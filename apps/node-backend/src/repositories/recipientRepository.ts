@@ -4,8 +4,8 @@
  *
  * Performance notes:
  * - textNormalization is imported at module level to avoid per-call dynamic import overhead.
- * - createOrGet reads established rows without writing, then uses a conflict-safe
- *   upsert on a miss so concurrent creators both resolve the winning row.
+ * - createOrGet reads established rows without writing, then inserts on a miss
+ *   inside a transaction so concurrent creators both resolve the winning row.
  * - getAll + getCount share the same WHERE predicate but are kept separate for clarity.
  *   Callers that need both can call them concurrently via Promise.all.
  */
@@ -23,9 +23,9 @@ import {
   recipientClusterRootRowSchema,
   recipientMergeLockRowSchema,
   recipientRowSchema,
-  recipientUpsertRowSchema,
   requireRow,
 } from "../database/rows/catalog.ts";
+import { withTransaction } from "../database/connection.ts";
 import type { RecipientAliasRow } from "../database/rows/catalog.ts";
 import { normalizeForMatching } from "../lib/textNormalization.ts";
 import { makeValidationError } from "../lib/repositoryErrors.ts";
@@ -67,32 +67,108 @@ const RECIPIENT_SORT_COLUMNS: Record<string, RawBuilder<unknown>> = {
 };
 
 /**
- * The enriched recipient projection over `source` (aliased `r`): the default
- * category path, primary bank account, primary name and alias count.
+ * The enriched recipient projection over `recipients` (aliased `r`): the
+ * default category path, primary bank account, primary name and alias count.
  */
-function enrichedRecipients(source: RawBuilder<unknown>): RawBuilder<unknown> {
-  return sql`
+const ENRICHED_RECIPIENTS = sql`
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
-             pba.account_number AS primary_bank_account,
+             (
+               SELECT rba.account_number
+               FROM recipient_bank_accounts rba
+               WHERE rba.recipient_id = r.id AND rba.is_active = true
+               ORDER BY rba.is_primary DESC
+               LIMIT 1
+             ) AS primary_bank_account,
              pr.name AS primary_recipient_name,
              COALESCE(ac.alias_count, 0) AS alias_count
-      FROM ${source} r
+      FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN LATERAL (
-        SELECT rba.account_number
-        FROM recipient_bank_accounts rba
-        WHERE rba.recipient_id = r.id AND rba.is_active = true
-        ORDER BY rba.is_primary DESC
-        LIMIT 1
-      ) pba ON true
       LEFT JOIN (
-        SELECT primary_recipient_id, count(*)::int AS alias_count
+        SELECT primary_recipient_id, count(*) AS alias_count
         FROM recipients
         WHERE primary_recipient_id IS NOT NULL
         GROUP BY primary_recipient_id
       ) ac ON ac.primary_recipient_id = r.id`;
+
+/**
+ * Code points grouped by their lower-case form, for the Unicode ILIKE below.
+ * Built on first use: one pass over the code space (about 0.1 s).
+ */
+let lowerCaseGroups: Map<string, string[]> | null = null;
+
+function caseGroups(): Map<string, string[]> {
+  if (lowerCaseGroups) return lowerCaseGroups;
+  const groups = new Map<string, string[]>();
+  for (let cp = 0; cp <= 0x10ffff; cp++) {
+    if (cp >= 0xd800 && cp <= 0xdfff) continue;
+    const ch = String.fromCodePoint(cp);
+    const lower = ch.toLowerCase();
+    if (lower === ch) continue;
+    const group = groups.get(lower);
+    if (group) group.push(ch);
+    else groups.set(lower, [ch]);
+  }
+  // PostgreSQL lowers a word-final capital sigma to the final form, so a
+  // stored 'ΟΔΟΣ' matches 'οδος'. A per-character class cannot see word
+  // boundaries; treat the three sigmas as one letter instead.
+  groups.set("σ", ["Σ", "ς"]);
+  groups.set("ς", ["Σ", "σ"]);
+  lowerCaseGroups = groups;
+  return groups;
+}
+
+/** One code point as a PostgreSQL ARE escape (`\uXXXX` / `\UXXXXXXXX`). */
+function areEscape(ch: string): string {
+  const cp = ch.codePointAt(0) ?? 0;
+  return cp <= 0xffff
+    ? `\\u${cp.toString(16).padStart(4, "0")}`
+    : `\\U${cp.toString(16).padStart(8, "0")}`;
+}
+
+/** The ARE fragment matching every character that lowers like `ch`. */
+function caseInsensitiveChar(ch: string): string {
+  const lower = ch.toLowerCase();
+  const others = (caseGroups().get(lower) ?? []).filter((c) => c !== lower);
+  const lowerChars = Array.from(lower);
+  if (lowerChars.length > 1) {
+    // Only U+0130 lowers to two code points ('i' + U+0307).
+    const sequence = lowerChars.map(caseInsensitiveChar).join("");
+    return `(?:${sequence}|${others.map(areEscape).join("|")})`;
+  }
+  if (others.length === 0) return areEscape(lower);
+  return `[${[lower, ...others].map(areEscape).join("")}]`;
+}
+
+/**
+ * The regular expression (PostgreSQL ARE, for SQLite's `REGEXP`) that matches
+ * exactly the values `value ILIKE likePattern` matched under PostgreSQL's
+ * `pg_unicode_fast` collation, which lowers both sides with Unicode case
+ * mapping before a LIKE match: `%` is any run, `_` one character and `\`
+ * makes the next character literal. Vision's `ilike()` keeps the C locale's
+ * ASCII-only folding, so recipient search cannot use it.
+ *
+ * Known differences, both from context-dependent lower-casing: the three
+ * sigmas are one letter (PostgreSQL picks the final form at a word end), and
+ * a stored U+0130 ('İ') lowers to two characters in PostgreSQL, so there a
+ * pattern 'i%' or '_' could match half of it.
+ */
+function unicodeIlikeRegex(likePattern: string): string {
+  const chars = Array.from(likePattern);
+  const parts: string[] = [];
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i] ?? "";
+    if (c === "%") parts.push(".*");
+    else if (c === "_") parts.push(".");
+    else if (c === "\\" && i + 1 < chars.length) parts.push(caseInsensitiveChar(chars[++i] ?? ""));
+    else parts.push(caseInsensitiveChar(c));
+  }
+  // A leading or trailing `%` is an unanchored end.
+  const anchoredStart = parts[0] !== ".*";
+  const anchoredEnd = parts.at(-1) !== ".*" || parts.length === 1;
+  const body = parts.slice(anchoredStart ? 0 : 1, anchoredEnd ? parts.length : -1).join("");
+  return `${anchoredStart ? "^" : ""}${body}${anchoredEnd ? "$" : ""}`;
 }
 
 /**
@@ -109,9 +185,7 @@ function buildWhereClause({
 
   if (active) conditions.push(sql`r.is_active = true`);
   if (name) {
-    conditions.push(
-      sql`r.name COLLATE pg_catalog.pg_unicode_fast ILIKE ${`%${name}%`}`,
-    );
+    conditions.push(sql`r.name REGEXP ${unicodeIlikeRegex(`%${name}%`)}`);
   }
   if (uncategorized) {
     // Phase 6: only surface recipients that both lack a default category
@@ -137,29 +211,29 @@ function buildWhereClause({
     );
   }
   if (search) {
-    const sp = `%${search}%`;
-    // Native clusters use the C locale. Select Unicode case mapping explicitly
-    // for search without changing stored names, sorting, or database collation.
+    // The database folds case in the C locale (ASCII only). Search folds
+    // Unicode case explicitly, without changing stored names or sorting.
+    const sp = unicodeIlikeRegex(`%${search}%`);
     conditions.push(sql`(
-      r.name COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
-      r.notes COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
-      c.general COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
-      c.detail COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
-      EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp})
+      r.name REGEXP ${sp} OR
+      r.notes REGEXP ${sp} OR
+      c.general REGEXP ${sp} OR
+      c.detail REGEXP ${sp} OR
+      EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number REGEXP ${sp})
     )`);
   }
 
   return sql`WHERE ${sql.join(conditions, sql` AND `)}`;
 }
 
-/** `= ANY($n::int[])`: one array parameter however many ids there are. */
-function anyRecipientId(ids: RecipientId[]): RawBuilder<RecipientId> {
-  return sql<RecipientId>`ANY(${ids}::int[])`;
+/** `IN (...)` over one JSON array parameter, however many ids there are. */
+function inRecipientIds(ids: readonly RecipientId[]): RawBuilder<RecipientId> {
+  return sql<RecipientId>`(SELECT value FROM json_each(${JSON.stringify(ids)}))`;
 }
 
 /**
  * Insert a recipient, or touch the conflicting row so RETURNING always yields
- * the winning row's id.
+ * the winning row's id (an upsert's DO UPDATE returns the existing row).
  */
 function upsertRecipient(name: string, normalizedName: string, isActive: boolean) {
   return db
@@ -194,14 +268,16 @@ export const recipientRepository = {
 
     // String(): the old untyped lookup coerced a null sortBy the same way.
     const sortCol = sortBy ? RECIPIENT_SORT_COLUMNS[sortBy] : undefined;
-    const sortDirection = sortDir === "desc" ? sql`DESC` : sql`ASC`;
+    // PostgreSQL sorts NULL as the largest value; SQLite as the smallest.
+    const sortDirection =
+      sortDir === "desc" ? sql`DESC NULLS FIRST` : sql`ASC NULLS LAST`;
     const orderBy = sortCol
       ? sql`${sortCol} ${sortDirection}, r.name ASC`
       : sql`r.name ASC`;
 
     return checkedRows(
       enrichedRecipientRowSchema,
-      sql`${enrichedRecipients(sql`recipients`)}
+      sql`${ENRICHED_RECIPIENTS}
       ${where}
       ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`,
     );
@@ -224,7 +300,7 @@ export const recipientRepository = {
 
     const row = await checkedRow(
       countRowSchema,
-      sql`SELECT count(*) FROM recipients r
+      sql`SELECT count(*) AS "count::bigint" FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
       ${where}`,
     );
@@ -234,7 +310,7 @@ export const recipientRepository = {
   async getById(id: RecipientId): Promise<EnrichedRecipientRow | null> {
     const row = await checkedRow(
       enrichedRecipientRowSchema,
-      sql`${enrichedRecipients(sql`recipients`)}
+      sql`${ENRICHED_RECIPIENTS}
       WHERE r.id = ${id}`,
     );
     return row ?? null;
@@ -259,12 +335,10 @@ export const recipientRepository = {
    *      no `updated_at` bump (which on an ADOPTED user recipient would edit
    *      the user's own row and invalidate the DB editor's xmin optimistic
    *      concurrency check on every reconcile).
-   *   2. On a miss, INSERT ... ON CONFLICT DO UPDATE ... RETURNING id — not
-   *      `createOrGet`'s DO NOTHING + re-SELECT, which finds nothing when a
-   *      concurrent transaction has inserted the row but not yet committed.
-   *      Here that would surface as a failed reconcile rather than a skipped
-   *      import row, so the id must come back unconditionally: DO UPDATE blocks
-   *      on the conflicting row and always returns it.
+   *   2. On a miss, INSERT ... ON CONFLICT DO UPDATE ... RETURNING id, so the
+   *      id comes back unconditionally: a concurrent creator that inserted the
+   *      row first holds the single write lock until it commits (ADR-263), and
+   *      the DO UPDATE then returns its row.
    *
    * An existing user recipient that normalizes to the same name is adopted
    * as-is — never deactivated, and after phase 1 never even written to.
@@ -333,18 +407,34 @@ export const recipientRepository = {
     let recipientId = existing?.id;
     let created = false;
     if (recipientId == null) {
-      const inserted = requireRow(
-        await checkedRow(
-          recipientUpsertRowSchema,
-          upsertRecipient(upperName, normalizedName, true).returning([
-            "id",
-            sql<boolean>`(xmax = 0)`.as("created"),
-          ]),
-        ),
-        "recipient upsert",
-      );
-      recipientId = inserted.id;
-      created = inserted.created;
+      // The insert and the conflict fallback share one write transaction, so
+      // `created` is exact: a conflicting row was committed before it began.
+      ({ recipientId, created } = await withTransaction(async () => {
+        const inserted = await checkedRow(
+          recipientKeyRowSchema,
+          db
+            .insertInto("recipients")
+            .values({
+              name: upperName,
+              normalized_name: normalizedName,
+              is_active: true,
+            })
+            .onConflict((oc) => oc.column("normalized_name").doNothing())
+            .returning("id"),
+        );
+        if (inserted) return { recipientId: inserted.id, created: true };
+        const winner = requireRow(
+          await checkedRow(
+            recipientKeyRowSchema,
+            db
+              .selectFrom("recipients")
+              .select("id")
+              .where("normalized_name", "=", normalizedName),
+          ),
+          "recipient upsert",
+        );
+        return { recipientId: winner.id, created: false };
+      }));
     }
 
     const full = await this.getById(recipientId);
@@ -389,18 +479,18 @@ export const recipientRepository = {
 
     if (Object.keys(changes).length === 0) return this.getById(id);
 
-    const updated = db
-      .updateTable("recipients")
-      .set({ ...changes, updated_at: sql<Date>`NOW()` })
-      .where("id", "=", id)
-      .returningAll();
-    // One statement: the enrichment reads the updated row from the CTE.
-    const row = await checkedRow(
-      enrichedRecipientRowSchema,
-      sql`WITH updated AS (${updated})
-      ${enrichedRecipients(sql`updated`)}`,
-    );
-    return row ?? null;
+    // One transaction: the enrichment reads the row this write produced.
+    return withTransaction(async () => {
+      const updated = await checkedRow(
+        recipientKeyRowSchema,
+        db
+          .updateTable("recipients")
+          .set({ ...changes, updated_at: sql<Date>`now()` })
+          .where("id", "=", id)
+          .returning("id"),
+      );
+      return updated ? this.getById(updated.id) : null;
+    });
   },
 
   async hardDelete(id: RecipientId): Promise<boolean> {
@@ -412,8 +502,10 @@ export const recipientRepository = {
   },
 
   /**
-   * Lock all merge participants in a consistent order before reading alias
-   * state. A target can become an alias while a competing merge holds its lock.
+   * Read all merge participants' alias state inside the merge transaction. A
+   * target can become an alias in a competing merge; the caller's BEGIN
+   * IMMEDIATE transaction (ADR-263) runs after or before that merge, never
+   * interleaved with it, so this read stays true until the merge commits.
    */
   async lockByIdsForMerge(
     ids: RecipientId[],
@@ -425,9 +517,8 @@ export const recipientRepository = {
       db
         .selectFrom("recipients")
         .select(["id", "primary_recipient_id"])
-        .where("id", "=", anyRecipientId(ids))
-        .orderBy("id")
-        .forUpdate(),
+        .where("id", "in", inRecipientIds(ids))
+        .orderBy("id"),
     );
   },
 
@@ -445,8 +536,8 @@ export const recipientRepository = {
       recipientKeyRowSchema,
       db
         .updateTable("recipients")
-        .set({ primary_recipient_id: primaryId, updated_at: sql<Date>`NOW()` })
-        .where("id", "=", anyRecipientId(aliasIds))
+        .set({ primary_recipient_id: primaryId, updated_at: sql<Date>`now()` })
+        .where("id", "in", inRecipientIds(aliasIds))
         .where("id", "<>", primaryId)
         .returning("id"),
     );
@@ -467,8 +558,8 @@ export const recipientRepository = {
   ): Promise<number> {
     const result = await db
       .updateTable("recipients")
-      .set({ primary_recipient_id: primaryId, updated_at: sql<Date>`NOW()` })
-      .where("primary_recipient_id", "=", anyRecipientId(aliasIds))
+      .set({ primary_recipient_id: primaryId, updated_at: sql<Date>`now()` })
+      .where("primary_recipient_id", "in", inRecipientIds(aliasIds))
       .where("id", "<>", primaryId)
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
@@ -480,7 +571,7 @@ export const recipientRepository = {
   async unmergeRecipient(id: RecipientId): Promise<boolean> {
     const row = await db
       .updateTable("recipients")
-      .set({ primary_recipient_id: null, updated_at: sql<Date>`NOW()` })
+      .set({ primary_recipient_id: null, updated_at: sql<Date>`now()` })
       .where("id", "=", id)
       .returning("id")
       .executeTakeFirst();
@@ -528,7 +619,7 @@ export const recipientRepository = {
           "id",
           sql<RecipientId>`COALESCE(primary_recipient_id, id)`.as("cluster_root"),
         ])
-        .where("id", "=", anyRecipientId(ids)),
+        .where("id", "in", inRecipientIds(ids)),
     );
     const map = new Map<RecipientId, RecipientId>();
     for (const row of rows) map.set(row.id, row.cluster_root);

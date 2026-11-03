@@ -27,8 +27,11 @@ import { looseText } from "../lib/looseText.ts";
 import { z } from "zod";
 import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
-import { checkedRow, db } from "../database/db.ts";
-import { transactionRowSchema } from "../database/rowSchemas.ts";
+import { checkedRow } from "../database/db.ts";
+import {
+  transactionKeyRowSchema,
+  transactionRowSchema,
+} from "../database/rowSchemas.ts";
 import { earliestDateRowSchema } from "../database/rows/ledger.ts";
 import accountRepository from "../repositories/accountRepository.ts";
 import { recipientRepository } from "../repositories/recipientRepository.ts";
@@ -66,7 +69,7 @@ const openingBalanceBodySchema = z.looseObject({
       return z.NEVER;
     }
     // assertYmd also parse-checks the calendar (rejects e.g. 2026-13-40), which
-    // a bare regex lets through to fail the Postgres DATE cast as a 500.
+    // a bare regex lets through to fail the DATE column check as a 500.
     try {
       assertYmd(date, "date");
     } catch (err) {
@@ -136,36 +139,29 @@ export async function setOpeningBalance(
   const { balance, date, currency } = normalizeOpeningBalance(body, account);
 
   // The earliest-activity read, the "does an anchor already exist?" check, and
-  // the upsert must be atomic: two concurrent calls would otherwise both see no
+  // the write must be atomic: two concurrent calls would otherwise both see no
   // existing anchor and both INSERT, minting two anchors for one
-  // (account, currency) — the one-anchor invariant is backed only by a CHECK.
-  // Lock the account row FOR UPDATE first so the second caller blocks, then
-  // re-runs the CTE's `existing` SELECT against the now-committed anchor and
-  // takes the UPDATE branch. The partial unique index (migration
-  // 0077_opening_anchor_unique_index) is the defense-in-depth backstop.
+  // (account, currency). They run in one BEGIN IMMEDIATE transaction on the
+  // single writer (ADR-263), so a second caller starts only after the first
+  // committed, finds its anchor and takes the UPDATE branch (PostgreSQL got
+  // the same from FOR UPDATE on the account row). The partial unique index
+  // (migration 0077_opening_anchor_unique_index) is the defense-in-depth
+  // backstop.
   return withTransaction(async () => {
-    await db
-      .selectFrom("accounts")
-      .select("id")
-      .where("id", "=", accountId)
-      .forUpdate()
-      .execute();
-
     // Warn when the anchor does not precede the account's real activity: a later
     // import-stamped balance wins, leaving a mid-history anchor inert.
     const earliestRow = await checkedRow(
       earliestDateRowSchema,
-      db
-        .selectFrom("transactions")
-        .select((eb) => eb.fn.min("date").as("earliest"))
-        .where("account_id", "=", accountId)
-        .where("is_active", "=", true)
-        .where("currency", "=", currency)
-        .where("transfer_source", "is distinct from", "opening"),
+      sql`SELECT MIN(date) AS "earliest::date"
+            FROM transactions
+           WHERE account_id = ${accountId}
+             AND is_active = true
+             AND currency = ${currency}
+             AND transfer_source IS NOT 'opening'`,
     );
-    // pg reads MIN(date) as a JS Date (no setTypeParser override); String(Date)
-    // yields "Wed Jul 01", which is never lexically <= an ISO "YYYY-MM-DD" — the
-    // warning was dead code. Normalize to a calendar-day string before comparing.
+    // MIN(date) reads as a local-midnight Date; String(Date) yields
+    // "Wed Jul 01", which is never lexically <= an ISO "YYYY-MM-DD". Normalize
+    // to a calendar-day string before comparing.
     const earliest = toWireDate(earliestRow?.earliest);
     const warning =
       earliest && earliest <= date
@@ -178,38 +174,41 @@ export async function setOpeningBalance(
     // not overwrite a recipient the user has since set on the existing anchor.
     const systemRecipientId = await recipientRepository.getOrCreateSystemId();
 
-    // Single atomic upsert: UPDATE the existing (account, currency) anchor if one
-    // exists, else INSERT. `balance` is server-stamped here — the one sanctioned
-    // exception to the ADR-094 import-pipeline-only write protection.
-    const upserted = await checkedRow(
-      transactionRowSchema,
-      sql`WITH existing AS (
-          SELECT id FROM transactions
+    // UPDATE the existing (account, currency) anchor if one exists, else
+    // INSERT, in this transaction. `balance` is server-stamped here — the one
+    // sanctioned exception to the ADR-094 import-pipeline-only write
+    // protection. Money binds as decimal text: String() of the number is the
+    // text node-postgres sent, and vision_numeric() applies the NUMERIC(18,4)
+    // assignment cast. updated_at is set in the statement so RETURNING shows
+    // it (the SQLite trigger writes it after the row).
+    const balanceText = String(balance);
+    const existing = await checkedRow(
+      transactionKeyRowSchema,
+      sql`SELECT id FROM transactions
            WHERE account_id = ${accountId} AND transfer_source = 'opening'
              AND currency = ${currency}
-           LIMIT 1
-       ),
-       updated AS (
-          UPDATE transactions t
-             SET balance = ${balance}, date = ${date}, memo = ${OPENING_MEMO},
-                 amount = 0, is_active = true
-            FROM existing
-           WHERE t.id = existing.id
-          RETURNING t.*
-       ),
-       inserted AS (
-          INSERT INTO transactions
-            (date, amount, balance, currency, memo, account_id, recipient_id,
-             is_transfer, transfer_source, is_active)
-          SELECT ${date}, 0, ${balance}, ${currency}, ${OPENING_MEMO},
-                 ${accountId}, ${systemRecipientId}, true, 'opening', true
-           WHERE NOT EXISTS (SELECT 1 FROM existing)
-          RETURNING *
-       )
-       SELECT * FROM updated
-       UNION ALL
-       SELECT * FROM inserted`,
+           LIMIT 1`,
     );
+    const upserted = existing
+      ? await checkedRow(
+          transactionRowSchema,
+          sql`UPDATE transactions
+                 SET balance = vision_numeric(${balanceText}, 18, 4), date = ${date},
+                     memo = ${OPENING_MEMO}, amount = vision_numeric(0, 18, 4),
+                     is_active = true, updated_at = now()
+               WHERE id = ${existing.id}
+              RETURNING *`,
+        )
+      : await checkedRow(
+          transactionRowSchema,
+          sql`INSERT INTO transactions
+                (date, amount, balance, currency, memo, account_id, recipient_id,
+                 is_transfer, transfer_source, is_active)
+              VALUES (${date}, vision_numeric(0, 18, 4), vision_numeric(${balanceText}, 18, 4),
+                      ${currency}, ${OPENING_MEMO}, ${accountId}, ${systemRecipientId},
+                      true, 'opening', true)
+              RETURNING *`,
+        );
 
     return { transaction: upserted ?? null, warning };
   });

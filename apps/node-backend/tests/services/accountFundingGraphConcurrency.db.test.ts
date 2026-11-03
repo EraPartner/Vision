@@ -1,26 +1,24 @@
 /**
- * Real-PostgreSQL concurrency coverage for the account funding graph.
+ * Real-database concurrency coverage for the account funding graph.
  *
- * Unit tests pin call order, but only two live connections establish that the
- * transaction-scoped advisory lock makes the second writer revalidate after
- * the first commits. Both races below would be able to mint a cycle if their
- * validation and writes interleaved.
+ * Unit tests pin call order, but only concurrent writers establish that the
+ * second writer revalidates after the first commits. PostgreSQL got this from
+ * a transaction-scoped advisory lock; on SQLite (ADR-263) every funding-graph
+ * mutation validates and writes inside one withTransaction(), and BEGIN
+ * IMMEDIATE on the single writer queues the second transaction behind the
+ * first. Each race below holds the write lock, waits until both mutations are
+ * queued on it, then releases them. Both races would be able to mint a cycle
+ * if their validation and writes interleaved.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "../setup/db.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "../setup/db.ts";
 import { accountService } from "../../src/services/accountService.ts";
 import { mergeAccounts } from "../../src/services/accountMergeService.ts";
-import { closePool } from "../../src/database/connection.ts";
 import {
-  __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
-  __ACCOUNT_FUNDING_GRAPH_LOCK_SQL as ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
-} from "../../src/lib/accountFundingGraphLock.ts";
+  closePool,
+  getPoolStats,
+  withTransaction,
+} from "../../src/database/connection.ts";
 import {
   asAccountId,
 } from "@vision/types/brands";
@@ -73,40 +71,42 @@ function expectOneWinner(outcomes: PromiseSettledResult<unknown>[]) {
   );
 }
 
-async function holdFundingGraphLock() {
-  const client = await must(getTestPool(), "getTestPool()").connect();
-  await client.query("BEGIN");
-  await client.query(ACCOUNT_FUNDING_GRAPH_LOCK_SQL, [
-    ...ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
-  ]);
-  let released = false;
+/**
+ * Hold the database write lock in an open transaction. The mutations under
+ * test are started afterwards from the test's own async context, so they do
+ * not join this transaction: they queue on the write lock behind it.
+ */
+async function holdWriteLock() {
+  let signalHeld!: () => void;
+  const held = new Promise<void>((resolve) => {
+    signalHeld = resolve;
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const gate = withTransaction(async () => {
+    signalHeld();
+    await released;
+  });
+  await Promise.race([held, gate]);
+  let done = false;
   return async () => {
-    if (released) return;
-    released = true;
-    try {
-      await client.query("COMMIT");
-    } finally {
-      client.release();
-    }
+    if (done) return;
+    done = true;
+    release();
+    await gate;
   };
 }
 
 async function waitForFundingGraphWaiters(expected: number) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const { rows } = await must(getTestPool(), "getTestPool()").query<{ count: number }>(
-      `SELECT count(*)::integer AS count
-         FROM pg_stat_activity
-        WHERE state = 'active'
-          AND wait_event_type = 'Lock'
-          AND wait_event = 'advisory'
-          AND query LIKE 'SELECT pg_advisory_xact_lock%'`,
-    );
-    if (must(rows[0], "row").count >= expected) return;
+    if (getPoolStats().waitingCount >= expected) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error(
-    `Timed out waiting for ${expected} funding-graph lock waiter(s)`,
+    `Timed out waiting for ${expected} write-lock waiter(s)`,
   );
 }
 
@@ -134,17 +134,9 @@ async function releaseLockAndCollect<
   return outcomes;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "account funding graph concurrency (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
       await pool.query("UPDATE accounts SET funding_account_id = NULL");
@@ -152,7 +144,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -160,7 +151,7 @@ describe.skipIf(!hasTestDatabase())(
     it("serializes opposing PATCH requests and rejects the stale edge", async () => {
       const a = await insertAccount("Funding race A");
       const b = await insertAccount("Funding race B");
-      const releaseLock = await holdFundingGraphLock();
+      const releaseLock = await holdWriteLock();
       const outcomesPromise = Promise.allSettled([
         accountService.update(asAccountId(a), { funding_account_id: b }),
         accountService.update(asAccountId(b), { funding_account_id: a }),
@@ -188,7 +179,7 @@ describe.skipIf(!hasTestDatabase())(
       const dependent = await insertAccount("Funding merge dependent");
       const survivor = await insertAccount("Funding merge survivor", dependent);
       const source = await insertAccount("Funding merge source");
-      const releaseLock = await holdFundingGraphLock();
+      const releaseLock = await holdWriteLock();
       const outcomesPromise = Promise.allSettled([
         accountService.update(asAccountId(dependent), { funding_account_id: source }),
         mergeAccounts(asAccountId(survivor), [asAccountId(source)]),
@@ -206,7 +197,7 @@ describe.skipIf(!hasTestDatabase())(
     it("serializes account deletion against a funding PATCH", async () => {
       const parent = await insertAccount("Funding delete parent");
       const dependent = await insertAccount("Funding delete dependent");
-      const releaseLock = await holdFundingGraphLock();
+      const releaseLock = await holdWriteLock();
       const outcomesPromise = Promise.allSettled([
         accountService.remove(asAccountId(parent)),
         accountService.update(asAccountId(dependent), { funding_account_id: parent }),

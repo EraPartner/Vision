@@ -7,11 +7,9 @@ import { sql } from "kysely";
 import type { ExpressionBuilder, SelectQueryBuilder } from "kysely";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
+import { categoryKeyRowSchema } from "../database/rowSchemas.ts";
 import {
-  categoryKeyRowSchema,
-  countRowSchema,
-} from "../database/rowSchemas.ts";
-import {
+  categoryCountRowSchema,
   categoryRowSchema,
   requireRow,
 } from "../database/rows/catalog.ts";
@@ -66,11 +64,12 @@ export const categoryRepository = {
     active = true,
   }: CategoryFilters = {}): Promise<number> {
     const builder = filterCategories(
-      db.selectFrom("categories").select(sql<string>`count(*)`.as("count")),
+      db.selectFrom("categories").select(sql<number>`count(*)`.as("count")),
       { general, detail, search, active },
     );
-    const row = await checkedRow(countRowSchema, builder);
-    return parseInt(requireRow(row, "category count").count, 10);
+    // A bare count(*) reads as a number (ADR-263).
+    const row = await checkedRow(categoryCountRowSchema, builder);
+    return requireRow(row, "category count").count;
   },
 
   async getById(id: CategoryId): Promise<EnrichedCategoryRow | null> {
@@ -92,7 +91,11 @@ export const categoryRepository = {
       db
         .selectFrom("categories")
         .selectAll()
-        .where("id", "=", sql<CategoryId>`ANY(${uniqueIds}::int[])`)
+        .where(
+          "id",
+          "in",
+          sql<CategoryId>`(SELECT value FROM json_each(${JSON.stringify(uniqueIds)}))`,
+        )
         .where("is_active", "=", true)
         .orderBy("id"),
     );
@@ -125,8 +128,9 @@ export const categoryRepository = {
   }): Promise<{ category: EnrichedCategoryRow | null; created: boolean }> {
     const g = general.toUpperCase().trim();
     const d = detail.toUpperCase().trim();
+    // One BEGIN IMMEDIATE transaction (ADR-263) serialises this with the
+    // hierarchy writes, as the PostgreSQL hierarchy advisory lock did.
     return withTransaction(async () => {
-      await sql`SELECT pg_advisory_xact_lock(1128356178, 1)`.execute(db);
       const alias = await checkedRow(
         categoryKeyRowSchema,
         db
@@ -190,7 +194,7 @@ export const categoryRepository = {
 
     const updated = await db
       .updateTable("categories")
-      .set({ ...changes, updated_at: sql<Date>`NOW()` })
+      .set({ ...changes, updated_at: sql<Date>`now()` })
       .where("id", "=", id)
       .where("legacy_compatible", "=", true)
       .returning("id")
@@ -207,7 +211,10 @@ export const categoryRepository = {
         .executeTakeFirst();
       return result.numDeletedRows > 0n;
     } catch (error) {
-      if (errorCode(error) === "23503")
+      // A RESTRICT reference (a child, merge or root alias) raises 23001 on
+      // SQLite (ADR-263); PostgreSQL raised 23503 for every foreign key.
+      const code = errorCode(error);
+      if (code === "23503" || code === "23001")
         throw new ConflictError(
           "Category is still referenced or has legacy merge redirects",
         );
@@ -222,8 +229,12 @@ export const categoryRepository = {
   ): Promise<number | null> {
     const result = await db
       .updateTable("recipients")
-      .set({ default_category_id: categoryId, updated_at: sql<Date>`NOW()` })
-      .where("id", "=", sql<RecipientId>`ANY(${recipientIds}::int[])`)
+      .set({ default_category_id: categoryId, updated_at: sql<Date>`now()` })
+      .where(
+        "id",
+        "in",
+        sql<RecipientId>`(SELECT value FROM json_each(${JSON.stringify(recipientIds)}))`,
+      )
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
@@ -239,18 +250,19 @@ function filterCategories<O>(
     active,
   }: Pick<CategoryFilters, "general" | "detail" | "search" | "active">,
 ): SelectQueryBuilder<DB, "categories", O> {
+  // ilike(): PostgreSQL ILIKE in the C locale (ASCII case folding).
   let filtered = builder.where("legacy_compatible", "=", true);
   if (active) filtered = filtered.where("is_active", "=", true);
-  if (general) filtered = filtered.where("general", "ilike", `%${general}%`);
-  if (detail) filtered = filtered.where("detail", "ilike", `%${detail}%`);
+  if (general) filtered = filtered.where(sql<boolean>`ilike(general, ${`%${general}%`})`);
+  if (detail) filtered = filtered.where(sql<boolean>`ilike(detail, ${`%${detail}%`})`);
   if (search) {
     const sp = `%${search}%`;
     filtered = filtered.where((eb: ExpressionBuilder<DB, "categories">) =>
       eb.or([
-        eb("general", "ilike", sp),
-        eb("detail", "ilike", sp),
-        eb("path_name", "ilike", sp),
-        eb("description", "ilike", sp),
+        sql<boolean>`ilike(general, ${sp})`,
+        sql<boolean>`ilike(detail, ${sp})`,
+        sql<boolean>`ilike(path_name, ${sp})`,
+        sql<boolean>`ilike(description, ${sp})`,
       ]),
     );
   }

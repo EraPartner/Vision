@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the two server-generated ledger rows —
+ * Real-database tests for the two server-generated ledger rows —
  * reconcile's 'adjustment' delta and the opening-balance anchor — and for the
  * shared system recipient that owns them.
  *
@@ -9,20 +9,14 @@
  * mock suites next door assert the statements and their params, which is why
  * the omission survived: a mocked `query` accepts any column list. Nothing
  * short of the real schema can catch this class, so every row asserted here is
- * written by the service into real Postgres and read back.
+ * written by the service into the real database and read back.
  *
- * Determinism: fixtures are dated by SQL expressions relative to CURRENT_DATE,
- * never by literal calendar dates.
+ * Determinism: fixtures are dated by SQL expressions relative to today() (the
+ * local calendar day), never by literal calendar dates.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { accountService } from "../src/services/accountService.ts";
 
 const listAccounts = async () => (await accountService.list()).items;
@@ -38,7 +32,7 @@ import {
 } from "../src/services/accountMergeService.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
-import { closePool } from "../src/database/connection.ts";
+import { closePool, withTransaction } from "../src/database/connection.ts";
 import { must } from "./helpers/must.ts";
 import { asAccountId } from "@vision/types/brands";
 
@@ -86,7 +80,7 @@ async function addAccount(
 ) {
   const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO accounts (name, type, currency, spendable, in_net_worth, is_active)
-     VALUES ($1, 'checking'::account_type, $2, true, true, true)
+     VALUES ($1, 'checking', $2, true, true, true)
      RETURNING id`,
     [name, currency],
   );
@@ -94,7 +88,7 @@ async function addAccount(
   if (statementBalance != null) {
     await must(getTestPool(), "test pool").query(
       `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
-       VALUES ($1, $2, $3, CURRENT_DATE)`,
+       VALUES ($1, $2, vision_numeric($3, 18, 4), today())`,
       [id, statementCurrency, statementBalance],
     );
   }
@@ -114,7 +108,7 @@ async function insertTxn({
 }) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, account_id, is_active)
-     VALUES ((${dateExpr})::date, $1, $2, $3, $4, true)`,
+     VALUES (${dateExpr}, vision_numeric($1, 18, 4), $2, $3, $4, true)`,
     [amount, currency, rec.misc, accountId],
   );
 }
@@ -122,7 +116,7 @@ async function insertTxn({
 async function insertRate(code: string, rate: string | number) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, CURRENT_DATE, $2, true)`,
+     VALUES ($1, today(), vision_numeric($2, 20, 10), true)`,
     [code, rate],
   );
 }
@@ -140,17 +134,9 @@ async function systemRows() {
   return rows;
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "system-generated ledger rows + their recipient (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "test pool");
       await pool.query("DELETE FROM transactions");
@@ -162,7 +148,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -181,7 +166,7 @@ describe.skipIf(!hasTestDatabase())(
         must(getTestPool(), "test pool").query<DbRow>(
           `INSERT INTO transactions
          (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
-       VALUES (CURRENT_DATE, 20, 'EUR', 'BALANCE ADJUSTMENT', $1, true, 'adjustment', true)`,
+       VALUES (today(), vision_numeric('20', 18, 4), 'EUR', 'BALANCE ADJUSTMENT', $1, true, 'adjustment', true)`,
           [accountId],
         ),
       ).rejects.toMatchObject({ code: "23502", column: "recipient_id" });
@@ -195,7 +180,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         const id = await addAccount("CHECKING", { statementBalance: "120.00" });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           accountId: id,
         });
@@ -235,13 +220,13 @@ describe.skipIf(!hasTestDatabase())(
         });
         await insertRate("USD", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           currency: "EUR",
           accountId: id,
         });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "100.00",
           currency: "USD",
           accountId: id,
@@ -271,7 +256,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         await insertRate("USD", "0.5");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "100.00",
           currency: "USD",
           accountId: id,
@@ -290,7 +275,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         const id = await addAccount("CHECKING", { statementBalance: "120.00" });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           accountId: id,
         });
@@ -312,7 +297,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         const id = await addAccount("WALLET");
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '1 day'",
+          dateExpr: "add_days(today(), -1)",
           amount: "-25.00",
           accountId: id,
         });
@@ -351,6 +336,31 @@ describe.skipIf(!hasTestDatabase())(
         expect(rows).toHaveLength(1); // one anchor per (account, currency)
         expect(Number(must(rows[0], "row").balance)).toBe(2500);
         expect(must(rows[0], "row").recipient_id).toBe(rec.misc);
+      });
+
+      it("stores the anchor balance as exact NUMERIC(18,4), rounding half away from zero", async () => {
+        await seedRecipient();
+        const id = await addAccount("WALLET");
+
+        // 1234.56789 → 1234.5679 (round up past the scale), on the INSERT branch.
+        const inserted = await setOpeningBalance(id, {
+          balance: 1234.56789,
+          date: "2020-02-29",
+        });
+        expect(must(inserted.transaction, "transaction").balance).toBe("1234.5679");
+        // A half step rounds away from zero on the UPDATE branch, both signs.
+        await setOpeningBalance(id, { balance: 0.00005, date: "2020-02-29" });
+        expect(must((await systemRows())[0], "row").balance).toBe("0.0001");
+        await setOpeningBalance(id, { balance: -2.00005, date: "2020-02-29" });
+        const [row] = await systemRows();
+        expect(must(row, "row").balance).toBe("-2.0001");
+        expect(must(row, "row").amount).toBe("0.0000");
+
+        // The anchor date round-trips as the same calendar day (leap day).
+        const { rows } = await must(getTestPool(), "test pool").query<{ day: string }>(
+          `SELECT to_char(date, 'YYYY-MM-DD') AS day FROM transactions WHERE transfer_source = 'opening'`,
+        );
+        expect(rows).toEqual([{ day: "2020-02-29" }]);
       });
 
       it("anchors each currency of a multi-currency account separately", async () => {
@@ -483,7 +493,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedRecipient();
         const id = await addAccount("CHECKING", { statementBalance: "120.00" });
         await insertTxn({
-          dateExpr: "CURRENT_DATE - interval '2 days'",
+          dateExpr: "add_days(today(), -2)",
           amount: "100.00",
           accountId: id,
         });
@@ -509,23 +519,29 @@ describe.skipIf(!hasTestDatabase())(
       });
 
       // Every call after the first is a pure read. An ON CONFLICT DO UPDATE no-op
-      // would instead fire the recipients BEFORE UPDATE trigger on every
-      // reconcile: updated_at bumps, xmin advances (one dead tuple per call, and
-      // a broken optimistic-concurrency check for the DB editor on an adopted
-      // user recipient) and the row stays exclusively locked for the rest of the
-      // caller's transaction.
-      it("does not write the row on the resolve path (no xmin/updated_at churn)", async () => {
+      // would instead fire the recipients update triggers on every reconcile:
+      // updated_at bumps (a broken optimistic-concurrency check for the DB
+      // editor on an adopted user recipient) and the call takes the database
+      // write lock for the rest of the caller's transaction. PostgreSQL's xmin
+      // row version has no SQLite counterpart; the single writer connection's
+      // total_changes() counts every row written, so it proves no write.
+      it("does not write the row on the resolve path (no row-write/updated_at churn)", async () => {
         const id = await recipientRepository.getOrCreateSystemId();
-        const version = async () =>
-          (
-            await must(getTestPool(), "test pool").query<{
-              xmin: string;
-              updated_at: Date;
-            }>(
-              `SELECT xmin::text AS xmin, updated_at FROM recipients WHERE id = $1`,
+        const version = async () => {
+          const row = (
+            await must(getTestPool(), "test pool").query<{ updated_at: Date }>(
+              `SELECT updated_at FROM recipients WHERE id = $1`,
               [id],
             )
           ).rows[0];
+          const writes = await withTransaction(async (client) =>
+            must(
+              (await client.query<{ n: number }>("SELECT total_changes() AS n")).rows[0],
+              "total_changes row",
+            ).n,
+          );
+          return { updated_at: row?.updated_at, writes };
+        };
 
         const before = await version();
         for (let i = 0; i < 5; i++)

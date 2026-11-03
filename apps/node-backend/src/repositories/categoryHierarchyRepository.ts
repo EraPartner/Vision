@@ -12,7 +12,6 @@ import {
 } from "../database/rows/catalog.ts";
 import type { CategoryNodeRow } from "../database/rows/catalog.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
-import { asCategoryId } from "@vision/types/brands";
 import type { CategoryId } from "@vision/types/brands";
 import { errorCode } from "../lib/errors.ts";
 
@@ -48,6 +47,12 @@ function pgErrorCode(error: unknown): unknown {
   return errorCode(error);
 }
 
+/** A foreign key refused the write: 23503, or 23001 for a RESTRICT action. */
+function isForeignKeyViolation(error: unknown): boolean {
+  const code = pgErrorCode(error);
+  return code === "23503" || code === "23001";
+}
+
 function conflict(message: string, code = "CATEGORY_HIERARCHY_CONFLICT") {
   return new ConflictError(message, { details: { reason: code } });
 }
@@ -75,37 +80,54 @@ function mapNode(row: CategoryNodeRow | undefined): CategoryNode | null {
   };
 }
 
-function selectNodes() {
-  return db
-    .selectFrom("categories as c")
-    .innerJoin("category_paths as p", "p.id", "c.id")
-    .select([
-      "c.id",
-      "c.name",
-      "c.parent_id",
-      "p.ids",
-      "p.names",
-      "p.path_name",
-      "p.depth",
-      "c.description",
-      "c.is_active",
-      "c.hierarchy_only",
-      "c.legacy_compatible",
-    ]);
+/**
+ * `categories` joined to the `category_paths` view. The view's JSON arrays
+ * have no declared type; the `::json` alias hints parse them.
+ */
+const NODE_SELECT = sql`
+  SELECT c.id, c.name, c.parent_id,
+         p.ids AS "ids::json", p.names AS "names::json",
+         p.path_name, p.depth,
+         c.description, c.is_active, c.hierarchy_only, c.legacy_compatible
+    FROM categories c
+    JOIN category_paths p ON p.id = c.id`;
+
+/**
+ * PostgreSQL's text[] order in the C collation: element by element, code
+ * point by code point, a shorter prefix first.
+ */
+function compareNamePaths(a: readonly string[], b: readonly string[]): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const x = a[i] ?? "";
+    const y = b[i] ?? "";
+    if (x === y) continue;
+    const xs = Array.from(x);
+    const ys = Array.from(y);
+    const m = Math.min(xs.length, ys.length);
+    for (let j = 0; j < m; j++) {
+      const d = (xs[j]?.codePointAt(0) ?? 0) - (ys[j]?.codePointAt(0) ?? 0);
+      if (d !== 0) return d;
+    }
+    return xs.length - ys.length;
+  }
+  return a.length - b.length;
 }
 
 async function readNode(id: CategoryId): Promise<CategoryNode | null> {
   const row = await checkedRow(
     categoryNodeRowSchema,
-    selectNodes().where("c.id", "=", id),
+    sql`${NODE_SELECT} WHERE c.id = ${id}`,
   );
   return mapNode(row);
 }
 
-/** Serialises hierarchy writes: one transaction-scoped advisory lock. */
-async function lockHierarchy(): Promise<void> {
-  await sql`SELECT pg_advisory_xact_lock(1128356178, 1)`.execute(db);
-}
+/*
+ * Hierarchy writes are serialised by their transaction: withTransaction() is
+ * BEGIN IMMEDIATE on the single writer (ADR-263), which replaces the
+ * PostgreSQL advisory lock and the FOR UPDATE row locks. Every check below
+ * runs in the same transaction as the write it guards.
+ */
 
 async function requireActiveParent(parentId: CategoryId): Promise<void> {
   const parent = await checkedRow(
@@ -113,8 +135,7 @@ async function requireActiveParent(parentId: CategoryId): Promise<void> {
     db
       .selectFrom("categories")
       .select(["id", "is_active"])
-      .where("id", "=", parentId)
-      .forUpdate(),
+      .where("id", "=", parentId),
   );
   if (!parent) throw invalid("Parent category does not exist");
   if (!parent.is_active) throw invalid("An inactive category cannot be a parent");
@@ -136,10 +157,13 @@ async function upsertRootAlias(
 }
 
 export async function listCategoryNodes(): Promise<CategoryNode[]> {
-  const rows = await checkedRows(
-    categoryNodeRowSchema,
-    selectNodes().orderBy("p.names").orderBy("c.id"),
-  );
+  const rows = await checkedRows(categoryNodeRowSchema, NODE_SELECT);
+  // ORDER BY p.names, c.id: the names arrive as JSON text, whose order is not
+  // PostgreSQL's array order, so the rows are sorted here.
+  rows.sort((a, b) => {
+    const byPath = compareNamePaths(a.names, b.names);
+    return byPath !== 0 ? byPath : a.id - b.id;
+  });
   return rows.map((row) => mapNode(row));
 }
 
@@ -158,7 +182,6 @@ export async function createCategoryNode({
   if (!normalized || normalized.length > 100)
     throw invalid("Category name must contain 1 to 100 characters");
   return withTransaction(async () => {
-    await lockHierarchy();
     if (parentId !== null) {
       await requireActiveParent(parentId);
     } else {
@@ -173,15 +196,21 @@ export async function createCategoryNode({
           "This root name is reserved by a legacy category redirect",
         );
     }
+    // The row's `general` embeds its own id, so the id is drawn before the
+    // INSERT, as nextval() drew it: the next AUTOINCREMENT value. This
+    // transaction holds the write lock, so no other insert can take it, and
+    // the explicit id advances sqlite_sequence like any insert.
     const nextId = requireRow(
       await checkedRow(
         categoryNextIdRowSchema,
-        sql`SELECT nextval(pg_get_serial_sequence('categories','id')) AS id`,
+        sql`SELECT max(
+                 COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'categories'), 0),
+                 COALESCE((SELECT max(id) FROM categories), 0)
+               ) + 1 AS id`,
       ),
-      "category nextval",
+      "category next id",
     );
-    // categories.id is a serial INTEGER, so the BIGINT nextval fits a number.
-    const id = asCategoryId(Number(nextId.id));
+    const id = nextId.id;
     try {
       await db
         .insertInto("categories")
@@ -212,10 +241,9 @@ export async function updateCategoryNode(
   { name, parentId, description, is_active: isActive }: CategoryNodePatch,
 ): Promise<CategoryNode | null> {
   return withTransaction(async () => {
-    await lockHierarchy();
     const existing = await checkedRow(
       categoryRowSchema,
-      db.selectFrom("categories").selectAll().where("id", "=", id).forUpdate(),
+      db.selectFrom("categories").selectAll().where("id", "=", id),
     );
     if (!existing) return null;
     if (name !== undefined && (!name.trim() || name.trim().length > 100))
@@ -246,7 +274,7 @@ export async function updateCategoryNode(
           description:
             description === undefined ? existing.description : description,
           is_active: isActive ?? existing.is_active,
-          updated_at: sql<Date>`NOW()`,
+          updated_at: sql<Date>`now()`,
         })
         .where("id", "=", id)
         .execute();
@@ -288,7 +316,6 @@ export async function deleteCategoryNode(id: CategoryId): Promise<boolean> {
       .selectFrom("categories")
       .select("id")
       .where("id", "=", id)
-      .forUpdate()
       .executeTakeFirst();
     if (!existing) return false;
     const child = await db
@@ -302,7 +329,9 @@ export async function deleteCategoryNode(id: CategoryId): Promise<boolean> {
     try {
       await db.deleteFrom("categories").where("id", "=", id).execute();
     } catch (error) {
-      if (pgErrorCode(error) === "23503")
+      // A RESTRICT reference (a merge or root alias) raises 23001 on SQLite
+      // (ADR-263); PostgreSQL raised 23503 for every foreign key.
+      if (isForeignKeyViolation(error))
         throw conflict(
           "Category is still referenced or has legacy merge redirects",
         );
@@ -321,7 +350,6 @@ export async function mergeCategoryNodes(
 ): Promise<CategoryNode | null> {
   if (sourceId === targetId) throw invalid("Source and target must differ");
   return withTransaction(async () => {
-    await lockHierarchy();
     const nodes = await checkedRows(
       categoryMergeNodeRowSchema,
       db
@@ -335,14 +363,13 @@ export async function mergeCategoryNodes(
           "hierarchy_only",
         ])
         .where("id", "in", [sourceId, targetId])
-        .orderBy("id")
-        .forUpdate(),
+        .orderBy("id"),
     );
     if (nodes.length !== 2) return null;
     if (!nodes.find((node) => node.id === targetId)?.is_active)
       throw invalid("Merge target must be active");
-    // Two locked rows, the target among them and source !== target: the other
-    // row is the source.
+    // Two rows, the target among them and source !== target: the other row is
+    // the source.
     const source = requireRow(
       nodes.find((node) => node.id === sourceId),
       "merge source category",
@@ -364,23 +391,22 @@ export async function mergeCategoryNodes(
         .set({ parent_id: targetId })
         .where("parent_id", "=", sourceId)
         .execute();
+      // Every single-column foreign key that references categories, from
+      // the schema itself (the PostgreSQL version read pg_constraint).
       const references = await checkedRows(
         categoryReferenceRowSchema,
-        sql`SELECT ns.nspname AS schema_name, rel.relname AS table_name,
-                  att.attname AS column_name
-           FROM pg_constraint con
-           JOIN pg_class rel ON rel.oid=con.conrelid
-           JOIN pg_namespace ns ON ns.oid=rel.relnamespace
-           JOIN pg_attribute att ON att.attrelid=con.conrelid
-                                AND att.attnum=con.conkey[1]
-           WHERE con.contype='f' AND con.confrelid='categories'::regclass
-             AND cardinality(con.conkey)=1
-             AND con.conrelid <> 'categories'::regclass
-             AND rel.relname NOT IN ('category_merge_aliases','category_root_aliases')`,
+        sql`SELECT m.name AS table_name, fk."from" AS column_name
+           FROM sqlite_schema m
+           JOIN pragma_foreign_key_list(m.name) fk
+           WHERE m.type = 'table'
+             AND fk."table" = 'categories'
+             AND m.name <> 'categories'
+             AND m.name NOT IN ('category_merge_aliases', 'category_root_aliases')
+             AND (SELECT count(*) FROM pragma_foreign_key_list(m.name) part
+                   WHERE part.id = fk.id) = 1
+           ORDER BY m.name, fk."from"`,
       );
       for (const ref of references) {
-        if (ref.schema_name !== "public")
-          throw conflict("Category reference exists outside the public schema");
         const identifier = /^[a-z_][a-z0-9_]*$/;
         if (
           !identifier.test(ref.table_name) ||
@@ -388,7 +414,7 @@ export async function mergeCategoryNodes(
         )
           throw conflict("Unsupported category reference identifier");
         const column = sql.ref(ref.column_name);
-        await sql`UPDATE ${sql.table(`public.${ref.table_name}`)}
+        await sql`UPDATE ${sql.table(ref.table_name)}
           SET ${column}=${targetId} WHERE ${column}=${sourceId}`.execute(db);
       }
       // Retain redirects through chains such as A -> B -> C. These rows also

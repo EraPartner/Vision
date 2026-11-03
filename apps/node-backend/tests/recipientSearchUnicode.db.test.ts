@@ -1,26 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  releaseDbSuiteLock,
-  getTestPool,
-  hasTestDatabase,
-  closeTestPool,
-} from "./setup/db.ts";
+import { getTestPool, closeTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import recipientRepository from "../src/repositories/recipientRepository.ts";
 import { must } from "./helpers/must.ts";
 import type { RecipientId } from "@vision/types/brands";
 
-// Real PostgreSQL is essential: mocked ILIKE cannot expose the native C-locale bug.
-describe.skipIf(!hasTestDatabase())("recipient Unicode search", () => {
+// A real database is essential: the database's own ilike() folds ASCII only
+// (the C locale), so only a real query shows that recipient search folds
+// Unicode case as PostgreSQL's pg_unicode_fast ILIKE did.
+describe("recipient Unicode search", () => {
   const ids: number[] = [];
   beforeAll(async () => {
-    await acquireDbSuiteLock();
     for (const [name, notes] of [
       ["QA CAFÉ 🧪 unicode-search", ""],
       ["QA Élise unicode-search", "RÉSUMÉ unicode-note"],
+      ["QA ΟΔΟΣ unicode-sigma", ""],
+      ["QA 50% OFF unicode-literal", ""],
     ]) {
-      const result = await must(getTestPool(), "getTestPool()").query<{
+      const result = await getTestPool().query<{
         id: RecipientId;
       }>(
         "INSERT INTO recipients (name, normalized_name, notes) VALUES ($1, $2, $3) RETURNING id",
@@ -31,11 +28,10 @@ describe.skipIf(!hasTestDatabase())("recipient Unicode search", () => {
   }, 180_000);
   afterAll(async () => {
     if (ids.length > 0)
-      await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM recipients WHERE id = ANY($1::int[])",
-        [ids],
+      await getTestPool().query(
+        "DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))",
+        [JSON.stringify(ids)],
       );
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -72,5 +68,27 @@ describe.skipIf(!hasTestDatabase())("recipient Unicode search", () => {
     expect(
       await recipientRepository.getCount({ search: "résumé unicode-note" }),
     ).toBe(1);
+  });
+  it("matches a word-final capital sigma with the final lower-case form", async () => {
+    // PostgreSQL lowered 'ΟΔΟΣ' to 'οδος'.
+    expect(
+      (await recipientRepository.getAll({ search: "qa οδος unicode-sigma" })).map(
+        (r) => r.id,
+      ),
+    ).toEqual([ids[2]]);
+  });
+  it("keeps ILIKE wildcards: % is any run, _ one character, \\ escapes", async () => {
+    expect(
+      (await recipientRepository.getAll({ search: "qa c_fé" })).map((r) => r.id),
+    ).toEqual([ids[0]]);
+    expect(
+      (await recipientRepository.getAll({ search: "qa%unicode-search" })).map(
+        (r) => r.id,
+      ),
+    ).toEqual([ids[0], ids[1]]);
+    expect(
+      (await recipientRepository.getAll({ search: "50\\% off" })).map((r) => r.id),
+    ).toEqual([ids[3]]);
+    expect(await recipientRepository.getCount({ search: "qa c\\_fé" })).toBe(0);
   });
 });

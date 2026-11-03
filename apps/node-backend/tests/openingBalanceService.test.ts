@@ -102,7 +102,7 @@ describe("normalizeOpeningBalance (ADR-094 D4)", () => {
 
   it("rejects an impossible calendar date the bare regex would pass", () => {
     // 2026-13-40 matches /^\d{4}-\d{2}-\d{2}$/ but is not a real date; without
-    // the calendar parse-check it reaches Postgres and 500s on the DATE cast.
+    // the calendar parse-check it reaches the database and 500s on the date check.
     expect(() =>
       normalizeOpeningBalance({ balance: 1, date: "2026-13-40" }, account),
     ).toThrow(/date/);
@@ -184,9 +184,9 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
 
   it("stamps a system anchor row (amount 0, transfer_source opening, server balance)", async () => {
     mockClient.query
-      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // account row lock (FOR UPDATE)
       .mockResolvedValueOnce({ rows: [{ earliest: null }] }) // no prior activity
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
+      .mockResolvedValueOnce({ rows: [] }) // no existing anchor
       .mockResolvedValueOnce({
         rows: [anchorRow(42, "1000.0000")],
       });
@@ -199,24 +199,56 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
     expect(result.warning).toBeNull();
     expect(must(result.transaction, "result.transaction").id).toBe(42);
 
-    // Whole upsert runs in a transaction; the first query locks the account row.
+    // The whole upsert runs in one transaction (BEGIN IMMEDIATE on the single
+    // writer replaced the account row lock, ADR-263); the first query is the
+    // earliest-activity probe for this account and currency.
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([5]);
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([5, "EUR"]);
 
-    // Fourth query is the upsert (lock, earliest-activity probe, system-recipient
-    // upsert, upsert); params carry the server-stamped balance, currency and
-    // system recipient. The real-PostgreSQL insert/update paths are covered in
+    // Third query looks for an existing anchor; with none, the fourth INSERTs
+    // it. Params carry the server-stamped balance as decimal text, currency and
+    // system recipient. The real-database insert/update paths are covered in
     // systemRecipientRows.db.test.ts.
-    expect(must(query.mock.calls[3], "query.mock.calls[3]")[1]).toEqual(
-      expect.arrayContaining([5, 1000, "EUR", "2024-01-01", "OPENING BALANCE", 900]),
+    expect(must(query.mock.calls[2], "query.mock.calls[2]")[1]).toEqual([5, "EUR"]);
+    const [insertSql, insertParams] = must(query.mock.calls[3], "query.mock.calls[3]");
+    expect(insertSql).toMatch(/^\s*INSERT INTO transactions/);
+    expect(insertSql).toContain("vision_numeric(?, 18, 4)");
+    expect(insertParams).toEqual(
+      expect.arrayContaining([5, "1000", "EUR", "2024-01-01", "OPENING BALANCE", 900]),
     );
+    expect(query).toHaveBeenCalledTimes(4);
+  });
+
+  it("updates an existing anchor in place and leaves its recipient alone", async () => {
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [{ earliest: null }] })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient
+      .mockResolvedValueOnce({ rows: [{ id: 42 }] }) // existing anchor
+      .mockResolvedValueOnce({ rows: [anchorRow(42, "1234.5679")] });
+
+    const result = await setOpeningBalance(asAccountId(5), {
+      balance: 1234.56789,
+      date: "2024-01-01",
+    });
+
+    expect(must(result.transaction, "result.transaction").balance).toBe("1234.5679");
+    const [updateSql, updateParams] = must(query.mock.calls[3], "query.mock.calls[3]");
+    expect(updateSql).toMatch(/^\s*UPDATE transactions/);
+    expect(updateSql).not.toContain("recipient_id");
+    // The exact decimal text reaches vision_numeric(?, 18, 4), which rounds it
+    // to the column scale half away from zero, as NUMERIC(18,4) did.
+    expect(updateSql).toContain("balance = vision_numeric(?, 18, 4)");
+    expect(updateParams).toEqual(
+      expect.arrayContaining(["1234.56789", "2024-01-01", "OPENING BALANCE", 42]),
+    );
+    expect(updateParams).not.toContain(900);
   });
 
   it("warns when the anchor date does not precede existing activity", async () => {
     mockClient.query
-      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 0, 15) }] }) // activity predates the anchor
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
+      .mockResolvedValueOnce({ rows: [] }) // no existing anchor
       .mockResolvedValueOnce({ rows: [anchorRow(7, "500.0000")] });
 
     const result = await setOpeningBalance(asAccountId(5), {
@@ -226,15 +258,16 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
     expect(result.warning).toMatch(/does not precede/i);
   });
 
-  it("warns even when pg returns MIN(date) as a Date object (real driver shape)", async () => {
-    // pg reads a DATE column as a local-midnight JS Date, not an ISO string.
+  it("warns even when the driver returns MIN(date) as a Date object (real driver shape)", async () => {
+    // The driver reads a DATE value (the `::date` hint) as a local-midnight JS
+    // Date, as pg did, not an ISO string.
     // String(Date) is "Sat Jun 01 2023 …", which is never lexically <= an ISO
     // "YYYY-MM-DD" — so the pre-fix String(earliest).slice(0,10) compare made
     // the warning dead code in production. toWireDate normalizes it first.
     mockClient.query
-      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
+      .mockResolvedValueOnce({ rows: [] }) // no existing anchor
       .mockResolvedValueOnce({ rows: [anchorRow(8, "500.0000")] });
 
     const result = await setOpeningBalance(asAccountId(5), {
@@ -246,9 +279,9 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
 
   it("does not warn when a Date-typed earliest is after the anchor", async () => {
     mockClient.query
-      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2024, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
+      .mockResolvedValueOnce({ rows: [] }) // no existing anchor
       .mockResolvedValueOnce({ rows: [anchorRow(9, "500.0000")] });
 
     const result = await setOpeningBalance(asAccountId(5), {

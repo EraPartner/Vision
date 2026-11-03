@@ -1,5 +1,5 @@
 /**
- * Real-PostgreSQL behaviour of the transaction service's manual-create and
+ * Real-database (SQLite) behaviour of the transaction service's manual-create and
  * PATCH paths, plus the uncategorised bulk selection. Replaces
  * services/transactionService.test.ts (eleven mocked collaborators and
  * call-order assertions) and the SQL-text cases of
@@ -10,13 +10,7 @@
  * features with their own DB suites, and the reconcile runs detached.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { createCategoryNode } from "../src/repositories/categoryHierarchyRepository.ts";
@@ -70,14 +64,12 @@ async function insertRecipient(
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
+describe("transaction service (real DB)", () => {
   let accountId: AccountId;
   let shopId: RecipientId;
   let categoryId: number;
 
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
     accountId = must(await accountRepository.resolveOrCreateByName(ACCOUNT), "accountRepository.resolveOrCreateByName result");
     const root = await createCategoryNode({ name: `FOOD${MARK}` });
     const leaf = await createCategoryNode({
@@ -93,8 +85,10 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
     try {
       const db = must(getTestPool(), "test pool");
       await db.query(
-        `DELETE FROM manual_transaction_dedup_claims m USING transactions t
-          WHERE m.transaction_id = t.id AND t.account_id = $1`,
+        `DELETE FROM manual_transaction_dedup_claims
+          WHERE EXISTS (SELECT 1 FROM transactions t
+                         WHERE t.id = manual_transaction_dedup_claims.transaction_id
+                           AND t.account_id = $1)`,
         [accountId],
       );
       await db.query("DELETE FROM transactions WHERE account_id = $1", [
@@ -102,17 +96,16 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
       ]);
       await db.query("DELETE FROM accounts WHERE id = $1", [accountId]);
       await db.query(
-        "UPDATE recipients SET primary_recipient_id = NULL WHERE id = ANY($1)",
+        "UPDATE recipients SET primary_recipient_id = NULL WHERE id IN (SELECT value FROM json_each($1))",
         [created.recipientIds],
       );
-      await db.query("DELETE FROM recipients WHERE id = ANY($1)", [
+      await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
         created.recipientIds,
       ]);
       for (const id of [...created.categoryIds].reverse()) {
         await db.query("DELETE FROM categories WHERE id = $1", [id]);
       }
     } finally {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     }
@@ -139,7 +132,7 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
     });
     expect(second.transaction.id).not.toBe(first.transaction.id);
     const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
-      "SELECT count(*)::int AS n FROM transactions WHERE account_id = $1 AND date = '1902-03-04'",
+      "SELECT count(*) AS n FROM transactions WHERE account_id = $1 AND date = '1902-03-04'",
       [accountId],
     );
     expect(must(rows[0], "rows[0]").n).toBe(2);

@@ -100,7 +100,7 @@ function dispatch(sql: string, params: unknown[]) {
     return {
       rows: [
         {
-          // BIGINT id as pg returns it.
+          // BIGINT id as the driver returns it (text, as pg did).
           id: String(params[0]),
           rows_total: matchedRows.length,
           status: "committing",
@@ -117,19 +117,19 @@ function dispatch(sql: string, params: unknown[]) {
   if (/from "portfolio_import_staging_rows" as "isr"/.test(sql))
     return { rows: matchedRows.map(matchedWireRow) };
   if (
-    /where "dedup_fingerprint_version" = \$1 and "dedup_fingerprint" = \$2/.test(
+    /where "dedup_fingerprint_version" = \? and "dedup_fingerprint" = \?/.test(
       sql,
     )
   )
-    return { rows: fingerprintDuplicate ? [{ "?column?": 1 }] : [] };
+    return { rows: fingerprintDuplicate ? [{ one: 1 }] : [] };
   if (/FROM portfolio_transactions\s+WHERE investment_id/.test(sql)) {
     return { rows: [{ n: Number(fieldDuplicate) }] };
   }
-  if (/select COUNT\(\*\)::int as "n" from "transactions"/.test(sql)) {
+  if (/select COUNT\(\*\) as "n" from "transactions"/.test(sql)) {
     return { rows: [{ n: Number(cashDuplicate) }] };
   }
   if (/INSERT INTO transactions/.test(sql)) return { rows: [{ id: 777 }] };
-  if (/set "status" = \$1, "error_message" = \$2/.test(sql)) {
+  if (/set "status" = \?, "error_message" = \?/.test(sql)) {
     marked.push({ id: params[2], status: params[0], message: params[1] });
     return { rows: [] };
   }
@@ -156,7 +156,7 @@ const MATCHED_NULLABLE = [
 ] as const;
 
 /**
- * The commit read as pg returns it: BIGINT id and NUMERIC columns as text,
+ * The commit read as the driver returns it: BIGINT id and NUMERIC columns as text,
  * and every selected column present (NULL when the fixture leaves it out).
  */
 function matchedWireRow(fixture: object) {
@@ -502,7 +502,8 @@ describe("commitBatch (portfolio)", () => {
     const dedupCall = must(query.mock.calls.find(([sql]) =>
       /FROM portfolio_transactions\s+WHERE investment_id/.test(sql),
     ), "matching query.mock.calls");
-    expect(dedupCall[1].slice(3, 5)).toEqual([100, 4]);
+    // Money and units bind as decimal text for dec_eq (exact comparison).
+    expect(dedupCall[1].slice(3, 5)).toEqual(["100", "4"]);
   });
 
   it("dedups units-plus-price rows against repository-derived amount", async () => {
@@ -515,7 +516,7 @@ describe("commitBatch (portfolio)", () => {
     const dedupCall = must(query.mock.calls.find(([sql]) =>
       /FROM portfolio_transactions\s+WHERE investment_id/.test(sql),
     ), "matching query.mock.calls");
-    expect(dedupCall[1].slice(3, 5)).toEqual([100, 4]);
+    expect(dedupCall[1].slice(3, 5)).toEqual(["100", "4"]);
   });
 
   it("field-dedup predicate matches on account_id and currency, not just trade shape", async () => {
@@ -525,7 +526,8 @@ describe("commitBatch (portfolio)", () => {
     const dedupCall = must(query.mock.calls.find(([sql]) =>
       /FROM portfolio_transactions\s+WHERE investment_id/.test(sql),
     ), "matching query.mock.calls");
-    expect(dedupCall[0]).toContain("account_id IS NOT DISTINCT FROM");
+    // SQLite's IS is the null-safe equality PostgreSQL spelled IS NOT DISTINCT FROM.
+    expect(dedupCall[0]).toContain("AND account_id IS ?");
     // [investment_id, tx_date, type, amount, units, account_id, currency]
     expect(dedupCall[1].slice(5)).toEqual([7, "USD"]);
   });
@@ -621,11 +623,12 @@ describe("commitBatch (portfolio)", () => {
     // Exact column list — a regression that drops recipient_id (or reorders it
     // away from its parameter) must fail here, not only on a real database.
     expect(sql).toMatch(
-      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, category_id, is_active\)\s*VALUES \(\$1,\s*\$2,\s*\$3,\s*\$4,\s*\$5,\s*\$6,\s*\$7,\s*true\)/,
+      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, category_id, is_active\)\s*VALUES \(\?,\s*vision_numeric\(\?, 18, 4\),\s*\?,\s*\?,\s*\?,\s*\?,\s*\?,\s*true\)/,
     );
-    // [date, signed amount, currency, memo, account_id, recipient_id,
-    //  category_id] — external deposits stay uncategorized (transfers).
-    expect(params).toEqual(["2026-01-05", 1000, "EUR", "wire", 7, 42, null]);
+    // [date, signed amount (decimal text for vision_numeric), currency, memo,
+    //  account_id, recipient_id, category_id] — external deposits stay
+    //  uncategorized (transfers).
+    expect(params).toEqual(["2026-01-05", "1000", "EUR", "wire", 7, 42, null]);
   });
 
   // ── D6 (ADR-095 addendum): an instrument-less dividend/interest/fee/tax row
@@ -670,7 +673,7 @@ describe("commitBatch (portfolio)", () => {
     // classifyBrokerageRow alone would send to review (defaulting to +1).
     expect(params).toEqual([
       "2026-01-05",
-      -2.5,
+      "-2.5",
       "EUR",
       "CUSTODY FEE",
       7,
@@ -710,7 +713,7 @@ describe("commitBatch (portfolio)", () => {
     ), "matching query.mock.calls");
     expect(params).toEqual([
       "2026-01-05",
-      12.34,
+      "12.34",
       "EUR",
       "DIVIDEND",
       7,
@@ -748,7 +751,7 @@ describe("commitBatch (portfolio)", () => {
     ), "matching query.mock.calls");
     expect(params).toEqual([
       "2026-01-05",
-      12.34,
+      "12.34",
       "EUR",
       "DIVIDEND",
       7,
@@ -885,7 +888,7 @@ describe("commitBatch (portfolio)", () => {
     const cashInsert = must(query.mock.calls.find(([s]) =>
       /INSERT INTO transactions/.test(s),
     ), "matching query.mock.calls");
-    expect(cashInsert[1][1]).toBe(-500); // amount param — was +500 (credited as a deposit)
+    expect(cashInsert[1][1]).toBe("-500"); // amount param (decimal text) — was +500 (credited as a deposit)
   });
 
   it("cash dedup matches across the sign fix: signed value OR legacy positive magnitude", async () => {
@@ -910,10 +913,11 @@ describe("commitBatch (portfolio)", () => {
       /as "n" from "transactions"/.test(s),
     ), "matching query.mock.calls");
     // Predicate accepts either the post-fix signed value or the legacy magnitude.
-    expect(dedupCall[0]).toMatch(/amount = \$3 OR amount = \$4/);
+    expect(dedupCall[0]).toMatch(/\(dec_eq\(amount, \?\) OR dec_eq\(amount, \?\)\)/);
     // params: [accountId, tx_date, signed(-500), magnitude(500), currency, memo]
-    expect(dedupCall[1][2]).toBe(-500); // signed (post-fix) branch
-    expect(dedupCall[1][3]).toBe(500); // legacy positive (pre-fix) branch
+    // — amounts as decimal text, compared exactly by dec_eq.
+    expect(dedupCall[1][2]).toBe("-500"); // signed (post-fix) branch
+    expect(dedupCall[1][3]).toBe("500"); // legacy positive (pre-fix) branch
     expect(dedupCall[1][4]).toBe("EUR");
     expect(dedupCall[1][5]).toBe("WITHDRAWAL"); // memo carries the kind/direction
   });
@@ -940,10 +944,10 @@ describe("commitBatch (portfolio)", () => {
     const dedupCall = must(query.mock.calls.find(([s]) =>
       /as "n" from "transactions"/.test(s),
     ), "matching query.mock.calls");
-    expect(dedupCall[0]).toMatch(/amount = \$3/);
-    expect(dedupCall[0]).not.toMatch(/amount = \$4|OR amount/); // no magnitude branch at all
+    expect(dedupCall[0]).toMatch(/and dec_eq\(amount, \?\) and/);
+    expect(dedupCall[0]).not.toMatch(/OR dec_eq\(amount/); // no magnitude branch at all
     // params: [accountId, tx_date, signed(-10), currency, memo, is_active] — magnitude never sent.
-    expect(dedupCall[1]).toEqual([7, "2026-01-05", -10, "EUR", "FEE", true]);
+    expect(dedupCall[1]).toEqual([7, "2026-01-05", "-10", "EUR", "FEE", true]);
   });
 
   it("cash dedup does not conflate opposite directions: a deposit only matches positive amounts", async () => {
@@ -966,8 +970,8 @@ describe("commitBatch (portfolio)", () => {
     const dedupCall = must(query.mock.calls.find(([s]) =>
       /as "n" from "transactions"/.test(s),
     ), "matching query.mock.calls");
-    expect(dedupCall[1][2]).toBe(500); // signed
-    expect(dedupCall[1][3]).toBe(500); // magnitude — same, so no negative branch
+    expect(dedupCall[1][2]).toBe("500"); // signed
+    expect(dedupCall[1][3]).toBe("500"); // magnitude — same, so no negative branch
     expect(dedupCall[1][4]).toBe("EUR");
     expect(dedupCall[1][5]).toBe("DEPOSIT");
   });

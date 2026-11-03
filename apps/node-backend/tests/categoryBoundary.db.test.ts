@@ -1,17 +1,11 @@
 /**
- * Real-PostgreSQL behaviour of the flat (legacy) category repository and the
+ * Real-database (SQLite) behaviour of the flat (legacy) category repository and the
  * category hierarchy mutations: input normalization, filters, pagination,
  * legacy-only writes, and the hierarchy's refusal paths. Replaces mocked-pool
  * tests that asserted SQL text and client call order.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import categoryRepository from "../src/repositories/categoryRepository.ts";
 import {
@@ -63,30 +57,25 @@ async function categoryExists(id: number) {
   return rows.length === 1;
 }
 
-describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
-  beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
-
+describe("categories (real DB)", () => {
   afterEach(async () => {
     const db = must(getTestPool(), "getTestPool()");
-    await db.query("DELETE FROM transactions WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))", [
       created.transactionIds.splice(0),
     ]);
-    await db.query("DELETE FROM accounts WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
       created.accountIds.splice(0),
     ]);
-    await db.query("DELETE FROM recipients WHERE id = ANY($1::int[])", [
+    await db.query("DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))", [
       created.recipientIds.splice(0),
     ]);
     const ids = created.categoryIds.splice(0);
     await db.query(
-      "DELETE FROM category_merge_aliases WHERE target_category_id = ANY($1::int[])",
+      "DELETE FROM category_merge_aliases WHERE target_category_id IN (SELECT value FROM json_each($1))",
       [ids],
     );
     await db.query(
-      "DELETE FROM category_root_aliases WHERE target_category_id = ANY($1::int[])",
+      "DELETE FROM category_root_aliases WHERE target_category_id IN (SELECT value FROM json_each($1))",
       [ids],
     );
     // Children before parents (the self-reference is restrictive).
@@ -96,12 +85,8 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
   });
 
   afterAll(async () => {
-    try {
-      await releaseDbSuiteLock();
-    } finally {
-      await closeTestPool();
-      await closePool();
-    }
+    await closeTestPool();
+    await closePool();
   });
 
   it("normalizes created and updated legacy categories and returns existing ones", async () => {
@@ -211,7 +196,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
       await categoryRepository.assignToRecipients(category.id, recipientIds.map(asRecipientId)),
     ).toBe(2);
     const { rows: after } = await db.query<{ default_category_id: number | null }>(
-      "SELECT default_category_id FROM recipients WHERE id = ANY($1::int[])",
+      "SELECT default_category_id FROM recipients WHERE id IN (SELECT value FROM json_each($1))",
       [recipientIds],
     );
     expect(after.map((row) => row.default_category_id)).toEqual([
@@ -219,7 +204,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
       category.id,
     ]);
     await db.query(
-      "UPDATE recipients SET default_category_id = NULL WHERE id = ANY($1::int[])",
+      "UPDATE recipients SET default_category_id = NULL WHERE id IN (SELECT value FROM json_each($1))",
       [recipientIds],
     );
   });
@@ -270,7 +255,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     created.recipientIds.push(must(recipientRows[0], "row").id);
     const { rows: txRows } = await db.query<{ id: number }>(
       `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id)
-       VALUES (CURRENT_DATE, -12.34, 'EUR', $1, $2, $3) RETURNING id`,
+       VALUES (today(), vision_numeric('-12.34', 18, 4), 'EUR', $1, $2, $3) RETURNING id`,
       [must(recipientRows[0], "row").id, source.id, must(accountRows[0], "row").id],
     );
     created.transactionIds.push(must(txRows[0], "row").id);

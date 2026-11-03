@@ -1,49 +1,38 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  acquireDbSuiteLock,
-  closeTestPool,
-  getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
-} from "./setup/db.ts";
-import { closePool } from "../src/database/connection.ts";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { closeTestPool, getTestPool } from "./setup/db.ts";
+import { closePool, withTransaction } from "../src/database/connection.ts";
 import { mergeRecipients } from "../src/services/recipientMergeService.ts";
 import { must } from "./helpers/must.ts";
 import type { RecipientId } from "@vision/types/brands";
 
-/** A result row whose columns the test reads without a fixed shape. */
-type DbRow = Record<string, unknown>;
+/** `IN (...)` parameter: the ids as one JSON array. */
+const idList = (ids: readonly number[]) => JSON.stringify(ids);
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "recipient merge concurrency (real DB)",
   () => {
     const ids: number[] = [];
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
     afterEach(async () => {
-      await must(getTestPool(), "getTestPool()").query(
-        "UPDATE recipients SET primary_recipient_id = NULL WHERE id = ANY($1::int[])",
-        [ids],
+      await getTestPool().query(
+        "UPDATE recipients SET primary_recipient_id = NULL WHERE id IN (SELECT value FROM json_each($1))",
+        [idList(ids)],
       );
-      await must(getTestPool(), "getTestPool()").query(
-        "DELETE FROM recipients WHERE id = ANY($1::int[])",
-        [ids.splice(0)],
+      await getTestPool().query(
+        "DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))",
+        [idList(ids.splice(0))],
       );
     });
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
     async function fixture() {
-      const result = await must(getTestPool(), "getTestPool()").query<{
+      const result = await getTestPool().query<{
         id: RecipientId;
       }>(
         "INSERT INTO recipients (name, normalized_name) VALUES ('Merge A', 'merge a'), ('Merge B', 'merge b'), ('Merge C', 'merge c') RETURNING id",
       );
-      const [a, b, c] = result.rows.map((r) => r.id);
+      const [a, b, c] = result.rows.map((r) => r.id).sort((x, y) => x - y);
       const created: [RecipientId, RecipientId, RecipientId] = [
         must(a, "recipient A"),
         must(b, "recipient B"),
@@ -52,69 +41,95 @@ describe.skipIf(!hasTestDatabase())(
       ids.push(...created);
       return created;
     }
-    async function waitForBlockedMerges(count: number) {
-      const deadline = Date.now() + 5000;
-      while (Date.now() < deadline) {
-        const result = await must(getTestPool(), "getTestPool()").query<{
-          count: number;
-        }>(
-          "SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%recipients%'",
-        );
-        if (must(result.rows[0], "result.rows[0]").count >= count) return;
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
-      throw new Error("Merge transactions did not reach the lock gate");
-    }
-    it("revalidates B after B into A wins the lock ahead of C into B", async () => {
+    // PostgreSQL held B's row lock in a gate transaction and waited in
+    // pg_stat_activity for both merges to block on it. SQLite has no row
+    // locks: the guarantee comes from the single writer, where every merge is
+    // one BEGIN IMMEDIATE transaction queued behind any open one. The gate is
+    // therefore an open write transaction; both merges queue behind it, run
+    // one after the other in arrival order, and the second revalidates B.
+    it("revalidates B after B into A wins the write lock ahead of C into B", async () => {
       const [a, b, c] = await fixture();
-      const gate = await must(getTestPool(), "getTestPool()").connect();
       const outcomes: Promise<{ value?: unknown; error?: unknown }>[] = [];
+      let releaseGate!: () => void;
+      const gateOpen = new Promise<void>((resolve) => {
+        releaseGate = resolve;
+      });
+      let gateHeld!: () => void;
+      const held = new Promise<void>((resolve) => {
+        gateHeld = resolve;
+      });
+      const gate = withTransaction(async () => {
+        gateHeld();
+        await gateOpen;
+      });
       try {
-        await gate.query("BEGIN");
-        await gate.query("SELECT id FROM recipients WHERE id = $1 FOR UPDATE", [
-          b,
-        ]);
-        // Convert rejections into values immediately to avoid unhandled promises.
-        outcomes.push(
-          mergeRecipients(a, [b]).then(
-            (value) => ({ value }),
-            (error: unknown) => ({ error }),
-          ),
+        await held;
+        // Started outside the gate's context, so each merge queues for the
+        // write lock instead of joining the gate's transaction. Rejections
+        // become values immediately to avoid unhandled promises.
+        for (const [primary, alias] of [
+          [a, b],
+          [b, c],
+        ] as const) {
+          outcomes.push(
+            mergeRecipients(primary, [alias]).then(
+              (value) => ({ value }),
+              (error: unknown) => ({ error }),
+            ),
+          );
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        // Neither merge can have written while the gate holds the writer.
+        const during = await getTestPool().query(
+          "SELECT id, primary_recipient_id FROM recipients WHERE id IN (SELECT value FROM json_each($1)) ORDER BY id",
+          [idList([a, b, c])],
         );
-        await waitForBlockedMerges(1);
-        outcomes.push(
-          mergeRecipients(b, [c]).then(
-            (value) => ({ value }),
-            (error: unknown) => ({ error }),
-          ),
-        );
-        await waitForBlockedMerges(2);
-        await gate.query("COMMIT");
-        const [first, second] = await Promise.all(outcomes);
-        expect(must(first, "first").error).toBeUndefined();
-        expect(must(second, "second").error).toMatchObject({ status: 409 });
-        const result = await must(getTestPool(), "getTestPool()").query<DbRow>(
-          "SELECT id, primary_recipient_id FROM recipients WHERE id = ANY($1::int[]) ORDER BY id",
-          [[a, b, c]],
-        );
-        expect(result.rows).toEqual([
-          { id: a, primary_recipient_id: null },
-          { id: b, primary_recipient_id: a },
-          { id: c, primary_recipient_id: null },
-        ]);
+        expect(during.rows.every((row) => row.primary_recipient_id === null)).toBe(true);
       } finally {
-        await gate.query("ROLLBACK");
-        gate.release();
-        await Promise.all(outcomes);
+        releaseGate();
+        await gate;
       }
+      const [first, second] = await Promise.all(outcomes);
+      expect(must(first, "first").error).toBeUndefined();
+      expect(must(second, "second").error).toMatchObject({ status: 409 });
+      const result = await getTestPool().query(
+        "SELECT id, primary_recipient_id FROM recipients WHERE id IN (SELECT value FROM json_each($1)) ORDER BY id",
+        [idList([a, b, c])],
+      );
+      expect(result.rows).toEqual([
+        { id: a, primary_recipient_id: null },
+        { id: b, primary_recipient_id: a },
+        { id: c, primary_recipient_id: null },
+      ]);
+    });
+    it("gives one consistent result when the two merges race without a gate", async () => {
+      const [a, b, c] = await fixture();
+      const settled = await Promise.allSettled([
+        mergeRecipients(a, [b]),
+        mergeRecipients(b, [c]),
+      ]);
+      expect(settled[0].status).toBe("fulfilled");
+      expect(settled[1]).toMatchObject({
+        status: "rejected",
+        reason: { status: 409 },
+      });
+      const result = await getTestPool().query(
+        "SELECT id, primary_recipient_id FROM recipients WHERE id IN (SELECT value FROM json_each($1)) ORDER BY id",
+        [idList([a, b, c])],
+      );
+      expect(result.rows).toEqual([
+        { id: a, primary_recipient_id: null },
+        { id: b, primary_recipient_id: a },
+        { id: c, primary_recipient_id: null },
+      ]);
     });
     it("retains one-level aliases when C into B completes before B into A", async () => {
       const [a, b, c] = await fixture();
       await mergeRecipients(b, [c]);
       await mergeRecipients(a, [b]);
-      const result = await must(getTestPool(), "getTestPool()").query<DbRow>(
-        "SELECT primary_recipient_id FROM recipients WHERE id = ANY($1::int[]) ORDER BY id",
-        [[b, c]],
+      const result = await getTestPool().query(
+        "SELECT primary_recipient_id FROM recipients WHERE id IN (SELECT value FROM json_each($1)) ORDER BY id",
+        [idList([b, c])],
       );
       expect(result.rows).toEqual([
         { primary_recipient_id: a },

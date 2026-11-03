@@ -25,6 +25,11 @@ import {
 // Shared narrow projections
 // ---------------------------------------------------------------------------
 
+/** `SELECT name FROM pragma_table_info(...)`: one column name of a table. */
+export const tableColumnRowSchema = z
+  .object({ name: z.string() })
+  .describe("table column row");
+
 // Re-exported so catalog callers keep one import site; defined once elsewhere.
 export { idRowSchema } from "../rowSchemas.ts";
 export { requireRow } from "../rowContracts.ts";
@@ -53,17 +58,20 @@ export const categoryRowSchema = z
   .describe("categories row");
 export type CategoryRow = z.output<typeof categoryRowSchema>;
 
-/** `NODE_SELECT`: `categories` joined to the `category_paths` view. */
+/**
+ * `NODE_SELECT`: `categories` joined to the `category_paths` view. `ids` and
+ * `names` are the view's JSON arrays, parsed through `::json` alias hints.
+ */
 export const categoryNodeRowSchema = z
   .object({
     id: pgCategoryId,
     name: z.string(),
     parent_id: pgCategoryId.nullable(),
-    /** INTEGER[] from the recursive view; never NULL for a joined row. */
+    /** Root-first id path from the recursive view; never NULL for a joined row. */
     ids: z.array(pgCategoryId),
     names: z.array(z.string()),
     path_name: z.string(),
-    /** `cardinality(ids)`: INTEGER. */
+    /** `json_array_length(ids)`: INTEGER. */
     depth: pgInt,
     description: z.string().nullable(),
     is_active: z.boolean(),
@@ -73,17 +81,22 @@ export const categoryNodeRowSchema = z
   .describe("category node row");
 export type CategoryNodeRow = z.output<typeof categoryNodeRowSchema>;
 
-/** `SELECT id,is_active FROM categories ... FOR UPDATE` (parent check). */
+/** `SELECT id,is_active FROM categories` (parent check). */
 export const categoryActiveRowSchema = z
   .object({ id: pgCategoryId, is_active: z.boolean() })
   .describe("category active row");
 
-/** `nextval(...) AS id`: BIGINT, so a string. */
+/** The next AUTOINCREMENT id of `categories`: an INTEGER expression. */
 export const categoryNextIdRowSchema = z
-  .object({ id: pgBigint })
+  .object({ id: pgCategoryId })
   .describe("category next id row");
 
-/** The merge participants' locked projection. */
+/** `categoryRepository.getCount`: a bare `count(*)`, so a number. */
+export const categoryCountRowSchema = z
+  .object({ count: pgInt })
+  .describe("category count row");
+
+/** The merge participants' projection. */
 export const categoryMergeNodeRowSchema = z
   .object({
     id: pgCategoryId,
@@ -95,10 +108,9 @@ export const categoryMergeNodeRowSchema = z
   })
   .describe("category merge node row");
 
-/** A single-column foreign key that references `categories` (pg_catalog `name`s). */
+/** A single-column foreign key that references `categories` (`pragma_foreign_key_list`). */
 export const categoryReferenceRowSchema = z
   .object({
-    schema_name: z.string(),
     table_name: z.string(),
     column_name: z.string(),
   })
@@ -140,16 +152,11 @@ export const enrichedRecipientRowSchema = recipientAliasRowSchema
     /** VARCHAR from a LEFT JOIN LATERAL. */
     primary_bank_account: z.string().nullable(),
     primary_recipient_name: z.string().nullable(),
-    /** `COALESCE(count(*)::int, 0)` */
+    /** `count(*)` of the aliases: an integer, 0 when there are none. */
     alias_count: pgInt,
   })
   .describe("enriched recipients row");
 export type EnrichedRecipientRow = z.output<typeof enrichedRecipientRowSchema>;
-
-/** `createOrGet`'s upsert: `RETURNING id, (xmax = 0) AS created`. */
-export const recipientUpsertRowSchema = z
-  .object({ id: pgRecipientId, created: z.boolean() })
-  .describe("recipient upsert row");
 
 /** `lockByIdsForMerge`. */
 export const recipientMergeLockRowSchema = z

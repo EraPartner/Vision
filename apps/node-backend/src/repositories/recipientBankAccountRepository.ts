@@ -19,16 +19,16 @@ import type { RecipientId } from '@vision/types/brands';
 
 export type { RecipientBankAccountRow };
 
-/** `= ANY($n::int[])`: one array parameter however many ids there are. */
-function anyRecipientId(ids: RecipientId[]): RawBuilder<RecipientId> {
-  return sql<RecipientId>`ANY(${ids}::int[])`;
+/** `IN (...)` over one JSON array parameter, however many ids there are. */
+function inRecipientIds(ids: readonly RecipientId[]): RawBuilder<RecipientId> {
+  return sql<RecipientId>`(SELECT value FROM json_each(${JSON.stringify(ids)}))`;
 }
 
 /** Clear the recipient's current primary account. */
 async function clearPrimary(recipientId: RecipientId | null): Promise<void> {
   await db
     .updateTable('recipient_bank_accounts')
-    .set({ is_primary: false, updated_at: sql<Date>`NOW()` })
+    .set({ is_primary: false, updated_at: sql<Date>`now()` })
     .where('recipient_id', '=', recipientId)
     .where('is_primary', '=', true)
     .execute();
@@ -69,7 +69,10 @@ export const recipientBankAccountRepository = {
 
     return checkedRows(
       recipientBankAccountRowSchema,
-      builder.orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
+      builder
+        .orderBy('is_primary', 'desc')
+        // PostgreSQL sorted a NULL created_at last; SQLite sorts it first.
+        .orderBy('created_at', (ob) => ob.asc().nullsLast()),
     );
   },
 
@@ -124,7 +127,7 @@ export const recipientBankAccountRepository = {
       if (Object.keys(updates).length > 0) {
         await db
           .updateTable('recipient_bank_accounts')
-          .set({ ...updates, updated_at: sql<Date>`NOW()` })
+          .set({ ...updates, updated_at: sql<Date>`now()` })
           .where('id', '=', existing.id)
           .execute();
       }
@@ -195,7 +198,7 @@ export const recipientBankAccountRepository = {
       recipientBankAccountRowSchema,
       db
         .updateTable('recipient_bank_accounts')
-        .set({ ...updates, updated_at: sql<Date>`NOW()` })
+        .set({ ...updates, updated_at: sql<Date>`now()` })
         .where('id', '=', id)
         .returningAll(),
     );
@@ -206,7 +209,7 @@ export const recipientBankAccountRepository = {
   async softDelete(id: number): Promise<boolean> {
     const row = await db
       .updateTable('recipient_bank_accounts')
-      .set({ is_active: false, updated_at: sql<Date>`NOW()` })
+      .set({ is_active: false, updated_at: sql<Date>`now()` })
       .where('id', '=', id)
       .returning('id')
       .executeTakeFirst();
@@ -225,11 +228,21 @@ export const recipientBankAccountRepository = {
     aliasIds: RecipientId[],
   ): Promise<number> {
     const result = await db
-      .deleteFrom('recipient_bank_accounts as rba')
-      .using('recipient_bank_accounts as keep')
-      .where('rba.recipient_id', '=', anyRecipientId(aliasIds))
-      .where('keep.recipient_id', '=', primaryId)
-      .whereRef('keep.account_number', '=', 'rba.account_number')
+      .deleteFrom('recipient_bank_accounts')
+      .where('recipient_id', 'in', inRecipientIds(aliasIds))
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('recipient_bank_accounts as keep')
+            .select('keep.id')
+            .where('keep.recipient_id', '=', primaryId)
+            .whereRef(
+              'keep.account_number',
+              '=',
+              'recipient_bank_accounts.account_number',
+            ),
+        ),
+      )
       .executeTakeFirst();
     return Number(result.numDeletedRows);
   },
@@ -242,7 +255,7 @@ export const recipientBankAccountRepository = {
     const result = await db
       .updateTable('recipient_bank_accounts')
       .set({ recipient_id: primaryId })
-      .where('recipient_id', '=', anyRecipientId(aliasIds))
+      .where('recipient_id', 'in', inRecipientIds(aliasIds))
       .executeTakeFirst();
     return Number(result.numUpdatedRows);
   },
@@ -256,7 +269,7 @@ export const recipientBankAccountRepository = {
       await clearPrimary(recipientId);
       const row = await db
         .updateTable('recipient_bank_accounts')
-        .set({ is_primary: true, updated_at: sql<Date>`NOW()` })
+        .set({ is_primary: true, updated_at: sql<Date>`now()` })
         .where('id', '=', bankAccountId)
         .where('recipient_id', '=', recipientId)
         .returning('id')
