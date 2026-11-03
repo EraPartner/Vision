@@ -276,7 +276,7 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
     armExport();
     await exportCsv("account_ids=3,9").expect(200);
     const [sql, params] = exportQuery();
-    expect(sql).toMatch(/t\.account_id IN \(\$\d+, \$\d+\)/);
+    expect(sql).toMatch(/t\.account_id IN \(\?, \?\)/);
     expect(params).toEqual([3, 9]);
   });
 

@@ -423,7 +423,7 @@ describe("Transaction Routes", () => {
         .expect(200);
 
       const probeSql = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0];
-      expect(probeSql).toContain("t.amount < 0");
+      expect(probeSql).toContain("dec_sign(t.amount) < 0");
     });
 
     it("should apply transaction_type=income filter to export query", async () => {
@@ -436,7 +436,7 @@ describe("Transaction Routes", () => {
         .expect(200);
 
       const probeSql = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0];
-      expect(probeSql).toContain("t.amount > 0");
+      expect(probeSql).toContain("dec_sign(t.amount) > 0");
     });
 
     it("should apply recipient_id filter to export query", async () => {
@@ -450,7 +450,7 @@ describe("Transaction Routes", () => {
       expect(probeParams).toContain(42);
     });
 
-    it("should apply search filter as ILIKE pattern in export query", async () => {
+    it("should apply search filter as an ilike() pattern in export query", async () => {
       dbQuery
         .mockResolvedValueOnce(pgResult({ rows: [{}] }))
         .mockResolvedValueOnce(pgResult({ rows: [] }));
@@ -458,7 +458,7 @@ describe("Transaction Routes", () => {
       await api.get("/api/transactions/export/csv?search=netflix").expect(200);
 
       const [probeSql, probeParams] = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]");
-      expect(probeSql).toMatch(/t\.memo ILIKE/);
+      expect(probeSql).toMatch(/ilike\(st\.memo, \?\)/);
       expect(probeParams).toContain("%netflix%");
     });
 
@@ -472,7 +472,7 @@ describe("Transaction Routes", () => {
         .expect(200);
 
       const [probeSql, probeParams] = must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]");
-      expect(probeSql).toMatch(/t\.id = \$/);
+      expect(probeSql).toMatch(/t\.id = \?/);
       expect(probeParams).toContain(7);
     });
 

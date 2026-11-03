@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for transactionRepository.
+ * Real-database tests for transactionRepository (SQLite, ADR-263).
  *
  * The mocked-pool suites that asserted query strings were removed (ADR-215);
  * transactionRepositoryOrdering.test.ts keeps only the count-cache checks.
@@ -17,19 +17,15 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
   it,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import transactionRepository, {
   clearTransactionCountCache,
@@ -123,7 +119,7 @@ async function insertTxn({
   const accountId = bank ? await ensureAccount(bank) : null;
   const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, memo, is_active, is_transfer, balance, transfer_source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     VALUES ($1, vision_numeric($2, 18, 4), $3, $4, $5, $6, $7, $8, $9, vision_numeric($10, 18, 4), $11)
      RETURNING id`,
     [
       date,
@@ -271,18 +267,11 @@ async function seedCorpus() {
   );
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "repositories/transactionRepository (real DB)",
   () => {
-    beforeAll(async () => {
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize.
-      await acquireDbSuiteLock();
-    }, 180_000);
-
+    // Each test file runs on its own SQLite database (tests/setup/db.ts), so
+    // there is no shared database to guard or serialize against.
     beforeEach(seedCorpus);
 
     afterEach(async () => {
@@ -302,7 +291,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -364,7 +352,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(must(byId[T.t4], "byId[T.t4]").tags).toEqual([]);
       });
 
-      it("filters by accountId and bankAccount (ILIKE substring)", async () => {
+      it("filters by accountId and bankAccount (ilike() substring)", async () => {
         const wise = await transactionRepository.getAll({
           accountId: asAccountId(must(acc["WISE USD"], "acc['WISE USD']")),
         });
@@ -715,7 +703,7 @@ describe.skipIf(!hasTestDatabase())(
       it("projects null for rows with no account", async () => {
         const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
           `INSERT INTO transactions (date, amount, currency, recipient_id)
-         VALUES ('2024-03-03', -1.00, 'EUR', $1) RETURNING id`,
+         VALUES ('2024-03-03', vision_numeric('-1.00', 18, 4), 'EUR', $1) RETURNING id`,
           [rec.delhaize],
         );
         const row = await transactionRepository.getById(
@@ -1244,7 +1232,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(must(row, "row").balance).toBeNull(); // manual rows never carry a bank stamp
         expect(must(row, "row").account_id).toBe(revolutId);
         const { rows } = await must(getTestPool(), "test pool").query<DbRow>(
-          `SELECT count(*)::int AS n FROM accounts WHERE lower(name) = 'revolut main'`,
+          `SELECT count(*) AS n FROM accounts WHERE lower(name) = 'revolut main'`,
         );
         expect(must(rows[0], "rows[0]").n).toBe(1);
         const { rows: stored } = await must(getTestPool(), "test pool").query<DbRow>(
@@ -1537,7 +1525,7 @@ describe.skipIf(!hasTestDatabase())(
         const pool = must(getTestPool(), "test pool");
         const planned = await pool.query<IdRow>(
           `INSERT INTO planned_transactions (planned_date, amount, recipient_id)
-         VALUES ('2024-02-29', '-18.75', $1) RETURNING id`,
+         VALUES ('2024-02-29', vision_numeric('-18.75', 18, 4), $1) RETURNING id`,
           [rec.delhaize],
         );
         await pool.query(

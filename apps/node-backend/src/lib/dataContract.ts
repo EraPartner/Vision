@@ -1,7 +1,7 @@
 /**
  * Data-contract checks for data Vision itself produced: bank/portfolio adapter
  * output, saved parser configs read back from `custom_parser_configs`, and
- * (through database/rowContracts.ts) PostgreSQL rows (ADR-193).
+ * (through database/rowContracts.ts) database rows (ADR-193).
  *
  * A mismatch here is a bug in Vision, not bad user input, so it never becomes
  * a 400. Tests and development throw so the bug fails loudly; every other

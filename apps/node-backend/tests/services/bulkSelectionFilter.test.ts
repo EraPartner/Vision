@@ -83,7 +83,7 @@ const REJECTED = {
   active: [0, 1, "yes", "TRUE", {}],
   amount_signed: [0, 1, "yes", {}],
   uncategorised: [0, 1, "yes", {}],
-  // Non-strings reached the ILIKE as '[object Object]' / 'a,b'.
+  // Non-strings reached the ilike() as '[object Object]' / 'a,b'.
   search: [7, {}, ["a"], true],
   bank_account: [7, {}, true],
   recipient_name: [7, {}, true],

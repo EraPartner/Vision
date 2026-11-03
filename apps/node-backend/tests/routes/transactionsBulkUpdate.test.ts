@@ -97,8 +97,8 @@ describe("POST /bulk-update — field validation", () => {
       /update "?transactions"?/i.test(sql),
     );
     expect(updateCalls).toHaveLength(1);
-    expect(must(updateCalls[0], "updateCalls[0]")[0]).toMatch(/category_id"? = \$\d/);
-    expect(must(updateCalls[0], "updateCalls[0]")[1]).toEqual(expect.arrayContaining([[1], null]));
+    expect(must(updateCalls[0], "updateCalls[0]")[0]).toMatch(/category_id"? = \?/);
+    expect(must(updateCalls[0], "updateCalls[0]")[1]).toEqual(expect.arrayContaining([JSON.stringify([1]), null]));
   });
 
   it("rejects null recipient_id (column is NOT NULL)", async () => {
@@ -180,7 +180,7 @@ describe("POST /bulk-update — success paths", () => {
     );
     expect(updateCalls).toHaveLength(1);
     expect(must(updateCalls[0], "updateCalls[0]")[1]).toEqual(
-      expect.arrayContaining([[5], 7, 99, false]),
+      expect.arrayContaining([JSON.stringify([5]), 7, 99, false]),
     );
   });
 

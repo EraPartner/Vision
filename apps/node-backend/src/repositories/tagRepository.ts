@@ -6,13 +6,10 @@
  */
 
 import { sql } from 'kysely';
+import { withTransaction } from '../database/connection.ts';
 import { checkedRow, checkedRows, db } from '../database/db.ts';
 import { countRowSchema } from '../database/rowSchemas.ts';
-import {
-  requireRow,
-  tagRowSchema,
-  tagUpsertRowSchema,
-} from '../database/rows/catalog.ts';
+import { requireRow, tagRowSchema } from '../database/rows/catalog.ts';
 
 import type { TagRow } from '../types/rows.ts';
 import type { TagId } from '@vision/types/brands';
@@ -44,12 +41,14 @@ const tagRepository = {
 
   /**
    * Count tags matching the active filter (for paginated list totals).
-   * @returns `COUNT(*)` is a bigint string; parsed here.
+   * @returns `COUNT(*)` read as a bigint string; parsed here.
    */
   async getCount({
     active = null,
   }: { active?: boolean | null } = {}): Promise<number> {
-    let builder = db.selectFrom('tags').select(sql<string>`COUNT(*)`.as('count'));
+    let builder = db
+      .selectFrom('tags')
+      .select(sql<string>`CAST(COUNT(*) AS TEXT)`.as('count'));
     if (active !== null) builder = builder.where('is_active', '=', active);
     const row = await checkedRow(countRowSchema, builder);
     return parseInt(requireRow(row, 'tag count').count, 10);
@@ -87,31 +86,41 @@ const tagRepository = {
    * If slug exists and is soft-deleted, it is reactivated.
    * Color is preserved if already set; new color is applied only if column was NULL.
    *
+   * `reactivated` is true when the slug already existed (the upsert took its
+   * DO UPDATE branch). SQLite has no `xmax`, so the existence read runs first,
+   * in the same transaction as the upsert, on the single writer.
+   *
    * @param slug  Already normalized by caller
    */
   async findOrCreateBySlug(
     slug: string,
     color: string | null = null,
   ): Promise<{ tag: TagRow; reactivated: boolean }> {
-    const result = await checkedRow(
-      tagUpsertRowSchema,
-      db
-        .insertInto('tags')
-        .values({ slug, color })
-        .onConflict((oc) =>
-          oc.column('slug').doUpdateSet({
-            is_active: true,
-            color: sql<string | null>`COALESCE(tags.color, EXCLUDED.color)`,
-            updated_at: sql<Date>`NOW()`,
-          }),
-        )
-        .returningAll()
-        .returning(sql<boolean>`(xmax <> 0)`.as('was_conflict')),
-    );
-    const row = requireRow(result, 'tag upsert');
-    const reactivated = row.was_conflict && row.is_active;
-    const { was_conflict: _wc, ...tag } = row;
-    return { tag, reactivated };
+    return withTransaction(async (client) => {
+      const existing = await checkedRow(
+        tagRowSchema,
+        db.selectFrom('tags').selectAll().where('slug', '=', slug),
+        client,
+      );
+      const result = await checkedRow(
+        tagRowSchema,
+        db
+          .insertInto('tags')
+          .values({ slug, color })
+          .onConflict((oc) =>
+            oc.column('slug').doUpdateSet({
+              is_active: true,
+              color: sql<string | null>`COALESCE(tags.color, EXCLUDED.color)`,
+              updated_at: sql<Date>`now()`,
+            }),
+          )
+          .returningAll(),
+        client,
+      );
+      const tag = requireRow(result, 'tag upsert');
+      const wasConflict = existing !== undefined;
+      return { tag, reactivated: wasConflict && tag.is_active };
+    });
   },
 
   /**
@@ -139,7 +148,7 @@ const tagRepository = {
       tagRowSchema,
       db
         .updateTable('tags')
-        .set({ ...changes, updated_at: sql<Date>`NOW()` })
+        .set({ ...changes, updated_at: sql<Date>`now()` })
         .where('id', '=', id)
         .returningAll(),
     );
@@ -154,7 +163,7 @@ const tagRepository = {
       tagRowSchema,
       db
         .updateTable('tags')
-        .set({ is_active: false, updated_at: sql<Date>`NOW()` })
+        .set({ is_active: false, updated_at: sql<Date>`now()` })
         .where('id', '=', id)
         .returningAll(),
     );
@@ -169,7 +178,7 @@ const tagRepository = {
       countRowSchema,
       db
         .selectFrom('transaction_tags')
-        .select(sql<string>`COUNT(*)`.as('count'))
+        .select(sql<string>`CAST(COUNT(*) AS TEXT)`.as('count'))
         .where('tag_id', '=', tagId),
     );
     return parseInt(requireRow(row, 'tag reference count').count, 10);

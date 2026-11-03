@@ -47,24 +47,29 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     await unmarkTransfer(asTransactionId(10));
 
     const sqls = issued();
-    // Both the target and its peer are locked FOR UPDATE before any mutation
-    // (mirrors markTransfer) so a concurrent re-pair can't strand a third row.
-    const locks = sqls.filter((s) => s.sql.includes("for update"));
-    expect(locks).toHaveLength(1);
-    expect(must(locks[0], "locks[0]").sql).toMatch(/order by id.*for update/s);
+    // Both the target and its peer are read in one id-ordered query inside the
+    // write transaction before any mutation (mirrors markTransfer). SQLite has
+    // no FOR UPDATE: the BEGIN IMMEDIATE transaction on the single writer is
+    // what keeps a concurrent re-pair from stranding a third row.
+    expect(sqls.filter((s) => s.sql.includes("for update"))).toHaveLength(0);
+    const pairReads = sqls.filter(
+      (s) => s.sql.startsWith("select id, transfer_peer_id") && s.sql.includes("order by id"),
+    );
+    expect(pairReads).toHaveLength(1);
+    expect(must(pairReads[0], "pairReads[0]").params).toEqual([JSON.stringify([10, 20])]);
     // The pairing is persisted in transfer_dismissals (ordered, idempotent)…
     const dismissal = sqls.find((s) =>
       s.sql.includes("insert into transfer_dismissals"),
     );
     expect(dismissal).toBeTruthy();
-    expect(must(dismissal, "dismissal").sql).toContain("least");
-    expect(must(dismissal, "dismissal").sql).toContain("greatest");
+    // …ordered as (smaller id, larger id), which chk_transfer_dismissals_ordered requires.
+    expect(must(dismissal, "dismissal").params).toEqual([10, 20]);
     expect(must(dismissal, "dismissal").sql).toContain("on conflict do nothing");
     // …and the ROWS go back to open so each can still pair with OTHER candidates.
     const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(2); // the row + its peer
     for (const update of updates) {
-      expect(update.sql).toMatch(/transfer_source = (null|\$\d)/);
+      expect(update.sql).toMatch(/transfer_source = (null|\?)/);
       expect(update.params).not.toContain("dismissed");
     }
   });
@@ -76,8 +81,12 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     await unmarkTransfer(asTransactionId(10));
 
     const sqls = issued();
-    // Both rows were locked in one sorted FOR UPDATE query.
-    expect(sqls.filter((s) => s.sql.includes("for update"))).toHaveLength(1);
+    // Both rows were read in one sorted query inside the write transaction.
+    expect(
+      sqls.filter(
+        (s) => s.sql.startsWith("select id, transfer_peer_id") && s.sql.includes("order by id"),
+      ),
+    ).toHaveLength(1);
     // The stale pair 10↔20 is no longer reciprocal → no dismissal recorded…
     expect(sqls.find((s) => s.sql.includes("transfer_dismissals"))).toBeUndefined();
     // …and ONLY the target is reset; the re-paired peer (20→99) is left intact,
@@ -97,7 +106,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     expect(sqls.find((s) => s.sql.includes("transfer_dismissals"))).toBeUndefined();
     const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(1);
-    expect(must(updates[0], "updates[0]").sql).toMatch(/transfer_source = (null|\$\d)/);
+    expect(must(updates[0], "updates[0]").sql).toMatch(/transfer_source = (null|\?)/);
   });
 });
 
@@ -159,11 +168,13 @@ describe("suggestion page input", () => {
       nextCursor: null,
       items: [{ outflow: { id: 1 }, candidates: [{ id: 3 }] }],
     });
-    // The window (3 days) binds once per use; besides it, the second page
-    // continues after (1, 2) and asks for limit + 1 = 2 rows.
+    // The window (3 days) binds once per use, as add_days(date, -3) and
+    // add_days(date, 3); besides it, the second page continues after (1, 2)
+    // and asks for limit + 1 = 2 rows.
     const pageParams = vi.mocked(query).mock.calls[2]?.[1] ?? [];
     expect(pageParams).toContain(3);
-    expect(pageParams.filter((value) => value !== 3)).toEqual([1, 2, 2]);
+    expect(pageParams).toContain(-3);
+    expect(pageParams.filter((value) => value !== 3 && value !== -3)).toEqual([1, 2, 2]);
   });
 
   it.each([

@@ -293,7 +293,7 @@ export async function backfillTransfersOnce(): Promise<{
   const result = await reconcileTransfers();
   await db
     .insertInto("user_settings")
-    .values({ key: "transfers_backfilled", value: sql`'true'::jsonb` })
+    .values({ key: "transfers_backfilled", value: sql`vision_jsonb('true')` })
     .onConflict((oc) => oc.column("key").doNothing())
     .execute();
   logger.info(

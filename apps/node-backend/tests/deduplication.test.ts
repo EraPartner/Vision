@@ -13,6 +13,7 @@ vi.mock("../src/database/connection.ts", () =>
     withSavepointIfInTransaction: vi.fn((_name: string, fn: () => unknown) =>
       Promise.resolve(fn()),
     ),
+    __getAmbientTransactionClient: vi.fn(() => null),
   }),
 );
 
@@ -27,7 +28,10 @@ import {
 } from "../src/services/deduplication.ts";
 import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
-import { withSavepointIfInTransaction } from "../src/database/connection.ts";
+import {
+  __getAmbientTransactionClient,
+  withSavepointIfInTransaction,
+} from "../src/database/connection.ts";
 
 const query = rawQuery as unknown as Mock<
   (
@@ -271,21 +275,38 @@ describe("DeduplicationService", () => {
   });
 
   describe("lockManualTransactionIdentity", () => {
-    it("takes a transaction-scoped advisory lock for the versioned hash", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
+    // PostgreSQL took pg_advisory_xact_lock on the identity hash. SQLite runs
+    // every transaction as BEGIN IMMEDIATE on the single writer, so the
+    // caller's transaction already serializes the check-then-insert window;
+    // the guarantee is that the call only succeeds inside one. The concurrent
+    // behaviour itself is covered against a real database in
+    // manualDedupSavepoint.db.test.ts.
+    const identity = {
+      date: "2026-02-10",
+      amount: -50,
+      recipientId: 22,
+      memo: "Rent",
+      accountId: 7,
+    };
 
-      await lockManualTransactionIdentity({
-        date: "2026-02-10",
-        amount: -50,
-        recipientId: 22,
-        memo: "Rent",
-        accountId: 7,
+    it("holds the identity through the caller's write transaction without extra SQL", async () => {
+      vi.mocked(__getAmbientTransactionClient).mockReturnValueOnce({
+        query: vi.fn(),
+        release: vi.fn(),
       });
 
-      expect(query).toHaveBeenCalledWith(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-        [expect.stringMatching(/^[0-9a-f]{64}$/)],
+      await expect(lockManualTransactionIdentity(identity)).resolves.toBeUndefined();
+
+      expect(query).not.toHaveBeenCalled();
+    });
+
+    it("refuses to run outside a transaction, where nothing would hold the lock", async () => {
+      vi.mocked(__getAmbientTransactionClient).mockReturnValueOnce(null);
+
+      await expect(lockManualTransactionIdentity(identity)).rejects.toThrow(
+        "lockManualTransactionIdentity must run inside withTransaction()",
       );
+      expect(query).not.toHaveBeenCalled();
     });
 
     it("uses the same lock identity after a legacy label resolves to its account id", () => {

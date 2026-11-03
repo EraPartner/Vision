@@ -21,7 +21,6 @@ import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.ts";
 import { logger } from "../config/logger.ts";
 import { addAll, divide, roundMoney, toDecimal } from "../lib/money.ts";
 import { median, firstNonZero } from "../lib/math.ts";
-import type { RecipientId } from "@vision/types/brands";
 
 /**
  * The bespoke projection `detectRecurringPatterns`' query selects — not a
@@ -280,7 +279,9 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
         ])
         .where("t.is_active", "=", true)
         .where("t.recipient_id", "is not", null)
-        .where("t.date", ">=", sql<Date>`CURRENT_DATE - INTERVAL '3 years'`)
+        // today() is the backend-local calendar day (ADR-009); sub_interval on a
+        // date returns a date and clamps Feb 29 like PostgreSQL.
+        .where("t.date", ">=", sql<Date>`sub_interval(today(), '3 years')`)
         .orderBy((eb) =>
           eb.fn.coalesce("r.primary_recipient_id", "t.recipient_id"),
         )
@@ -299,11 +300,10 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     // planned_transactions may not exist in partially initialized environments.
     const plannedTableCheck = await checkedRow(
       tableExistsRowSchema,
-      db.selectNoFrom(
-        sql<boolean>`to_regclass('public.planned_transactions') IS NOT NULL`.as(
-          "exists",
-        ),
-      ),
+      sql`SELECT EXISTS (
+            SELECT 1 FROM sqlite_schema
+            WHERE type = 'table' AND name = 'planned_transactions'
+          ) AS "exists::bool"`,
     );
     const plannedTableAvailable = Boolean(plannedTableCheck?.exists);
 
@@ -348,12 +348,8 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
               .as("recipient_id"),
           )
           .distinct()
-          .where((eb) =>
-            eb(
-              eb.fn.coalesce("r.primary_recipient_id", "pt.recipient_id"),
-              "=",
-              sql<RecipientId>`ANY(${allRecipientIds})`,
-            ),
+          .where(
+            sql<boolean>`COALESCE(r.primary_recipient_id, pt.recipient_id) IN (SELECT value FROM json_each(${JSON.stringify(allRecipientIds)}))`,
           )
           .where("pt.is_active", "=", true),
       );

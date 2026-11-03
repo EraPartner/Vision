@@ -1,12 +1,9 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
-import { closePool } from "../src/database/connection.ts";
+import { closePool, withTransaction } from "../src/database/connection.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { bulkDeleteTransactions } from "../src/services/transactionBulkService.ts";
 import { executePlanned } from "../src/services/plannedExecutionService.ts";
@@ -24,35 +21,29 @@ interface IdRow {
 
 type ExecutePlannedResult = Awaited<ReturnType<typeof executePlanned>>;
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "planned execution concurrency (real DB)",
   () => {
     const plannedIds: number[] = [];
     const transactionIds: number[] = [];
     const recipientIds: number[] = [];
 
-    beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       await must(getTestPool(), "test pool").query(
-        "DELETE FROM planned_transactions WHERE id = ANY($1::int[])",
-        [plannedIds.splice(0)],
+        "DELETE FROM planned_transactions WHERE id IN (SELECT value FROM json_each($1))",
+        [JSON.stringify(plannedIds.splice(0))],
       );
       await must(getTestPool(), "test pool").query(
-        "DELETE FROM transactions WHERE id = ANY($1::int[])",
-        [transactionIds.splice(0)],
+        "DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))",
+        [JSON.stringify(transactionIds.splice(0))],
       );
       await must(getTestPool(), "test pool").query(
-        "DELETE FROM recipients WHERE id = ANY($1::int[])",
-        [recipientIds.splice(0)],
+        "DELETE FROM recipients WHERE id IN (SELECT value FROM json_each($1))",
+        [JSON.stringify(recipientIds.splice(0))],
       );
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -67,13 +58,13 @@ describe.skipIf(!hasTestDatabase())(
       );
       recipientIds.push(must(recipient.rows[0], "recipient.rows[0]").id);
       const transactions = await pool.query<IdRow>(
-        "INSERT INTO transactions (date, amount, currency, recipient_id) VALUES ('2026-07-01', '-10.00', 'EUR', $1), ('2026-08-01', '-10.00', 'EUR', $1) RETURNING id",
+        "INSERT INTO transactions (date, amount, currency, recipient_id) VALUES ('2026-07-01', vision_numeric('-10.00', 18, 4), 'EUR', $1), ('2026-08-01', vision_numeric('-10.00', 18, 4), 'EUR', $1) RETURNING id",
         [must(recipient.rows[0], "recipient.rows[0]").id],
       );
       const ids = transactions.rows.map((row: { id: number }) => row.id);
       transactionIds.push(...ids);
       const planned = await pool.query<IdRow>(
-        "INSERT INTO planned_transactions (planned_date, amount, currency, is_recurring, recurrence_pattern, max_occurrences, recurrence_end_date) VALUES ('2026-07-01', '-10.00', 'EUR', true, 'monthly', $1, $2) RETURNING id",
+        "INSERT INTO planned_transactions (planned_date, amount, currency, is_recurring, recurrence_pattern, max_occurrences, recurrence_end_date) VALUES ('2026-07-01', vision_numeric('-10.00', 18, 4), 'EUR', true, 'monthly', $1, $2) RETURNING id",
         [max, end],
       );
       const id = asPlannedTransactionId(must(planned.rows[0], "planned row").id);
@@ -81,56 +72,59 @@ describe.skipIf(!hasTestDatabase())(
       return { id, ids };
     }
 
-    // Hold the parent until both application transactions are waiting. The old
-    // implementation reads stale state before blocking on the execution insert;
-    // the fixed implementation waits on the parent before its first read.
+    // Hold the single writer until both application transactions have queued
+    // behind it. PostgreSQL held the parent row FOR UPDATE and polled
+    // pg_stat_activity for two lock waiters; under SQLite every
+    // withTransaction() is BEGIN IMMEDIATE on the one writer connection, so the
+    // guarantee to prove is that neither execution gets anywhere while another
+    // write transaction is open, and that they then run one after the other.
     async function concurrently(
       id: PlannedTransactionId,
       ids: number[],
       expectedOccurrence?: string,
     ) {
-      const gate = await must(getTestPool(), "test pool").connect();
-      let outcomes:
-        Promise<PromiseSettledResult<ExecutePlannedResult>[]> | undefined;
+      let releaseGate: (() => void) | undefined;
+      let gateHeld: (() => void) | undefined;
+      const held = new Promise<void>((resolve) => {
+        gateHeld = resolve;
+      });
+      const gate = withTransaction(async (client) => {
+        await client.query("SELECT id FROM planned_transactions WHERE id = $1", [id]);
+        gateHeld?.();
+        await new Promise<void>((resolve) => {
+          releaseGate = resolve;
+        });
+      });
+      await held;
+      // Started outside the gate's callback, so they do not join its
+      // transaction: each opens its own and waits for the writer.
+      let settled = 0;
+      const outcomes = Promise.allSettled(
+        ids.map((executedTransactionId: number) =>
+          executePlanned({
+            id,
+            executedTransactionId: asTransactionId(executedTransactionId),
+            executionDate: "2026-07-01",
+            expectedOccurrence,
+          }).finally(() => {
+            settled += 1;
+          }),
+        ),
+      );
       try {
-        await gate.query("BEGIN");
-        await gate.query(
-          "SELECT id FROM planned_transactions WHERE id = $1 FOR UPDATE",
-          [id],
-        );
-        outcomes = Promise.allSettled(
-          ids.map((executedTransactionId: number) =>
-            executePlanned({
-              id,
-              executedTransactionId: asTransactionId(executedTransactionId),
-              executionDate: "2026-07-01",
-              expectedOccurrence,
-            }),
-          ),
-        );
-        const deadline = Date.now() + 5000;
-        let waiters = 0;
-        while (Date.now() < deadline) {
-          const result = await must(getTestPool(), "test pool").query<{ count: number }>(
-            "SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%planned_transaction%'",
-          );
-          waiters = must(result.rows[0], "result.rows[0]").count;
-          if (waiters >= 2) break;
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        expect(waiters).toBeGreaterThanOrEqual(2);
-        await gate.query("COMMIT");
-        return await outcomes;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(settled).toBe(0);
+        expect(await persisted(id)).toMatchObject({ count: 0 });
       } finally {
-        await gate.query("ROLLBACK");
-        gate.release();
-        if (outcomes) await outcomes;
+        releaseGate?.();
+        await gate;
       }
+      return await outcomes;
     }
 
     async function persisted(id: number) {
       const { rows } = await must(getTestPool(), "test pool").query<{ day: string; is_executed: boolean; count: number }>(
-        "SELECT to_char(planned_date, 'YYYY-MM-DD') AS day, is_executed, (SELECT count(*)::int FROM planned_transaction_executions WHERE planned_transaction_id = pt.id) AS count FROM planned_transactions pt WHERE id = $1",
+        "SELECT to_char(planned_date, 'YYYY-MM-DD') AS day, is_executed, (SELECT count(*) FROM planned_transaction_executions WHERE planned_transaction_id = pt.id) AS count FROM planned_transactions pt WHERE id = $1",
         [id],
       );
       return rows[0];
@@ -211,8 +205,8 @@ describe.skipIf(!hasTestDatabase())(
         [id, ids[0]],
       );
       await must(getTestPool(), "test pool").query(
-        "UPDATE transactions SET date = '2026-07-01' WHERE id = ANY($1::int[])",
-        [ids],
+        "UPDATE transactions SET date = '2026-07-01' WHERE id IN (SELECT value FROM json_each($1))",
+        [JSON.stringify(ids)],
       );
       const results = await concurrently(id, ids, "2026-07-01");
       expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
@@ -271,8 +265,8 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         (
           await must(getTestPool(), "test pool").query<IdRow>(
-            "SELECT id FROM transactions WHERE id = ANY($1::int[])",
-            [ids],
+            "SELECT id FROM transactions WHERE id IN (SELECT value FROM json_each($1))",
+            [JSON.stringify(ids)],
           )
         ).rowCount,
       ).toBe(2);

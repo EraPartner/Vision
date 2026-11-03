@@ -1,5 +1,5 @@
 /**
- * Real-PostgreSQL wire shape of split reads and writes. Replaces the
+ * Real-database wire shape of split reads and writes. Replaces the
  * mocked-pool splitRepository.test.ts, which choreographed query order and
  * asserted SQL fragments (LATERAL joins, CTE names): here the same outcomes —
  * real amount_paid / recipient_name on settle and getById, one payment shape
@@ -11,11 +11,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import splitPersistence from "../src/repositories/splitRepository.ts";
@@ -39,17 +36,15 @@ let payeeId: number;
 async function insertTx(amount: string, date = "2026-03-01"): Promise<number> {
   const { rows } = await must(getTestPool(), "test pool").query<IdRow>(
     `INSERT INTO transactions (date, amount, memo, currency, recipient_id)
-     VALUES ($1, $2, $3, 'EUR', $4) RETURNING id`,
+     VALUES ($1, vision_numeric($2, 18, 4), $3, 'EUR', $4) RETURNING id`,
     [date, amount, MARK, payeeId],
   );
   txIds.push(must(rows[0], "rows[0]").id);
   return must(rows[0], "rows[0]").id;
 }
 
-describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
+describe("split reads and writes (real DB)", () => {
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
     const pool = must(getTestPool(), "test pool");
     const owes = await pool.query<IdRow>(
       `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id`,
@@ -66,17 +61,15 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
   afterAll(async () => {
     try {
       const pool = getTestPool();
-      if (pool) {
-        if (txIds.length > 0)
-          await pool.query("DELETE FROM transactions WHERE id = ANY($1)", [
-            txIds,
-          ]);
-        await pool.query("DELETE FROM recipients WHERE normalized_name LIKE $1", [
-          `${MARK}%`,
-        ]);
-      }
+      if (txIds.length > 0)
+        await pool.query(
+          "DELETE FROM transactions WHERE id IN (SELECT value FROM json_each($1))",
+          [JSON.stringify(txIds)],
+        );
+      await pool.query("DELETE FROM recipients WHERE normalized_name LIKE $1", [
+        `${MARK}%`,
+      ]);
     } finally {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     }
@@ -115,6 +108,40 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
       asRecipientId(recipientId),
     );
     expect(exportRows.map((row) => row.amount)).toContain(17.5);
+  });
+
+  it("sums payments and remaining in exact decimals at the 4-dp scale", async () => {
+    // 0.1 + 0.2 is 0.30000000000000004 in binary floating point; dec_sum keeps
+    // it exact, and remaining = 10.0001 - 0.3 stays 9.7001 (not 9.700099999...).
+    const txId = await insertTx("-10.0001");
+    const split = await splitRepository.createSplitAtomic({
+      transaction_id: asTransactionId(txId),
+      recipient_id: asRecipientId(recipientId),
+      amount: 10.0001,
+      note: null,
+    });
+    expect(split).toMatchObject({ amount: 10.0001, amount_paid: 0 });
+    await splitRepository.addPayment({ split_id: split.id, amount: 0.1 });
+    await splitRepository.addPayment({ split_id: split.id, amount: 0.2 });
+
+    expect(await splitRepository.getSplitById(split.id)).toMatchObject({
+      amount: 10.0001,
+      amount_paid: 0.3,
+    });
+    const [owed] = (await splitRepository.getOwedByRecipient(asRecipientId(recipientId))).filter(
+      (row) => row.id === split.id,
+    );
+    expect(owed).toMatchObject({ amount: 10.0001, amount_paid: 0.3, remaining: 9.7001 });
+    const exportRows = await splitRepository.getOwedExportRowsByRecipient(
+      asRecipientId(recipientId),
+    );
+    expect(exportRows.map((row) => row.amount)).toContain(9.7001);
+    // The stored values are the canonical 4-dp text.
+    const { rows } = await must(getTestPool(), "test pool").query<{ amount: string }>(
+      "SELECT amount FROM split_payments WHERE split_id = $1 ORDER BY id",
+      [split.id],
+    );
+    expect(rows).toEqual([{ amount: "0.1000" }, { amount: "0.2000" }]);
   });
 
   it("settle and getById report the real paid total and recipient name", async () => {

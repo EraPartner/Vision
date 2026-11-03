@@ -76,7 +76,7 @@ export const attachmentRepository = {
       countRowSchema,
       db
         .selectFrom('attachments')
-        .select(sql<string>`COUNT(*)`.as('count'))
+        .select(sql<string>`CAST(COUNT(*) AS TEXT)`.as('count'))
         .where('transaction_id', '=', asTransactionId(transactionId)),
     );
     return parseInt(requireRow(row, 'attachment count').count, 10);
@@ -94,7 +94,9 @@ export const attachmentRepository = {
       db
         .selectFrom('attachments')
         .select('stored_path')
-        .where(sql<boolean>`transaction_id = ANY(${transactionIds}::int[])`),
+        .where(
+          sql<boolean>`transaction_id IN (SELECT value FROM json_each(${JSON.stringify(transactionIds)}))`,
+        ),
     );
     return rows.map((row) => row.stored_path);
   },

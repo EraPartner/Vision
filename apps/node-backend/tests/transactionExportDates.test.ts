@@ -12,11 +12,14 @@ import { makeTransactionRow } from "./builders/domainRows.ts";
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
-vi.mock("../src/database/connection.ts", () => mockConnection());
+vi.mock("../src/database/connection.ts", () =>
+  mockConnection({ withReadSnapshot: vi.fn() }),
+);
 
 import {
   getClient as rawGetClient,
   query as rawDbQuery,
+  withReadSnapshot as rawWithReadSnapshot,
 } from "../src/database/connection.ts";
 import type {
   PgPoolClient,
@@ -39,6 +42,7 @@ function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
 
 const getClient = vi.mocked(rawGetClient);
 const dbQuery = vi.mocked(rawDbQuery);
+const withReadSnapshot = vi.mocked(rawWithReadSnapshot);
 
 // A pg DATE arrives as a LOCAL-midnight Date object; this is the shape the
 // export must turn back into a plain calendar day regardless of process TZ.
@@ -103,8 +107,8 @@ describe("export date serialization", () => {
       },
     });
 
-    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0]).toMatch(/t\.account_id IN \(\$1, \$2\)/);
-    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0]).toContain("t.amount < 0");
+    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0]).toMatch(/t\.account_id IN \(\?, \?\)/);
+    expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[0]).toContain("dec_sign(t.amount) < 0");
     expect(must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]")[1]).toEqual([3, 9]);
   });
 
@@ -213,7 +217,7 @@ describe("export tag aggregation", () => {
     expect(valueAt(JSON.parse(must(res.chunks[0], "res.chunks[0]")), "tags")).toEqual(["alpha", "beta", "gamma"]);
   });
 
-  it("fetches tags via a single pre-aggregated LEFT JOIN, not a per-row correlated subquery", async () => {
+  it("fetches each row's active tags in slug order through the transaction_tags primary key", async () => {
     primeQueries([exportRow()]);
     const res = mockRes();
 
@@ -223,42 +227,63 @@ describe("export tag aggregation", () => {
 
     // dbQuery calls: [0] probe, [1] first chunk.
     const chunkSql = must(dbQuery.mock.calls[1], "dbQuery.mock.calls[1]")[0];
-    // Slug ordering + active-only filter preserved …
-    expect(chunkSql).toContain("array_agg(tg.slug ORDER BY tg.slug)");
-    expect(chunkSql).toContain("WHERE tg.is_active = true");
-    // … as a grouped LEFT JOIN, not a t.id-correlated subquery.
-    expect(chunkSql).toContain("GROUP BY tt.transaction_id");
-    expect(chunkSql).not.toContain("WHERE tt.transaction_id = t.id");
+    // Slug ordering + active-only filter preserved, folded by json_group_array
+    // (array_agg in PostgreSQL) over a slug-ordered subquery …
+    expect(chunkSql).toContain("json_group_array(tag_slugs.slug)");
+    expect(chunkSql).toContain("ORDER BY tg.slug");
+    expect(chunkSql).toContain("tg.is_active = 1");
+    // … per chunk row on the (transaction_id, tag_id) primary key. SQLite would
+    // aggregate the whole junction table for a grouped LEFT JOIN on every
+    // chunk, which is what the PostgreSQL planner avoided.
+    expect(chunkSql).toContain("WHERE tt.transaction_id = t.id");
+    expect(chunkSql).not.toContain("GROUP BY tt.transaction_id");
+    // The driver parses the JSON array; an untagged row gets [] from
+    // json_group_array, as COALESCE(array_agg(...), '{}') gave.
+    expect(chunkSql).toContain('AS "tags::json"');
   });
 });
 
 describe("bulk export service snapshot", () => {
-  function useClientResults(...results: object[]) {
+  /**
+   * withReadSnapshot (PostgreSQL's REPEATABLE READ READ ONLY transaction) runs
+   * the export on one snapshot client; the real helper opens and closes that
+   * connection around the callback whether it resolves or throws.
+   */
+  function useSnapshotResults(...results: object[]) {
     const query = vi.fn();
     for (const result of results) query.mockResolvedValueOnce(result);
-    const release = vi.fn();
-    getClient.mockResolvedValue(partial<PgPoolClient>({ query, release }));
-    return { query, release };
+    const client = partial<PgPoolClient>({ query, release: vi.fn() });
+    const settled: string[] = [];
+    withReadSnapshot.mockImplementation(async (fn) => {
+      try {
+        const value = await fn(client);
+        settled.push("resolved");
+        return value;
+      } catch (err) {
+        settled.push("rejected");
+        throw err;
+      }
+    });
+    return { query, settled };
   }
 
-  it("rejects a malformed selector before acquiring a database client", async () => {
+  it("rejects a malformed selector before opening a snapshot", async () => {
     const res = mockRes();
 
     await expect(
       streamBulkTransactionExport(res, { format: "csv" }),
     ).rejects.toThrow(/either .* or .* must be provided/i);
 
+    expect(withReadSnapshot).not.toHaveBeenCalled();
     expect(getClient).not.toHaveBeenCalled();
     expect(res.setHeader).not.toHaveBeenCalled();
   });
 
-  it("commits and releases one repeatable-read snapshot after streaming", async () => {
-    const { query, release } = useClientResults(
-      {},
+  it("runs the count, probe and chunks on one read snapshot", async () => {
+    const { query, settled } = useSnapshotResults(
       { rows: [{ n: 1 }] },
       { rows: [{ "?column?": 1 }] },
       { rows: [exportRow()] },
-      {},
     );
     const res = mockRes();
 
@@ -267,21 +292,23 @@ describe("bulk export service snapshot", () => {
       format: "csv",
     });
 
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toBe(
-      "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    expect(withReadSnapshot).toHaveBeenCalledOnce();
+    expect(settled).toEqual(["resolved"]);
+    // Every statement ran on the snapshot client, none on the shared reader.
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(dbQuery).not.toHaveBeenCalled();
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[0]).toMatch(
+      /count\(\*\) as "n".*json_each\(\?\)/is,
     );
-    expect(must(query.mock.calls.at(-1), "query.mock.calls entry last")[0]).toBe("COMMIT");
-    expect(release).toHaveBeenCalledOnce();
+    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([JSON.stringify([1])]);
     expect(methodMock(res, "end")).toHaveBeenCalledOnce();
     expect(res.setHeader).toHaveBeenCalledWith("X-Exported-Count", "1");
   });
 
-  it("rolls back and releases the snapshot when the export has no rows", async () => {
-    const { query, release } = useClientResults(
-      {},
+  it("ends the snapshot with the error when the export has no rows", async () => {
+    const { settled } = useSnapshotResults(
       { rows: [{ n: 1 }] },
       { rows: [] },
-      {},
     );
     const res = mockRes();
 
@@ -289,8 +316,8 @@ describe("bulk export service snapshot", () => {
       streamBulkTransactionExport(res, { ids: [1], format: "csv" }),
     ).rejects.toThrow("No transactions found");
 
-    expect(must(query.mock.calls.at(-1), "query.mock.calls entry last")[0]).toBe("ROLLBACK");
-    expect(release).toHaveBeenCalledOnce();
+    expect(withReadSnapshot).toHaveBeenCalledOnce();
+    expect(settled).toEqual(["rejected"]);
     expect(methodMock(res, "end")).not.toHaveBeenCalled();
   });
 });

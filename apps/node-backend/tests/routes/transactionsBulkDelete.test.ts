@@ -147,7 +147,8 @@ describe("POST /bulk-delete — id-mode success", () => {
       /delete from "?transactions"?/i.test(sql),
     );
     expect(deleteCall).toBeDefined();
-    expect(must(deleteCall, "deleteCall")[1]).toEqual([[1, 2, 3]]);
+    // The ids bind as one JSON array (`IN (SELECT value FROM json_each(?))`).
+    expect(must(deleteCall, "deleteCall")[1]).toEqual([JSON.stringify([1, 2, 3])]);
   });
 
   it("does not schedule a refresh when nothing was deleted", async () => {
@@ -208,7 +209,7 @@ describe("POST /bulk-delete — filter-mode", () => {
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
       /delete from "?transactions"?/i.test(sql),
     );
-    expect(must(deleteCall, "deleteCall")[1]).toEqual([[11, 22]]);
+    expect(must(deleteCall, "deleteCall")[1]).toEqual([JSON.stringify([11, 22])]);
   });
 
   it("reports selection drift to zero without scheduling reconciliation", async () => {

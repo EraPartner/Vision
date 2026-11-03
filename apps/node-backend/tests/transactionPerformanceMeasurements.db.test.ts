@@ -1,26 +1,28 @@
 /**
- * Opt-in PostgreSQL 18 measurement harness for two performance acceptance items.
+ * Opt-in SQLite measurement harness for two performance acceptance items
+ * (ADR-263; this replaced the PostgreSQL 18 EXPLAIN (ANALYZE, BUFFERS) harness).
  *
- * Run only on the disposable database provisioned by scripts/with-test-db.sh:
+ * Run it on this file's own disposable test database (tests/setup/db.ts):
  *
- *   VISION_RUN_PERFORMANCE_PROBES=1 bun run test:db \
+ *   VISION_RUN_PERFORMANCE_PROBES=1 bunx vitest run \
  *     tests/transactionPerformanceMeasurements.db.test.ts --reporter=verbose
  *
- * The corpus and every DDL change live in one transaction which is rolled back.
- * The stamped-balance comparison drops the existing production index only
- * inside that transaction, so the database is restored even if an assertion
- * fails. The logged JSON is the original EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
- * response and can be retained when a fresh hardware-specific plan is needed.
+ * The corpus is seeded in one write transaction on that database, which is
+ * discarded after the run. The stamped-balance comparison drops the production
+ * index only inside a rolled-back transaction (SQLite DDL is transactional),
+ * so the schema is restored even if an assertion fails. SQLite has no EXPLAIN
+ * ANALYZE: each run times the statement on the driver, and the plan is the
+ * EXPLAIN QUERY PLAN tree, which is logged as JSON and can be retained when a
+ * fresh hardware-specific plan is needed.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { PoolClient } from "pg";
+import { withTransaction } from "../src/database/connection.ts";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
+  inRollbackTransaction,
+  type TestPool,
 } from "./setup/db.ts";
 import { must } from "./helpers/must.ts";
 
@@ -28,27 +30,21 @@ interface IdRow {
   id: number;
 }
 
-/** One node of an EXPLAIN (FORMAT JSON) plan tree, as far as this harness reads it. */
-interface PlanNode {
-  "Node Type": string;
-  "Relation Name"?: string;
-  "Index Name"?: string;
-  "Sort Method"?: string;
-  "Sort Space Used"?: number;
-  "Actual Rows": number;
-  "Shared Hit Blocks"?: number;
-  "Shared Read Blocks"?: number;
-  "Temp Read Blocks"?: number;
-  "Temp Written Blocks"?: number;
-  Plans?: PlanNode[];
+/** One row of EXPLAIN QUERY PLAN: a plan step and the step it nests under. */
+interface PlanStep {
+  id: number;
+  parent: number;
+  detail: string;
 }
 
-/** The top-level EXPLAIN (ANALYZE, FORMAT JSON) entry. */
+/** One timed execution of a statement plus its query plan. */
 interface ExplainedPlan {
-  Plan: PlanNode;
-  "Execution Time": number;
-  "Planning Time": number;
+  steps: PlanStep[];
+  executionMs: number;
+  actualRows: number;
 }
+
+type Runner = Pick<TestPool, "query">;
 
 const ROW_COUNT = 120_000;
 const ACCOUNT_COUNT = 20;
@@ -56,8 +52,7 @@ const RECIPIENT_COUNT = 1_000;
 const CATEGORY_COUNT = 100;
 const REPETITIONS = 20;
 
-const shouldRun =
-  hasTestDatabase() && process.env.VISION_RUN_PERFORMANCE_PROBES === "1";
+const shouldRun = process.env.VISION_RUN_PERFORMANCE_PROBES === "1";
 
 const transactionJoins = `
   LEFT JOIN recipients r ON t.recipient_id = r.id
@@ -93,84 +88,91 @@ const transactionProjection = `
          END AS category_name
   FROM transactions t
   ${transactionJoins}
-  WHERE t.is_active = true`;
+  WHERE t.is_active = 1`;
 
-async function seedRepresentativeCorpus(client: PoolClient) {
-  await client.query(`
-    CREATE TEMP TABLE perf_accounts AS
-    WITH inserted AS (
-      INSERT INTO accounts (name, display_name)
-      SELECT 'PERF ACCOUNT ' || g, 'Performance account ' || g
-      FROM generate_series(1, ${ACCOUNT_COUNT}) g
-      RETURNING id, name
-    )
-    SELECT row_number() OVER (ORDER BY id)::int AS seq, id, name FROM inserted`);
+/** 1..n as rows of `g` (PostgreSQL's generate_series). */
+const series = (n: number) =>
+  `g(g) AS (SELECT 1 UNION ALL SELECT g + 1 FROM g WHERE g < ${n})`;
 
+/** A temp table numbering `select`'s ids 1..n in id order. */
+async function numbered(client: Runner, table: string, select: string) {
+  await client.query(`CREATE TEMP TABLE ${table} (seq INTEGER PRIMARY KEY, id INTEGER NOT NULL)`);
+  await client.query(
+    `INSERT INTO ${table} (seq, id) SELECT row_number() OVER (ORDER BY id), id FROM (${select})`,
+  );
+}
+
+async function seedRepresentativeCorpus(client: Runner) {
   await client.query(`
-    CREATE TEMP TABLE perf_categories AS
-    WITH inserted AS (
-      INSERT INTO categories (general, detail)
-      SELECT 'PERF GROUP ' || ((g - 1) / 10), 'Performance category ' || g
-      FROM generate_series(1, ${CATEGORY_COUNT}) g
-      RETURNING id
-    )
-    SELECT row_number() OVER (ORDER BY id)::int AS seq, id FROM inserted`);
+    WITH RECURSIVE ${series(ACCOUNT_COUNT)}
+    INSERT INTO accounts (name, display_name)
+    SELECT 'PERF ACCOUNT ' || g, 'Performance account ' || g FROM g`);
+  await numbered(client, "perf_accounts", "SELECT id FROM accounts WHERE name LIKE 'PERF ACCOUNT %'");
 
   await client.query(`
-    CREATE TEMP TABLE perf_primary_recipients AS
-    WITH inserted AS (
-      INSERT INTO recipients (name, normalized_name, default_category_id)
-      SELECT 'PERF RECIPIENT ' || g,
-             'perf recipient ' || g,
-             c.id
-      FROM generate_series(1, ${RECIPIENT_COUNT / 2}) g
-      JOIN perf_categories c ON c.seq = 1 + ((g - 1) % ${CATEGORY_COUNT})
-      RETURNING id
-    )
-    SELECT row_number() OVER (ORDER BY id)::int AS seq, id FROM inserted`);
+    WITH RECURSIVE ${series(CATEGORY_COUNT)}
+    INSERT INTO categories (general, detail)
+    SELECT 'PERF GROUP ' || ((g - 1) / 10), 'Performance category ' || g FROM g`);
+  await numbered(client, "perf_categories", "SELECT id FROM categories WHERE general LIKE 'PERF GROUP %'");
 
   await client.query(`
-    CREATE TEMP TABLE perf_recipients AS
-    WITH aliases AS (
-      INSERT INTO recipients (name, normalized_name, primary_recipient_id)
-      SELECT 'PERF ALIAS ' || p.seq,
-             'perf alias ' || p.seq,
-             p.id
-      FROM perf_primary_recipients p
-      RETURNING id
-    ), all_recipients AS (
-      SELECT id FROM perf_primary_recipients
-      UNION ALL
-      SELECT id FROM aliases
-    )
-    SELECT row_number() OVER (ORDER BY id)::int AS seq, id FROM all_recipients`);
-
-  // The fixture supplies canonical account IDs. Disabling user triggers avoids
-  // measuring seed-maintenance work; query indexes and
-  // foreign-key constraints remain active, and ROLLBACK restores trigger state.
-  await client.query("ALTER TABLE transactions DISABLE TRIGGER USER");
+    WITH RECURSIVE ${series(RECIPIENT_COUNT / 2)}
+    INSERT INTO recipients (name, normalized_name, default_category_id)
+    SELECT 'PERF RECIPIENT ' || g, 'perf recipient ' || g, c.id
+    FROM g JOIN perf_categories c ON c.seq = 1 + ((g - 1) % ${CATEGORY_COUNT})`);
+  await numbered(
+    client,
+    "perf_primary_recipients",
+    "SELECT id FROM recipients WHERE name LIKE 'PERF RECIPIENT %'",
+  );
   await client.query(`
-    INSERT INTO transactions (
-      date, amount, currency, balance, memo,
-      recipient_id, category_id, is_active, account_id
-    )
-    SELECT DATE '2000-01-01' + ((g - 1) / ${ACCOUNT_COUNT})::int,
-           (((g % 20_001) - 10_000)::numeric / 100)::numeric(18, 4),
-           (ARRAY['EUR', 'USD', 'GBP', 'CHF'])[1 + ((g - 1) % 4)],
-           CASE
-             WHEN a.seq = 1 AND g <= ${ROW_COUNT / 2} AND g % 2_000 = 1
-               THEN (g::numeric / 100)::numeric(18, 4)
-             ELSE NULL
-           END,
-           'PERF MEMO ' || lpad((g % 10_000)::text, 5, '0'),
-           r.id,
-           CASE WHEN g % 3 = 0 THEN c.id ELSE NULL END,
-           g % 50 <> 0,
-           a.id
-    FROM generate_series(1, ${ROW_COUNT}) g
-    JOIN perf_accounts a ON a.seq = 1 + ((g - 1) % ${ACCOUNT_COUNT})
-    JOIN perf_recipients r ON r.seq = 1 + ((g - 1) % ${RECIPIENT_COUNT})
-    JOIN perf_categories c ON c.seq = 1 + ((g - 1) % ${CATEGORY_COUNT})`);
+    INSERT INTO recipients (name, normalized_name, primary_recipient_id)
+    SELECT 'PERF ALIAS ' || p.seq, 'perf alias ' || p.seq, p.id
+    FROM perf_primary_recipients p`);
+  await numbered(
+    client,
+    "perf_recipients",
+    "SELECT id FROM recipients WHERE name LIKE 'PERF RECIPIENT %' OR name LIKE 'PERF ALIAS %'",
+  );
+
+  // The fixture supplies canonical account IDs. Dropping the transactions
+  // triggers for the bulk insert (PostgreSQL: DISABLE TRIGGER USER) avoids
+  // measuring seed-maintenance work; indexes, CHECKs and foreign keys stay
+  // active, and the triggers are recreated in this same transaction.
+  const { rows: triggers } = await client.query<{ name: string; sql: string }>(
+    "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND tbl_name = 'transactions' ORDER BY name",
+  );
+  for (const trigger of triggers) await client.query(`DROP TRIGGER "${trigger.name}"`);
+  try {
+    await client.query(`
+      WITH RECURSIVE ${series(ROW_COUNT)}
+      INSERT INTO transactions (
+        date, amount, currency, balance, memo,
+        recipient_id, category_id, is_active, account_id
+      )
+      SELECT add_days('2000-01-01', (g - 1) / ${ACCOUNT_COUNT}),
+             vision_numeric(dec_div((g % 20001) - 10000, 100), 18, 4),
+             CASE (g - 1) % 4 WHEN 0 THEN 'EUR' WHEN 1 THEN 'USD' WHEN 2 THEN 'GBP' ELSE 'CHF' END,
+             CASE
+               WHEN a.seq = 1 AND g <= ${ROW_COUNT / 2} AND g % 2000 = 1
+                 THEN vision_numeric(dec_div(g, 100), 18, 4)
+               ELSE NULL
+             END,
+             'PERF MEMO ' || printf('%05d', g % 10000),
+             r.id,
+             CASE WHEN g % 3 = 0 THEN c.id ELSE NULL END,
+             g % 50 <> 0,
+             a.id
+      FROM g
+      JOIN perf_accounts a ON a.seq = 1 + ((g - 1) % ${ACCOUNT_COUNT})
+      JOIN perf_recipients r ON r.seq = 1 + ((g - 1) % ${RECIPIENT_COUNT})
+      JOIN perf_categories c ON c.seq = 1 + ((g - 1) % ${CATEGORY_COUNT})`);
+  } finally {
+    for (const trigger of triggers) await client.query(trigger.sql);
+  }
+  for (const table of ["perf_accounts", "perf_categories", "perf_primary_recipients", "perf_recipients"]) {
+    await client.query(`DROP TABLE temp.${table}`);
+  }
   await client.query("ANALYZE transactions");
   await client.query("ANALYZE recipients");
   await client.query("ANALYZE categories");
@@ -178,28 +180,38 @@ async function seedRepresentativeCorpus(client: PoolClient) {
 }
 
 async function explain(
-  client: PoolClient,
+  client: Runner,
   sql: string,
   params: unknown[] = [],
 ): Promise<ExplainedPlan> {
-  const { rows } = await client.query<{ "QUERY PLAN": ExplainedPlan[] }>(
-    `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`,
+  const { rows: steps } = await client.query<PlanStep>(
+    `EXPLAIN QUERY PLAN ${sql}`,
     params,
   );
-  return must(must(rows[0], "plan row")["QUERY PLAN"][0], "plan");
+  const started = performance.now();
+  const { rows } = await client.query(sql, params);
+  const executionMs = performance.now() - started;
+  return {
+    steps: steps.map(({ id, parent, detail }) => ({ id, parent, detail })),
+    executionMs,
+    actualRows: rows.length,
+  };
 }
 
-function findPlanNode(
+function findPlanStep(
   plan: ExplainedPlan,
-  predicate: (node: PlanNode) => boolean,
-): PlanNode | undefined {
-  const pending = [plan.Plan];
-  while (pending.length > 0) {
-    const node = must(pending.pop(), "pending.pop result");
-    if (predicate(node)) return node;
-    pending.push(...(node.Plans ?? []));
-  }
-  return undefined;
+  predicate: (detail: string) => boolean,
+): string | undefined {
+  return plan.steps.find((step) => predicate(step.detail))?.detail;
+}
+
+/** The step that reads `transactions t`, and the index it uses if any. */
+function transactionScan(plan: ExplainedPlan) {
+  const detail = findPlanStep(plan, (step) => /^(SCAN|SEARCH) t\b/.test(step));
+  return {
+    detail,
+    index: detail ? /USING (?:COVERING )?INDEX (\S+)/.exec(detail)?.[1] : undefined,
+  };
 }
 
 function median(values: number[]): number {
@@ -217,24 +229,13 @@ function nearestRank(values: number[], percentile: number): number {
 }
 
 function summarizePlan(plan: ExplainedPlan) {
-  const sortNode = findPlanNode(plan, (node) => node["Node Type"] === "Sort");
-  const transactionScan = findPlanNode(
-    plan,
-    (node) => node["Relation Name"] === "transactions",
-  );
+  const scan = transactionScan(plan);
   return {
-    executionMs: plan["Execution Time"],
-    planningMs: plan["Planning Time"],
-    rootNode: plan.Plan["Node Type"],
-    transactionScanNode: transactionScan?.["Node Type"],
-    transactionScanIndex: transactionScan?.["Index Name"],
-    actualRows: plan.Plan["Actual Rows"],
-    sharedHitBlocks: plan.Plan["Shared Hit Blocks"],
-    sharedReadBlocks: plan.Plan["Shared Read Blocks"],
-    tempReadBlocks: plan.Plan["Temp Read Blocks"],
-    tempWrittenBlocks: plan.Plan["Temp Written Blocks"],
-    sortMethod: sortNode?.["Sort Method"],
-    sortSpaceKb: sortNode?.["Sort Space Used"],
+    executionMs: plan.executionMs,
+    transactionScanStep: scan.detail,
+    transactionScanIndex: scan.index,
+    actualRows: plan.actualRows,
+    sortStep: findPlanStep(plan, (step) => step.startsWith("USE TEMP B-TREE FOR")),
   };
 }
 
@@ -243,31 +244,21 @@ interface SortMeasurement {
   p95ExecutionMs: number;
   maxExecutionMs: number;
   runsMs: number[];
-  sortMethod: string | undefined;
-  sortSpaceKb: number | undefined;
+  sortStep: string | undefined;
   representativePlan: ReturnType<typeof summarizePlan>;
   fullPlan: ExplainedPlan;
 }
 
 describe.skipIf(!shouldRun)(
-  "transaction performance measurements (disposable PostgreSQL)",
+  "transaction performance measurements (disposable SQLite)",
   () => {
-    let client: PoolClient | undefined;
+    const pool = getTestPool();
 
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-      await acquireDbSuiteLock();
-      client = await must(getTestPool(), "test pool").connect();
-      await client.query("BEGIN");
-      await seedRepresentativeCorpus(client);
+      await withTransaction((client) => seedRepresentativeCorpus(client));
     }, 180_000);
 
     afterAll(async () => {
-      if (client) {
-        await client.query("ROLLBACK");
-        client.release();
-      }
-      await releaseDbSuiteLock();
       await closeTestPool();
     });
 
@@ -278,31 +269,27 @@ describe.skipIf(!shouldRun)(
         const sql = `${transactionProjection}
         ORDER BY ${expression} ASC, t.date DESC, t.id DESC
         LIMIT 50 OFFSET 0`;
-        await explain(must(client, "client"), sql);
+        await explain(pool, sql);
         const plans: ExplainedPlan[] = [];
         for (let run = 0; run < REPETITIONS; run += 1) {
-          plans.push(await explain(must(client, "client"), sql));
+          plans.push(await explain(pool, sql));
         }
-        const times = plans.map((plan) => plan["Execution Time"]);
+        const times = plans.map((plan) => plan.executionMs);
         const medianExecutionMs = median(times);
         const representative = plans.reduce((closest, candidate) =>
-          Math.abs(candidate["Execution Time"] - medianExecutionMs) <
-          Math.abs(closest["Execution Time"] - medianExecutionMs)
+          Math.abs(candidate.executionMs - medianExecutionMs) <
+          Math.abs(closest.executionMs - medianExecutionMs)
             ? candidate
             : closest,
         );
-        const sortNode = findPlanNode(
-          representative,
-          (node) => node["Node Type"] === "Sort",
-        );
+        const representativePlan = summarizePlan(representative);
         measurements[sortBy] = {
           medianExecutionMs,
           p95ExecutionMs: nearestRank(times, 95),
           maxExecutionMs: Math.max(...times),
           runsMs: times,
-          sortMethod: sortNode?.["Sort Method"],
-          sortSpaceKb: sortNode?.["Sort Space Used"],
-          representativePlan: summarizePlan(representative),
+          sortStep: representativePlan.sortStep,
+          representativePlan,
           fullPlan: representative,
         };
       }
@@ -340,27 +327,34 @@ describe.skipIf(!shouldRun)(
       for (const result of Object.values(measurements)) {
         expect(Number.isFinite(result.medianExecutionMs)).toBe(true);
         expect(result.representativePlan.actualRows).toBe(50);
-        expect(result.sortMethod).toBe("top-N heapsort");
+        // No index serves these sort keys, so SQLite sorts in a temp B-tree
+        // (its sorter keeps only the LIMIT rows, as PostgreSQL's top-N
+        // heapsort did) after one pass over the active transactions.
+        expect(result.sortStep).toBe("USE TEMP B-TREE FOR ORDER BY");
+        expect(result.representativePlan.transactionScanStep).toBeDefined();
       }
     }, 180_000);
 
     it("compares the exact latest stamped-balance probe with and without its partial index", async () => {
-      const target = await must(client, "client").query<IdRow>(
-        "SELECT id FROM perf_accounts WHERE seq = 1",
+      const target = await pool.query<IdRow>(
+        "SELECT id FROM accounts WHERE name = 'PERF ACCOUNT 1'",
       );
+      const targetId = must(target.rows[0], "target.rows[0]").id;
       const sql = `
       SELECT t.date, t.id
       FROM transactions t
-      WHERE t.account_id = $1 AND t.is_active = true
-        AND t.date <= CURRENT_DATE
+      WHERE t.account_id = $1 AND t.is_active = 1
+        AND t.date <= today()
         AND t.balance IS NOT NULL
       ORDER BY t.date DESC, t.id DESC
       LIMIT 1`;
 
-      await explain(must(client, "client"), sql, [must(target.rows[0], "target.rows[0]").id]);
-      const withIndex = await explain(must(client, "client"), sql, [must(target.rows[0], "target.rows[0]").id]);
-      await must(client, "client").query("DROP INDEX idx_transactions_account_stamped");
-      const withoutIndex = await explain(must(client, "client"), sql, [must(target.rows[0], "target.rows[0]").id]);
+      await explain(pool, sql, [targetId]);
+      const withIndex = await explain(pool, sql, [targetId]);
+      const withoutIndex = await inRollbackTransaction(async (client) => {
+        await client.query("DROP INDEX idx_transactions_account_stamped");
+        return explain(client, sql, [targetId]);
+      });
 
       process.stdout.write(
         `\nSTAMPED_BALANCE_EXPLAIN_SUMMARY=${JSON.stringify({
@@ -382,19 +376,17 @@ describe.skipIf(!shouldRun)(
         );
       }
 
-      const indexedNode = findPlanNode(
-        withIndex,
-        (node) => node["Index Name"] === "idx_transactions_account_stamped",
+      expect(transactionScan(withIndex).index).toBe("idx_transactions_account_stamped");
+      expect(transactionScan(withoutIndex).index).not.toBe("idx_transactions_account_stamped");
+      expect(withIndex.actualRows).toBe(1);
+      expect(withoutIndex.actualRows).toBe(1);
+      expect(Number.isFinite(withIndex.executionMs)).toBe(true);
+      expect(Number.isFinite(withoutIndex.executionMs)).toBe(true);
+      // The rollback restored the production index.
+      const { rows } = await pool.query(
+        "SELECT name FROM sqlite_schema WHERE type = 'index' AND name = 'idx_transactions_account_stamped'",
       );
-      expect(indexedNode).toBeDefined();
-      expect(
-        findPlanNode(
-          withoutIndex,
-          (node) => node["Index Name"] === "idx_transactions_account_stamped",
-        ),
-      ).toBeUndefined();
-      expect(Number.isFinite(withIndex["Execution Time"])).toBe(true);
-      expect(Number.isFinite(withoutIndex["Execution Time"])).toBe(true);
+      expect(rows).toHaveLength(1);
     });
   },
 );

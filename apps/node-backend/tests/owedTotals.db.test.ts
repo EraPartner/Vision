@@ -1,5 +1,5 @@
 /**
- * GET /api/splits/owed and /api/splits/owed/:id against real PostgreSQL:
+ * GET /api/splits/owed and /api/splits/owed/:id against a real database:
  * a split is denominated in its transaction's currency, so the owed figures
  * convert each currency at the latest stored rate before adding them up.
  *
@@ -7,13 +7,10 @@
  * 20 EUR + 50 USD + 7 GBP outstanding showed as 77 "EUR". A currency without
  * a stored rate is now left out and counted, never added 1:1.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
@@ -25,7 +22,7 @@ import {
   asRecipientId, type RecipientId, type TransactionId } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
 
-const describeDb = hasTestDatabase() ? describe : describe.skip;
+const describeDb = describe;
 const MARK = `owed_totals_${process.pid}`;
 
 async function insertRecipient(name: string): Promise<number> {
@@ -45,8 +42,8 @@ async function insertSplit(
 ) {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: TransactionId }>(
     `INSERT INTO transactions (date, amount, memo, currency, recipient_id)
-     VALUES (CURRENT_DATE, $1, $2, $3, $4) RETURNING id`,
-    [-amount, MARK, currency, owedBy],
+     VALUES (today(), vision_numeric($1, 18, 4), $2, $3, $4) RETURNING id`,
+    [String(-amount), MARK, currency, owedBy],
   );
   const split = await splitService.createSplitAtomic({
     transaction_id: must(rows[0], "rows[0]").id,
@@ -63,10 +60,6 @@ describeDb("owed totals in one currency (real DB)", () => {
   let alice: number;
   let bob: number;
 
-  beforeAll(async () => {
-    await acquireDbSuiteLock();
-  });
-
   beforeEach(async () => {
     const pool = must(getTestPool(), "getTestPool()");
     await pool.query("DELETE FROM transaction_splits");
@@ -77,7 +70,7 @@ describeDb("owed totals in one currency (real DB)", () => {
     await pool.query("DELETE FROM exchange_rates");
     await pool.query(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-       VALUES ('USD', '0.9', $1, true)`,
+       VALUES ('USD', vision_numeric('0.9', 20, 10), $1, true)`,
       [todayAppDateString()],
     );
     alice = await insertRecipient("alice");
@@ -93,16 +86,13 @@ describeDb("owed totals in one currency (real DB)", () => {
   afterAll(async () => {
     try {
       const pool = getTestPool();
-      if (pool) {
-        await pool.query("DELETE FROM transactions WHERE memo = $1", [MARK]);
-        await pool.query(
-          "DELETE FROM recipients WHERE normalized_name LIKE $1",
-          [`${MARK}%`],
-        );
-        await pool.query("DELETE FROM exchange_rates");
-      }
+      await pool.query("DELETE FROM transactions WHERE memo = $1", [MARK]);
+      await pool.query(
+        "DELETE FROM recipients WHERE normalized_name LIKE $1",
+        [`${MARK}%`],
+      );
+      await pool.query("DELETE FROM exchange_rates");
     } finally {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     }

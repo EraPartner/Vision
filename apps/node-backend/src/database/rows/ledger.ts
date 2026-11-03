@@ -3,9 +3,10 @@
  * transactions, splits and the services that compose them) that are not
  * covered by the shared schemas in `../rowSchemas.ts` (ADR-193).
  *
- * Same rules as `rowSchemas.ts`: each schema describes what node-postgres
- * returns with its default parsers, only checks (no transforms), and stays a
- * plain `z.object` so added columns pass through.
+ * Same rules as `rowSchemas.ts`: each schema describes what the SQLite driver
+ * returns (the shapes node-postgres returned with its default parsers), only
+ * checks (no transforms), and stays a plain `z.object` so added columns pass
+ * through.
  */
 import { z } from "zod";
 import {
@@ -30,12 +31,12 @@ import {
 // Shared small projections
 // ---------------------------------------------------------------------------
 
-/** A `COUNT(*)::int AS n` row. */
+/** A bare `COUNT(*) AS n` row (an integer, so a number). */
 export const intCountRowSchema = z
   .object({ n: pgInt })
   .describe("int count row");
 
-/** A bare `COUNT(*) AS n` row (BIGINT, so a string). */
+/** A `COUNT(*) AS "n::bigint"` row (read as BIGINT, so a string). */
 export const bigintCountRowSchema = z
   .object({ n: pgBigint })
   .describe("bigint count row");
@@ -59,7 +60,7 @@ export const balancePartsRowSchema = z
 // Transactions
 // ---------------------------------------------------------------------------
 
-/** `getAllWithCount`'s separate `COUNT(*)::int AS total` row. */
+/** `getAllWithCount`'s separate `COUNT(*) AS total` row (a number). */
 export const transactionTotalRowSchema = z
   .object({ total: pgInt })
   .describe("transaction total row");
@@ -208,7 +209,7 @@ export const statementBalanceAmountRowSchema = z
   .object({ balance: pgNumeric })
   .describe("statement balance amount row");
 
-/** `previewAccountPortfolioLots` row: `COUNT(*) OVER()` is BIGINT. */
+/** `previewAccountPortfolioLots` row: `COUNT(*) OVER()` read with a `::bigint` hint. */
 export const portfolioLotRowSchema = z
   .object({ id: pgPortfolioTransactionId, eligible_count: pgBigint })
   .describe("portfolio lot row");

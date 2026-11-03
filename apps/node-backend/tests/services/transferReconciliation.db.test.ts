@@ -1,5 +1,5 @@
 /**
- * Real-Postgres orchestration tests for transferReconciliationService (ADR-083).
+ * Real-database orchestration tests for transferReconciliationService (ADR-083).
  *
  * Why this suite is DB-backed rather than another mock choreography: every
  * behaviour worth pinning here lives in the interaction between SQL predicates
@@ -24,13 +24,10 @@
  * exactly as written.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
-  hasTestDatabase,
-  releaseDbSuiteLock,
 } from "../setup/db.ts";
 import {
   reconcileTransfers,
@@ -40,6 +37,7 @@ import {
   backfillTransfersOnce,
 } from "../../src/services/transferReconciliationService.ts";
 import { closePool } from "../../src/database/connection.ts";
+import { transactionRepository } from "../../src/repositories/transactionRepository.ts";
 import {
   asTransactionId,
 } from "@vision/types/brands";
@@ -100,11 +98,11 @@ async function insertTxn({
     `INSERT INTO transactions
        (date, amount, currency, recipient_id, account_id, is_active, is_transfer,
         transfer_peer_id, transfer_source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     VALUES ($1, vision_numeric($2, 18, 4), $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       date,
-      amount,
+      String(amount),
       currency,
       recipientId,
       accountIds[account],
@@ -145,30 +143,15 @@ async function seedMatchablePair(amount = -125.5, date = DAY0) {
   return { outId, inId };
 }
 
-describe.skipIf(!hasTestDatabase())(
+describe(
   "services/transferReconciliationService (real DB)",
   () => {
-    beforeAll(async () => {
-      // Fail loudly rather than mysteriously if the app pool and the fixture pool
-      // point at different databases — the seed would be invisible to the service
-      // and every assertion below would fail for a reason that has nothing to do
-      // with the code under test.
-      expect(
-        process.env.DATABASE_URL,
-        "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
-      ).toBe(process.env.TEST_DATABASE_URL);
-      // DB suites share one database across parallel vitest workers — serialize
-      // them behind the shared advisory lock (see tests/setup/db.ts).
-      await acquireDbSuiteLock();
-    }, 180_000);
-
     afterEach(async () => {
       const pool = must(getTestPool(), "getTestPool()");
-      // Targeted DELETEs, deliberately NOT `TRUNCATE ... CASCADE`: the cascade off
+      // Targeted DELETEs rather than wiping every table: the cascade off
       // `transactions` reaches a dozen unrelated tables (transaction_splits,
-      // planned_transaction_tags, portfolio_import_staging_rows, ...) and costs
-      // ~350ms per test in ACCESS EXCLUSIVE locks and file truncation, versus ~3ms
-      // here at these row counts. Order follows the FKs: transactions before
+      // planned_transaction_tags, portfolio_import_staging_rows, ...), none of
+      // which these tests touch. Order follows the FKs: transactions before
       // accounts (ON DELETE RESTRICT); transfer_dismissals cascades off
       // transactions but is cleared explicitly so the intent is visible.
       await pool.query("DELETE FROM transfer_dismissals");
@@ -181,7 +164,6 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     afterAll(async () => {
-      await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
     });
@@ -333,8 +315,8 @@ describe.skipIf(!hasTestDatabase())(
 
         // Edit one leg's amount: the pair is no longer equal-and-opposite.
         await must(getTestPool(), "getTestPool()").query(
-          "UPDATE transactions SET amount = $1 WHERE id = $2",
-          [-999, outId],
+          "UPDATE transactions SET amount = vision_numeric($1, 18, 4) WHERE id = $2",
+          [String(-999), outId],
         );
 
         await reconcileTransfers();
@@ -420,76 +402,62 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     // Suggestions
     // ───────────────────────────────────────────────────────────────────────────
+    // PostgreSQL held both legs FOR UPDATE on a gate connection, polled
+    // pg_stat_activity until the reconcile queued behind the row lock, and
+    // committed the edit there. SQLite has no row locks: the guarantee is that
+    // the candidate list read before the write transaction is re-derived inside
+    // it, so an edit committed between the two is seen. The edit is committed
+    // right after the first (pre-transaction) candidate read returns.
     it.each(["amount", "currency", "date", "account", "ambiguity"])(
-      "rechecks %s after waiting for candidate locks",
+      "rechecks %s that changed after the candidate read",
       async (change) => {
         await seedFixtures();
         const { outId, inId } = await seedMatchablePair();
-        const gate = await must(getTestPool(), "getTestPool()").connect();
-        let work: Promise<unknown> | undefined;
+        const pool = must(getTestPool(), "getTestPool()");
+        const edits: Record<string, [string, unknown[]]> = {
+          amount: [
+            "UPDATE transactions SET amount = vision_numeric(dec_add(amount, '1'), 18, 4) WHERE id = $1",
+            [inId],
+          ],
+          currency: ["UPDATE transactions SET currency = 'USD' WHERE id = $1", [inId]],
+          date: ["UPDATE transactions SET date = add_days(date, 10) WHERE id = $1", [inId]],
+          account: [
+            "UPDATE transactions SET account_id = $1 WHERE id = $2",
+            [accountIds.Checking, inId],
+          ],
+          ambiguity: [
+            "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) SELECT date, amount, currency, account_id, recipient_id FROM transactions WHERE id = $1",
+            [inId],
+          ],
+        };
+        const [editSql, editParams] = must(edits[change], `edit ${change}`);
+        const realList = transactionRepository.listUniqueTransferPairs.bind(transactionRepository);
+        const staleReads: unknown[] = [];
+        const spy = vi
+          .spyOn(transactionRepository, "listUniqueTransferPairs")
+          .mockImplementationOnce(async (windowDays) => {
+            const stale = await realList(windowDays);
+            staleReads.push(stale);
+            await pool.query(editSql, editParams);
+            return stale;
+          });
         try {
-          await gate.query("BEGIN");
-          await gate.query(
-            "SELECT id FROM transactions WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
-            [[outId, inId]],
-          );
-          work = reconcileTransfers();
-          const observed = Promise.allSettled([work]);
-          const deadline = Date.now() + 5000;
-          let waiting = false;
-          while (Date.now() < deadline) {
-            waiting = firstRow(
-              await must(getTestPool(), "getTestPool()").query<{
-                waiting: boolean;
-              }>(
-                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query ~* 'from \"?transactions\"?.*for update') AS waiting",
-              ),
-            ).waiting;
-            if (waiting) break;
-            await new Promise((resolve) => setTimeout(resolve, 20));
-          }
-          expect(waiting).toBe(true);
-          if (change === "amount")
-            await gate.query(
-              "UPDATE transactions SET amount=amount+1 WHERE id=$1",
-              [inId],
-            );
-          if (change === "currency")
-            await gate.query(
-              "UPDATE transactions SET currency='USD' WHERE id=$1",
-              [inId],
-            );
-          if (change === "date")
-            await gate.query(
-              "UPDATE transactions SET date=date+10 WHERE id=$1",
-              [inId],
-            );
-          if (change === "account")
-            await gate.query(
-              "UPDATE transactions SET account_id=$1 WHERE id=$2",
-              [accountIds.Checking, inId],
-            );
-          if (change === "ambiguity")
-            await gate.query(
-              "INSERT INTO transactions(date,amount,currency,account_id,recipient_id) SELECT date,amount,currency,account_id,recipient_id FROM transactions WHERE id=$1",
-              [inId],
-            );
-          await gate.query("COMMIT");
-          await observed;
-          await expect(work).resolves.toEqual({ pairsCreated: 0 });
-          expect(await readTxn(outId)).toMatchObject({
-            is_transfer: false,
-            transfer_peer_id: null,
-          });
-          expect(await readTxn(inId)).toMatchObject({
-            is_transfer: false,
-            transfer_peer_id: null,
-          });
+          await expect(reconcileTransfers()).resolves.toEqual({ pairsCreated: 0 });
+          // The stale read did propose the pair, and the in-transaction recheck
+          // (the second call) dropped it.
+          expect(staleReads).toEqual([[{ outId, inId }]]);
+          expect(spy).toHaveBeenCalledTimes(2);
         } finally {
-          await gate.query("ROLLBACK");
-          gate.release();
-          if (work) await Promise.allSettled([work]);
+          spy.mockRestore();
         }
+        expect(await readTxn(outId)).toMatchObject({
+          is_transfer: false,
+          transfer_peer_id: null,
+        });
+        expect(await readTxn(inId)).toMatchObject({
+          is_transfer: false,
+          transfer_peer_id: null,
+        });
       },
     );
 
@@ -595,8 +563,8 @@ describe.skipIf(!hasTestDatabase())(
           const update = must({
             inactive: "is_active = false",
             "same-account": `account_id = ${accountIds.Checking}`,
-            "same-sign": "amount = -50",
-            zero: "amount = 0",
+            "same-sign": "amount = vision_numeric('-50', 18, 4)",
+            zero: "amount = vision_numeric('0', 18, 4)",
           }[kind], "{ inactive: \"is_active = false\", \"same-account\": `account...");
           await must(getTestPool(), "getTestPool()").query(
             `UPDATE transactions SET ${update} WHERE id = $1`,
