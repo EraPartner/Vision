@@ -147,6 +147,48 @@ export function planColumn(name: string, declared: string | null | undefined): C
   return { key: name, read: readerForDeclaredType(declared) ?? identity };
 }
 
+/** PostgreSQL's invalid_text_representation (22P02) for a value no input function reads. */
+export class InputSyntaxError extends Error {
+  readonly code = "22P02";
+  constructor(message: string) {
+    super(message);
+    this.name = "InputSyntaxError";
+  }
+}
+
+/** Each accepted word, the shortest prefix PostgreSQL takes for it, and its value. */
+const BOOLEAN_WORDS: readonly (readonly [string, number, boolean])[] = [
+  ["true", 1, true],
+  ["false", 1, false],
+  ["yes", 1, true],
+  ["no", 1, false],
+  ["on", 2, true],
+  ["off", 2, false],
+];
+
+/**
+ * PostgreSQL's boolean input (boolin) for a value bound where a boolean is
+ * stored: node-postgres sent String(value), and PostgreSQL read it. A boolean
+ * stays as is. Text, trimmed and in any case, may be a prefix of true, false,
+ * yes or no, `on`, `of`/`off`, or exactly 1 or 0; so may a number's text.
+ * Anything else raises 22P02, as PostgreSQL did.
+ */
+export function booleanInput(value: unknown): boolean | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value;
+  const raw =
+    typeof value === "string" || typeof value === "number" || typeof value === "bigint"
+      ? String(value)
+      : sqlText(value);
+  const text = raw.trim().toLowerCase();
+  if (text === "1") return true;
+  if (text === "0") return false;
+  for (const [word, shortest, result] of BOOLEAN_WORDS) {
+    if (text.length >= shortest && word.startsWith(text)) return result;
+  }
+  throw new InputSyntaxError(`invalid input syntax for type boolean: "${raw}"`);
+}
+
 /** A Decimal.js-style value, which prints its exact digits with toString(). */
 interface DecimalLike {
   toString(): string;

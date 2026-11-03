@@ -494,6 +494,15 @@ export async function query<R = unknown>(
   if (store?.conn) return execute<R>(store.conn, text, params);
   const scanned = scanSql(text);
   if (scanned.readOnly) return execute<R>(getReader(), text, params);
+  if (TRANSACTION_CONTROL.has(scanned.firstKeyword)) {
+    // node-postgres code ran BEGIN ... COMMIT on a dedicated client. Here the
+    // writer is shared: a bare BEGIN would leave it in a transaction that
+    // every later write joins, while reads still go to the reader.
+    throw Object.assign(
+      new Error(`${scanned.firstKeyword} outside withTransaction(): use withTransaction() instead`),
+      { code: "25000" },
+    );
+  }
   const release = await writeLock.acquire();
   try {
     return execute<R>(getWriter(), text, params);
@@ -501,6 +510,9 @@ export async function query<R = unknown>(
     release();
   }
 }
+
+/** Statements only withTransaction() and withExclusiveWriter() may run. */
+const TRANSACTION_CONTROL = new Set(["BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"]);
 
 /** Kept for call compatibility: SQLite statements are cached by text already. */
 export async function queryPrepared(

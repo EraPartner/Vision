@@ -396,11 +396,10 @@ export function registerFunctions(db: DatabaseSync, clock: ConnectionClock): voi
       return 0;
     }
   });
-  /** PostgreSQL `x::date`: a timestamp's session-zone date, or a date as is. */
+  /** PostgreSQL `x::date` (see dateInputText). */
   db.function("ts_date", det, (a: unknown) => {
-    const v = dateOrInstant(a, "ts_date");
-    if (v === null) return null;
-    return T.formatDate("ms" in v ? T.localDateOf(v) : v);
+    if (a === null || a === undefined) return null;
+    return T.dateInputText(textArg(a, "ts_date"));
   });
   /** PostgreSQL `d::timestamptz`: local midnight of a date, or a timestamp as is. */
   db.function("date_ts", det, (a: unknown) => {

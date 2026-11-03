@@ -143,7 +143,7 @@ scale needs `dec_eq`.
 | --- | --- |
 | `now()`, `CURRENT_TIMESTAMP` | `now()`: transaction start time, as PostgreSQL |
 | `CURRENT_DATE`, `now()::date` | `today()`: the date in the backend's local time zone |
-| `ts::date` | `ts_date(ts)` |
+| `ts::date`, `$1::date` | `ts_date(x)`: a stored timestamp gives its local date; other text gives the date it was written with, as PostgreSQL date input does |
 | `d::timestamptz` | `date_ts(d)`: local midnight |
 | `x::timestamptz` (from text) | `vision_ts(x)` |
 | `date_trunc('month', x)` | `date_trunc('month', x)`: a date stays a date, a timestamp stays a timestamp |

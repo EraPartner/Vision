@@ -6,6 +6,10 @@
  *   scale (half away from zero) and refused above its precision with
  *   SQLSTATE 22003, as a `numeric(p,s)` assignment cast did;
  * - a value written to a JSONB_TEXT column is stored as canonical jsonb text;
+ * - a value written to a BOOLEAN, DATE_TEXT or TIMESTAMPTZ_TEXT column is
+ *   read the way PostgreSQL's input function read the text node-postgres
+ *   sent: `'yes'` is true, `'2026-01-05T23:30:00Z'` is the date 2026-01-05,
+ *   a Date is its local date, and timestamp text becomes canonical UTC text;
  * - an UPDATE (or an upsert's DO UPDATE) of a table with `updated_at` sets it
  *   to `now()` unless the statement sets it, as the
  *   `update_updated_at_column` triggers did. SQLite's trigger runs after the
@@ -41,6 +45,8 @@ import * as N from "./sqlite/numeric.ts";
 import { TABLE_WRITE_INFO } from "./schemaMap.generated.ts";
 import type { TableWriteInfo } from "./schemaMap.generated.ts";
 import { canonicalJsonbValue } from "./sqlite/jsonbValue.ts";
+import { canonicalTimestamp, dateInputText, formatInstant, instantFromDate } from "./sqlite/pgTime.ts";
+import { booleanInput } from "./sqlite/values.ts";
 
 /** Canonical decimal text for a value bound to NUMERIC(p, s). */
 export function canonicalDecimal(value: unknown, precision: number | null, scale: number | null): unknown {
@@ -69,10 +75,21 @@ function columnName(node: OperationNode): string | undefined {
   return ColumnNode.is(node) ? node.column.name : undefined;
 }
 
+/** A value assigned to a DATE column, as PostgreSQL's date input read it. */
+function dateValue(value: unknown): unknown {
+  if (typeof value === "string") return dateInputText(value);
+  if (value instanceof Date) return dateInputText(formatInstant(instantFromDate(value)));
+  return value;
+}
+
 function convertValue(info: TableWriteInfo, column: string, value: unknown): unknown {
+  if (value === null || value === undefined) return value;
   const decimal = info.decimals?.[column];
   if (decimal) return canonicalDecimal(value, decimal[0], decimal[1]);
   if (info.jsonb?.includes(column)) return canonicalJsonbValue(value);
+  if (info.booleans?.includes(column)) return booleanInput(value);
+  if (info.dates?.includes(column)) return dateValue(value);
+  if (info.timestamps?.includes(column) && typeof value === "string") return canonicalTimestamp(value);
   return value;
 }
 
@@ -102,7 +119,7 @@ function transformInsert(node: InsertQueryNode): InsertQueryNode {
   if (!info) return node;
   const columns = (node.columns ?? []).map((c) => c.column.name);
   let values = node.values;
-  if (values && ValuesNode.is(values) && (info.decimals || info.jsonb)) {
+  if (values && ValuesNode.is(values) && (info.decimals || info.jsonb || info.booleans || info.dates || info.timestamps)) {
     values = ValuesNode.create(
       values.values.map((item) => {
         if (PrimitiveValueListNode.is(item)) {

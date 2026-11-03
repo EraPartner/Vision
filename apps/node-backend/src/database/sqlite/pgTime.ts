@@ -235,6 +235,25 @@ export function localDateOf(instant: Instant): CivilDate {
   return civilOfWall(wallOfInstant(instant.ms));
 }
 
+/** The date part of timestamp text with a clock time. */
+const WRITTEN_DATE_RE = /^\s*(\d{4}-\d{2}-\d{2})[T ]/;
+
+/**
+ * PostgreSQL's date input, for `x::date` and for a value assigned to a DATE
+ * column. A date stays as is. Canonical timestamp text (a stored timestamptz,
+ * now(), or a bound Date) gives its session-zone date, like
+ * `timestamptz::date`. Other text with a clock time gives the date it was
+ * written with, as `'2026-01-05T23:30:00Z'::date` does; the whole text must
+ * still be a valid timestamp.
+ */
+export function dateInputText(text: string): string {
+  if (isDateText(text)) return formatDate(parseDate(text));
+  const instant = parseInstant(text);
+  if (formatInstant(instant) === text) return formatDate(localDateOf(instant));
+  const written = WRITTEN_DATE_RE.exec(text);
+  return formatDate(written?.[1] === undefined ? localDateOf(instant) : parseDate(written[1]));
+}
+
 /** Today in the session zone. */
 export function today(now: Date = new Date()): string {
   return formatDate(localDateOf(instantFromDate(now)));

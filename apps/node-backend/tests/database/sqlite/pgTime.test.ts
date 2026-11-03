@@ -102,6 +102,20 @@ describe("date and time functions match PostgreSQL 18 in Europe/Brussels", () =>
     expect(scalar(db, "SELECT typeof(date_diff_days('2026-03-01', '2026-02-01'))")).toBe("integer");
   });
 
+  it("reads x::date as PostgreSQL does for stored timestamps and for written text", () => {
+    // A stored timestamp is a timestamptz: its date in the session zone.
+    expect(scalar(db, "SELECT ts_date(vision_ts('2026-01-05T23:30:00Z'))")).toBe("2026-01-06");
+    expect(scalar(db, "SELECT ts_date('2026-01-05T23:30:00.000000Z')")).toBe("2026-01-06");
+    // Other text is date input in PostgreSQL: the written date, whatever the clock or zone.
+    expect(scalar(db, "SELECT ts_date('2026-01-05T23:30:00Z')")).toBe("2026-01-05");
+    expect(scalar(db, "SELECT ts_date('2026-01-05T23:30:00.000Z')")).toBe("2026-01-05");
+    expect(scalar(db, "SELECT ts_date('2026-01-05 01:00:00+14:00')")).toBe("2026-01-05");
+    expect(scalar(db, "SELECT ts_date('2026-01-05')")).toBe("2026-01-05");
+    expect(scalar(db, "SELECT ts_date(NULL)")).toBeNull();
+    expect(outcome(() => scalar(db, "SELECT ts_date('2026-02-30T10:00:00Z')"))).toEqual({ error: "22008" });
+    expect(outcome(() => scalar(db, "SELECT ts_date('2026-01-05Tnoon')"))).toEqual({ error: "22007" });
+  });
+
   it("accepts only canonical storage text", () => {
     expect(scalar(db, "SELECT vision_ts_ok('2026-01-31T12:00:00.000000Z')")).toBe(1);
     expect(scalar(db, "SELECT vision_ts_ok('2026-01-31T12:00:00Z')")).toBe(0);

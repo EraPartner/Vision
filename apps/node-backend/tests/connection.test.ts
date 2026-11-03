@@ -166,6 +166,18 @@ describe("transactions", () => {
     expect(await count()).toBe(before + 1);
   });
 
+  it("refuses transaction control outside withTransaction()", async () => {
+    // A bare BEGIN would leave the shared writer in a transaction that later
+    // writes join while reads still go to the reader.
+    for (const text of ["BEGIN", "begin immediate", "COMMIT", "END", "ROLLBACK", "SAVEPOINT s", "RELEASE s"]) {
+      await expect(query(text), text).rejects.toMatchObject({ code: "25000" });
+    }
+    const before = await count();
+    await query("INSERT INTO conn_items (name) VALUES ('after-refused-begin')");
+    await expect(withTransaction(() => Promise.reject(new Error("undo")))).rejects.toThrow("undo");
+    expect(await count()).toBe(before + 1);
+  });
+
   it("module-level query() joins the ambient transaction, so reads see its own writes", async () => {
     await withTransaction(async () => {
       await query("INSERT INTO conn_items (name) VALUES ('ambient')");
