@@ -2,7 +2,7 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-10-21
+date: 2026-11-03
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
 description: Native packaged-app update path with backup, checksum verification, and rollback boundaries; source checkouts update outside the app.
 aliases: [update system, application updater]
@@ -79,7 +79,9 @@ The topbar update badge and its dialog (`UpdateNotification`) were removed by
 `useUpdateStatus` (key `["update-status"]`, `GET /api/admin/update/check`), is polled every five
 minutes while the window is visible and refetched on window focus. The sidebar's Settings row shows
 a dot (with a screen-reader label) while it reports an update, and Settings › About reads the same
-status: it shows the latest version, publish date, release notes and release-page link, offers
+status: it shows the latest version, publish date, a two-line plain-text summary of the release
+notes (`releaseNotesSummary` in `apps/frontend/src/lib/releaseNotes.ts` strips the Markdown of the
+GitHub release body) and release-page link, offers
 *Check for updates* (which refreshes the shared query), and, in Electron only, an *Install update*
 button that runs the backup, download, install and restart phases through the updater bridge.
 Web clients see the status and release link but no install control.
