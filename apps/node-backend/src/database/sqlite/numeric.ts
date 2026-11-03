@@ -236,13 +236,6 @@ export function toDec(value: unknown, fn = "decimal"): Dec | null {
   throw invalidSyntax(value);
 }
 
-/** Like {@link toDec} but for a value that may not be NULL. */
-function need(value: unknown, fn: string): Dec {
-  const parsed = toDec(value, fn);
-  if (parsed === null) throw new TypeError(`${fn}: NULL is not a decimal`);
-  return parsed;
-}
-
 /** Rescale exactly to a larger or equal scale. */
 function upscale(value: Dec, scale: number): bigint {
   if (scale < value.scale) throw new RangeError("upscale to a smaller scale");
@@ -422,11 +415,6 @@ export function ceilDec(a: Dec): Dec {
 function leadingDigitPosition(value: Dec): number | null {
   if (value.coef === 0n) return null;
   return abs(value.coef).toString().length - value.scale;
-}
-
-/** Number of digits before the decimal point (0 for |value| < 1). */
-function integerDigits(value: Dec): number {
-  return Math.max(0, leadingDigitPosition(value) ?? 0);
 }
 
 /** PostgreSQL's numeric typmod limits (numerictypmodin), SQLSTATE 22023. */
