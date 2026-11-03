@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the brokerage CASH half of the portfolio import
+ * Real-database tests for the brokerage CASH half of the portfolio import
  * commit.
  *
  * The property under test is exactly the one mocks could never see:
@@ -37,19 +37,19 @@ import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/i
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.ts';
 import { partial } from './helpers/partial.ts';
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Ids seeded by `seedAccount()`. */
@@ -103,9 +103,9 @@ async function stageCash(
   const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, tx_date, type_raw, route, amount, currency, note)
-     VALUES ($1, $2, 'matched', '2026-02-01', $3, 'cash', $4, 'EUR', $5)
+     VALUES ($1, $2, 'matched', '2026-02-01', $3, 'cash', vision_numeric($4, 18, 4), 'EUR', $5)
      RETURNING id`,
-    [batchId, rowIndex, typeRaw, amount, note],
+    [batchId, rowIndex, typeRaw, String(amount), note],
   );
   return Number(must(rows[0], "rows[0]").id);
 }
@@ -113,20 +113,21 @@ async function stageCash(
 async function ledgerRows() {
   const { rows } = await pool.query<{
     id: number;
-    amount: number;
+    /** NUMERIC(18,4) text, exactly as stored. */
+    amount: string;
     memo: string | null;
     account_id: number;
     recipient_id: number;
     recipient_name: string;
   }>(
-    `SELECT t.id, t.amount::float8 AS amount, t.memo, t.account_id, t.recipient_id, r.name AS recipient_name
+    `SELECT t.id, t.amount, t.memo, t.account_id, t.recipient_id, r.name AS recipient_name
        FROM transactions t JOIN recipients r ON r.id = t.recipient_id
       ORDER BY t.id`,
   );
   return rows;
 }
 
-describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
+describeDb('portfolio import — brokerage cash commit (real database)', () => {
   beforeAll(() => {
     pool = must(getTestPool(), "test pool");
   });
@@ -162,7 +163,10 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     }
     // Ledger sign survives (cash-sign fix): staging magnitudes are absolute,
     // the withdrawal must land negative.
-    expect(rows.map((r) => r.amount).sort((a, b) => a - b)).toEqual([-250, 1000]);
+    expect(rows.map((r) => r.amount).sort((a, b) => Number(a) - Number(b))).toEqual([
+      '-250.0000',
+      '1000.0000',
+    ]);
 
     // Staging rows are committed and point at their ledger rows.
     const { rows: staged } = await pool.query<DbRow>(
@@ -215,6 +219,29 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     expect(await ledgerRows()).toHaveLength(1);
   });
 
+  it('stores and dedups a cash amount exactly at the column scale', async () => {
+    const batchA = await newBrokerageBatch(fx.accountId);
+    await stageCash(batchA, 0, { typeRaw: 'withdrawal', amount: 250.0001, note: 'wd' });
+    expect((await commitPortfolioImport({ batchId: batchA })).imported).toBe(1);
+    expect((await ledgerRows()).map((r) => r.amount)).toEqual(['-250.0001']);
+
+    // One ten-thousandth apart is a different movement, not a re-import.
+    const batchB = await newBrokerageBatch(fx.accountId);
+    await stageCash(batchB, 0, { typeRaw: 'withdrawal', amount: 250, note: 'wd' });
+    expect(await commitPortfolioImport({ batchId: batchB })).toMatchObject({
+      imported: 1,
+      duplicates: 0,
+    });
+
+    const batchC = await newBrokerageBatch(fx.accountId);
+    await stageCash(batchC, 0, { typeRaw: 'withdrawal', amount: 250.0001, note: 'wd' });
+    expect(await commitPortfolioImport({ batchId: batchC })).toMatchObject({
+      imported: 0,
+      duplicates: 1,
+    });
+    expect((await ledgerRows()).map((r) => r.amount)).toEqual(['-250.0001', '-250.0000']);
+  });
+
   it('rollback deletes exactly the cash rows the commit path itself created', async () => {
     // A decoy ledger row from ANOTHER source must survive the rollback.
     const { rows: decoyRec } = await pool.query<IdRow>(
@@ -222,7 +249,7 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     );
     const { rows: decoy } = await pool.query<IdRow>(
       `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-       VALUES ('2026-01-15', 77, 'EUR', 'unrelated', $1, $2, true) RETURNING id`,
+       VALUES ('2026-01-15', '77.0000', 'EUR', 'unrelated', $1, $2, true) RETURNING id`,
       [fx.accountId, must(decoyRec[0], "decoyRec[0]").id],
     );
 

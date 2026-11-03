@@ -45,7 +45,8 @@ import { accountService } from "../src/services/accountService.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { partial } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
+import { toDecimal } from "../src/lib/money.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
@@ -57,7 +58,7 @@ interface BigIdRow {
   id: string;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 /** Ids seeded per test. */
@@ -107,7 +108,7 @@ async function seedCashCategories() {
   const ids = Object.fromEntries(rows.map((row) => [row.detail, row.id]));
   await pool.query(
     `INSERT INTO user_settings (key, value)
-     VALUES ('brokerage_cash_category_ids', $1::jsonb)`,
+     VALUES ('brokerage_cash_category_ids', vision_jsonb($1))`,
     [
       JSON.stringify({
         dividend: ids.DIVIDENDS,
@@ -126,7 +127,7 @@ async function newBrokerageBatch(
   const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_batches
        (adapter_name, status, rows_total, account_id, is_brokerage, custom_config)
-     VALUES ('generic', 'pending', 0, $1, true, $2) RETURNING id`,
+     VALUES ('generic', 'pending', 0, $1, true, vision_jsonb($2)) RETURNING id`,
     [accountId, customConfig ? JSON.stringify(customConfig) : null],
   );
   return Number(must(rows[0], "rows[0]").id);
@@ -155,7 +156,7 @@ async function stagePending(
   const { rows } = await pool.query<BigIdRow>(
     `INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, tx_date, type_raw, symbol_raw, name_raw, amount, currency, note, raw_data)
-     VALUES ($1, $2, 'pending', '2026-02-02', $3, $4, $5, $6, $7, $8, $9)
+     VALUES ($1, $2, 'pending', '2026-02-02', $3, $4, $5, vision_numeric($6, 18, 4), $7, $8, $9)
      RETURNING id`,
     [
       batchId,
@@ -163,7 +164,7 @@ async function stagePending(
       typeRaw,
       symbolRaw,
       nameRaw,
-      amount,
+      String(amount),
       currency,
       note,
       `${rowIndex}|${typeRaw}|${amount}|${currency}`,
@@ -175,7 +176,8 @@ async function stagePending(
 async function ledgerRows() {
   const { rows } = await pool.query<{
     id: number;
-    amount: number;
+    /** NUMERIC(18,4) text, exactly as stored. */
+    amount: string;
     memo: string | null;
     account_id: number;
     recipient_id: number;
@@ -183,7 +185,7 @@ async function ledgerRows() {
     cat_general: string | null;
     cat_detail: string | null;
   }>(
-    `SELECT t.id, t.amount::float8 AS amount, t.memo, t.account_id, t.recipient_id,
+    `SELECT t.id, t.amount, t.memo, t.account_id, t.recipient_id,
             r.name AS recipient_name, c.general AS cat_general, c.detail AS cat_detail
        FROM transactions t
        JOIN recipients r ON r.id = t.recipient_id
@@ -217,7 +219,7 @@ async function stageCorpus(batchId: number) {
 const TYPE_MAPPING = { type_mapping: { "Custody Fee": "fee" } };
 
 describeDb(
-  "portfolio import — D6 instrument-less cash rows (real Postgres)",
+  "portfolio import — D6 instrument-less cash rows (real database)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
@@ -293,22 +295,22 @@ describeDb(
       }
       const byAmount = new Map(ledger.map((r) => [r.amount, r]));
       // Income kinds credit the sleeve…
-      expect(byAmount.get(12.34)).toMatchObject({
+      expect(byAmount.get("12.3400")).toMatchObject({
         cat_general: "INCOME",
         cat_detail: "DIVIDENDS",
       });
-      expect(byAmount.get(1.11)).toMatchObject({
+      expect(byAmount.get("1.1100")).toMatchObject({
         cat_general: "INCOME",
         cat_detail: "INTEREST",
       });
       // …expense kinds debit it. The fee's sign comes from the CANONICAL type
       // ('Custody Fee' → fee via type_mapping): deriving it from type_raw would
       // classify 'review' and default to +2.50.
-      expect(byAmount.get(-2.5)).toMatchObject({
+      expect(byAmount.get("-2.5000")).toMatchObject({
         cat_general: "INVESTMENTS",
         cat_detail: "FEES",
       });
-      expect(byAmount.get(-0.4)).toMatchObject({
+      expect(byAmount.get("-0.4000")).toMatchObject({
         cat_general: "INVESTMENTS",
         cat_detail: "TAXES",
       });
@@ -316,13 +318,13 @@ describeDb(
       // The instrument-bearing dividend stays a PORTFOLIO row (tax/stats source)
       // and emitted NO ledger row — the double-count guard.
       const { rows: ptx } = await pool.query<DbRow>(
-        `SELECT investment_id, type, amount::float8 AS amount, account_id FROM portfolio_transactions`,
+        `SELECT investment_id, type, amount, account_id FROM portfolio_transactions`,
       );
       expect(ptx).toHaveLength(1);
       expect(ptx[0]).toMatchObject({
         investment_id: fx.investmentId,
         type: "dividend",
-        amount: 100,
+        amount: "100.0000",
         account_id: fx.accountId,
       });
     });
@@ -352,12 +354,12 @@ describeDb(
       );
       const { rows: decoyTxn } = await pool.query<IdRow>(
         `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-       VALUES ('2026-01-15', 77, 'EUR', 'unrelated', $1, $2, true) RETURNING id`,
+       VALUES ('2026-01-15', '77.0000', 'EUR', 'unrelated', $1, $2, true) RETURNING id`,
         [fx.accountId, must(decoyRec[0], "decoyRec[0]").id],
       );
       const { rows: decoyTrade } = await pool.query<IdRow>(
         `INSERT INTO portfolio_transactions (investment_id, type, date, amount)
-       VALUES ($1, 'buy', '2026-01-10', 500) RETURNING id`,
+       VALUES ($1, 'buy', '2026-01-10', '500.0000') RETURNING id`,
         [fx.investmentId],
       );
 
@@ -413,8 +415,10 @@ describeDb(
       const resA = await commitPortfolioImport({ batchId: batchA });
       expect(resA).toMatchObject({ imported: 2, duplicates: 0, errors: 0 });
       const ledgerA = await ledgerRows();
-      expect(ledgerA.map((r) => r.amount)).toEqual([-2.5, -2.5]);
-      expect(ledgerA.reduce((s, r) => s + r.amount, 0)).toBeCloseTo(-5.0);
+      expect(ledgerA.map((r) => r.amount)).toEqual(["-2.5000", "-2.5000"]);
+      expect(
+        ledgerA.reduce((sum, r) => sum.plus(r.amount), toDecimal(0)).toFixed(4),
+      ).toBe("-5.0000");
 
       // Cross-batch idempotence must survive the repeated identity: the re-import
       // sees 2 pre-existing matches for 2 statement occurrences → both dedup.
@@ -438,7 +442,7 @@ describeDb(
       );
       await pool.query(
         `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-       VALUES ('2026-02-02', 10, 'EUR', 'CUSTODY FEE', $1, $2, true)`,
+       VALUES ('2026-02-02', '10.0000', 'EUR', 'CUSTODY FEE', $1, $2, true)`,
         [fx.accountId, must(rec[0], "rec[0]").id],
       );
 
@@ -451,8 +455,8 @@ describeDb(
       expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
       const amounts = (await ledgerRows())
         .map((r) => r.amount)
-        .sort((a, b) => a - b);
-      expect(amounts).toEqual([-10, 10]); // the fee landed; the bystander is untouched
+        .sort((a, b) => Number(a) - Number(b));
+      expect(amounts).toEqual(["-10.0000", "10.0000"]); // the fee landed; the bystander is untouched
     });
 
     it("a USD cash row on the EUR sleeve keeps its native currency and is converted per partition, not summed raw (WP-C2 FX check)", async () => {
@@ -463,7 +467,7 @@ describeDb(
       // cross-currency Σ that added 100 EUR + 100 USD as bare numbers.
       await pool.query(
         `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-       VALUES ('USD', CURRENT_DATE, '0.5', true)`,
+       VALUES ('USD', today(), '0.5000000000', true)`,
       );
       const batchId = await newBrokerageBatch(fx.accountId, TYPE_MAPPING);
       await stagePending(batchId, 0, { typeRaw: "deposit", amount: 100 }); // 100 EUR
@@ -478,9 +482,9 @@ describeDb(
 
       // (a) native currency stored raw on the row.
       const { rows: usdRows } = await pool.query<DbRow>(
-        `SELECT amount::float8 AS amount, currency FROM transactions WHERE currency = 'USD'`,
+        `SELECT amount, currency FROM transactions WHERE currency = 'USD'`,
       );
-      expect(usdRows).toEqual([{ amount: 100, currency: "USD" }]);
+      expect(usdRows).toEqual([{ amount: "100.0000", currency: "USD" }]);
 
       // (b) the hub balance partitions per currency and converts each at its own
       // rate: 100 EUR + (100 USD × 0.5) = 150 — not (100 + 100) × 1 = 200, and

@@ -3,10 +3,13 @@
  *
  * Every function runs on the ambient transaction connection (the `db` driver
  * routes through query()). The service wraps the complete compare-and-set
- * mutation in withTransaction().
+ * mutation in withTransaction(), whose BEGIN IMMEDIATE on the single SQLite
+ * writer replaces PostgreSQL's row and table locks (ADR-263): the reads below
+ * cannot change before the update commits.
  */
 
 import { sql } from "kysely";
+import { __getAmbientTransactionClient } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   historicalRateRowSchema,
@@ -41,10 +44,25 @@ export type RetagCustodyEventRow = Partial<
 > &
   PortfolioUnitEventRow & { investment_id: InvestmentId };
 
-export async function lockPortfolioTransactionWrites(): Promise<void> {
-  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
-    db,
-  );
+/** A JSON array parameter for `IN (SELECT value FROM json_each(?))`. */
+const inIds = <T extends number = number>(ids: readonly T[]) =>
+  sql<T>`(SELECT value FROM json_each(${JSON.stringify(ids.map(Number))}))`;
+
+/**
+ * Stable portfolio history for the re-tag (ADR-263). PostgreSQL took a SHARE
+ * ROW EXCLUSIVE table lock here. SQLite runs every write transaction with
+ * BEGIN IMMEDIATE on the single writer connection, so the caller's
+ * withTransaction() already excludes every concurrent write to
+ * portfolio_transactions, portfolio_asset_transfers and
+ * portfolio_asset_adjustments until it ends. Refuses to run outside one,
+ * where that guarantee would not hold.
+ */
+export function lockPortfolioTransactionWrites(): Promise<void> {
+  if (!__getAmbientTransactionClient())
+    return Promise.reject(
+      new Error("lockPortfolioTransactionWrites must run inside withTransaction()"),
+    );
+  return Promise.resolve();
 }
 
 export async function lockEligibleDestinationAccount(
@@ -58,8 +76,7 @@ export async function lockEligibleDestinationAccount(
       .select(["id", "name", "display_name", "type", "is_active"])
       .where("id", "=", accountId)
       .where("is_active", "=", true)
-      .where("type", "in", ["brokerage", "crypto_exchange", "wallet"])
-      .forUpdate(),
+      .where("type", "in", ["brokerage", "crypto_exchange", "wallet"]),
   );
 }
 
@@ -71,9 +88,8 @@ export async function lockTransactions(
     db
       .selectFrom("portfolio_transactions")
       .select(["id", "investment_id", "account_id"])
-      .where(sql<boolean>`id = ANY(${transactionIds}::int[])`)
-      .orderBy("id", "asc")
-      .forUpdate(),
+      .where("id", "in", inIds(transactionIds))
+      .orderBy("id", "asc"),
   );
 }
 
@@ -84,14 +100,14 @@ export async function getUnitEventsForInvestments(
     retagTransactionEventRowSchema,
     sql`SELECT pt.id, pt.investment_id, pt.type,
             to_char(pt.date, 'YYYY-MM-DD') AS date,
-            COALESCE(pt.amount, 0) AS amount,
-            COALESCE(pt.units, 0) AS units,
-            COALESCE(pt.fees, 0) AS fees,
-            COALESCE(pt.taxes, 0) AS taxes,
+            COALESCE(pt.amount, '0') AS amount,
+            COALESCE(pt.units, '0') AS units,
+            COALESCE(pt.fees, '0') AS fees,
+            COALESCE(pt.taxes, '0') AS taxes,
             COALESCE(pt.currency, 'EUR') AS currency,
             pt.fx_rate_to_eur,
             CASE
-              WHEN COALESCE(pt.currency, 'EUR') = 'EUR' THEN 1
+              WHEN COALESCE(pt.currency, 'EUR') = 'EUR' THEN '1'
               ELSE COALESCE(
                 pt.fx_rate_to_eur,
                 (SELECT er.rate_to_eur
@@ -104,11 +120,11 @@ export async function getUnitEventsForInvestments(
             END AS fx_multiplier_eur,
             pt.account_id,
             i.asset_class,
-            COALESCE(i.current_price, 0) AS current_price,
-            COALESCE(i.interest_rate, 0) AS interest_rate
+            COALESCE(i.current_price, '0') AS current_price,
+            COALESCE(i.interest_rate, '0') AS interest_rate
        FROM portfolio_transactions pt
        JOIN investments i ON i.id = pt.investment_id
-      WHERE pt.investment_id = ANY(${investmentIds}::int[])
+      WHERE pt.investment_id IN ${inIds(investmentIds)}
       ORDER BY pt.investment_id ASC, pt.date ASC, pt.id ASC`,
   );
   const transfers: RetagCustodyEventRow[] = [];
@@ -150,8 +166,8 @@ export async function compareAndSetAccount(
     db
       .updateTable("portfolio_transactions")
       .set({ account_id: toAccountId })
-      .where(sql<boolean>`id = ANY(${transactionIds}::int[])`)
-      .where(sql<boolean>`account_id IS NOT DISTINCT FROM ${fromAccountId}`)
+      .where("id", "in", inIds(transactionIds))
+      .where(sql<boolean>`account_id IS ${fromAccountId}`)
       .returning("id"),
   );
   return rows.map((row) => row.id);

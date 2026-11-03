@@ -80,7 +80,9 @@ export async function insertIncludedInUnitsIncome(
         investment_id: sql<InvestmentId>`${row.investment_id}`,
         type: "dividend",
         date: sql<string>`${row.tx_date}`,
-        amount: sql<string>`${row.amount}`,
+        // A template bypasses the write plugin: round to the column's scale
+        // as PostgreSQL's assignment cast did.
+        amount: sql<string>`vision_numeric(${row.amount == null ? null : String(row.amount)}, 18, 4)`,
         units: null,
         price_per_unit: null,
         fees: 0,

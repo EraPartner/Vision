@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
-import pg from "pg";
+import { StatementSync } from "node:sqlite";
 import {
   acquireDbSuiteLock,
   releaseDbSuiteLock,
@@ -11,29 +11,47 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
-let pool: Pool;
-/** pg's overloads collapse to the text form; QueryConfig objects arrive too. */
-type ClientQuery = (
-  statement: string | { text: string },
-  params?: unknown[],
-) => unknown;
+let pool: TestPool;
+/**
+ * Every statement the driver runs, savepoints included, executes through a
+ * prepared StatementSync; `sourceSQL` is the statement's text.
+ */
+type StatementRun = (this: StatementSync, ...params: unknown[]) => unknown;
+
+/**
+ * A trigger standing in for PostgreSQL's `ADD CONSTRAINT ... CHECK ... NOT
+ * VALID`: SQLite cannot add a CHECK to an existing table. The driver
+ * translates its RAISE into SQLSTATE 23514 naming the constraint, as the
+ * CHECK failure did.
+ */
+function failingInsertTrigger(
+  name: string,
+  table: string,
+  column: string,
+  value: string,
+): string {
+  return `CREATE TRIGGER ${name} BEFORE INSERT ON ${table}
+    WHEN NEW.${column} = '${value}'
+    BEGIN
+      SELECT RAISE(ABORT, 'vision:23514:${name}:new row for relation "${table}" violates check constraint "${name}"');
+    END`;
+}
 describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
   beforeAll(() => {
     pool = must(getTestPool(), "test pool");
   });
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
   }, 180000);
   afterAll(async () => {
@@ -51,13 +69,26 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
     let accountId: number | undefined;
     let investmentId: number | undefined;
     let batchId: number | undefined;
-    let querySpy: MockInstance<ClientQuery> | undefined;
+    let runSpy: MockInstance<StatementRun> | undefined;
+    let allSpy: MockInstance<StatementRun> | undefined;
     const broker = "VISION SAVEPOINT RELEASE TEST";
     try {
-      await pool.query(`ALTER TABLE portfolio_transactions ADD CONSTRAINT vision_test_trade_savepoint_failure
-        CHECK (note IS DISTINCT FROM 'VISION_TEST_FAIL_TRADE') NOT VALID`);
-      await pool.query(`ALTER TABLE transactions ADD CONSTRAINT vision_test_cash_savepoint_failure
-        CHECK (memo IS DISTINCT FROM 'VISION_TEST_FAIL_CASH') NOT VALID`);
+      await pool.query(
+        failingInsertTrigger(
+          "vision_test_trade_savepoint_failure",
+          "portfolio_transactions",
+          "note",
+          "VISION_TEST_FAIL_TRADE",
+        ),
+      );
+      await pool.query(
+        failingInsertTrigger(
+          "vision_test_cash_savepoint_failure",
+          "transactions",
+          "memo",
+          "VISION_TEST_FAIL_CASH",
+        ),
+      );
       accountId = must((
         await pool.query<IdRow>(
           `INSERT INTO accounts(name,display_name,institution) VALUES($1,$1,$1) RETURNING id`,
@@ -92,16 +123,17 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
               await pool.query<BigIdRow>(
                 `INSERT INTO portfolio_import_staging_rows
           (batch_id,row_index,status,tx_date,type_raw,type,route,units,price_per_unit,amount,currency,note,resolved_investment_id)
-          VALUES($1,$2,'matched',$3,$4::text,CASE WHEN $5 = 'portfolio' THEN $4::text::portfolio_txn_type ELSE NULL END,$5,$6,$7,$8,'EUR',$9,$10) RETURNING id`,
+          VALUES($1,$2,'matched',$3,$4,CASE WHEN $5 = 'portfolio' THEN $4 ELSE NULL END,$5,
+            vision_numeric($6,18,8),vision_numeric($7,18,6),vision_numeric($8,18,4),'EUR',$9,$10) RETURNING id`,
                 [
                   batchId,
                   i,
                   `2026-02-0${i + 1}`,
                   trade ? "buy" : "deposit",
                   trade ? "portfolio" : "cash",
-                  trade ? 3 : null,
-                  trade ? 100 : null,
-                  trade ? 300 : i === 2 ? 10 : 20,
+                  trade ? "3" : null,
+                  trade ? "100" : null,
+                  trade ? "300" : i === 2 ? "10" : "20",
                   notes[i],
                   trade ? investmentId : null,
                 ],
@@ -110,19 +142,29 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
           ),
         );
       }
-      querySpy = vi.spyOn(
-        pg.Client.prototype as unknown as { query: ClientQuery },
-        "query",
-      );
+      // Statements that return rows run through all(), the rest through run().
+      const prototype = StatementSync.prototype as unknown as Record<
+        "run" | "all",
+        StatementRun
+      >;
+      runSpy = vi.spyOn(prototype, "run");
+      allSpy = vi.spyOn(prototype, "all");
       expect(await commitBatch({ batchId })).toEqual({
         imported: 2,
         duplicates: 0,
         errors: 2,
       });
-      const calls = querySpy.mock.calls.map(([statement, params]) => ({
-        sql: typeof statement === "string" ? statement : statement.text,
-        params,
-      }));
+      const record = (spy: MockInstance<StatementRun>) =>
+        spy.mock.calls.map((params, index) => ({
+          order: must(spy.mock.invocationCallOrder[index], "call order"),
+          sql: must(spy.mock.contexts[index], "statement").sourceSQL,
+          params,
+        }));
+      const calls = [...record(runSpy), ...record(allSpy)].sort(
+        (a, b) => a.order - b.order,
+      );
+      runSpy.mockRestore();
+      allSpy.mockRestore();
       for (const id of [stagedIds[0], stagedIds[2]]) {
         const rollback = calls.findIndex(
           ({ sql }) => sql === `ROLLBACK TO SAVEPOINT sp_prow_${id}`,
@@ -133,8 +175,8 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
           calls.findIndex(
             ({ sql, params }) =>
               /UPDATE "?portfolio_import_staging_rows"?/i.test(sql) &&
-              (params ?? []).some((value) => Number(value) === id) &&
-              (params ?? []).includes("error"),
+              params.some((value) => Number(value) === id) &&
+              params.includes("error"),
           ),
         ).toBeGreaterThan(rollback + 1);
       }
@@ -169,11 +211,11 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
       expect(
         (
           await pool.query<DbRow>(
-            "SELECT memo,amount::float8 AS amount FROM transactions WHERE account_id=$1",
+            "SELECT memo,amount FROM transactions WHERE account_id=$1",
             [accountId],
           )
         ).rows,
-      ).toEqual([{ memo: "SAVEPOINT GOOD CASH", amount: 20 }]);
+      ).toEqual([{ memo: "SAVEPOINT GOOD CASH", amount: "20.0000" }]);
       expect(
         (
           await pool.query<DbRow>(
@@ -183,12 +225,13 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
         ).rows[0],
       ).toMatchObject({ rows_imported: 2, rows_error: 2, rows_duplicate: 0 });
     } finally {
-      querySpy?.mockRestore();
+      runSpy?.mockRestore();
+      allSpy?.mockRestore();
       await pool.query(
-        "ALTER TABLE portfolio_transactions DROP CONSTRAINT IF EXISTS vision_test_trade_savepoint_failure",
+        "DROP TRIGGER IF EXISTS vision_test_trade_savepoint_failure",
       );
       await pool.query(
-        "ALTER TABLE transactions DROP CONSTRAINT IF EXISTS vision_test_cash_savepoint_failure",
+        "DROP TRIGGER IF EXISTS vision_test_cash_savepoint_failure",
       );
       if (batchId !== undefined) {
         await pool.query(

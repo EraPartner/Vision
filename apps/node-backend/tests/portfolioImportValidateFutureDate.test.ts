@@ -77,32 +77,59 @@ function wireQuery(pending: Record<string, unknown>[]) {
     }
     if (sql.includes('from "portfolio_import_staging_rows"'))
       return Promise.resolve({ rows: pending.map(pendingWireRow) });
-    return Promise.resolve({ rows: [] }); // UNNEST update + counter updates
+    return Promise.resolve({ rows: [] }); // batch row update + counter updates
   });
 }
 
-/** The UNNEST batch update: each param is one column array. */
+/** One row of the batch update's `json_each(?)` parameter. */
+interface StagingUpdate {
+  id: string;
+  status: string;
+  type: string | null;
+  route: string | null;
+  fingerprint: string | null;
+  source_record_hash: string | null;
+  fingerprint_version: number | null;
+  occurrence: number | null;
+  error_message: string | null;
+}
+
 type Column = unknown[];
-// The update binds at least nine column arrays; the tests read up to index 8.
-type UnnestCall = [
+/**
+ * The batch row update, by column in the order the PostgreSQL unnest bound
+ * them: ids, statuses, types, routes, fingerprints, source record hashes,
+ * fingerprint versions, occurrences, error messages.
+ */
+type BatchUpdateCall = [
   sql: string,
-  params: [
-    Column,
-    Column,
-    Column,
-    Column,
-    Column,
-    Column,
-    Column,
-    Column,
-    Column,
-    ...Column[],
-  ],
+  params: [Column, Column, Column, Column, Column, Column, Column, Column, Column],
 ];
 
-function findUnnestUpdate() {
-  return query.mock.calls.find(([sql]) => sql.includes("FROM unnest(")) as
-    UnnestCall | undefined;
+function findBatchUpdate(): BatchUpdateCall | undefined {
+  const call = query.mock.calls.find(
+    ([sql]) =>
+      sql.includes("UPDATE portfolio_import_staging_rows") &&
+      sql.includes("FROM json_each("),
+  );
+  if (!call) return undefined;
+  const [sql, params] = call;
+  const raw = must(params, "batch update params")[0];
+  if (typeof raw !== "string") throw new Error("expected one JSON array parameter");
+  const rows = JSON.parse(raw) as StagingUpdate[];
+  return [
+    sql,
+    [
+      rows.map((row) => row.id),
+      rows.map((row) => row.status),
+      rows.map((row) => row.type),
+      rows.map((row) => row.route),
+      rows.map((row) => row.fingerprint),
+      rows.map((row) => row.source_record_hash),
+      rows.map((row) => row.fingerprint_version),
+      rows.map((row) => row.occurrence),
+      rows.map((row) => row.error_message),
+    ],
+  ];
 }
 
 describe("validateBatch — future-dated rows", () => {
@@ -139,7 +166,7 @@ describe("validateBatch — future-dated rows", () => {
 
     expect(result).toMatchObject({ validated: 1, errors: 1, duplicates: 0 });
 
-    const update = findUnnestUpdate();
+    const update = findBatchUpdate();
     expect(update).toBeTruthy();
     const [, [ids, statuses, , , , , , , errorMessages]] = must(update, "update");
     const idx1 = ids.indexOf("1");
@@ -169,7 +196,7 @@ describe("validateBatch — future-dated rows", () => {
 
     expect(result).toEqual({ validated: 2, errors: 0, duplicates: 0 });
     const [, [, statuses, , , hashes, sourceHashes, , occurrences]] =
-      must(findUnnestUpdate(), "findUnnestUpdate result");
+      must(findBatchUpdate(), "findBatchUpdate result");
     expect(statuses).toEqual(["validated", "validated"]);
     expect(sourceHashes[0]).toBe(sourceHashes[1]);
     expect(hashes[0]).not.toBe(hashes[1]);
@@ -196,7 +223,7 @@ describe("validateBatch — future-dated rows", () => {
       errors: 0,
       duplicates: 0,
     });
-    const [, [, , , , , , , occurrences]] = must(findUnnestUpdate(), "findUnnestUpdate result");
+    const [, [, , , , , , , occurrences]] = must(findBatchUpdate(), "findBatchUpdate result");
     expect(occurrences).toEqual([2]);
   });
 });

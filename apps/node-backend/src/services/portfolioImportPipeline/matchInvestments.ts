@@ -178,9 +178,11 @@ export async function matchBatch({
     return { investmentId: null, matchSource: null };
   };
 
-  const ids: string[] = [];
-  const investmentIds: (number | null)[] = [];
-  const matchSources: (string | null)[] = [];
+  const updates: {
+    id: string;
+    investment_id: number | null;
+    match_source: string | null;
+  }[] = [];
   const counts: { symbol: number; name_exact: number; unresolved: number } = {
     symbol: 0,
     name_exact: 0,
@@ -195,9 +197,11 @@ export async function matchBatch({
       resolved = classify(row.symbol_raw, row.name_raw);
       cache.set(key, resolved);
     }
-    ids.push(row.id);
-    investmentIds.push(resolved.investmentId);
-    matchSources.push(resolved.matchSource);
+    updates.push({
+      id: row.id,
+      investment_id: resolved.investmentId,
+      match_source: resolved.matchSource,
+    });
     counts[resolved.matchSource ?? "unresolved"] += 1;
 
     seen++;
@@ -206,14 +210,21 @@ export async function matchBatch({
     }
   }
 
-  if (ids.length > 0) {
-    await sql`UPDATE portfolio_import_staging_rows s
-          SET status = 'matched',
-              resolved_investment_id = v.investment_id,
-              match_source = v.match_source
-         FROM unnest(${ids}::bigint[], ${investmentIds}::int[], ${matchSources}::text[])
-              AS v(id, investment_id, match_source)
-        WHERE s.id = v.id`.execute(db);
+  if (updates.length > 0) {
+    // One statement for the whole batch: the JSON array binds as one
+    // parameter, so large batches stay below SQLite's variable limit.
+    await sql`WITH v AS (
+          SELECT CAST(value ->> 'id' AS INTEGER) AS id,
+                 CAST(value ->> 'investment_id' AS INTEGER) AS investment_id,
+                 value ->> 'match_source' AS match_source
+            FROM json_each(${JSON.stringify(updates)})
+        )
+        UPDATE portfolio_import_staging_rows
+           SET status = 'matched',
+               resolved_investment_id = v.investment_id,
+               match_source = v.match_source
+          FROM v
+         WHERE portfolio_import_staging_rows.id = v.id`.execute(db);
   }
 
   logger.info("[portfolio-pipeline:match] done", { batchId, total, counts });
@@ -227,9 +238,9 @@ function activeInvestmentsByKey(key: RawBuilder<string>, keys: string[]) {
     .select([
       key.as("match_key"),
       sql<number>`MIN(id)`.as("id"),
-      sql<number>`COUNT(*)::int`.as("count"),
+      sql<number>`COUNT(*)`.as("count"),
     ])
-    .where(sql<boolean>`${key} = ANY(${keys}::text[])`)
+    .where(sql<boolean>`${key} IN (SELECT value FROM json_each(${JSON.stringify(keys)}))`)
     .where("is_active", "=", true)
     .groupBy(key);
 }

@@ -30,7 +30,7 @@ import {
 } from "./helpers/saxoWorkbook.ts";
 import type { SyntheticSheet } from "./helpers/saxoWorkbook.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
@@ -38,7 +38,7 @@ interface IdRow {
   id: number;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const owned = { accounts: [] as number[], investments: [] as number[] };
 let directory: string;
@@ -346,7 +346,7 @@ async function fundingWorkbook(
 async function cash(accountId: number) {
   return (
     await pool.query<DbRow>(
-      `SELECT to_char(date,'YYYY-MM-DD') AS date, amount::text AS amount, currency
+      `SELECT to_char(date,'YYYY-MM-DD') AS date, amount, currency
          FROM transactions WHERE account_id=$1 ORDER BY date, id`,
       [accountId],
     )
@@ -357,7 +357,7 @@ async function cashTotals(accountId: number) {
   return Object.fromEntries(
     (
       await pool.query<{ currency: string; total: string }>(
-        `SELECT currency, SUM(amount)::text AS total FROM transactions
+        `SELECT currency, dec_sum(amount) AS "total::text" FROM transactions
           WHERE account_id=$1 GROUP BY currency ORDER BY currency`,
         [accountId],
       )
@@ -368,8 +368,8 @@ async function cashTotals(accountId: number) {
 async function portfolio(investmentId: number) {
   return (
     await pool.query<DbRow>(
-      `SELECT type, to_char(date,'YYYY-MM-DD') AS date, units::text AS units,
-          amount::text AS amount, fees::text AS fees, taxes::text AS taxes, currency
+      `SELECT type, to_char(date,'YYYY-MM-DD') AS date, units,
+          amount, fees, taxes, currency
          FROM portfolio_transactions WHERE investment_id=$1 ORDER BY date, id`,
       [investmentId],
     )
@@ -388,11 +388,11 @@ async function batchState(batchId: number) {
 async function cleanup() {
   if (owned.investments.length > 0)
     await pool.query(
-      "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::integer[])",
+      "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
       [owned.investments],
     );
   if (owned.accounts.length > 0) {
-    const batches = `SELECT id FROM portfolio_import_batches WHERE account_id=ANY($1::integer[])`;
+    const batches = `SELECT id FROM portfolio_import_batches WHERE account_id IN (SELECT value FROM json_each($1))`;
     await pool.query(
       `DELETE FROM portfolio_import_reconciliation_journal WHERE previous_entry_id IS NOT NULL AND batch_id IN (${batches})`,
       [owned.accounts],
@@ -402,20 +402,20 @@ async function cleanup() {
       [owned.accounts],
     );
     await pool.query(
-      "DELETE FROM transactions WHERE account_id=ANY($1::integer[])",
+      "DELETE FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
       [owned.accounts],
     );
     await pool.query(
-      "DELETE FROM portfolio_import_batches WHERE account_id=ANY($1::integer[])",
+      "DELETE FROM portfolio_import_batches WHERE account_id IN (SELECT value FROM json_each($1))",
       [owned.accounts],
     );
   }
   if (owned.investments.length > 0)
-    await pool.query("DELETE FROM investments WHERE id=ANY($1::integer[])", [
+    await pool.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
       owned.investments,
     ]);
   if (owned.accounts.length > 0)
-    await pool.query("DELETE FROM accounts WHERE id=ANY($1::integer[])", [
+    await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
       owned.accounts,
     ]);
   owned.accounts.length = 0;
@@ -525,7 +525,7 @@ describeDb("one broker history through more than one export", () => {
     describe("a CSV batch recorded before batches kept their source columns", () => {
       const forgetColumns = (batchId: number) =>
         pool.query<DbRow>(
-          "UPDATE portfolio_import_batches SET custom_config = custom_config - 'source_columns' WHERE id=$1",
+          "UPDATE portfolio_import_batches SET custom_config = vision_jsonb(json_remove(custom_config, '$.source_columns')) WHERE id=$1",
           [batchId],
         );
 
@@ -712,7 +712,9 @@ describeDb("one broker history through more than one export", () => {
       const rows = async () =>
         (
           await pool.query<DbRow>(
-            "SELECT to_jsonb(s) AS data FROM portfolio_import_staging_rows s WHERE batch_id=$1 ORDER BY row_index",
+            // Whole rows (PostgreSQL: to_jsonb(s)), timestamps as stored text.
+            `SELECT s.*, s.created_at AS "created_at::text", s.updated_at AS "updated_at::text"
+               FROM portfolio_import_staging_rows s WHERE batch_id=$1 ORDER BY row_index`,
             [csvBatch],
           )
         ).rows;
@@ -744,7 +746,7 @@ describeDb("one broker history through more than one export", () => {
       const manual = must((
           await pool.query<IdRow>(
             `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,is_active)
-             VALUES('2025-01-10',500,'EUR','Manual deposit',$1,(SELECT id FROM recipients ORDER BY id LIMIT 1),true) RETURNING id`,
+             VALUES('2025-01-10','500.0000','EUR','Manual deposit',$1,(SELECT id FROM recipients ORDER BY id LIMIT 1),true) RETURNING id`,
             [sleeve],
           )
         ).rows[0], "query row").id;
@@ -753,14 +755,14 @@ describeDb("one broker history through more than one export", () => {
       expect(await commit(workbook)).toMatchObject({ imported: 3, adopted: 1 });
       expect(await cash(sleeve)).toEqual(SAXO_CASH);
       expect(
-        (await pool.query<DbRow>("SELECT memo, dedup_fingerprint IS NOT NULL AS owned FROM transactions WHERE id=$1", [manual]))
+        (await pool.query<DbRow>(`SELECT memo, dedup_fingerprint IS NOT NULL AS "owned::bool" FROM transactions WHERE id=$1`, [manual]))
           .rows[0],
       ).toEqual({ memo: "Manual deposit", owned: true });
       await commit(await stage(file, "saxo_transaction_history", sleeve));
       expect(await cashTotals(sleeve)).toEqual({ EUR: "450.0000" });
       await rollbackBatch(workbook);
       expect(
-        (await pool.query<DbRow>("SELECT amount::text AS amount, dedup_fingerprint FROM transactions WHERE account_id=$1", [sleeve]))
+        (await pool.query<DbRow>("SELECT amount, dedup_fingerprint FROM transactions WHERE account_id=$1", [sleeve]))
           .rows,
       ).toEqual([{ amount: "500.0000", dedup_fingerprint: null }]);
     });
@@ -848,7 +850,7 @@ describeDb("one broker history through more than one export", () => {
       const image = async () =>
         (
           await pool.query<DbRow>(
-            "SELECT amount::text AS amount, currency, comment FROM transactions WHERE id=$1",
+            "SELECT amount, currency, comment FROM transactions WHERE id=$1",
             [id],
           )
         ).rows[0];
@@ -868,7 +870,7 @@ describeDb("one broker history through more than one export", () => {
     it("neither overwrites nor duplicates a CSV deposit edited after import", async () => {
       const sleeve = await account("IBKR");
       await commit(await stage(await ibkrCsv("ibkr80", ["deposit80"]), "ibkr_transaction_history", sleeve));
-      await pool.query("UPDATE transactions SET amount=81 WHERE account_id=$1", [sleeve]);
+      await pool.query("UPDATE transactions SET amount='81.0000' WHERE account_id=$1", [sleeve]);
       const funding = await stage(
         await fundingWorkbook("funding80", "xlsx", ["usd"], []),
         "ibkr_funding_history",
@@ -902,16 +904,16 @@ describeDb("one broker history through more than one export", () => {
           ),
         );
       }
-      await pool.query(`CREATE FUNCTION synthetic_funding_failure() RETURNS trigger LANGUAGE plpgsql AS $$
-        BEGIN IF NEW.account_id=${Number(sleeves[1])} AND NEW.currency='USD' THEN RAISE EXCEPTION 'Forced synthetic correction failure'; END IF; RETURN NEW; END $$`);
-      await pool.query(
-        "CREATE TRIGGER synthetic_funding_failure BEFORE UPDATE ON transactions FOR EACH ROW EXECUTE FUNCTION synthetic_funding_failure()",
-      );
+      // The driver reads a `vision:<sqlstate>::<message>` RAISE as that
+      // SQLSTATE and message, as PostgreSQL's RAISE EXCEPTION (P0001).
+      await pool.query(`CREATE TRIGGER synthetic_funding_failure BEFORE UPDATE ON transactions FOR EACH ROW
+        WHEN NEW.account_id=${Number(sleeves[1])} AND NEW.currency='USD'
+        BEGIN SELECT RAISE(ABORT, 'vision:P0001::Forced synthetic correction failure'); END`);
       try {
         await expect(commit(...fundings)).rejects.toThrow("Forced synthetic correction failure");
       } finally {
         await pool.query(
-          "DROP TRIGGER IF EXISTS synthetic_funding_failure ON transactions; DROP FUNCTION IF EXISTS synthetic_funding_failure()",
+          "DROP TRIGGER IF EXISTS synthetic_funding_failure",
         );
       }
       for (const [index, sleeve] of sleeves.entries()) {
@@ -1439,7 +1441,7 @@ describeDb("one broker history through more than one export", () => {
       // A trade typed by hand on this account: no source id to tell them apart.
       await pool.query(
         `INSERT INTO portfolio_transactions(investment_id,account_id,type,date,units,price_per_unit,amount,fees,taxes,currency)
-         VALUES($1,$2,'buy','2025-01-12',10,18,180,1,0.63,'EUR')`,
+         VALUES($1,$2,'buy','2025-01-12','10.00000000','18.000000','180.0000','1.0000','0.6300','EUR')`,
         [exm, sleeve],
       );
       const { id: manual } = must(

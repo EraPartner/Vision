@@ -18,7 +18,7 @@ import { runPortfolioImportPipeline } from "../src/services/portfolioImportPipel
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
@@ -26,7 +26,7 @@ interface IdRow {
   id: number;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const fixture = (name: string) =>
   fileURLToPath(new URL(`./fixtures/portfolio/${name}`, import.meta.url));
@@ -76,33 +76,33 @@ async function importKinesis(file: string, accountId: number) {
 async function cleanup() {
   if (owned.investments.length > 0)
     await pool.query(
-      "DELETE FROM portfolio_transactions WHERE investment_id=ANY($1::integer[])",
+      "DELETE FROM portfolio_transactions WHERE investment_id IN (SELECT value FROM json_each($1))",
       [owned.investments],
     );
   if (owned.accounts.length > 0) {
     await pool.query(
-      "DELETE FROM portfolio_asset_adjustment_sources WHERE adjustment_id IN (SELECT id FROM portfolio_asset_adjustments WHERE account_id=ANY($1::integer[]))",
+      "DELETE FROM portfolio_asset_adjustment_sources WHERE adjustment_id IN (SELECT id FROM portfolio_asset_adjustments WHERE account_id IN (SELECT value FROM json_each($1)))",
       [owned.accounts],
     );
     await pool.query(
-      "DELETE FROM portfolio_asset_adjustments WHERE account_id=ANY($1::integer[])",
+      "DELETE FROM portfolio_asset_adjustments WHERE account_id IN (SELECT value FROM json_each($1))",
       [owned.accounts],
     );
     await pool.query(
-      "DELETE FROM transactions WHERE account_id=ANY($1::integer[])",
+      "DELETE FROM transactions WHERE account_id IN (SELECT value FROM json_each($1))",
       [owned.accounts],
     );
     await pool.query(
-      "DELETE FROM portfolio_import_batches WHERE account_id=ANY($1::integer[])",
+      "DELETE FROM portfolio_import_batches WHERE account_id IN (SELECT value FROM json_each($1))",
       [owned.accounts],
     );
   }
   if (owned.investments.length > 0)
-    await pool.query("DELETE FROM investments WHERE id=ANY($1::integer[])", [
+    await pool.query("DELETE FROM investments WHERE id IN (SELECT value FROM json_each($1))", [
       owned.investments,
     ]);
   if (owned.accounts.length > 0)
-    await pool.query("DELETE FROM accounts WHERE id=ANY($1::integer[])", [
+    await pool.query("DELETE FROM accounts WHERE id IN (SELECT value FROM json_each($1))", [
       owned.accounts,
     ]);
   owned.accounts.length = 0;
@@ -130,7 +130,7 @@ describeDb("Kinesis imports without reconciliation scopes", () => {
     const ledger = async () =>
       (
         await pool.query<DbRow>(
-          "SELECT to_char(date,'YYYY-MM-DD') AS date,amount::text AS amount,currency,memo FROM transactions WHERE account_id=$1 ORDER BY date,id",
+          "SELECT to_char(date,'YYYY-MM-DD') AS date,amount,currency,memo FROM transactions WHERE account_id=$1 ORDER BY date,id",
           [sleeve],
         )
       ).rows;
@@ -191,9 +191,9 @@ describeDb("Kinesis imports without reconciliation scopes", () => {
     const history = async () =>
       (
         await pool.query<DbRow>(
-          `SELECT type,to_char(date,'YYYY-MM-DD') AS date,amount::text AS amount,units::text AS units,
-            price_per_unit::text AS price,fees::text AS fees,taxes::text AS taxes,currency,
-            fx_rate_to_eur::text AS fx,income_recognition_role AS role
+          `SELECT type,to_char(date,'YYYY-MM-DD') AS date,amount,units,
+            price_per_unit AS price,fees,taxes,currency,
+            fx_rate_to_eur AS fx,income_recognition_role AS role
            FROM portfolio_transactions WHERE investment_id=$1 ORDER BY date,type`,
           [kau],
         )

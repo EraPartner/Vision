@@ -15,20 +15,21 @@ import {
   asCurrencyCode,
   asInvestmentId,
 } from "@vision/types/brands";
+import { toDecimal } from "../src/lib/money.ts";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const fixtures: {
   accountIds: number[];
   investmentIds: number[];
@@ -88,16 +89,17 @@ async function stageSource(
           units, price_per_unit, amount, currency, resolved_investment_id,
           raw_data, source_record_hash, dedup_fingerprint,
           dedup_fingerprint_version, dedup_occurrence)
-       VALUES ($1, $2, 'matched', $3, $4::text, $4::text::portfolio_txn_type, 'portfolio',
-               $5, $6, $7, 'EUR', $8, $9, $10, $11, 1, $12)`,
+       VALUES ($1, $2, 'matched', $3, $4, $4, 'portfolio',
+               vision_numeric($5, 18, 8), vision_numeric($6, 18, 6),
+               vision_numeric($7, 18, 4), 'EUR', $8, $9, $10, $11, 1, $12)`,
       [
         batchId,
         rowIndex,
         row.date,
         row.type,
-        row.units,
-        row.price,
-        row.units * row.price,
+        String(row.units),
+        String(row.price),
+        String(row.units * row.price),
         investmentId,
         rawData,
         sourceHash,
@@ -125,12 +127,13 @@ async function committedTrades(investmentId: number) {
     await pool.query<{
       type: string;
       date: string;
-      units: number;
+      /** NUMERIC(18,8) text, exactly as stored. */
+      units: string;
       source_record_hash: string | null;
       dedup_fingerprint: string | null;
       dedup_fingerprint_version: number | null;
     }>(
-      `SELECT type, to_char(date, 'YYYY-MM-DD') AS date, units::float8 AS units,
+      `SELECT type, to_char(date, 'YYYY-MM-DD') AS date, units,
               source_record_hash, dedup_fingerprint, dedup_fingerprint_version
          FROM portfolio_transactions WHERE investment_id = $1 ORDER BY id`,
       [investmentId],
@@ -139,13 +142,12 @@ async function committedTrades(investmentId: number) {
 }
 
 describe.skipIf(!hasTestDatabase())(
-  "portfolio import commit chronology (real Postgres)",
+  "portfolio import commit chronology (real database)",
   () => {
     beforeAll(() => {
       pool = must(getTestPool(), "test pool");
     });
     beforeAll(async () => {
-      expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
     }, 180_000);
 
@@ -210,18 +212,20 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         trades.map(({ date, type, units }) => ({ date, type, units })),
       ).toEqual([
-        { date: "2026-01-01", type: "buy", units: 5 },
-        { date: "2026-01-01", type: "buy", units: 5 },
-        { date: "2026-01-03", type: "buy", units: 2 },
-        { date: "2026-02-01", type: "sell", units: 8 },
+        { date: "2026-01-01", type: "buy", units: "5.00000000" },
+        { date: "2026-01-01", type: "buy", units: "5.00000000" },
+        { date: "2026-01-03", type: "buy", units: "2.00000000" },
+        { date: "2026-02-01", type: "sell", units: "8.00000000" },
       ]);
       expect(
-        trades.reduce(
-          (units, trade) =>
-            units + (trade.type === "sell" ? -1 : 1) * trade.units,
-          0,
-        ),
-      ).toBe(4);
+        trades
+          .reduce(
+            (units, trade) =>
+              trade.type === "sell" ? units.minus(trade.units) : units.plus(trade.units),
+            toDecimal(0),
+          )
+          .toFixed(8),
+      ).toBe("4.00000000");
       expect(await stagingProvenance(batchId)).toEqual(provenance);
       expect(provenance.map((row) => row.dedup_occurrence)).toEqual([
         1, 1, 1, 2,
@@ -278,9 +282,9 @@ describe.skipIf(!hasTestDatabase())(
       });
       const trades = await committedTrades(position.investmentId);
       expect(trades.map(({ type, units }) => ({ type, units }))).toEqual([
-        { type: "buy", units: 5 },
-        { type: "buy", units: 5 },
-        { type: "sell", units: 8 },
+        { type: "buy", units: "5.00000000" },
+        { type: "buy", units: "5.00000000" },
+        { type: "sell", units: "8.00000000" },
       ]);
       expect(
         (

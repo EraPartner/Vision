@@ -451,7 +451,7 @@ export async function resolveInvestmentRows({
  *   1. TRADES, bulk — one `DELETE ... WHERE import_batch_id = $1` (migration
  *      0086), scoped by the batch stamp rather than by an id list, so it cannot
  *      touch a lot this batch did not create. Replaces the old per-row loop.
- *   2. CASH, batched — one `DELETE FROM transactions WHERE id = ANY(...)` over
+ *   2. CASH, batched — one `DELETE FROM transactions WHERE id IN (...)` over
  *      exactly the route='cash' ids. `transactions.import_batch_id` FKs to the
  *      BANK `import_batches` table and is never stamped with a portfolio batch
  *      id, so pass 1 structurally cannot have covered these.
@@ -498,10 +498,12 @@ export async function rollbackBatch(batchId: number) {
   let deletedCash = 0;
   return withTransaction(async (client) => {
     deletedCash = 0;
-    // Share the batch-first lock order with review resolution. This closes the
-    // route pre-check race and prevents resolution from creating a holding while
-    // rollback already owns staging rows (the opposite order could deadlock).
-    // Pre-ADR-236 receipts also name the batches whose rows they changed.
+    // Read every batch this rollback touches inside the writer transaction.
+    // Under SQLite (ADR-263) the transaction holds the single write lock, so
+    // review resolution cannot create a holding or change a staging row
+    // between these reads and the deletes below. The ascending order is kept
+    // from the PostgreSQL row-lock order. Pre-ADR-236 receipts also name the
+    // batches whose rows they changed.
     const lockIds = [
       ...new Set([
         batchId,
@@ -681,7 +683,11 @@ export async function rollbackBatch(batchId: number) {
       await protectPlannedExecutions(cashIds);
       const r = await db
         .deleteFrom("transactions")
-        .where("id", "=", sql<TransactionId>`ANY(${cashIds}::int[])`)
+        .where(
+          "id",
+          "in",
+          sql<TransactionId>`(SELECT value FROM json_each(${JSON.stringify(cashIds.map(Number))}))`,
+        )
         .executeTakeFirst();
       deleted += Number(r.numDeletedRows);
       deletedCash += Number(r.numDeletedRows);

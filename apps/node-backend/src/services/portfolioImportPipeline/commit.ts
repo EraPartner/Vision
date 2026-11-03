@@ -371,7 +371,6 @@ export async function commitBatch({
       chunkDuplicates = 0;
       chunkErrors = 0;
 
-      let ibkrCashAliasLocked = false;
       for (const [j, row] of chunk.entries()) {
         if (row.route === "account_internal") {
           // Wallet-to-Pro movement is retained as a source annotation within
@@ -438,13 +437,10 @@ export async function commitBatch({
               String(row.type_raw).toLowerCase(),
             )
           ) {
-            if (!ibkrCashAliasLocked) {
-              await sql`LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE`.execute(
-                db,
-              );
-              ibkrCashAliasLocked = true;
-            }
-            // A pre-ADR-236 funding correction already holds this deposit.
+            // The chunk runs in the single writer transaction, so no other
+            // writer can add or retag a correction between this check and
+            // the insert below. A pre-ADR-236 funding correction already
+            // holds this deposit.
             if ((await findCorrectedIbkrCashAlias(row)) != null) {
               chunkDuplicates++;
               await markRow(row.id, "duplicate");
@@ -501,7 +497,9 @@ export async function commitBatch({
             // A template, not the builder: currency and recipient are not
             // checked here, so a bad value fails on the table's constraints
             // and is recorded as this row's error.
-            const baseValues = sql`${row.tx_date}, ${signedCashAmount(row)}, ${row.currency || "EUR"},
+            // The signed amount binds as the text the pg driver sent for a JS
+            // number, and vision_numeric rounds it to the column's scale.
+            const baseValues = sql`${row.tx_date}, vision_numeric(${String(signedCashAmount(row))}, 18, 4), ${row.currency || "EUR"},
                       ${memo}, ${batchAccountId}, ${cashRecipientId}, ${categoryId}`;
             const [inserted] = await checkedRows(
               intIdRowSchema,
@@ -840,13 +838,13 @@ async function countCashFieldMatches(
     intCountNRowSchema,
     db
       .selectFrom("transactions")
-      .select(sql<number>`COUNT(*)::int`.as("n"))
+      .select(sql<number>`COUNT(*)`.as("n"))
       .where("account_id", "=", asAccountId(accountId))
-      .where(sql<boolean>`date = ${row.tx_date}::date`)
+      .where(sql<boolean>`date = ${row.tx_date}`)
       .where(
         legacyLeg
-          ? sql<boolean>`(amount = ${signed} OR amount = ${Math.abs(signed)})`
-          : sql<boolean>`amount = ${signed}`,
+          ? sql<boolean>`(dec_eq(amount, ${String(signed)}) OR dec_eq(amount, ${String(Math.abs(signed))}))`
+          : sql<boolean>`dec_eq(amount, ${String(signed)})`,
       )
       .where(sql<boolean>`COALESCE(currency, 'EUR') = ${row.currency || "EUR"}`)
       .where(sql<boolean>`COALESCE(memo, '') = COALESCE(${memo}, '')`)
@@ -914,18 +912,20 @@ async function countTradeFieldMatches(
 ): Promise<number> {
   // account_id and currency are part of the identity: the same-shaped fill on
   // a different account (or in a different currency) is a distinct trade, not
-  // a re-import of this one. IS NOT DISTINCT FROM keeps NULL==NULL matching
-  // for account-less (non-brokerage) batches.
+  // a re-import of this one. IS keeps NULL==NULL matching for account-less
+  // (non-brokerage) batches. The canonical values are JS numbers; they bind
+  // as the text the pg driver sent, and dec_eq compares them exactly.
+  const units = canonical.units ?? null;
   const matches = await checkedRow(
     intCountNRowSchema,
-    sql`SELECT COUNT(*)::int AS n
+    sql`SELECT COUNT(*) AS n
        FROM portfolio_transactions
       WHERE investment_id = ${row.investment_id}
-        AND date = ${row.tx_date}::date
-        AND type = ${row.type}::portfolio_txn_type
-        AND amount = ${canonical.amount ?? 0}
-        AND COALESCE(units, 0) = COALESCE(${canonical.units ?? null}::numeric, 0::numeric)
-        AND account_id IS NOT DISTINCT FROM ${batchAccountId ?? null}
+        AND date = ${row.tx_date}
+        AND type = ${row.type}
+        AND dec_eq(amount, ${String(canonical.amount ?? 0)})
+        AND dec_eq(COALESCE(units, '0'), COALESCE(${units == null ? null : String(units)}, '0'))
+        AND account_id IS ${batchAccountId ?? null}
         AND COALESCE(currency, 'EUR') = ${row.currency || row.investment_currency || "EUR"}
         ${legacyOnly ? sql`AND dedup_fingerprint IS NULL` : sql``}`,
   );

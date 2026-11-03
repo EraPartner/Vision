@@ -89,7 +89,7 @@ export async function validateBatch({
         "b.custom_config",
         "b.is_brokerage",
         "b.adapter_name",
-        sql<string | null>`a.import_identity::text`.as("account_import_identity"),
+        sql<string | null>`a.import_identity`.as("account_import_identity"),
       ])
       .where("b.id", "=", String(batchId)),
   );
@@ -176,15 +176,18 @@ export async function validateBatch({
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
-    const ids: string[] = [];
-    const statuses: string[] = [];
-    const types: (string | null | undefined)[] = [];
-    const routes: (string | null | undefined)[] = [];
-    const txHashes: (string | null)[] = [];
-    const sourceRecordHashes: (string | null)[] = [];
-    const fingerprintVersions: (number | null)[] = [];
-    const occurrences: (number | null)[] = [];
-    const errorMessages: (string | null)[] = [];
+    // One JSON array of row updates (PostgreSQL unnested parallel arrays).
+    const updates: Array<{
+      id: string;
+      status: string;
+      type: string | null;
+      route: string | null;
+      fingerprint: string | null;
+      source_record_hash: string | null;
+      fingerprint_version: number | null;
+      occurrence: number | null;
+      error_message: string | null;
+    }> = [];
 
     for (const row of chunk) {
       // Both maps hold every staging row of the batch; `chunk` is a subset.
@@ -192,47 +195,63 @@ export async function validateBatch({
         identityById.get(row.id),
         "identityById holds every staging row of the batch",
       );
-      ids.push(row.id);
       const { type, route, error } = requiredValue(
         resolutionById.get(row.id),
         "resolutionById holds every staging row of the batch",
       );
       if (error) {
         errors++;
-        statuses.push("error");
-        types.push(null);
-        routes.push(null);
-        txHashes.push(null);
-        sourceRecordHashes.push(identity.sourceRecordHash);
-        fingerprintVersions.push(null);
-        occurrences.push(null);
-        errorMessages.push(error);
+        updates.push({
+          id: row.id,
+          status: "error",
+          type: null,
+          route: null,
+          fingerprint: null,
+          source_record_hash: identity.sourceRecordHash,
+          fingerprint_version: null,
+          occurrence: null,
+          error_message: error,
+        });
         continue;
       }
-      statuses.push("validated");
-      types.push(type);
-      routes.push(route);
-      txHashes.push(identity.fingerprint);
-      sourceRecordHashes.push(identity.sourceRecordHash);
-      fingerprintVersions.push(identity.version);
-      occurrences.push(identity.occurrence);
-      errorMessages.push(null);
+      updates.push({
+        id: row.id,
+        status: "validated",
+        type: type ?? null,
+        route: route ?? null,
+        fingerprint: identity.fingerprint,
+        source_record_hash: identity.sourceRecordHash,
+        fingerprint_version: identity.version,
+        occurrence: identity.occurrence,
+        error_message: null,
+      });
     }
 
-    await sql`UPDATE portfolio_import_staging_rows s
-          SET status        = v.status,
-              type          = v.type::portfolio_txn_type,
-              route         = v.route,
-              source_record_hash = v.source_record_hash,
-              dedup_fingerprint = v.fingerprint,
-              dedup_fingerprint_version = v.fingerprint_version,
-              dedup_occurrence = v.occurrence,
-              error_message = v.error_message
-         FROM unnest(${ids}::bigint[], ${statuses}::text[], ${types}::text[], ${routes}::text[],
-                     ${txHashes}::text[], ${sourceRecordHashes}::text[], ${fingerprintVersions}::smallint[],
-                     ${occurrences}::integer[], ${errorMessages}::text[])
-              AS v(id, status, type, route, fingerprint, source_record_hash, fingerprint_version, occurrence, error_message)
-        WHERE s.id = v.id`.execute(db);
+    // The type CHECK rejects a value outside portfolio_txn_type, as the
+    // PostgreSQL enum cast did.
+    await sql`WITH v AS (
+           SELECT CAST(value ->> 'id' AS INTEGER) AS id,
+                  value ->> 'status' AS status,
+                  value ->> 'type' AS type,
+                  value ->> 'route' AS route,
+                  value ->> 'fingerprint' AS fingerprint,
+                  value ->> 'source_record_hash' AS source_record_hash,
+                  CAST(value ->> 'fingerprint_version' AS INTEGER) AS fingerprint_version,
+                  CAST(value ->> 'occurrence' AS INTEGER) AS occurrence,
+                  value ->> 'error_message' AS error_message
+             FROM json_each(${JSON.stringify(updates)})
+         )
+         UPDATE portfolio_import_staging_rows
+            SET status        = v.status,
+                type          = v.type,
+                route         = v.route,
+                source_record_hash = v.source_record_hash,
+                dedup_fingerprint = v.fingerprint,
+                dedup_fingerprint_version = v.fingerprint_version,
+                dedup_occurrence = v.occurrence,
+                error_message = v.error_message
+           FROM v
+          WHERE portfolio_import_staging_rows.id = v.id`.execute(db);
     seen += chunk.length;
     if (onProgress) onProgress({ phase: "validating", current: seen, total });
   }

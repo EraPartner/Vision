@@ -7,15 +7,19 @@
  */
 
 import { sql } from "kysely";
-import { asAccountId } from "@vision/types/brands";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId } from "@vision/types/brands";
+import {
+  __getAmbientTransactionClient,
+  withTransaction,
+} from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   committedStagingRowSchema,
   intTotalRowSchema,
   investmentCreationRowSchema,
   investmentResolutionRowSchema,
-  overrideInvestmentsSummaryRowSchema,
+  overrideEligibilityRowSchema,
   portfolioImportBatchLockRowSchema,
   portfolioImportBatchSummaryRowSchema,
   portfolioImportPreviewRowSchema,
@@ -39,6 +43,30 @@ export type {
 };
 
 type Id = number | string;
+
+/** A JSON array parameter for `IN (SELECT value FROM json_each(?))`. */
+const inIds = <T = number>(ids: readonly Id[]) =>
+  sql<T>`(SELECT value FROM json_each(${JSON.stringify(ids.map(Number))}))`;
+
+/**
+ * PostgreSQL row and table locks became the single SQLite writer (ADR-263):
+ * withTransaction() runs BEGIN IMMEDIATE, so everything a transaction reads
+ * stays unchanged until it commits. The former lock helpers keep their call
+ * sites and refuse to run outside a transaction, where nothing would hold.
+ */
+function requireWriterTransaction(operation: string): Promise<void> {
+  if (!__getAmbientTransactionClient())
+    return Promise.reject(
+      new Error(`${operation} must run inside withTransaction()`),
+    );
+  return Promise.resolve();
+}
+
+/** A reviewable portfolio row: matched, or an unresolved-instrument error. */
+const REVIEWABLE_PORTFOLIO_ROW = sql<boolean>`(status = 'matched'
+             OR (status = 'error'
+               AND error_message = 'unresolved instrument — pick or create a holding'))
+           AND route IS NOT 'cash'`;
 
 const BATCH_COLUMNS = [
   "id",
@@ -71,23 +99,17 @@ export async function repointAccount(
   const result = await db
     .updateTable("portfolio_import_batches")
     .set({ account_id: asAccountId(targetId) })
-    .where("account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+    .where("account_id", "in", inIds<AccountId>(sourceIds))
     .executeTakeFirst();
   return Number(result.numUpdatedRows);
 }
 
-/** Lock routed batches before account rows so merge follows the same batch ->
- * account lock order as portfolio-import commit. This prevents the two
- * operations from deadlocking while preserving the reviewed destination.
+/** Hold routed batches for an account merge. The merge's writer transaction
+ * excludes a concurrent portfolio-import commit (formerly a batch -> account
+ * row-lock order), so the reviewed destination cannot change underneath it.
  */
-export async function lockForAccountMerge(sourceIds: number[]): Promise<void> {
-  await db
-    .selectFrom("portfolio_import_batches")
-    .select("id")
-    .where("account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
-    .orderBy("id")
-    .forUpdate()
-    .execute();
+export async function lockForAccountMerge(_sourceIds: number[]): Promise<void> {
+  await requireWriterTransaction("lockForAccountMerge");
 }
 
 /**
@@ -101,24 +123,33 @@ export async function setBatchAccount(
   accountId: number | null | undefined,
 ): Promise<void> {
   const account = accountId ?? null;
-  await sql`
-    WITH repaired AS (
-       UPDATE portfolio_import_staging_rows
-          SET status = 'matched', error_message = NULL
-        WHERE batch_id = ${batchId}
-          AND ${account}::integer IS NOT NULL
-          AND route = 'cash'
-          AND status = 'error'
-          AND error_message = 'brokerage cash row requires a batch account'
-       RETURNING id
-     )
-     UPDATE portfolio_import_batches
-        SET account_id = ${account},
-            rows_error = GREATEST(
-              COALESCE(rows_error, 0) - (SELECT COUNT(*) FROM repaired),
-              0
-            )
-      WHERE id = ${batchId}`.execute(db);
+  // One unit, as PostgreSQL's single data-modifying statement was.
+  await withTransaction(async () => {
+    let repaired = 0;
+    if (account !== null) {
+      const result = await db
+        .updateTable("portfolio_import_staging_rows")
+        .set({ status: "matched", error_message: null })
+        .where("batch_id", "=", String(batchId))
+        .where("route", "=", "cash")
+        .where("status", "=", "error")
+        .where(
+          "error_message",
+          "=",
+          "brokerage cash row requires a batch account",
+        )
+        .executeTakeFirst();
+      repaired = Number(result.numUpdatedRows);
+    }
+    await db
+      .updateTable("portfolio_import_batches")
+      .set({
+        account_id: account === null ? null : asAccountId(account),
+        rows_error: sql<number>`max(COALESCE(rows_error, 0) - ${repaired}, 0)`,
+      })
+      .where("id", "=", String(batchId))
+      .execute();
+  });
 }
 
 export async function listBatches({
@@ -141,7 +172,7 @@ export async function listBatches({
     intTotalRowSchema,
     db
       .selectFrom("portfolio_import_batches")
-      .select(sql<number>`COUNT(*)::int`.as("total")),
+      .select(sql<number>`COUNT(*)`.as("total")),
   );
   return { batches: rows, total: countRow?.total ?? 0 };
 }
@@ -159,7 +190,8 @@ export async function getBatch(
 }
 
 /**
- * Lock one batch for a lifecycle-sensitive transaction.
+ * Read one batch for a lifecycle-sensitive transaction. Inside the caller's
+ * withTransaction() the row cannot change before it commits (ADR-263).
  */
 export async function lockBatchForUpdate(
   batchId: Id,
@@ -175,8 +207,7 @@ export async function lockBatchForUpdate(
         "custom_config",
         "account_id",
       ])
-      .where("id", "=", String(batchId))
-      .forUpdate(),
+      .where("id", "=", String(batchId)),
   );
 }
 
@@ -198,9 +229,9 @@ export async function getImportReadinessProblems(
           status NOT IN ('matched', 'committed', 'duplicate')
           OR (status = 'matched' AND (
             tx_date IS NULL
-            OR (route = 'cash' AND (${account}::integer IS NULL OR amount IS NULL))
-            OR (route IS DISTINCT FROM 'cash' AND route IS DISTINCT FROM 'account_internal' AND (
-              (type IS NULL AND route IS DISTINCT FROM 'asset_transfer' AND route IS DISTINCT FROM 'asset_adjustment')
+            OR (route = 'cash' AND (${account} IS NULL OR amount IS NULL))
+            OR (route IS NOT 'cash' AND route IS NOT 'account_internal' AND (
+              (type IS NULL AND route IS NOT 'asset_transfer' AND route IS NOT 'asset_adjustment')
               OR COALESCE(user_override_investment_id, resolved_investment_id) IS NULL
             ))
           ))
@@ -210,25 +241,15 @@ export async function getImportReadinessProblems(
 }
 
 /**
- * Manual writes do not share an investment advisory lock. Use the existing
- * broker-retag table-lock convention so the overlap read is stable until the
- * enclosing reviewed import transaction finishes. Account rows come first,
- * matching account lifecycle and broker-retag lock order.
+ * Keep the overlap read stable until the enclosing reviewed import
+ * transaction finishes. PostgreSQL locked the account row and the portfolio
+ * table; the enclosing writer transaction now excludes manual writes and
+ * account lifecycle changes (ADR-263).
  */
 export async function lockImportReadinessHistory(
-  accountId: number | null | undefined,
+  _accountId: number | null | undefined,
 ): Promise<void> {
-  if (accountId != null) {
-    await db
-      .selectFrom("accounts")
-      .select("id")
-      .where("id", "=", asAccountId(accountId))
-      .forUpdate()
-      .execute();
-  }
-  await sql`LOCK TABLE portfolio_transactions IN SHARE ROW EXCLUSIVE MODE`.execute(
-    db,
-  );
+  await requireWriterTransaction("lockImportReadinessHistory");
 }
 
 /**
@@ -253,17 +274,19 @@ export async function getManualPortfolioOverlaps(
          ON pt.investment_id = COALESCE(
               isr.user_override_investment_id, isr.resolved_investment_id)
         AND pt.type = isr.type
-        AND ABS(pt.date - isr.tx_date) <= 7
+        AND abs(date_diff_days(pt.date, isr.tx_date)) <= 7
       WHERE isr.batch_id = ${batchId}
         AND isr.status = 'matched'
-        AND isr.route IS DISTINCT FROM 'cash'
+        AND isr.route IS NOT 'cash'
         AND pt.dedup_fingerprint IS NULL
         AND (
           (isr.type IN ('buy', 'sell', 'gift', 'split')
             AND isr.units IS NOT NULL AND pt.units IS NOT NULL
-            AND ABS(pt.units - isr.units) <= GREATEST(
-              0.00000001::numeric,
-              ABS(isr.units) * 0.00000001::numeric))
+            AND dec_le(
+              dec_abs(dec_sub(pt.units, isr.units)),
+              dec_greatest(
+                '0.00000001',
+                dec_mul(dec_abs(isr.units), '0.00000001'))))
           OR isr.type NOT IN ('buy', 'sell', 'gift', 'split')
         )
         AND NOT EXISTS (
@@ -273,7 +296,7 @@ export async function getManualPortfolioOverlaps(
              AND canonical.dedup_fingerprint_version = isr.dedup_fingerprint_version
              AND canonical.investment_id = COALESCE(
                   isr.user_override_investment_id, isr.resolved_investment_id)
-             AND canonical.account_id IS NOT DISTINCT FROM ${account}::integer
+             AND canonical.account_id IS ${account}
              AND canonical.type = isr.type
         )
       ORDER BY isr.row_index`,
@@ -348,59 +371,48 @@ export async function overrideInvestment({
   rowId: Id;
   investmentId: number | null;
 }): Promise<number | null> {
-  // The CTE captures the row's status BEFORE the update (locked FOR UPDATE) so
-  // the caller can tell an error→matched reset from a plain re-point of an
-  // already-matched row — RETURNING alone only sees the post-update state, which
-  // is indistinguishable between the two.
-  const updatedRows = await checkedRows(
-    stagingOldStatusRowSchema,
-    sql`WITH prev AS (
-        SELECT id, status AS old_status
-          FROM portfolio_import_staging_rows
-         WHERE batch_id = ${batchId} AND id = ${rowId}
-           AND (status = 'matched'
-             OR (status = 'error'
-               AND error_message = 'unresolved instrument — pick or create a holding'))
-           AND route IS DISTINCT FROM 'cash'
-         FOR UPDATE
-     ),
-     upd AS (
-        UPDATE portfolio_import_staging_rows r
-           SET user_override_investment_id = ${investmentId},
-               status = CASE
-                 WHEN prev.old_status = 'error' AND ${investmentId}::integer IS NOT NULL THEN 'matched'
-                 ELSE r.status
-               END,
-               error_message = CASE
-                 WHEN prev.old_status = 'error' AND ${investmentId}::integer IS NOT NULL THEN NULL
-                 ELSE r.error_message
-               END
-          FROM prev
-         WHERE r.id = prev.id
-        RETURNING prev.old_status
-     )
-     SELECT old_status FROM upd`,
-  );
-  const [updated] = updatedRows;
-
-  // If we flipped an error row back to matched, the batch's cumulative
-  // rows_error over-counts it — decrement so total counts don't exceed rows_total.
-  if (investmentId != null && updated?.old_status === "error") {
+  // The row's status BEFORE the update tells the caller an error→matched
+  // reset from a plain re-point of an already-matched row. The read and the
+  // writes share one writer transaction, so the row cannot change in between.
+  return withTransaction(async () => {
+    const updated = await checkedRow(
+      stagingOldStatusRowSchema,
+      sql`SELECT status AS old_status
+            FROM portfolio_import_staging_rows
+           WHERE batch_id = ${batchId} AND id = ${rowId}
+             AND ${REVIEWABLE_PORTFOLIO_ROW}`,
+    );
+    if (!updated) return 0;
+    const reset = updated.old_status === "error" && investmentId != null;
     await db
-      .updateTable("portfolio_import_batches")
-      .set({ rows_error: sql<number>`GREATEST(COALESCE(rows_error, 0) - 1, 0)` })
-      .where("id", "=", String(batchId))
+      .updateTable("portfolio_import_staging_rows")
+      .set({
+        user_override_investment_id:
+          investmentId == null ? null : asInvestmentId(investmentId),
+        ...(reset ? { status: "matched", error_message: null } : {}),
+      })
+      .where("batch_id", "=", String(batchId))
+      .where("id", "=", String(rowId))
       .execute();
-  }
 
-  return updatedRows.length;
+    // If we flipped an error row back to matched, the batch's cumulative
+    // rows_error over-counts it — decrement so total counts don't exceed rows_total.
+    if (reset) {
+      await db
+        .updateTable("portfolio_import_batches")
+        .set({ rows_error: sql<number>`max(COALESCE(rows_error, 0) - 1, 0)` })
+        .where("id", "=", String(batchId))
+        .execute();
+    }
+
+    return 1;
+  });
 }
 
 /**
- * Serialize a review resolution against its batch and lock the complete row set.
- * The batch lock comes first so concurrent "create new" requests for the same
- * batch cannot both create a holding before either request sees the other's
- * overrides.
+ * Read a review resolution's batch and complete row set. The caller's writer
+ * transaction serializes concurrent "create new" requests for the same batch,
+ * so neither can create a holding before seeing the other's overrides.
  */
 export async function lockInvestmentResolutionRows({
   batchId,
@@ -429,9 +441,8 @@ export async function lockInvestmentResolutionRows({
         "user_override_investment_id",
       ])
       .where("batch_id", "=", String(batchId))
-      .where("id", "=", sql<string>`ANY(${rowIds}::bigint[])`)
-      .orderBy("id")
-      .forUpdate(),
+      .where("id", "in", inIds<string>(rowIds))
+      .orderBy("id"),
   );
 
   return { batchStatus: batch.status, rows };
@@ -440,10 +451,10 @@ export async function lockInvestmentResolutionRows({
 /**
  * Point a complete requested set of review rows at one investment.
  *
- * The requested/eligible count guard is inside the same statement as the
- * update. If even one id is missing, belongs to another batch, or is no longer
- * reviewable, the UPDATE sees a false guard and changes zero rows. The service
- * wraps this statement (and optional holding creation) in one transaction.
+ * The requested/eligible count guard runs in the same writer transaction as
+ * the update. If even one id is missing, belongs to another batch, or is no
+ * longer reviewable, the guard is false and zero rows change. The service
+ * wraps this (and optional holding creation) in one transaction.
  */
 export async function overrideInvestments({
   batchId,
@@ -459,66 +470,53 @@ export async function overrideInvestments({
   updatedCount: number;
   resetErrorCount: number;
 }> {
-  const rows = await checkedRows(
-    overrideInvestmentsSummaryRowSchema,
-    sql`WITH requested AS (
-        SELECT DISTINCT unnest(${rowIds}::bigint[]) AS id
-     ),
-     locked AS (
-        SELECT r.id, r.status AS old_status, r.route, r.error_message
-          FROM portfolio_import_staging_rows r
-          JOIN requested req ON req.id = r.id
-         WHERE r.batch_id = ${batchId}
-         ORDER BY r.id
-         FOR UPDATE OF r
-     ),
-     eligible AS (
-        SELECT id, old_status
-          FROM locked
-         WHERE (old_status = 'matched'
-             OR (old_status = 'error'
-               AND error_message = 'unresolved instrument — pick or create a holding'))
-           AND route IS DISTINCT FROM 'cash'
-     ),
-     counts AS (
-        SELECT (SELECT COUNT(*)::int FROM requested) AS requested_count,
-               (SELECT COUNT(*)::int FROM eligible) AS eligible_count
-     ),
-     upd AS (
-        UPDATE portfolio_import_staging_rows r
-           SET user_override_investment_id = ${investmentId},
-               status = CASE WHEN eligible.old_status = 'error' THEN 'matched' ELSE r.status END,
-               error_message = CASE WHEN eligible.old_status = 'error' THEN NULL ELSE r.error_message END
-          FROM eligible, counts
-         WHERE r.id = eligible.id
-           AND counts.requested_count = counts.eligible_count
-        RETURNING eligible.old_status
-     )
-     SELECT counts.requested_count,
-            counts.eligible_count,
-            COUNT(upd.old_status)::int AS updated_count,
-            COUNT(upd.old_status) FILTER (WHERE upd.old_status = 'error')::int AS reset_error_count
-       FROM counts
-       LEFT JOIN upd ON TRUE
-      GROUP BY counts.requested_count, counts.eligible_count`,
-  );
+  // One writer transaction: the eligibility count and the guarded update see
+  // the same rows, as PostgreSQL's single statement did.
+  const summary = await withTransaction(async () => {
+    const requested = [...new Set(rowIds.map(Number))];
+    const rows = sql<boolean>`batch_id = ${batchId} AND id IN ${inIds(requested)}
+           AND ${REVIEWABLE_PORTFOLIO_ROW}`;
+    const eligibility = await checkedRow(
+      overrideEligibilityRowSchema,
+      sql`SELECT COUNT(*) AS eligible_count,
+                 COUNT(*) FILTER (WHERE status = 'error') AS error_count
+            FROM portfolio_import_staging_rows
+           WHERE ${rows}`,
+    );
+    const eligibleCount = eligibility?.eligible_count ?? 0;
+    let updatedCount = 0;
+    let resetErrorCount = 0;
+    if (requested.length === eligibleCount) {
+      const result = await db
+        .updateTable("portfolio_import_staging_rows")
+        .set({
+          user_override_investment_id: asInvestmentId(investmentId),
+          status: sql<string>`CASE WHEN status = 'error' THEN 'matched' ELSE status END`,
+          error_message: sql<string | null>`CASE WHEN status = 'error' THEN NULL ELSE error_message END`,
+        })
+        .where(rows)
+        .executeTakeFirst();
+      updatedCount = Number(result.numUpdatedRows);
+      resetErrorCount = eligibility?.error_count ?? 0;
+    }
+    const counts = {
+      requested_count: requested.length,
+      eligible_count: eligibleCount,
+      updated_count: updatedCount,
+      reset_error_count: resetErrorCount,
+    };
 
-  const summary = rows[0] ?? {
-    requested_count: rowIds.length,
-    eligible_count: 0,
-    updated_count: 0,
-    reset_error_count: 0,
-  };
-
-  if (summary.reset_error_count > 0) {
-    await db
-      .updateTable("portfolio_import_batches")
-      .set({
-        rows_error: sql<number>`GREATEST(COALESCE(rows_error, 0) - ${summary.reset_error_count}, 0)`,
-      })
-      .where("id", "=", String(batchId))
-      .execute();
-  }
+    if (counts.reset_error_count > 0) {
+      await db
+        .updateTable("portfolio_import_batches")
+        .set({
+          rows_error: sql<number>`max(COALESCE(rows_error, 0) - ${counts.reset_error_count}, 0)`,
+        })
+        .where("id", "=", String(batchId))
+        .execute();
+    }
+    return counts;
+  });
 
   return {
     requestedCount: summary.requested_count,

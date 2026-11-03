@@ -5,14 +5,15 @@
  * receipt (ADR-236).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import pg from "pg";
-import type { Client } from "pg";
-import { hasTestDatabase } from "./setup/db.ts";
 import {
-  createMigratedDatabase,
-  hasIsolatedTestDatabase,
-} from "./setup/migratedDatabase.ts";
-import type { DisposableDatabase } from "./setup/migratedDatabase.ts";
+  closeTestPool,
+  getTestPool,
+  hasTestDatabase,
+  resetTestDatabase,
+} from "./setup/db.ts";
+import type { TestPool } from "./setup/db.ts";
+import { withTransaction } from "../src/database/connection.ts";
+import { portfolioIncomeTransactionSnapshotSql } from "../src/database/sqlite/schemaFunctions.ts";
 import { must } from "./helpers/must.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
@@ -20,27 +21,37 @@ type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
 
-let scratch: DisposableDatabase | undefined;
-let db: Client | undefined;
+// Each test file has its own copy of the migrated template, so this file's
+// database is the isolated scratch database the PostgreSQL suite created;
+// resetTestDatabase() starts it from the pristine schema with empty journals.
+let db: TestPool | undefined;
 let investment: unknown;
 let oldJournal: unknown[];
 let oldImage: Record<string, unknown>;
 let oldTxn: unknown;
 let batch: unknown;
 let source: unknown;
-const oldSnapshot = `jsonb_build_object('id',t.id,'investment_id',t.investment_id,'type',t.type,'date',to_char(t.date,'YYYY-MM-DD'),'amount',t.amount::text,'units',t.units::text,'price_per_unit',t.price_per_unit::text,'fees',t.fees::text,'taxes',t.taxes::text,'currency',t.currency,'fx_rate_to_eur',t.fx_rate_to_eur::text,'account_id',t.account_id,'note',t.note,'dividend_amount_convention',t.dividend_amount_convention,'is_recurring',t.is_recurring,'recurrence_interval',t.recurrence_interval,'recurrence_end_date',to_char(t.recurrence_end_date,'YYYY-MM-DD'),'import_batch_id',t.import_batch_id::text,'source_record_hash',t.source_record_hash,'dedup_fingerprint',t.dedup_fingerprint,'dedup_fingerprint_version',t.dedup_fingerprint_version)`;
-describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
+/** The snapshot of `alias`, as the schema's snapshot function computes it. */
+const snapshot = portfolioIncomeTransactionSnapshotSql;
+/**
+ * The pre-income-role receipt image, built independently of the snapshot
+ * function: the PostgreSQL suite's jsonb_build_object, as json_object.
+ */
+const oldSnapshot = `vision_jsonb(json_object('id',t.id,'investment_id',t.investment_id,'type',t.type,'date',to_char(t.date,'YYYY-MM-DD'),'amount',t.amount,'units',t.units,'price_per_unit',t.price_per_unit,'fees',t.fees,'taxes',t.taxes,'currency',t.currency,'fx_rate_to_eur',t.fx_rate_to_eur,'account_id',t.account_id,'note',t.note,'dividend_amount_convention',t.dividend_amount_convention,'is_recurring',json(iif(t.is_recurring,'true','false')),'recurrence_interval',t.recurrence_interval,'recurrence_end_date',to_char(t.recurrence_end_date,'YYYY-MM-DD'),'import_batch_id',CAST(t.import_batch_id AS TEXT),'source_record_hash',t.source_record_hash,'dedup_fingerprint',t.dedup_fingerprint,'dedup_fingerprint_version',t.dedup_fingerprint_version))`;
+/** Every reconciliation journal row, as the driver reads it (PostgreSQL: to_jsonb(r)). */
+const JOURNAL_ROWS =
+  "SELECT * FROM portfolio_import_reconciliation_journal ORDER BY id";
+describe.skipIf(!hasTestDatabase())(
   "durable portfolio income recognition",
   () => {
     beforeAll(async () => {
-      scratch = await createMigratedDatabase("c_income");
-      db = new pg.Client({ connectionString: scratch.url });
-      await db.connect();
+      await resetTestDatabase();
+      db = getTestPool();
       investment = must((
         await db.query<IdRow>(
           "INSERT INTO investments(name,symbol,asset_class,currency) VALUES('Income migration canary','INCOME','metals','EUR') RETURNING id",
@@ -48,19 +59,19 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       ).rows[0], "query row").id;
       oldTxn = must((
         await db.query<IdRow>(
-          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,note) VALUES($1,'gift','2026-01-01',0,2,0,0,0,'EUR','Legacy note') RETURNING id",
+          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,note) VALUES($1,'gift','2026-01-01','0.0000','2.00000000','0.000000','0.0000','0.0000','EUR','Legacy note') RETURNING id",
           [investment],
         )
       ).rows[0], "query row").id;
       oldImage = must((
         await db.query<{ data: Record<string, unknown> }>(
-          `SELECT ${oldSnapshot} AS data FROM portfolio_transactions t WHERE id=$1`,
+          `SELECT ${oldSnapshot} AS "data::json" FROM portfolio_transactions t WHERE id=$1`,
           [oldTxn],
         )
       ).rows[0], "query row").data;
       batch = must((
         await db.query<BigIdRow>(
-          "INSERT INTO portfolio_import_batches(adapter_name,status,custom_config) VALUES('kinesis_transaction_history','awaiting_review',$1) RETURNING id",
+          "INSERT INTO portfolio_import_batches(adapter_name,status,custom_config) VALUES('kinesis_transaction_history','awaiting_review',vision_jsonb($1)) RETURNING id",
           [
             JSON.stringify({
               format: "kinesis_transaction_history",
@@ -77,44 +88,45 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
         )
       ).rows[0], "query row").id;
       await db.query(
-        "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES($1,$2,$3,'adopt','preserve_existing',$4,$4)",
+        "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES($1,$2,$3,'adopt','preserve_existing',vision_jsonb($4),vision_jsonb($4))",
         [batch, source, oldTxn, JSON.stringify(oldImage)],
       );
-      oldJournal = (
-        await db.query<DbRow>(
-          "SELECT to_jsonb(r) AS data FROM portfolio_import_reconciliation_journal r",
-        )
-      ).rows;
+      oldJournal = (await db.query<DbRow>(JOURNAL_ROWS)).rows;
+      expect(oldJournal).toHaveLength(1);
     }, 180000);
     afterAll(async () => {
-      if (db) await db.end();
-      await scratch?.drop();
+      await closeTestPool();
     });
     it("defaults to the standard role and keeps existing receipt images byte-equivalent", async () => {
       expect(
         (
           await must(db, "db").query<DbRow>(
-            "SELECT portfolio_income_transaction_snapshot(t) AS data,income_recognition_role FROM portfolio_transactions t WHERE id=$1",
+            `SELECT ${snapshot("t")} AS "data::json",income_recognition_role FROM portfolio_transactions t WHERE id=$1`,
             [oldTxn],
           )
         ).rows[0],
       ).toEqual({ data: oldImage, income_recognition_role: "standard" });
+      // Byte-equivalent: the canonical jsonb text of both images is equal.
+      expect(
+        (
+          await must(db, "db").query<DbRow>(
+            `SELECT ${snapshot("t")} = ${oldSnapshot} AS "same::bool" FROM portfolio_transactions t WHERE id=$1`,
+            [oldTxn],
+          )
+        ).rows[0],
+      ).toEqual({ same: true });
       expect(
         must((
           await must(db, "db").query<DbRow>(
-            "SELECT COUNT(*)::int AS n FROM portfolio_import_income_recognition_journal",
+            "SELECT COUNT(*) AS n FROM portfolio_import_income_recognition_journal",
           )
         ).rows[0], "query row").n,
       ).toBe(0);
       expect(
-        (
-          await must(db, "db").query<DbRow>(
-            "SELECT to_jsonb(r) AS data FROM portfolio_import_reconciliation_journal r",
-          )
-        ).rows,
+        (await must(db, "db").query<DbRow>(JOURNAL_ROWS)).rows,
       ).toEqual(oldJournal);
       const cas = await must(db, "db").query<IdRow>(
-        "UPDATE portfolio_transactions t SET note=note WHERE id=$1 AND portfolio_income_transaction_snapshot(t)=normalize_portfolio_income_snapshot($2) RETURNING id",
+        `UPDATE portfolio_transactions SET note=note WHERE id=$1 AND ${snapshot("portfolio_transactions")}=normalize_portfolio_income_snapshot($2) RETURNING id`,
         [
           oldTxn,
           JSON.stringify({ ...oldImage, income_recognition_role: "standard" }),
@@ -137,7 +149,7 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       ).rejects.toThrow(/chk_portfolio_income/);
       const unpaired = must((
         await must(db, "db").query<IdRow>(
-          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,income_recognition_role) VALUES($1,'dividend','2026-01-01',1,'EUR','included_in_units') RETURNING id",
+          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,income_recognition_role) VALUES($1,'dividend','2026-01-01','1.0000','EUR','included_in_units') RETURNING id",
           [investment],
         )
       ).rows[0], "query row").id;
@@ -152,27 +164,29 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
           [batch],
         )
       ).rows[0], "query row").id;
-      await must(db, "db").query("BEGIN");
-      const income = must((
-        await must(db, "db").query<IdRow>(
-          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,fees,taxes,currency,income_recognition_role) VALUES($1,'dividend','2026-01-01',1,0,0,'EUR','included_in_units') RETURNING id",
-          [investment],
-        )
-      ).rows[0], "query row").id;
-      const journal = must((
-        await must(db, "db").query<BigIdRow>(
-          `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data) SELECT $1,$2,$3,i.id,u.id,'record',portfolio_income_transaction_snapshot(i),portfolio_income_transaction_snapshot(u),$4 FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$5 AND u.id=$6 RETURNING id`,
-          [
-            batch,
-            incomeSource,
-            source,
-            JSON.stringify({ sourceFileHash: "f".repeat(64) }),
-            income,
-            oldTxn,
-          ],
-        )
-      ).rows[0], "query row").id;
-      await must(db, "db").query("COMMIT");
+      // One writer transaction: the income row and its receipt land together.
+      const { income, journal } = await withTransaction(async (client) => {
+        const income = must((
+          await client.query<IdRow>(
+            "INSERT INTO portfolio_transactions(investment_id,type,date,amount,fees,taxes,currency,income_recognition_role) VALUES($1,'dividend','2026-01-01','1.0000','0.0000','0.0000','EUR','included_in_units') RETURNING id",
+            [investment],
+          )
+        ).rows[0], "query row").id;
+        const journal = must((
+          await client.query<BigIdRow>(
+            `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data) SELECT $1,$2,$3,i.id,u.id,'record',${snapshot("i")},${snapshot("u")},vision_jsonb($4) FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$5 AND u.id=$6 RETURNING id`,
+            [
+              batch,
+              incomeSource,
+              source,
+              JSON.stringify({ sourceFileHash: "f".repeat(64) }),
+              income,
+              oldTxn,
+            ],
+          )
+        ).rows[0], "query row").id;
+        return { income, journal };
+      });
       await expect(
         must(db, "db").query<DbRow>(
           "UPDATE portfolio_transactions SET date='2026-01-02' WHERE id=$1",
@@ -182,29 +196,25 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       await expect(
         must(db, "db").query<DbRow>("DELETE FROM portfolio_transactions WHERE id=$1", [income]),
       ).rejects.toThrow(/paired income/);
-      await must(db, "db").query("BEGIN");
-      await must(db, "db").query(
-        "INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,previous_entry_id,income_data,unit_data,proof_data) SELECT batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,'restore',id,income_data,unit_data,proof_data FROM portfolio_import_income_recognition_journal WHERE id=$1",
-        [journal],
-      );
-      await must(db, "db").query("DELETE FROM portfolio_transactions WHERE id=$1", [
-        income,
-      ]);
-      await must(db, "db").query("COMMIT");
+      await withTransaction(async (client) => {
+        await client.query(
+          "INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,previous_entry_id,income_data,unit_data,proof_data) SELECT batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,'restore',id,income_data,unit_data,proof_data FROM portfolio_import_income_recognition_journal WHERE id=$1",
+          [journal],
+        );
+        await client.query("DELETE FROM portfolio_transactions WHERE id=$1", [
+          income,
+        ]);
+      });
       expect(
         must((
           await must(db, "db").query<DbRow>(
-            "SELECT COUNT(*)::int AS n FROM portfolio_transactions WHERE id=$1",
+            "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE id=$1",
             [income],
           )
         ).rows[0], "query row").n,
       ).toBe(0);
       expect(
-        (
-          await must(db, "db").query<DbRow>(
-            "SELECT to_jsonb(r) AS data FROM portfolio_import_reconciliation_journal r",
-          )
-        ).rows,
+        (await must(db, "db").query<DbRow>(JOURNAL_ROWS)).rows,
       ).toEqual(oldJournal);
     });
   },

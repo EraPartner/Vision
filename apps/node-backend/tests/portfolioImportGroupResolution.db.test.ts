@@ -1,5 +1,5 @@
 /**
- * Real-Postgres evidence for atomic portfolio-import group resolution.
+ * Real-database evidence for atomic portfolio-import group resolution.
  *
  * The repository unit tests pin the SQL shape. These tests prove the observable
  * database properties: a 2,000-row group is updated as one set, create-new
@@ -20,19 +20,19 @@ import {
   asInvestmentId,
 } from "@vision/types/brands";
 import { must } from "./helpers/must.ts";
-import type { Pool } from "pg";
+import type { TestPool } from "./setup/db.ts";
 
 /** A row from an ad-hoc SQL read: column values are narrowed where used. */
 type DbRow = Record<string, unknown>;
 interface IdRow {
   id: number;
 }
-/** BIGINT ids arrive from node-postgres as strings. */
+/** BIGINT ids arrive from the driver as strings. */
 interface BigIdRow {
   id: string;
 }
 
-let pool: Pool;
+let pool: TestPool;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 
 async function wipe() {
@@ -53,17 +53,22 @@ async function newBatch() {
 
 async function stageRows(batchId: number, count: number, startIndex = 0) {
   const { rows } = await pool.query<BigIdRow>(
-    `INSERT INTO portfolio_import_staging_rows
+    `WITH RECURSIVE series(n) AS (
+       SELECT 0 WHERE $3 > 0
+       UNION ALL
+       SELECT n + 1 FROM series WHERE n + 1 < $3
+     )
+     INSERT INTO portfolio_import_staging_rows
        (batch_id, row_index, status, symbol_raw, name_raw, currency)
-     SELECT $1, $2 + n, 'matched', 'GRP', 'GROUP-RESOLUTION-HOLDING', 'EUR'
-       FROM generate_series(0, $3 - 1) AS n
+     SELECT $1, CAST($2 + n AS INTEGER), 'matched', 'GRP', 'GROUP-RESOLUTION-HOLDING', 'EUR'
+       FROM series
      RETURNING id`,
     [batchId, startIndex, count],
   );
   return rows.map((row) => Number(row.id));
 }
 
-describeDb('portfolio import group resolution (real Postgres)', () => {
+describeDb('portfolio import group resolution (real database)', () => {
   beforeAll(() => {
     pool = must(getTestPool(), "test pool");
   });
@@ -92,7 +97,7 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
       .resolves.toMatchObject({ investmentId, created: false, resolved: 2_000 });
 
     const { rows } = await pool.query<DbRow>(
-      `SELECT COUNT(*)::int AS resolved
+      `SELECT COUNT(*) AS resolved
          FROM portfolio_import_staging_rows
         WHERE batch_id = $1 AND user_override_investment_id = $2`,
       [batchId, investmentId],
@@ -110,14 +115,14 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
     expect(created).toMatchObject({ created: true, resolved: 2 });
 
     const { rows: holdingCount } = await pool.query<DbRow>(
-      `SELECT COUNT(*)::int AS count FROM investments WHERE name = 'GROUP-RESOLUTION-HOLDING'`,
+      `SELECT COUNT(*) AS count FROM investments WHERE name = 'GROUP-RESOLUTION-HOLDING'`,
     );
     expect(must(holdingCount[0], "holdingCount[0]").count).toBe(1);
 
     const before = await pool.query<DbRow>(
       `SELECT id, user_override_investment_id
          FROM portfolio_import_staging_rows
-        WHERE id = ANY($1::bigint[])
+        WHERE id IN (SELECT value FROM json_each($1))
         ORDER BY id`,
       [[...rowIds, foreignRowId]],
     );
@@ -131,7 +136,7 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
     const after = await pool.query<DbRow>(
       `SELECT id, user_override_investment_id
          FROM portfolio_import_staging_rows
-        WHERE id = ANY($1::bigint[])
+        WHERE id IN (SELECT value FROM json_each($1))
         ORDER BY id`,
       [[...rowIds, foreignRowId]],
     );

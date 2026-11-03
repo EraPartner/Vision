@@ -22,11 +22,16 @@ vi.mock("../src/repositories/plannedExecutionGuard.ts", () => ({
   protectPlannedExecutions: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/database/connection.ts", () =>
-  mockTxConnection(undefined, {
+vi.mock("../src/database/connection.ts", () => {
+  const connection = mockTxConnection(undefined, {
     query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
-  }),
-);
+  });
+  // The repositories' former lock helpers assert an ambient transaction.
+  return {
+    ...connection,
+    __getAmbientTransactionClient: connection.getAmbientTransactionClient,
+  };
+});
 
 vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: {
@@ -310,8 +315,10 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
 
     expect(res).toEqual({ deleted: 1 });
     expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(/delete from "?transactions"? where "?id"? = ANY/i),
-      [[812]],
+      expect.stringMatching(
+        /delete from "transactions" where "id" in \(SELECT value FROM json_each\(\?\)\)/i,
+      ),
+      ["[812]"],
     );
     expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
     expect(markBatchAborted).toHaveBeenCalledWith(5);
@@ -335,7 +342,7 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
 
     expect(res).toEqual({ deleted: 1 });
     expect(query).not.toHaveBeenCalledWith(
-      "DELETE FROM transactions WHERE id = ANY($1::int[])",
+      expect.stringMatching(/delete from "transactions"/i),
       expect.anything(),
     );
     expect(portfolioTransactionRepository.hardDelete).toHaveBeenCalledWith(812);
@@ -416,8 +423,8 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
     expect(res).toEqual({ deleted: 1 });
     expect(portfolioTransactionRepository.hardDelete).toHaveBeenCalledWith(42);
     expect(query).not.toHaveBeenCalledWith(
-      "DELETE FROM transactions WHERE id = ANY($1::int[])",
-      [[42]],
+      expect.stringMatching(/delete from "transactions"/i),
+      expect.anything(),
     );
   });
 
