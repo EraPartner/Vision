@@ -4,15 +4,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { appRoot } from "../paths";
+import { PACKAGED_ANALYSIS_SANDBOX } from "../runtime/native";
 import {
   assertSafeNativeDestination,
-  BACKEND_ENTRIES,
-  BACKEND_SOURCE,
-  bundleDatabaseTool,
+  bundleBunTool,
   compileBackend,
   manifestEntries,
   signCompiledBackend,
 } from "./prepare-native-runtime";
+
+const repoRoot = path.resolve(appRoot, "..", "..");
 
 void test("native payload replacement is restricted to a native-runtime directory", () => {
   assert.equal(
@@ -74,7 +76,7 @@ for (const exitCode of [0, 1]) {
         { mode: 0o755 },
       );
       const compile = () =>
-        compileBackend(fakeBun, ["main.ts"], path.join(root, "out"), root);
+        compileBackend(fakeBun, "main.ts", path.join(root, "out"), root);
       if (exitCode === 0) compile();
       else assert.throws(compile, /compilation exited 1/);
       assert.deepEqual(
@@ -87,13 +89,16 @@ for (const exitCode of [0, 1]) {
   });
 }
 
-void test("the backend compiles the analysis sandbox worker with the main entrypoint", () => {
-  for (const entry of BACKEND_ENTRIES) {
-    assert.ok(fs.statSync(path.join(BACKEND_SOURCE, ...entry.split("/"))).isFile(), entry);
-  }
-  const executor = fs.readFileSync(path.join(BACKEND_SOURCE, "services", "analysisExecutor.ts"), "utf8");
-  // The compiled worker path the executor builds next to the main entrypoint.
-  assert.match(executor, /"services",\s*"analysisSandboxWorker\.js"/);
+void test("the backend and the packaging name the same analysis sandbox path", () => {
+  const executor = fs.readFileSync(
+    path.join(repoRoot, "apps", "node-backend", "src", "services", "analysisExecutor.ts"),
+    "utf8",
+  );
+  assert.ok(
+    executor.includes(`PACKAGED_ANALYSIS_SANDBOX = "${PACKAGED_ANALYSIS_SANDBOX}"`),
+    "analysisExecutor.ts must start the sandbox the payload ships",
+  );
+  assert.ok(fs.statSync(path.join(repoRoot, "apps", "node-backend", "src", "services", "analysisSandbox.ts")).isFile());
 });
 
 void test("the database tool is bundled for Bun at the packaged path", () => {
@@ -108,7 +113,7 @@ void test("the database tool is bundled for Bun at the packaged path", () => {
     );
     const outfile = path.join(root, "tools", "db-file.js");
     fs.mkdirSync(path.dirname(outfile));
-    bundleDatabaseTool(fakeBun, "apps/node-backend/scripts/db-file.ts", outfile, root);
+    bundleBunTool(fakeBun, "apps/node-backend/scripts/db-file.ts", outfile, root);
     assert.equal(fs.readFileSync(outfile, "utf8"), "bundled\n");
     assert.deepEqual(
       fs.readFileSync(path.join(root, "args.txt"), "utf8").trim().split("\n"),
@@ -128,11 +133,11 @@ void test("database tool bundling fails when Bun fails or writes nothing", () =>
     fs.writeFileSync(silent, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const outfile = path.join(root, "db-file.js");
     assert.throws(
-      () => bundleDatabaseTool(failing, "db-file.ts", outfile, root),
+      () => bundleBunTool(failing, "db-file.ts", outfile, root),
       /bundling exited 3/,
     );
     assert.throws(
-      () => bundleDatabaseTool(silent, "db-file.ts", outfile, root),
+      () => bundleBunTool(silent, "db-file.ts", outfile, root),
       /produced no output/,
     );
   } finally {

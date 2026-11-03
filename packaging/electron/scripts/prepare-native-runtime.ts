@@ -5,7 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { appRoot } from "../paths";
-import { PACKAGED_DATABASE_TOOL } from "../runtime/native";
+import {
+  PACKAGED_ANALYSIS_SANDBOX,
+  PACKAGED_DATABASE_TOOL,
+} from "../runtime/native";
 import { replaceGeneratedDirectory } from "./replace-generated-directory";
 
 export interface ManifestEntry {
@@ -93,22 +96,9 @@ function bunScratchFiles(directory: string): Set<string> {
   );
 }
 
-export const BACKEND_SOURCE = path.join(repoRoot, "apps", "node-backend", "src");
-
-/**
- * The backend's entrypoints, relative to its `src/`. The compiled backend
- * finds the worker at `/$bunfs/root/services/analysisSandboxWorker.js`.
- */
-export const BACKEND_ENTRIES = ["main.ts", "services/analysisSandboxWorker.ts"] as const;
-
-/**
- * Compile the backend into one executable. `entries` are the main entrypoint
- * and the analysis sandbox worker (ADR-263), which the backend starts as a
- * worker thread; Bun embeds both under the directory they share (`src/`).
- */
 export function compileBackend(
   bun: string,
-  entries: readonly string[],
+  entry: string,
   outfile: string,
   cwd: string = repoRoot,
 ): void {
@@ -122,7 +112,7 @@ export function compileBackend(
         // Precompiled bytecode skips parsing ~1,500 bundled modules on every
         // launch: the backend answers /health ~0.35 s sooner.
         "--bytecode",
-        ...entries,
+        entry,
         "--outfile",
         outfile,
       ],
@@ -140,11 +130,13 @@ export function compileBackend(
 }
 
 /**
- * Bundle `apps/node-backend/scripts/db-file.ts` for Bun. The packaged backend
- * executable runs it as Bun (BUN_BE_BUN=1), so backups, restore verification
- * and Demo seeding use the same Bun and SQLite as the backend itself.
+ * Bundle a backend tool for Bun. The packaged backend executable runs it as
+ * Bun (BUN_BE_BUN=1), so the tool uses the same Bun and SQLite as the backend
+ * itself: `scripts/db-file.ts` for backups, restore verification and Demo
+ * seeding, and `src/services/analysisSandbox.ts` for custom analysis SQL,
+ * which the backend runs as a child process it can kill (ADR-263).
  */
-export function bundleDatabaseTool(
+export function bundleBunTool(
   bun: string,
   entry: string,
   outfile: string,
@@ -157,9 +149,9 @@ export function bundleDatabaseTool(
   );
   if (bundle.error) throw bundle.error;
   if (bundle.status !== 0)
-    throw new Error(`Database tool bundling exited ${bundle.status}`);
+    throw new Error(`Bun tool bundling exited ${bundle.status}`);
   if (!fs.existsSync(outfile))
-    throw new Error("Database tool bundling produced no output");
+    throw new Error("Bun tool bundling produced no output");
 }
 
 /**
@@ -268,7 +260,7 @@ export function run(): void {
   try {
     compileBackend(
       bun,
-      BACKEND_ENTRIES.map((entry) => path.join(BACKEND_SOURCE, ...entry.split("/"))),
+      path.join(repoRoot, "apps", "node-backend", "src", "main.ts"),
       path.join(stagingRoot, "vision-backend"),
     );
     fs.chmodSync(path.join(stagingRoot, "vision-backend"), 0o755);
@@ -281,16 +273,18 @@ export function run(): void {
       signCompiledBackend(path.join(stagingRoot, "vision-apple-ai"));
     }
 
-    const databaseTool = path.join(
-      stagingRoot,
-      ...PACKAGED_DATABASE_TOOL.split("/"),
-    );
-    fs.mkdirSync(path.dirname(databaseTool), { recursive: true });
-    bundleDatabaseTool(
-      bun,
-      path.join(repoRoot, "apps", "node-backend", "scripts", "db-file.ts"),
-      databaseTool,
-    );
+    for (const [packaged, source] of [
+      [PACKAGED_DATABASE_TOOL, "scripts/db-file.ts"],
+      [PACKAGED_ANALYSIS_SANDBOX, "src/services/analysisSandbox.ts"],
+    ] as const) {
+      const outfile = path.join(stagingRoot, ...packaged.split("/"));
+      fs.mkdirSync(path.dirname(outfile), { recursive: true });
+      bundleBunTool(
+        bun,
+        path.join(repoRoot, "apps", "node-backend", ...source.split("/")),
+        outfile,
+      );
+    }
 
     copyTree(frontendRoot, path.join(stagingRoot, "dist"));
     // The compiled backend and the database tool apply db/migrations

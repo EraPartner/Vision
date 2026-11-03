@@ -4,7 +4,7 @@ import path from "node:path";
 import { Arch, Platform, build } from "electron-builder";
 
 import { appRoot } from "../paths";
-import { PACKAGED_DATABASE_TOOL } from "../runtime/native";
+import { PACKAGED_ANALYSIS_SANDBOX, PACKAGED_DATABASE_TOOL } from "../runtime/native";
 import {
   assertSafeNativeDestination,
   run as prepareNativeRuntime,
@@ -78,14 +78,12 @@ export function packageConfig(
   };
 }
 
-/** The prepared payload has the backend, its database tool and the SQLite baseline. */
+/** The prepared payload has the backend, its database tool, its analysis sandbox and the SQLite baseline. */
 export function assertPreparedPayload(runtimeRoot: string): void {
   fs.accessSync(path.join(runtimeRoot, "manifest.json"), fs.constants.R_OK);
   fs.accessSync(path.join(runtimeRoot, "vision-backend"), fs.constants.X_OK);
-  fs.accessSync(
-    path.join(runtimeRoot, ...PACKAGED_DATABASE_TOOL.split("/")),
-    fs.constants.R_OK,
-  );
+  for (const tool of [PACKAGED_DATABASE_TOOL, PACKAGED_ANALYSIS_SANDBOX])
+    fs.accessSync(path.join(runtimeRoot, ...tool.split("/")), fs.constants.R_OK);
   const migrations = path.join(runtimeRoot, "db", "migrations");
   const baseline = fs
     .readdirSync(migrations)

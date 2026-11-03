@@ -2,18 +2,21 @@
  * Isolated, bounded SQL execution over the approved analysis views only
  * (ADR-263).
  *
- * A statement runs in the analysis sandbox (analysisSandboxWorker.ts): a
- * worker thread with a fresh in-memory SQLite database. The executor reads
- * the rows of the approved `vision_analysis_*` views the statement names
- * from one read snapshot and hands them to the worker, which serves them as
- * `vision_analysis.<view>` with `query_only` on. The worker never sees the
- * database file or its path. One sandbox runs at a time; a statement gets
- * 5 s, after which the request fails with SQLSTATE 57014 and the worker is
- * terminated.
+ * A statement runs in the analysis sandbox (analysisSandbox.ts): a child
+ * process with a fresh in-memory SQLite database and an environment that
+ * holds only the time zone. The executor reads the rows of the approved
+ * `vision_analysis_*` views the statement names from one read snapshot and
+ * hands them to the process, which serves them as `vision_analysis.<view>`
+ * with `query_only` on. The process never sees the database file or its
+ * path. One sandbox runs at a time; a statement gets 5 s, after which the
+ * request fails with SQLSTATE 57014 and the process is killed, even when
+ * SQLite is still busy inside one statement.
  */
 
-import { Worker } from "node:worker_threads";
+import { spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { withReadSnapshot } from "../database/connection.ts";
 import type { PgPoolClient } from "../database/connection.ts";
 import { toSqlParam } from "../database/sqlite/values.ts";
@@ -25,7 +28,8 @@ import type {
   SandboxRequest,
   SandboxTable,
   SandboxValue,
-} from "./analysisSandboxWorker.ts";
+} from "./analysisSandbox.ts";
+import { SANDBOX_FLAG, encodeRequest } from "./analysisSandbox.ts";
 import { nanToZero, nonZeroOr } from "../lib/math.ts";
 
 const MAX_ROWS = 1000;
@@ -37,9 +41,17 @@ const STATEMENT_TIMEOUT_MS = 5_000;
 const LOAD_TIMEOUT_MS = 60_000;
 /** How long a request waits for the sandbox another request is using. */
 const QUEUE_TIMEOUT_MS = 30_000;
-/** The worker stops itself at the deadline; this is how long the executor waits for it. */
+/** The sandbox stops itself at the deadline; this is how long the executor waits before killing it. */
 const TERMINATE_GRACE_MS = 250;
+/** The sandbox's JavaScript heap where the runtime takes a limit (Node; Bun has no such flag). */
 const SANDBOX_HEAP_MB = 1024;
+/** What the sandbox may write to stderr that the executor keeps, for a crash message. */
+const STDERR_KEEP_BYTES = 4096;
+/**
+ * The bundled sandbox in a packaged app, relative to the directory of the
+ * backend executable. packaging/electron/runtime/native.ts names the same path.
+ */
+export const PACKAGED_ANALYSIS_SANDBOX = "tools/analysis-sandbox.js";
 const EXECUTOR = "sqlite-sandbox-v1";
 
 export interface AnalysisSqlRequest {
@@ -367,14 +379,14 @@ async function copyView(client: PgPoolClient, view: string): Promise<SandboxTabl
 }
 
 // ---------------------------------------------------------------------------
-// The sandbox slot: one worker at a time
+// The sandbox slot: one process at a time
 // ---------------------------------------------------------------------------
 
 interface Job {
   requestId: string;
   /** Set by cancelAnalysisQuery(). */
   cancelled: Error | null;
-  /** While the worker runs: fail the request and terminate the worker. */
+  /** While the sandbox runs: fail the request and kill the process. */
   abort: ((error: Error) => void) | null;
 }
 
@@ -387,7 +399,7 @@ interface Waiter {
 let slotHeld = false;
 const waiters: Waiter[] = [];
 const jobs = new Map<string, Job>();
-const runningWorkers = new Set<Worker>();
+const runningSandboxes = new Set<ChildProcess>();
 let statementTimeoutMs = STATEMENT_TIMEOUT_MS;
 
 function cancelledError(message: string) {
@@ -436,73 +448,167 @@ function releaseSlot(): void {
   else slotHeld = false;
 }
 
+interface SandboxCommand {
+  bin: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+}
+
 /**
- * Where the worker module is. From source (Bun or Node) it sits next to
- * this file. A compiled backend (`bun build --compile`, which must list it
- * as a second entrypoint) embeds it at the same path under the bundle root
- * that holds the main entrypoint: `/$bunfs/root/services/...`.
+ * How to start the sandbox. A compiled backend (`bun build --compile`) runs
+ * the bundled tool beside it as Bun (BUN_BE_BUN=1), as the database tool
+ * runs. From source, the same runtime runs analysisSandbox.ts (Node strips
+ * the types). The environment holds only the time zone, so SQL today() and
+ * now()'s local date agree with the backend's, and nothing names the
+ * database file.
  */
-function sandboxWorkerEntry(): string | URL {
+function sandboxCommand(): SandboxCommand {
+  const env: Record<string, string> = {
+    TZ: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
   const bunMain = (globalThis as { Bun?: { main?: unknown } }).Bun?.main;
-  if (typeof bunMain === "string" && bunMain.startsWith("/$bunfs/"))
-    return path.posix.join(
-      path.posix.dirname(bunMain),
-      "services",
-      "analysisSandboxWorker.js",
+  if (typeof bunMain === "string" && bunMain.startsWith("/$bunfs/")) {
+    const tool = path.join(
+      path.dirname(process.execPath),
+      ...PACKAGED_ANALYSIS_SANDBOX.split("/"),
     );
-  return new URL("./analysisSandboxWorker.ts", import.meta.url);
+    return {
+      bin: process.execPath,
+      args: [tool, SANDBOX_FLAG],
+      cwd: path.dirname(tool),
+      env: { ...env, BUN_BE_BUN: "1" },
+    };
+  }
+  const source = fileURLToPath(new URL("./analysisSandbox.ts", import.meta.url));
+  const args = process.versions.bun
+    ? [source, SANDBOX_FLAG]
+    : [`--max-old-space-size=${SANDBOX_HEAP_MB}`, "--no-warnings", source, SANDBOX_FLAG];
+  return { bin: process.execPath, args, cwd: path.dirname(source), env };
 }
 
 type SandboxResultMessage = Extract<SandboxMessage, { kind: "result" }>;
 
-function workerFailure(error: Error): Error {
-  if ((error as { code?: unknown }).code === "ERR_WORKER_OUT_OF_MEMORY")
-    return Object.assign(new Error("out of memory"), { code: "53200" });
+function sandboxFailure(error: Error): Error {
   return Object.assign(
     new Error(`The analysis sandbox failed: ${error.message}`),
     { code: "XX000" },
   );
 }
 
+/** The error for a process that ended without an answer. */
+function crashError(exitCode: number | null, signal: string | null, stderr: string): Error {
+  if (/out of memory/i.test(stderr))
+    return Object.assign(new Error("out of memory"), { code: "53200" });
+  const how = signal ? `signal ${signal}` : `exit code ${String(exitCode)}`;
+  return Object.assign(
+    new Error(`The analysis sandbox stopped unexpectedly (${how})`),
+    { code: "XX000" },
+  );
+}
+
+/** Puts back the non-finite numbers JSON could not carry. */
+function restoreSpecialNumbers(message: SandboxResultMessage): SandboxResultMessage {
+  for (const [index, key, value] of message.special ?? []) {
+    const row = message.rows[index];
+    if (row) row[key] = Number(value);
+  }
+  const { special: _special, ...rest } = message;
+  return rest;
+}
+
+/**
+ * Start one sandbox process and stream its JSON-line messages to `onMessage`.
+ * `exited` settles when the process has ended.
+ */
+function spawnSandbox(
+  request: SandboxRequest,
+  onMessage: (message: SandboxMessage) => void,
+  onEnd: (error: Error | null) => void,
+): { child: ChildProcess; exited: Promise<void> } {
+  const command = sandboxCommand();
+  const child = spawn(command.bin, command.args, {
+    cwd: command.cwd,
+    env: command.env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  runningSandboxes.add(child);
+  let stdout = "";
+  let stderr = "";
+  let spawnError: Error | null = null;
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+    let newline = stdout.indexOf("\n");
+    while (newline >= 0) {
+      const line = stdout.slice(0, newline);
+      stdout = stdout.slice(newline + 1);
+      if (line.trim() !== "") onMessage(JSON.parse(line) as SandboxMessage);
+      newline = stdout.indexOf("\n");
+    }
+  });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr = (stderr + chunk).slice(-STDERR_KEEP_BYTES);
+  });
+  // A process that ends early closes stdin under the request; the exit says why.
+  child.stdin.on("error", () => undefined);
+  child.on("error", (error: Error) => {
+    spawnError = error;
+  });
+  const exited = new Promise<void>((resolve) => {
+    child.once("close", (exitCode: number | null, signal: string | null) => {
+      runningSandboxes.delete(child);
+      onEnd(spawnError ? sandboxFailure(spawnError) : crashError(exitCode, signal, stderr));
+      resolve();
+    });
+  });
+  child.stdin.end(encodeRequest(request));
+  return { child, exited };
+}
+
+/** Test hook: run the sandbox directly, without the executor's SQL checks. */
+export function __runSandbox(request: SandboxRequest): Promise<SandboxMessage[]> {
+  return new Promise((resolve, reject) => {
+    const messages: SandboxMessage[] = [];
+    spawnSandbox(
+      request,
+      (message) => messages.push(message),
+      (error) => {
+        if (messages.length === 0 && error) reject(error);
+        else resolve(messages);
+      },
+    );
+  });
+}
+
 function startSandbox(
   job: Job,
   request: SandboxRequest,
 ): { result: Promise<SandboxResultMessage>; exited: Promise<void> } {
-  const worker = new Worker(sandboxWorkerEntry(), {
-    workerData: request,
-    // The sandbox gets no environment: nothing in it names the database file.
-    env: {},
-    resourceLimits: { maxOldGenerationSizeMb: SANDBOX_HEAP_MB },
-  });
-  runningWorkers.add(worker);
-  const exited = new Promise<void>((resolve) => {
-    worker.once("exit", () => {
-      runningWorkers.delete(worker);
-      resolve();
-    });
-  });
+  let settled = false;
+  let timer: NodeJS.Timeout | undefined;
+  let child: ChildProcess | null = null;
+  let resolveResult!: (message: SandboxResultMessage) => void;
+  let rejectResult!: (error: Error) => void;
   const result = new Promise<SandboxResultMessage>((resolve, reject) => {
-    let settled = false;
-    let timer = setTimeout(() => {
-      stop(
-        cancelledError(
-          "canceling statement due to statement timeout: loading the analysis data took too long",
-        ),
-      );
-    }, LOAD_TIMEOUT_MS);
-    const settle = () => {
-      settled = true;
-      clearTimeout(timer);
-      job.abort = null;
-    };
-    const stop = (error: Error) => {
-      if (settled) return;
-      settle();
-      reject(error);
-      void worker.terminate();
-    };
-    job.abort = stop;
-    worker.on("message", (message: SandboxMessage) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+  const settle = () => {
+    settled = true;
+    clearTimeout(timer);
+    job.abort = null;
+  };
+  const stop = (error: Error) => {
+    if (settled) return;
+    settle();
+    rejectResult(error);
+    child?.kill("SIGKILL");
+  };
+  const started = spawnSandbox(
+    request,
+    (message) => {
       if (settled) return;
       if (message.kind === "ready") {
         clearTimeout(timer);
@@ -513,27 +619,30 @@ function startSandbox(
         return;
       }
       settle();
-      if (message.kind === "result") resolve(message);
+      if (message.kind === "result") resolveResult(restoreSpecialNumbers(message));
       else
-        reject(
+        rejectResult(
           Object.assign(
             new Error(message.message),
             message.code ? { code: message.code } : {},
           ),
         );
-      void worker.terminate();
-    });
-    worker.on("error", (error: Error) => stop(workerFailure(error)));
-    worker.once("exit", (exitCode: number) =>
-      stop(
-        Object.assign(
-          new Error(`The analysis sandbox stopped unexpectedly (exit code ${exitCode})`),
-          { code: "XX000" },
-        ),
+      child?.kill("SIGKILL");
+    },
+    (error) => {
+      if (error) stop(error);
+    },
+  );
+  child = started.child;
+  timer = setTimeout(() => {
+    stop(
+      cancelledError(
+        "canceling statement due to statement timeout: loading the analysis data took too long",
       ),
     );
-  });
-  return { result, exited };
+  }, LOAD_TIMEOUT_MS);
+  job.abort = stop;
+  return { result, exited: started.exited };
 }
 
 /** Test hook: a shorter statement limit, or null for the 5 s default. */
@@ -637,7 +746,7 @@ export async function executeAnalysisSql({
     };
   } finally {
     if (jobs.get(activeId) === job) jobs.delete(activeId);
-    // The slot frees when the thread has ended, so two sandboxes never run at once.
+    // The slot frees when the process has ended, so two sandboxes never run at once.
     if (exited) void exited.then(releaseSlot);
     else releaseSlot();
   }
@@ -656,20 +765,20 @@ export function cancelAnalysisQuery(
   return Promise.resolve({ cancelled: true });
 }
 
-/** Cancel queued and running analyses and wait (up to 1 s) for the worker to end. */
+/** Cancel queued and running analyses and wait (up to 1 s) for the sandbox to end. */
 export async function closeAnalysisPool() {
   for (const waiter of [...waiters]) waiter.refuse(userCancelError());
   for (const job of jobs.values()) {
-    // A job still copying its views stops before it starts a worker.
+    // A job still copying its views stops before it starts a sandbox.
     job.cancelled = userCancelError();
     job.abort?.(job.cancelled);
   }
   const ended = Promise.all(
-    [...runningWorkers].map(
-      (worker) =>
+    [...runningSandboxes].map(
+      (child) =>
         new Promise<void>((resolve) => {
-          worker.once("exit", () => resolve());
-          void worker.terminate();
+          child.once("close", () => resolve());
+          child.kill("SIGKILL");
         }),
     ),
   );

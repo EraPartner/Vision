@@ -114,7 +114,7 @@ void test("native package excludes test data, source maps, and foreign Bare preb
   );
 });
 
-void test("packaging requires the backend, its database tool and a baseline migration", () => {
+void test("packaging requires the backend, its tools and a baseline migration", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-payload-check-"));
   try {
     fs.writeFileSync(path.join(root, "manifest.json"), "{}");
@@ -124,6 +124,8 @@ void test("packaging requires the backend, its database tool and a baseline migr
     assert.throws(() => assertPreparedPayload(root), /ENOENT/);
     fs.mkdirSync(path.join(root, "tools"));
     fs.writeFileSync(path.join(root, "tools", "db-file.js"), "");
+    assert.throws(() => assertPreparedPayload(root), /analysis-sandbox\.js/);
+    fs.writeFileSync(path.join(root, "tools", "analysis-sandbox.js"), "");
     assert.doesNotThrow(() => assertPreparedPayload(root));
     fs.rmSync(path.join(root, "db", "migrations", "0001_baseline.sql"));
     assert.throws(() => assertPreparedPayload(root), /no baseline database migration/);

@@ -361,4 +361,4 @@ export const researchDossierSnapshotRowSchema = researchDossierVersionRowSchema
   .describe("research_dossier_versions snapshot row");
 
 // The analysis executor has no fixed queries of its own: user SQL runs in the
-// sandbox worker (analysisSandboxWorker.ts), whose rows are dynamic.
+// sandbox (analysisSandbox.ts), whose rows are dynamic.

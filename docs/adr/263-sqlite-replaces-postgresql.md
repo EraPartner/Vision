@@ -183,8 +183,11 @@ so what services read stays what node-postgres returned. Bound values convert th
   `vision_analysis` (so `vision_analysis.transactions_v2` keeps resolving) and runs the user's
   single read-only statement there with `query_only` on. The sandbox has no connection to the real
   database file, so nothing else is reachable. The same path runs under Bun and under Node in tests.
-- Analysis SQL runs in a worker thread with a 5 s limit. On timeout the request fails and the
-  worker is terminated; only one analysis worker runs at a time.
+- Analysis SQL runs in a child process with a 5 s limit and an environment that holds only the
+  time zone. On timeout the request fails and the process is killed, which stops a statement even
+  while SQLite is busy inside it (a worker thread could not be stopped there). Only one sandbox
+  runs at a time. The packaged app ships the sandbox as `tools/analysis-sandbox.js` and runs it
+  through the backend executable as Bun, as it runs the database tool.
 - Open question answered by default: saved analyses whose custom SQL was written for PostgreSQL
   are kept unchanged, flagged "needs review" and not executed until the user saves a SQLite
   version. Analyses built in the visual editor are regenerated from their stored definition.

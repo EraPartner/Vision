@@ -31,6 +31,12 @@ export const DATABASE_FILE_NAME = "vision.sqlite3";
 export const PREVIOUS_DATABASE_GENERATIONS_KEPT = 3;
 /** The packaged database tool, run by the backend executable as Bun (BUN_BE_BUN=1). */
 export const PACKAGED_DATABASE_TOOL = "tools/db-file.js";
+/**
+ * The packaged analysis SQL sandbox, beside the database tool. The backend
+ * executable starts it as Bun for each custom statement (ADR-263);
+ * apps/node-backend/src/services/analysisExecutor.ts names the same path.
+ */
+export const PACKAGED_ANALYSIS_SANDBOX = "tools/analysis-sandbox.js";
 /** The same tool from a source checkout, run with the developer's Bun. */
 export const SOURCE_DATABASE_TOOL = "apps/node-backend/scripts/db-file.ts";
 /** The script that converts Vision 2.0 (PostgreSQL) backups to SQLite. */

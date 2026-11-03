@@ -1,27 +1,30 @@
 /**
- * The analysis SQL sandbox (ADR-263). analysisExecutor.ts starts this module
- * as a worker thread for one statement and terminates it afterwards.
+ * The analysis SQL sandbox (ADR-263). analysisExecutor.ts runs this module as
+ * a child process for one statement, with the flag `--vision-analysis-sandbox`
+ * and an environment that holds only the time zone. The packaged app runs the
+ * bundled copy, `tools/analysis-sandbox.js`, through the backend executable
+ * as Bun (BUN_BE_BUN=1).
  *
- * The worker builds a fresh in-memory SQLite database. An attached
- * in-memory database named `vision_analysis` holds the rows the executor
- * copied from the approved `vision_analysis_*` views, as views with the
- * PostgreSQL names, so `vision_analysis.transactions_v2` resolves as it did
+ * The process reads one request as JSON from stdin and writes its messages as
+ * JSON lines to stdout. It builds a fresh in-memory SQLite database. An
+ * attached in-memory database named `vision_analysis` holds the rows the
+ * executor copied from the approved `vision_analysis_*` views, as views with
+ * the PostgreSQL names, so `vision_analysis.transactions_v2` resolves as it did
  * before. It then turns `query_only` on and runs the user's statement, which
- * must be one SELECT, WITH or VALUES statement. The worker receives rows, not
- * a path: it never opens or attaches a file, and it imports nothing that
- * reads the configuration or the environment.
+ * must be one SELECT, WITH or VALUES statement. The process receives rows, not
+ * a path: it never opens or attaches a file, and it imports nothing that reads
+ * the configuration or the environment.
  *
- * node:sqlite cannot interrupt a running statement from another thread, and
- * terminating the worker takes effect only when SQLite next calls back into
- * JavaScript. So the worker enforces the statement limit itself: every copied
- * row passes vision_sandbox_tick() and every Vision SQL function checks the
- * deadline, and either one throws SQLSTATE 57014 once it has passed. A
+ * The statement limit is enforced twice. Inside, every copied row passes
+ * vision_sandbox_tick() and every Vision SQL function checks the deadline, and
+ * either one throws SQLSTATE 57014 once it has passed. Outside, the executor
+ * kills the process (SIGKILL) shortly after the deadline, which also stops a
  * statement that loops inside SQLite without reading a copied row or calling
  * a function (a recursive CTE over constants, a cross join of materialized
- * CTEs) is not stopped by either; the executor fails the request at the
- * deadline and keeps the sandbox slot until the thread ends.
+ * CTEs). Memory has no separate cap beyond the statement limit: the SQLite
+ * builds tested (Node 22's and Bun 1.4's, on Linux) ignore
+ * `PRAGMA hard_heap_limit`. Under Node the JavaScript heap is capped too.
  */
-import { parentPort, workerData } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
 import type {
   AggregateOptions,
@@ -93,11 +96,16 @@ export type SandboxMessage =
       columns: SandboxResultColumn[];
       rows: Array<Record<string, unknown>>;
       hasMore: boolean;
+      /** Row values JSON cannot carry: [row, column id, "Infinity" | "-Infinity" | "NaN"]. */
+      special?: Array<[number, string, string]>;
     }
   | { kind: "error"; message: string; code: string | undefined };
 
 const READ_STATEMENTS = new Set(["SELECT", "WITH", "VALUES"]);
+const SQLITE_NOMEM = 7;
 const SQLITE_READONLY = 8;
+/** The command-line flag that makes this module serve one request. */
+export const SANDBOX_FLAG = "--vision-analysis-sandbox";
 const CANONICAL_TIMESTAMP = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3})\d{3}Z$/;
 const DECIMAL_TEXT = /^-?\d+(\.\d+)?$/;
 const HINT = /::(bool|json|timestamptz|date|bigint|text)$/;
@@ -365,6 +373,7 @@ function failure(caught: unknown): Extract<SandboxMessage, { kind: "error" }> {
     return { kind: "error", message, code };
   // PostgreSQL's errors for a write in a read-only transaction and for unfinished SQL.
   if (errcode === SQLITE_READONLY) return { kind: "error", message, code: "25006" };
+  if (errcode === SQLITE_NOMEM) return { kind: "error", message: "out of memory", code: "53200" };
   if (/incomplete input/.test(message)) return { kind: "error", message, code: "42601" };
   return { kind: "error", message, code: undefined };
 }
@@ -410,7 +419,46 @@ function main(request: SandboxRequest, post: (message: SandboxMessage) => void):
   }
 }
 
-if (parentPort) {
-  const port = parentPort;
-  main(workerData as SandboxRequest, (message) => port.postMessage(message));
+/** Non-finite numbers in a result, which JSON would turn into null. */
+function withSpecialNumbers(message: SandboxMessage): SandboxMessage {
+  if (message.kind !== "result") return message;
+  const special: Array<[number, string, string]> = [];
+  message.rows.forEach((row, index) => {
+    for (const [key, value] of Object.entries(row))
+      if (typeof value === "number" && !Number.isFinite(value))
+        special.push([index, key, String(value)]);
+  });
+  return special.length > 0 ? { ...message, special } : message;
 }
+
+/** A request value: bigints travel as {"$bigint": "..."}, non-finite numbers as {"$number": "..."}. */
+export function encodeRequest(request: SandboxRequest): string {
+  return JSON.stringify(request, (_key, value: unknown) => {
+    if (typeof value === "bigint") return { $bigint: value.toString() };
+    if (typeof value === "number" && !Number.isFinite(value)) return { $number: String(value) };
+    return value;
+  });
+}
+
+function decodeRequest(text: string): SandboxRequest {
+  // Request values are scalars, so an object with one of these keys is always a tag.
+  return JSON.parse(text, (_key, value: unknown) => {
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const tagged = value as { $bigint?: unknown; $number?: unknown };
+      if (typeof tagged.$bigint === "string") return BigInt(tagged.$bigint);
+      if (typeof tagged.$number === "string") return Number(tagged.$number);
+    }
+    return value;
+  }) as SandboxRequest;
+}
+
+async function serve(): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  const request = decodeRequest(Buffer.concat(chunks).toString("utf8"));
+  main(request, (message) => {
+    process.stdout.write(`${JSON.stringify(withSpecialNumbers(message))}\n`);
+  });
+}
+
+if (process.argv.includes(SANDBOX_FLAG)) void serve();

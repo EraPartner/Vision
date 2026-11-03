@@ -299,7 +299,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 5. **Native initialization**:
    - choose and persist an available loopback backend port;
-   - verify the compiled backend, the database tool `tools/db-file.js`, the frontend and the `db/`
+   - verify the compiled backend, the tools `tools/db-file.js` and `tools/analysis-sandbox.js`, the frontend and the `db/`
      migration files against the checksum manifest ([[docs/adr/235-launch-runtime-verification-marker|ADR-235]]). The first
      launch of an installed payload hashes every file in a worker thread (64 KiB chunks, off the
      Electron main event loop) and records the manifest's SHA-256, app version and payload path
@@ -502,7 +502,8 @@ settings). Simplified merged view:
 - **`native-runtime/`** — Also kept outside asar. It contains the compiled Bun backend (built
   with `bun build --compile --bytecode`, so launch skips parsing the bundled modules),
   database tool `tools/db-file.js` (backups, restore verification and Demo seeding, run by the
-  backend executable as Bun), production frontend, `db/` migrations (applied in-process by the
+  backend executable as Bun), analysis SQL sandbox `tools/analysis-sandbox.js` (one child process
+  per custom statement, also run as Bun, ADR-263), production frontend, `db/` migrations (applied in-process by the
   compiled backend), and the checksum manifest used by the default native provider.
 
 - **`demo-seed/`** — Vision Demo only. Contains `vision-demo.sqlite3`, which the database tool
@@ -579,6 +580,8 @@ platform would need those branches back ([[docs/adr/219-minimal-electron-shell-h
 - React frontend (built with Vite)
 - Compiled Bun backend, spawned as a verified child process
 - The database tool `tools/db-file.js`, bundled from `apps/node-backend/scripts/db-file.ts`
+- The analysis SQL sandbox `tools/analysis-sandbox.js`, bundled from
+  `apps/node-backend/src/services/analysisSandbox.ts`
 - The `db/` folder with the `db/migrations/` SQL files, applied in-process by the compiled
   backend (no separate migration executable). The database itself uses the system SQLite library
   (3.39.0 or later); no database server is bundled ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]])

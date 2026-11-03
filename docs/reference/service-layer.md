@@ -758,10 +758,10 @@ analysis definitions and run state.
 - `analysisCatalog` exposes four versioned datasets and compiles only declared fields, filters,
   groups, measures, order terms, and the validated many-to-one account join.
 - `analysisExecutor` accepts one `SELECT` or `WITH` statement over declared approved views. It
-  copies the rows of the named `vision_analysis_*` views from one read snapshot into a worker
-  thread with an in-memory SQLite database (`analysisSandboxWorker.ts`), which never sees the
-  database file. One sandbox runs at a time. Limits are a 5 s statement timeout (then SQLSTATE
-  `57014` and the worker is terminated), a 1,000-row cap and a 2 MB response cap.
+  copies the rows of the named `vision_analysis_*` views from one read snapshot into a child
+  process with an in-memory SQLite database (`analysisSandbox.ts`), which never sees the database
+  file. One sandbox runs at a time. Limits are a 5 s statement timeout (then SQLSTATE `57014` and
+  the process is killed), a 1,000-row cap and a 2 MB response cap.
 - `savedAnalysisService` validates the shared analysis contract, appends immutable definition
   versions, and stores charts, parameters, source references, refresh status, failures, and the last
   usable result across budgeting, portfolio, research, and cross-workspace libraries.

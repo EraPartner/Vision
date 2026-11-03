@@ -17,7 +17,7 @@ related_code:
 > [Open the journey](../flow-visualizer.html#native-startup). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 Vision for macOS bundles the compiled Bun backend, the database tool `tools/db-file.js`, the
-production frontend and the `db/` migration files. The backend opens one SQLite database file
+analysis SQL sandbox `tools/analysis-sandbox.js`, the production frontend and the `db/` migration files. The backend opens one SQLite database file
 in-process through the system SQLite library (3.39.0 or later, so macOS 13 or later). There is no
 database server, no database port and no database credentials
 ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). Electron owns the backend's lifecycle and
@@ -28,8 +28,9 @@ prints report PDFs with its own Chromium
 
 The native payload builder (`packaging/electron/scripts/prepare-native-runtime.ts`) requires:
 
-- Bun, which compiles the backend into `vision-backend` and bundles
-  `apps/node-backend/scripts/db-file.ts` into `tools/db-file.js`; and
+- Bun, which compiles the backend into `vision-backend`, bundles
+  `apps/node-backend/scripts/db-file.ts` into `tools/db-file.js` and
+  `apps/node-backend/src/services/analysisSandbox.ts` into `tools/analysis-sandbox.js`; and
 - the production frontend (`bun run build`).
 
 It copies the frontend to `dist/` and the whole `db/` folder, builds the `vision-apple-ai` helper on

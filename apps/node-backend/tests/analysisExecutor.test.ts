@@ -1,7 +1,7 @@
-import { Worker } from "node:worker_threads";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { compileVisualAnalysis } from "../src/services/analysisCatalog.ts";
 import {
+  __runSandbox,
   __setAnalysisStatementTimeout,
   __validateAnalysisSql,
   cancelAnalysisQuery,
@@ -12,7 +12,7 @@ import type {
   SandboxMessage,
   SandboxRequest,
   SandboxTable,
-} from "../src/services/analysisSandboxWorker.ts";
+} from "../src/services/analysisSandbox.ts";
 import { getTestPool } from "./setup/db.ts";
 import { firstRow } from "./helpers/must.ts";
 
@@ -30,30 +30,18 @@ async function rejection(promise: Promise<unknown>): Promise<Error & { code?: st
   throw new Error("Expected the promise to reject");
 }
 
-/** Runs the sandbox worker directly, without the executor's SQL checks. */
-function runSandboxWorker(
+/** Runs the sandbox process directly, without the executor's SQL checks. */
+function runSandbox(
   request: Partial<SandboxRequest> & { sql: string },
 ): Promise<SandboxMessage[]> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(
-      new URL("../src/services/analysisSandboxWorker.ts", import.meta.url),
-      {
-        workerData: {
-          params: [],
-          limit: 100,
-          offset: 0,
-          statementTimeoutMs: 5_000,
-          startedAt: new Date().toISOString(),
-          tables: [],
-          ...request,
-        } satisfies SandboxRequest,
-        env: {},
-      },
-    );
-    const messages: SandboxMessage[] = [];
-    worker.on("message", (message: SandboxMessage) => messages.push(message));
-    worker.on("error", reject);
-    worker.on("exit", () => resolve(messages));
+  return __runSandbox({
+    params: [],
+    limit: 100,
+    offset: 0,
+    statementTimeoutMs: 5_000,
+    startedAt: new Date().toISOString(),
+    tables: [],
+    ...request,
   });
 }
 
@@ -296,7 +284,7 @@ describe("analysis sandbox boundary", () => {
   });
 
   it("holds only the copies and knows no database file", async () => {
-    const [ready, result] = await runSandboxWorker({
+    const [ready, result] = await runSandbox({
       sql: `SELECT (SELECT group_concat(name, ',') FROM (SELECT name FROM vision_analysis.sqlite_schema ORDER BY name)) AS copies,
                    (SELECT count(*) FROM main.sqlite_schema) AS main_objects,
                    (SELECT count(*) FROM pragma_database_list WHERE file <> '') AS files_on_disk`,
@@ -325,11 +313,11 @@ describe("analysis sandbox boundary", () => {
     ["SELECT 1; ATTACH DATABASE 'other.sqlite3' AS other", "42601"],
     ["SELECT 1 /* end */; PRAGMA query_only = OFF", "42601"],
   ])("the sandbox itself refuses %s", async (sql, code) => {
-    const messages = await runSandboxWorker({ sql, tables: [accountsCopy] });
+    const messages = await runSandbox({ sql, tables: [accountsCopy] });
     expect(messages[0]).toEqual({ kind: "ready" });
     expect(messages[1]).toMatchObject({ kind: "error", code });
     // The copy is unchanged and still the only data.
-    const [, check] = await runSandboxWorker({
+    const [, check] = await runSandbox({
       sql: "SELECT count(*) AS n FROM vision_analysis.accounts_v1",
       tables: [accountsCopy],
     });
@@ -372,6 +360,34 @@ describe("analysis sandbox boundary", () => {
       datasetIds: ["accounts"],
     });
     expect(next.rows).toEqual([{ n: 1 }]);
+  });
+
+  it("kills a statement that loops inside SQLite past the limit and frees the sandbox", async () => {
+    __setAnalysisStatementTimeout(300);
+    const started = Date.now();
+    // 10^10 rows of constants, with no copied row or Vision function inside: only the kill stops it.
+    const error = await rejection(
+      executeAnalysisSql({
+        requestId: "native-loop",
+        sql: `WITH d AS (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9))
+              SELECT (SELECT count(*) FROM d a JOIN d b JOIN d c JOIN d e JOIN d f
+                        JOIN d g JOIN d h JOIN d i JOIN d j JOIN d k) AS endless,
+                     (SELECT count(*) FROM vision_analysis.accounts_v1) AS accounts`,
+        datasetIds: ["accounts"],
+      }),
+    );
+    expect(error).toMatchObject({
+      code: "57014",
+      message: "canceling statement due to statement timeout",
+    });
+    const next = await executeAnalysisSql({
+      requestId: "after-native-loop",
+      sql: "SELECT count(*) AS n FROM vision_analysis.accounts_v1 WHERE account_id = $1",
+      values: [accountId],
+      datasetIds: ["accounts"],
+    });
+    expect(next.rows).toEqual([{ n: 1 }]);
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 
   it("runs one sandbox at a time and cancels a running or queued statement", async () => {

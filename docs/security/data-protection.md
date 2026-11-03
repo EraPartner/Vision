@@ -2,12 +2,12 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-10-28
-updated: 2026-10-28
+date: 2026-11-03
+updated: 2026-11-03
 tags: [security, csp, same-origin, loopback, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, host-guard, dns-rebinding, zip-bomb, response-cap, content-length]
 description: Content Security Policy, the loopback-only network boundary, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). 2026-10-20: CORS, the admin token and proxy support removed; the backend is loopback-only (ADR-233). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
-related_code: ["apps/node-backend/src/main.ts", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/services/analysisExecutor.ts", "apps/node-backend/src/database/analysisRoleBootstrap.ts", "apps/node-backend/src/middleware/hostGuard.ts", "apps/node-backend/src/middleware/csrfGuard.ts"]
+related_code: ["apps/node-backend/src/main.ts", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/services/analysisExecutor.ts", "apps/node-backend/src/services/analysisSandbox.ts", "apps/node-backend/src/middleware/hostGuard.ts", "apps/node-backend/src/middleware/csrfGuard.ts"]
 ---
 
 # Security: Data Protection & CSP
@@ -165,13 +165,25 @@ path-parameter adapters and route-compatible re-exports.
 
 ### Manual analysis SQL isolation
 
-The manual analysis workspace never executes SQL with the application database role. Startup
-maintains a dedicated `vision_analysis_executor` login that cannot create databases or roles,
-inherit privileges, replicate, or bypass row-level security. The role receives schema usage and
-`SELECT` only on the four approved `vision_analysis.*_v1` views. The executor also requires a
-declared dataset set, opens a read-only transaction, applies statement, lock, idle, row and byte
-limits, and rejects write, catalog, file, extension, and multi-statement SQL before PostgreSQL sees
-it. Cancellation uses a reserved connection under that same restricted role.
+The manual analysis workspace never executes SQL against the application database file
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). `services/analysisExecutor.ts` reads the
+rows of the approved `vision_analysis_*` views that a statement names, from one read snapshot, and
+hands them to a child process (`services/analysisSandbox.ts`). The process holds a fresh
+in-memory SQLite database with `query_only` on and serves those rows as `vision_analysis.<view>`.
+It never gets the database file, its path, or the environment: its environment holds only the
+time zone. Results record the executor label `sqlite-sandbox-v1`.
+
+- A statement must start with `SELECT`, `WITH` or `VALUES`, and only one statement is allowed.
+- `ATTACH`, `DETACH`, `PRAGMA`, transaction words, `load_extension`, `readfile` and `writefile` are
+  refused, and so is access to the `sqlite_master` and `sqlite_schema` tables.
+- A statement gets 5 s, and loading the view copies gets 60 s. One sandbox runs at a time; other
+  requests wait in a first-in, first-out queue for at most 30 s. A timeout or a cancel fails with
+  SQLSTATE `57014`, and the process is killed with SIGKILL, which also stops a statement that
+  loops inside SQLite without returning to JavaScript.
+- Row and byte limits apply to the result.
+
+Saved custom SQL written for PostgreSQL is kept unchanged but does not run: it is marked as needing
+review until the user saves it again as SQLite SQL. See [[docs/api/analysis|Analysis API]].
 
 This boundary protects against accidental and adversarial editor input. It does not turn database
 results into public data: the analysis routes remain inside Vision's existing local-user boundary.
@@ -269,7 +281,7 @@ Applied to all routes as a baseline protection.
 
 By default, Vision stores all data locally:
 
-- **Database:** Local PostgreSQL instance
+- **Database:** One local SQLite file in the application data directory, opened in-process by the backend
 - **Backend:** Local Node.js process
 - **Frontend:** Local Chromium instance
 
@@ -284,27 +296,27 @@ No data is transmitted externally except:
 
 Sensitive configuration via environment variables only:
 
-- Database credentials
 - API keys (Kinesis, etc.)
+
+The database has no credentials: it is a file inside a `database/` directory that the desktop
+runtime creates with mode `0700`.
 
 Never stored in source code or committed to git.
 
 ### Provider API Keys Are Stored in Plaintext (Accepted Risk)
 
-`provider_api_keys.api_key` (migration 0043) is a plain `TEXT` column, even
-though the `pgcrypto` extension has been available since the baseline migration
-(`0001`). The table is in the whole-database backup dump, so Settings-managed research
-provider keys appear in the clear in every database dump and in every
-**unencrypted** backup bundle.
+`provider_api_keys.api_key` (migration 0043) is a plain `TEXT` column. The table is in the
+whole-database backup copy, so Settings-managed research provider keys appear in the clear in the
+database file, in every pre-migration copy and in every **unencrypted** backup bundle.
 
 **Why this is accepted rather than fixed:**
 
-- The same class of secret already lives in plaintext in `.env` — provider keys
-  set by environment variable and `DATABASE_URL` with the database password. `pgp_sym_encrypt` would need its key from that same file,
-  so anyone who can read the ciphertext can almost always read the key too. It
-  moves the secret, it does not protect it.
-- The threat it would actually address — an attacker who reads the database or a
-  dump but _not_ the host filesystem — is narrow for a single-user, local-first
+- The same class of secret already lives in plaintext in `.env` and `runtime.env`: provider keys
+  set by environment variable. A column encryption key would have to live on the same machine, so
+  anyone who can read the ciphertext can almost always read the key too. It moves the secret, it
+  does not protect it.
+- The threat it would actually address — an attacker who reads the database file or a
+  backup but _not_ the rest of the host filesystem — is narrow for a single-user, local-first
   deployment where the database and `.env` sit on the same machine.
 - Encrypting the column adds a real failure mode: a backup restored onto a fresh
   install without the original key would silently produce unusable provider keys,
@@ -318,8 +330,7 @@ provider keys appear in the clear in every database dump and in every
   use it if backups leave the machine.
 - Provider keys are per-vendor, revocable at the vendor, and grant no access to
   Vision's own data.
-- The database role the runtime pool uses can be a non-superuser (`ftm_app`); see
-  `.env.example`.
+- The desktop runtime keeps the database in a directory with mode `0700`.
 
 **What would change this decision:** multi-user support, a hosted/shared
 deployment, or storing a secret whose compromise is not independently revocable.
@@ -523,7 +534,7 @@ res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
 Vision does not record a tamper-evident change history and makes no tamper-detection claim.
 [[docs/adr/231-remove-audit-history|ADR-231]] removed the September 2026 audit-history feature:
-the PostgreSQL hash chain, the Electron HMAC receipt under `audit-anchor/`, the macOS Keychain
+the database hash chain, the Electron HMAC receipt under `audit-anchor/`, the macOS Keychain
 witness and its helper, the private loopback bridge (`/api/internal/audit/*` with
 `VISION_AUDIT_BRIDGE_TOKEN`), enrollment, device transfer, key rotation, one-year retention and the
 Admin audit view. The owner judged that protection unrealistic on a single-user Mac: a person who
@@ -537,8 +548,8 @@ key, not row contents) and no longer refuses any table with `403`. Split routes 
 Restore no longer compares a receipt or warns about audit continuity, and updates are no longer
 recorded or gated by a bridge; the update checksum check remains.
 
-On launch, once the database records migration `0004_remove_audit_history`
-([[docs/adr/242-backup-before-boot-migrations|ADR-242]]),
+On launch, once the backend is ready (every SQLite database descends from a Vision 2.0 database
+that had applied migration `0004_remove_audit_history`),
 `packaging/electron/legacy-audit-cleanup.ts` deletes the leftover `audit-anchor/`
 folder (receipt, `safeStorage`-encrypted HMAC key and any transfer journal) and the Keychain item
 (service `com.vaultvoyager.vision.audit-witness` or `com.vaultvoyager.vision-demo.audit-witness`,
@@ -625,7 +636,7 @@ Three defensive measures protect the restore operation from data loss and system
 - **Problem:** During restore, the database is stopped, dropped, and recreated. The 10-second health watchdog continued polling `GET /health`, detected backend-offline, and could emit spurious `backend:lost` events while restore was still in progress
 - **Solution:** Restore sequence:
   1. Call `stopHealthWatchdog()` before restore attempt
-  2. Execute restore (drop DB, load SQL, swap attachments)
+  2. Execute restore (stage and verify the database copy, then swap the database directory and attachments)
   3. Guarantee `startHealthWatchdog()` in `finally` block
 - **Impact:** No spurious recovery alerts mid-restore; clean separation between restore cleanup and watchdog recovery logic
 
@@ -635,13 +646,13 @@ See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for full cont
 
 The repository's `install.sh` builds the native macOS application from a local
 checkout. It does not download or install host package managers or build toolchains. It fails
-closed when the required build tools or exact
-migration-package versions are unavailable. Locked Bun dependencies, PostgreSQL 18.6
-validation, payload hashing, and post-build code-signature checks protect the generated
-application resources. Report PDFs print with Electron's own Chromium; no separate browser is
+closed on a Mac that is not Apple Silicon or when `bun` or `node` is missing. Locked Bun
+dependencies, the payload manifest with a SHA-256 for every file (verified again after packaging),
+and the ad-hoc code signature protect the generated application resources. Report PDFs print with Electron's own Chromium; no separate browser is
 bundled (ADR-234).
 
-The installed application starts only its private loopback PostgreSQL cluster.
+The installed application starts no database server. Its backend opens the SQLite file
+in-process and listens only on loopback.
 
 ---
 
