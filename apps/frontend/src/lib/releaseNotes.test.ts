@@ -5,6 +5,7 @@ import { releaseNotesSummary } from "./releaseNotes";
 describe("releaseNotesSummary", () => {
     test("reduces a generated GitHub release body to plain text", () => {
         const body = [
+            "<!-- Release notes generated using configuration in .github/release.yml -->",
             "## What's Changed",
             "* fix(frontend): keep **chart** range by @EraPartner in https://github.com/EraPartner/Vision/pull/390",
             "* chore(deps): bump `electron` by @dependabot[bot] in https://github.com/EraPartner/Vision/pull/47",
