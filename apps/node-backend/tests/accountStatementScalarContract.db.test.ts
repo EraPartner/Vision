@@ -1,5 +1,6 @@
 /** Contract-phase smoke with accounts.statement_balance* absent. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Pool as PgPool } from "pg";
 import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
@@ -17,10 +18,13 @@ const describeDb =
     ? describe
     : describe.skip;
 // Only dereferenced inside the database-gated suite.
-const pool = must(getTestPool(), "getTestPool()");
+// Resolved in beforeAll: without TEST_DATABASE_URL the suite is skipped and
+// getTestPool() is null, so resolving it at import time would fail the file.
+let pool: PgPool;
 
 describeDb("account statement scalar contract schema", () => {
   beforeAll(async () => {
+    pool = must(getTestPool(), "getTestPool()");
     const { rows } = await pool.query(
       `SELECT column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'accounts'

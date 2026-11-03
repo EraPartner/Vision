@@ -309,9 +309,10 @@ describe.skipIf(!hasTestDatabase())(
 
         expect(must(byDay[1], "byDay[1]").current).not.toBeNull();
         // Cumulative through today covers both current-month rows (they collapse
-        // onto one day when the suite runs on the 1st).
+        // onto one day when the suite runs on the 1st). On the last day of the
+        // month the "future" row is dated today, so it is actual-to-date too.
         expect(must(byDay[r.current_day], "byDay[r.current_day]").current).toBe(
-          40,
+          r.current_day < r.days_in_month ? 40 : -460,
         );
         if (r.current_day < r.days_in_month) {
           expect(

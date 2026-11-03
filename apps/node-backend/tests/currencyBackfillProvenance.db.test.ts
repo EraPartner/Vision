@@ -8,6 +8,7 @@ import {
   it,
   vi,
 } from "vitest";
+import type { Pool as PgPool } from "pg";
 import {
   acquireDbSuiteLock,
   closeTestPool,
@@ -40,7 +41,9 @@ vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
   };
 });
 
-const pool = must(getTestPool(), "getTestPool()");
+// Resolved in beforeAll: without TEST_DATABASE_URL the suite is skipped and
+// getTestPool() is null, so resolving it at import time would fail the file.
+let pool: PgPool;
 const day = "1950-02-03";
 const hash = "a".repeat(64);
 let investmentId: number;
@@ -90,6 +93,7 @@ async function snapshot(id: number): Promise<Snapshot> {
 
 describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
   beforeAll(async () => {
+    pool = must(getTestPool(), "getTestPool()");
     expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
     await acquireDbSuiteLock();
   }, 180_000);
