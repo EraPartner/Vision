@@ -15,6 +15,7 @@ related_code:
   - apps/frontend/src/components/charts/scrub.ts
   - apps/frontend/src/components/charts/ScrubOverlay.tsx
   - apps/frontend/src/components/charts/__tests__/chartScrub.test.tsx
+  - apps/frontend/src/components/charts/__tests__/ScrubOverlay.test.tsx
   - apps/frontend/src/components/charts/keyboardNav.ts
   - apps/frontend/src/components/charts/__tests__/chartKeyboardNav.test.tsx
   - apps/frontend/src/components/charts/ChartSyncContext.tsx
@@ -395,9 +396,9 @@ Per-point values are reachable without a pointer. `useChartKeyboardNav` provides
 - **Tab** focuses the chart (`:focus-visible` shows the app's global focus ring; mouse clicks don't).
 - **←/→** step one data point, clamped at the ends; from an empty state → starts at the first point, ← starts at the last. Reuses the exact hover state the pointer drives, so the existing `ChartTooltip`/readout renders — no new visual affordance.
 - **Home/End** jump to the first/last point.
-- **Shift+←/→** extend a range-compare scrub on `scrubbable` charts (`LineChart`/`AreaChart`/`ComposedChart`), showing the same glass Δ pill as a pointer drag. On a range pinned by the pointer they move its head, not the hover position. A plain arrow ends the scrub.
+- **Shift+←/→** extend a range-compare scrub on `scrubbable` charts (`LineChart`/`AreaChart`/`ComposedChart`), showing the same glass Δ pill as a pointer drag. On a range pinned by the pointer they move its head, not the hover position. A range the keyboard starts, or takes over from a click anchor, is pinned: pointer movement does not move it and a click clears it. A plain arrow ends the scrub.
 - **Escape** clears hover + scrub. While a range or anchor is active on the focused chart, a window capture listener claims the key before Radix's document capture listener, so the first Escape clears the range and the next closes an enclosing dialog. With only a hover, the dialog closes straight away. Arrows/Home/End are always consumed when handled (else the page would scroll).
-- **Blur** clears everything — no tooltip lingers on an unfocused chart.
+- **Blur** clears the hover and any scrub — no tooltip lingers on an unfocused chart. The exception is a window switch, where the window itself loses focus: it blurs the chart too, but with a range or anchor active it clears only the hover, and the range or anchor stays for the return. There, Shift+←/→ continue from its head, Escape clears it, and a plain arrow ends it and restarts from an end of the chart.
 
 ARIA: the SVG keeps `role="img"` + the generated `aria-label` summary (above); focusable images are valid and keep the SR overview intact. `role="application"` was deliberately avoided (would drop virtual-cursor semantics), and no `aria-live` was added to the tooltip (it re-renders at pointermove rate — live announcement would be SR spam).
 
@@ -475,18 +476,18 @@ function FlowTab() {
 
 - **Drag:** press on a point and drag either way. The range always reads earlier → later. It stays on screen after release.
 - **Click, move, click:** a click anchors a point (an edge hairline with value dots marks it), the range follows the pointer, and a second click pins it. A second click on the anchor cancels it. A press that moves up to 4px is a click, however dense the data.
-- **Clearing:** a click on a pinned range, Escape, a plain arrow key or blur clears it. Moving the data to another timeline (a refetch that adds a day, another period) also clears it, because the range is held as indices.
-- **Leaving keeps the range:** the pointer leaving the chart clears only the hover. A drag may end outside the plot, a touch leaves on every lift, and an anchor survives brushing past the edge. A press the browser takes over for a scroll (`pointercancel`) clears the scrub.
-- **Pointers:** only the primary pointer's main button starts a gesture. Other pointers cannot steer or end it.
+- **Clearing:** a click on a pinned range, Escape, a plain arrow key or blur clears it. A window switch is the exception: it clears only the hover and keeps the range or anchor. Moving the data to another timeline (a refetch that adds a day, another period) also clears it, because the range is held as indices. The clear runs while the chart renders the new data, so the old range is never painted on it. A new array of the same timeline keeps the range.
+- **Leaving keeps the range:** the pointer leaving the chart clears only the hover. A drag may end outside the plot, a touch leaves on every lift, and an anchor survives brushing past the edge. A press that ends without a release (the browser takes it over for a scroll with `pointercancel`, or its pointer capture is lost) restores what that press replaced: a pinned range or anchor comes back, and a press from idle leaves nothing. A `pointercancel` with no press held leaves the scrub as it is.
+- **Pointers:** only the primary pointer's main button starts a gesture. While one pointer holds a press, events from any other pointer are ignored, so a second finger or a mouse cannot steer, end or replace it.
 - The band is tinted gain/loss by the lead row: the series flagged `primary`, or the only series. With several peer series and no `primary`, it stays neutral. It has hairlines and value dots at both ends. Stacked areas show no dots because the stack offsets them.
-- The readout shows the period (tooltip titles of both ends) and `formatScrubDelta` (absolute change and %) per series, with the `primary` series first. It shows up to 4 rows, then "+N". It stays inside the chart box. `AreaChart`'s `scrubPercent={false}` drops the percent for values that are percentages themselves (relative performance).
+- The readout shows the period (tooltip titles of both ends) and `formatScrubDelta` (absolute change and %) per series, with the `primary` series first. It shows up to 4 rows, then "+N". Its width is capped at the chart box, which keeps it inside the box: the period line wraps, each row wraps its label, Δ and shortened span onto further lines, and the Δ text itself stays on one line. Before the box has a width, no cap is set. `AreaChart`'s `scrubPercent={false}` drops the percent for values that are percentages themselves (relative performance).
 - A series without a value at a range end reads its nearest value inside the range, and its row shows that shorter span. A series with fewer than two values inside the range is left out.
 - The standard `ChartTooltip` is suppressed while a range is shown.
 - Pointer capture keeps a drag going when the pointer leaves the plot.
-- `useChartPointer` holds the hit-testing and gesture handlers, so the three charts spread one set onto their hover-capture rect.
+- `useChartPointer` holds the hit-testing and gesture handlers (`onPointerMove`, `onPointerLeave`, `onPointerDown`, `onPointerUp`, `onPointerCancel` and `onLostPointerCapture`), so the three charts spread one set onto their hover-capture rect. A held press ends on `pointerup`, `pointercancel` or lost capture, so the whole set must be spread.
 - Clicking a chart no longer draws the browser's default focus outline. Keyboard focus still shows the ring (`CartesianChartFrame`).
 
-**Enabled on:** `BankBalancesWidget`, `ForecastInner`, `ForecastInnerRolling`, `PortfolioPage` (value hero, by broker and relative performance), `NetWorthChart`, `WatchlistChartDialog` (price), `MarketLookupPage` (price), `ResearchComparePage`, `ChartBuilderPage` (main `ComposedChart`) and `PortfolioForecastPage`. Statistics flow charts (monthly net, category trends, custom charts), the chart builder oscillator and AI chat tool charts stay off.
+**Enabled on:** `BankBalancesWidget`, `ForecastInner`, `ForecastInnerRolling`, `PortfolioPage` (value hero, by broker and relative performance), `NetWorthChart`, `WatchlistChartDialog` (price), `MarketLookupPage` (price), `ResearchComparePage`, `ChartBuilderPage` (main `ComposedChart`) and `PortfolioForecastPage`. `ChartBuilderPage` flags a price series `primary` only when exactly one is plotted, of any chart type, so volume and indicators beside it do not take the lead from it. With two or more price series, none is flagged: they are peers and the band stays neutral. Statistics flow charts (monthly net, category trends, custom charts), the chart builder oscillator and AI chat tool charts stay off.
 
 ### Synced Crosshairs (`syncId` prop + `ChartSyncContext`)
 

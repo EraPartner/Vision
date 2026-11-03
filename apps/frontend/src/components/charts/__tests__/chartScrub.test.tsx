@@ -5,7 +5,7 @@
  * two points per series. The range stays after release and clears on a
  * click, Escape or blur.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent } from "@testing-library/react";
 
 import { renderWithApp } from "@/test/renderWithApp";
@@ -142,6 +142,15 @@ function renderDense() {
     );
 }
 
+/** jsdom reports no focus until an element takes it, so state the window's. */
+function windowFocused(focused: boolean) {
+    vi.spyOn(document, "hasFocus").mockReturnValue(focused);
+}
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
+
 describe("chart range compare", () => {
     it("reads the same earlier → later change per series in both drag directions and keeps it after release", () => {
         const { container } = renderArea(true);
@@ -187,6 +196,7 @@ describe("chart range compare", () => {
     });
 
     it("Escape and blur clear the range", () => {
+        windowFocused(true);
         const { container } = renderArea(true);
         const overlay = overlayOf(container);
         const svg = frameOf(container);
@@ -198,6 +208,27 @@ describe("chart range compare", () => {
         drag(overlay, X0, X2);
         fireEvent.blur(svg);
         expect(readout(container)).toBeNull();
+    });
+
+    it("keeps a range through a window switch, and Escape still clears it", () => {
+        windowFocused(false);
+        const { container } = renderArea(true);
+        const svg = frameOf(container);
+
+        drag(overlayOf(container), X0, X2);
+        fireEvent.blur(svg);
+        expect(readout(container)).toContain("T10 – T30");
+
+        fireEvent.keyDown(svg, { key: "Escape" });
+        expect(readout(container)).toBeNull();
+    });
+
+    it("keeps an anchor through a window switch", () => {
+        windowFocused(false);
+        const { container } = renderArea(true);
+        click(overlayOf(container), X1);
+        fireEvent.blur(frameOf(container));
+        expect(band(container)).not.toBeNull();
     });
 
     it("keeps a range released outside the plot when the pointer leaves", () => {
@@ -241,6 +272,97 @@ describe("chart range compare", () => {
         const { container } = renderArea(true);
         const overlay = overlayOf(container);
         fireEvent.pointerDown(overlay, { clientX: X1, ...MOUSE });
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(band(container)).toBeNull();
+    });
+
+    it("keeps a pinned range through a press the browser takes over", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        drag(overlay, X0, X2);
+        const pinned = readout(container);
+
+        fireEvent.pointerDown(overlay, { clientX: X3, ...MOUSE });
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(readout(container)).toBe(pinned);
+
+        // Restored as pinned: a click still dismisses it.
+        click(overlay, X3);
+        expect(readout(container)).toBeNull();
+    });
+
+    it("keeps an anchor through a press the browser takes over, and it still follows the pointer", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        click(overlay, X0);
+
+        fireEvent.pointerDown(overlay, { clientX: X2, ...MOUSE });
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(band(container)).not.toBeNull();
+        expect(readout(container)).toBeNull();
+
+        fireEvent.pointerMove(overlay, { clientX: X3, ...MOUSE });
+        expect(readout(container)).toContain("T10 – T40");
+    });
+
+    it("keeps an anchor when the press on it, which would cancel it, is taken over", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        click(overlay, X1);
+
+        fireEvent.pointerDown(overlay, { clientX: X1, ...MOUSE });
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(band(container)).not.toBeNull();
+    });
+
+    it("leaves nothing to follow after a press from idle is taken over", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        fireEvent.pointerDown(overlay, { clientX: X1, ...MOUSE });
+        fireEvent.pointerCancel(overlay, MOUSE);
+
+        fireEvent.pointerMove(overlay, { clientX: X3, ...MOUSE });
+        expect(band(container)).toBeNull();
+        expect(readout(container)).toBeNull();
+    });
+
+    it("does not bring back a dismissed range on a later stray cancel", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+
+        drag(overlay, X0, X2);
+        click(overlay, X3);
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(readout(container)).toBeNull();
+        expect(band(container)).toBeNull();
+
+        click(overlay, X1);
+        click(overlay, X1); // cancels the anchor
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(band(container)).toBeNull();
+    });
+
+    it("keeps a pinned range through a cancel with no press held", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        drag(overlay, X0, X2);
+
+        // A second finger's cancel, after the first lifted.
+        fireEvent.pointerCancel(overlay, {
+            pointerId: 2,
+            isPrimary: false,
+            button: 0,
+        });
+        expect(readout(container)).toContain("T10 – T30");
+    });
+
+    it("does not restore what a press replaced after Escape cleared the chart", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        click(overlay, X1);
+
+        fireEvent.pointerDown(overlay, { clientX: X1, ...MOUSE });
+        fireEvent.keyDown(frameOf(container), { key: "Escape" });
         fireEvent.pointerCancel(overlay, MOUSE);
         expect(band(container)).toBeNull();
     });
@@ -292,6 +414,58 @@ describe("chart range compare", () => {
         expect(readout(container)).toContain("T10 – T30");
         fireEvent.pointerUp(overlay, { clientX: X2, ...MOUSE });
         fireEvent.pointerMove(overlay, { clientX: X3, ...MOUSE });
+        expect(readout(container)).toContain("T10 – T30");
+    });
+
+    it("does not let another primary pointer steer or take over a held drag", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        // isPrimary is per pointer type: a touch during a mouse drag has it too.
+        const touch = { pointerId: 2, isPrimary: true, button: 0 };
+
+        fireEvent.pointerDown(overlay, { clientX: X0, ...MOUSE });
+        fireEvent.pointerMove(overlay, { clientX: X1, ...MOUSE });
+        fireEvent.pointerDown(overlay, { clientX: X3, ...touch });
+        fireEvent.pointerMove(overlay, { clientX: X3, ...touch });
+        fireEvent.lostPointerCapture(overlay, touch);
+        fireEvent.pointerMove(overlay, { clientX: X2, ...MOUSE });
+        expect(readout(container)).toContain("T10 – T30");
+
+        fireEvent.pointerUp(overlay, { clientX: X2, ...MOUSE });
+        fireEvent.pointerMove(overlay, { clientX: X3, ...MOUSE });
+        expect(readout(container)).toContain("T10 – T30");
+    });
+
+    it("does not let a press that lost its capture block the next press", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        const touch = { pointerId: 2, isPrimary: true, button: 0 };
+
+        fireEvent.pointerDown(overlay, { clientX: X0, ...MOUSE });
+        fireEvent.lostPointerCapture(overlay, MOUSE);
+
+        fireEvent.pointerDown(overlay, { clientX: X1, ...touch });
+        fireEvent.pointerMove(overlay, { clientX: X3, ...touch });
+        fireEvent.pointerUp(overlay, { clientX: X3, ...touch });
+        expect(readout(container)).toContain("T20 – T40");
+    });
+
+    it("restores what a press replaced when its capture is lost", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        drag(overlay, X0, X2);
+        const pinned = readout(container);
+
+        fireEvent.pointerDown(overlay, { clientX: X3, ...MOUSE });
+        fireEvent.lostPointerCapture(overlay, MOUSE);
+        expect(readout(container)).toBe(pinned);
+    });
+
+    it("keeps a range when capture is released after the pointerup", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        drag(overlay, X0, X2);
+        fireEvent.lostPointerCapture(overlay, MOUSE);
         expect(readout(container)).toContain("T10 – T30");
     });
 
@@ -475,6 +649,39 @@ describe("chart range compare", () => {
         expect(readout(container)).toContain("T10 – T40");
     });
 
+    it("holds a keyboard range against pointer moves, and a click clears it", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        const svg = frameOf(container);
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        fireEvent.keyDown(svg, { key: "ArrowRight", shiftKey: true });
+        expect(readout(container)).toContain("T10 – T20");
+
+        fireEvent.pointerMove(overlay, { clientX: X3, ...MOUSE });
+        expect(readout(container)).toContain("T10 – T20");
+
+        click(overlay, X3);
+        expect(readout(container)).toBeNull();
+        expect(band(container)).toBeNull();
+    });
+
+    it("holds a keyboard range started from a click anchor against pointer moves, and a click clears it", () => {
+        const { container } = renderArea(true);
+        const overlay = overlayOf(container);
+        const svg = frameOf(container);
+        click(overlay, X0);
+        fireEvent.keyDown(svg, { key: "ArrowRight", shiftKey: true });
+        fireEvent.keyDown(svg, { key: "ArrowRight", shiftKey: true });
+        expect(readout(container)).toContain("T10 – T30");
+
+        fireEvent.pointerMove(overlay, { clientX: X3, ...MOUSE });
+        expect(readout(container)).toContain("T10 – T30");
+
+        click(overlay, X3);
+        expect(readout(container)).toBeNull();
+        expect(band(container)).toBeNull();
+    });
+
     it("drops the range when the data moves to another timeline, not on a new array of it", () => {
         const chart = (data: typeof DATA) => (
             <AreaChart
@@ -496,6 +703,54 @@ describe("chart range compare", () => {
 
         rerender(chart(DATA.slice(1)));
         expect(readout(container)).toBeNull();
+    });
+
+    it("never renders the old range on a new timeline, not even for one frame", () => {
+        const title = vi.fn((d: Datum) => `T${d.value}`);
+        const chart = (data: typeof DATA) => (
+            <AreaChart
+                data={data}
+                xAccessor={(d) => d.date}
+                series={SERIES}
+                width={600}
+                height={300}
+                tooltipValueFormat={fmt}
+                tooltipTitle={title}
+                scrubbable
+            />
+        );
+        const { container, rerender } = renderWithApp(chart(DATA));
+        const overlay = overlayOf(container);
+        drag(overlay, X0, X2);
+        // The hover tooltip also asks for titles: leave only the readout.
+        fireEvent.pointerLeave(overlay, MOUSE);
+        title.mockClear();
+
+        rerender(chart(DATA.slice(1)));
+        expect(title).not.toHaveBeenCalled();
+        expect(readout(container)).toBeNull();
+    });
+
+    it("does not restore a pre-timeline anchor from a press held across the change", () => {
+        const chart = (data: typeof DATA) => (
+            <AreaChart
+                data={data}
+                xAccessor={(d) => d.date}
+                series={SERIES}
+                width={600}
+                height={300}
+                tooltipValueFormat={fmt}
+                scrubbable
+            />
+        );
+        const { container, rerender } = renderWithApp(chart(DATA));
+        const overlay = overlayOf(container);
+        click(overlay, X1);
+        fireEvent.pointerDown(overlay, { clientX: X1, ...MOUSE });
+
+        rerender(chart(DATA.slice(1)));
+        fireEvent.pointerCancel(overlay, MOUSE);
+        expect(band(container)).toBeNull();
     });
 
     it("does nothing on a chart that is not scrubbable", () => {

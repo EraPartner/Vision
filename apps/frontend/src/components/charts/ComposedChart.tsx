@@ -383,6 +383,7 @@ function Inner<Datum>({
         index: safeHoverIdx,
         onIndexChange: setHoverIdx,
         onClear: clearAll,
+        onHoverEnd: hideHover,
         scrub: scrubbable ? scrub : undefined,
     });
 

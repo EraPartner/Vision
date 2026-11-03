@@ -9,7 +9,7 @@
  * scrubbable charts, and Escape/blur clear so no tooltip lingers. Pointer
  * behavior must be byte-identical to before — asserted at the end.
  */
-import { describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { fireEvent, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { KeyboardEvent } from "react";
@@ -40,6 +40,10 @@ vi.mock("@visx/responsive", async (importOriginal) => {
             }) => React.ReactNode;
         }) => children({ width: 600, height: 300 }),
     };
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
 });
 
 type SpyKeyboardEvent = Omit<KeyboardEvent, "preventDefault"> & {
@@ -217,6 +221,10 @@ async function expectNoTooltipValues() {
     });
 }
 
+function scrubBand(container: HTMLElement): Element | null {
+    return container.querySelector('[data-testid="chart-scrub-band"]');
+}
+
 describe("AreaChart keyboard access", () => {
     function renderChart(scrubbable = false) {
         return renderWithApp(
@@ -276,6 +284,30 @@ describe("AreaChart keyboard access", () => {
         await expectNoTooltipValues();
     });
 
+    it("a window switch clears a plain hover even on a scrubbable chart", async () => {
+        vi.spyOn(document, "hasFocus").mockReturnValue(false);
+        const { container } = renderChart(true);
+        const svg = getSvg(container);
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        await expectTooltipValue(10);
+        fireEvent.blur(svg);
+        await expectNoTooltipValues();
+    });
+
+    it("a window switch drops the hover but keeps an anchor set from the keyboard", async () => {
+        vi.spyOn(document, "hasFocus").mockReturnValue(false);
+        const { container } = renderChart(true);
+        const svg = getSvg(container);
+        fireEvent.keyDown(svg, { key: "ArrowRight" });
+        fireEvent.keyDown(svg, { key: "ArrowRight", shiftKey: true });
+        fireEvent.keyDown(svg, { key: "ArrowLeft", shiftKey: true });
+        await expectTooltipValue(10);
+
+        fireEvent.blur(svg);
+        await expectNoTooltipValues();
+        expect(scrubBand(container)).not.toBeNull();
+    });
+
     it("Shift+ArrowRight extends the range-compare scrub (Δ readout), Escape clears it", async () => {
         const { container } = renderChart(true);
         const svg = getSvg(container);
@@ -330,6 +362,80 @@ describe("LineChart keyboard access", () => {
         fireEvent.keyDown(svg, { key: "Escape" });
         await expectNoTooltipValues();
     });
+});
+
+describe("window switch on a click anchor", () => {
+    const CHARTS = [
+        [
+            "AreaChart",
+            () => (
+                <AreaChart
+                    data={DATA}
+                    xAccessor={(d) => d.date}
+                    series={SERIES}
+                    width={600}
+                    height={300}
+                    tooltipValueFormat={fmt}
+                    scrubbable
+                />
+            ),
+        ],
+        [
+            "LineChart",
+            () => (
+                <LineChart
+                    data={DATA}
+                    xAccessor={(d) => d.date}
+                    series={SERIES}
+                    tooltipValueFormat={fmt}
+                    scrubbable
+                />
+            ),
+        ],
+        [
+            "ComposedChart",
+            () => (
+                <ComposedChart
+                    data={DATA}
+                    xAccessor={(d) => d.date}
+                    series={[
+                        {
+                            key: "value",
+                            type: "line",
+                            accessor: (d) => d.value,
+                        },
+                    ]}
+                    tooltipValueFormat={fmt}
+                    scrubbable
+                />
+            ),
+        ],
+    ] as const;
+
+    it.each(CHARTS)(
+        "%s drops the hover and keeps the anchor",
+        async (_name, chart) => {
+            vi.spyOn(document, "hasFocus").mockReturnValue(false);
+            const { container } = renderWithApp(chart());
+            const overlay = must(
+                container.querySelector('rect[fill="transparent"]'),
+            );
+            const pointer = {
+                clientX: 0,
+                pointerId: 1,
+                isPrimary: true,
+                button: 0,
+            };
+            fireEvent.pointerMove(overlay, pointer);
+            fireEvent.pointerDown(overlay, pointer);
+            fireEvent.pointerUp(overlay, pointer);
+            await expectTooltipValue(10);
+
+            fireEvent.blur(getSvg(container));
+            await expectNoTooltipValues();
+            expect(scrubBand(container)).not.toBeNull();
+        },
+    );
 });
 
 describe("BarChart keyboard access", () => {

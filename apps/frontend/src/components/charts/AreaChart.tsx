@@ -425,6 +425,7 @@ function AreaChartInner<Datum>({
         index: hoverIndex,
         onIndexChange: showHover,
         onClear: clearAll,
+        onHoverEnd: hideHover,
         scrub: scrubbable ? scrub : undefined,
     });
 

@@ -121,7 +121,8 @@ export function ScrubReadout<Datum>({
     if (rows.length === 0) return null;
     const mid = (xStart + xEnd) / 2;
     // Shift by the same share of the readout's width as `mid` is of the
-    // chart's, so the readout tracks the range and never leaves the box.
+    // chart's, so the readout tracks the range. That holds only while it is no
+    // wider than the box, so it is capped there and only the Δ stays unbroken.
     const share = width > 0 ? Math.min(100, Math.max(0, (mid / width) * 100)) : 50;
     const shown = rows.slice(0, maxRows);
     const hidden = rows.length - shown.length;
@@ -130,7 +131,7 @@ export function ScrubReadout<Datum>({
             role="status"
             data-testid="chart-scrub-readout"
             className={cn(
-                "pointer-events-none absolute left-0 z-10 whitespace-nowrap rounded-xl px-2.5 py-1.5 type-footnote tabular-nums",
+                "pointer-events-none absolute left-0 z-10 rounded-xl px-2.5 py-1.5 type-footnote tabular-nums",
                 fullEffects
                     ? "glass-thick"
                     : "border border-border/60 bg-card shadow-elevation-1",
@@ -139,6 +140,7 @@ export function ScrubReadout<Datum>({
             // transform moves it without relayout per move.
             style={{
                 top,
+                maxWidth: width > 0 ? width : undefined,
                 transform: `translateX(${mid}px) translateX(-${share}%)`,
             }}
         >
@@ -150,28 +152,29 @@ export function ScrubReadout<Datum>({
                 return (
                     <div
                         key={row.key}
-                        className="flex items-center gap-1.5 font-medium"
+                        className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-medium"
                     >
                         {labelled ? (
-                            <>
+                            <span className="flex min-w-0 items-baseline gap-1.5">
                                 <span
                                     aria-hidden="true"
                                     className="size-2 shrink-0 rounded-full"
                                     style={{ backgroundColor: row.color }}
                                 />
-                                <span className="text-label-secondary">
+                                <span className="min-w-0 text-label-secondary">
                                     {row.label ?? row.key}
                                 </span>
-                            </>
+                            </span>
                         ) : null}
                         <span
-                            className={
+                            className={cn(
+                                "whitespace-nowrap",
                                 delta > 0
                                     ? "text-gain"
                                     : delta < 0
                                       ? "text-loss"
-                                      : "text-foreground"
-                            }
+                                      : "text-foreground",
+                            )}
                         >
                             {formatScrubDelta(
                                 row.start,

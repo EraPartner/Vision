@@ -3466,9 +3466,11 @@ Key rules:
 
 - Use pointer events (not mouse events) — works on desktop and touch.
 - Pointer leave clears only the hover. Keep the scrub, or a touch can never pin.
+- Spread the whole `pointer` object onto the hover-capture rect. A held press ends on `pointerup`, `pointercancel` or `lostpointercapture`, and a press that never ends blocks every later one. While a press is held, the handlers ignore other pointers. `pointercancel` and a lost capture call `scrub.cancel()`, which restores what the press replaced, where `scrub.end()` clears.
+- `useChartScrub` clears the range while rendering when `data` moves to another timeline (its length or end dates change), so the old range is never painted on the new data. A new array of the same timeline keeps it.
 - Suppress `ChartTooltip` while `scrub.range !== null`.
-- Pass `scrub` to `useChartKeyboardNav`, with an `onClear` that also calls `scrub.end()`, so Shift+←/→ and Escape drive the same state. Pass its `frameRef` to `CartesianChartFrame` so Escape reaches the range before an enclosing dialog.
-- Flag a chart's main series `primary`, so it leads the readout and tints the band.
+- Pass `scrub` to `useChartKeyboardNav`, with an `onClear` that also calls `scrub.end()`, so Shift+←/→ and Escape drive the same state. Blur calls `onClear` too, except when the window itself lost focus during a scrub: then it calls `onHoverEnd`, so also pass the hover-only handler there, and the range stays without leaving a tooltip. A range started from the keyboard is pinned, so pointer movement does not move it and a click clears it. Pass its `frameRef` to `CartesianChartFrame` so Escape reaches the range before an enclosing dialog.
+- Flag a chart's main series `primary`, so it leads the readout and tints the band. Flag none when the series are peers: the band then stays neutral.
 
 **Enabled on:** see [[docs/components/charts#scrub-to-compare-scrubbable-prop]].
 

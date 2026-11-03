@@ -300,6 +300,7 @@ function Inner<Datum>({
         index: hoverIdx,
         onIndexChange: showHover,
         onClear: clearAll,
+        onHoverEnd: hideHover,
         scrub: scrubbable ? scrub : undefined,
     });
 

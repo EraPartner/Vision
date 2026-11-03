@@ -12,7 +12,9 @@
  *   Escape     clear the highlight and any scrub range
  *
  * Losing focus (blur) also clears, so no tooltip lingers on an unfocused
- * chart. Purely additive: pointer paths are untouched, and the handler calls
+ * chart; a window switch clears only the hover and keeps an active range or
+ * anchor for the return.
+ * Purely additive: pointer paths are untouched, and the handler calls
  * preventDefault only on keys it actually consumes (arrows/Home/End would
  * otherwise scroll the page). A range or anchor claims Escape ahead of an
  * enclosing dialog, so the next Escape closes the dialog.
@@ -37,8 +39,10 @@ export interface ChartKeyboardNavOptions {
     readonly index: number | null;
     /** Highlight a point — reuse the chart's existing hover path. */
     readonly onIndexChange: (index: number) => void;
-    /** Clear the highlight and any scrub (Escape and blur) — reuse the chart's pointer-leave path. */
+    /** Clear the highlight and any scrub (Escape and blur). Not the chart's pointer-leave handler: that keeps the scrub. */
     readonly onClear: () => void;
+    /** Clear only the highlight, for a window switch that keeps the scrub. Pass it with `scrub`: the chart's pointer-leave handler fits. */
+    readonly onHoverEnd?: (() => void) | undefined;
     /** Range-compare scrub state; pass only when the chart is scrubbable. */
     readonly scrub?: ChartKeyboardScrub | undefined;
 }
@@ -48,6 +52,7 @@ export function useChartKeyboardNav({
     index,
     onIndexChange,
     onClear,
+    onHoverEnd,
     scrub,
 }: ChartKeyboardNavOptions) {
     const frameRef = useRef<SVGSVGElement>(null);
@@ -116,8 +121,13 @@ export function useChartKeyboardNav({
     );
 
     const onBlur = useCallback(() => {
+        // A window switch blurs the chart too: keep the range for the return.
+        if (scrubbing && !document.hasFocus()) {
+            onHoverEnd?.();
+            return;
+        }
         onClear();
-    }, [onClear]);
+    }, [onClear, onHoverEnd, scrubbing]);
 
     return { onKeyDown, onBlur, frameRef };
 }

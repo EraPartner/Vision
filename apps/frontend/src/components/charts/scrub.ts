@@ -2,10 +2,10 @@ import { bisector } from "d3-array";
 import {
     type PointerEvent,
     useCallback,
-    useEffect,
     useMemo,
     useReducer,
     useRef,
+    useState,
 } from "react";
 import type { PercentFormatter } from "@/hooks/useCurrencyFormatter";
 import type { CartesianXScale } from "./CartesianChartFrame";
@@ -18,7 +18,9 @@ export interface ScrubRange {
 /**
  * - `drag`: button held, the head follows the pointer.
  * - `follow`: a click anchored a point, the head follows the hover.
- * - `pinned`: the range is fixed until the next click, Escape or blur.
+ * - `pinned`: the pointer no longer moves the range, whether it came from a
+ *   release or from Shift+←/→ (which still moves its head). The next click,
+ *   Escape or blur clears it.
  */
 type ScrubPhase = "idle" | "drag" | "follow" | "pinned";
 
@@ -30,12 +32,15 @@ interface ScrubState {
     readonly anchorX: number | null;
     /** The current drag started on a pinned range: a plain click dismisses it. */
     readonly fromPinned: boolean;
+    /** What the held press replaced, restored if the browser takes the press. */
+    readonly beforePress: ScrubState | null;
 }
 
 type ScrubAction =
     | { readonly type: "press"; readonly index: number; readonly x: number }
     | { readonly type: "hover"; readonly index: number; readonly x: number }
     | { readonly type: "release" }
+    | { readonly type: "cancel" }
     | { readonly type: "begin"; readonly index: number }
     | { readonly type: "move"; readonly index: number }
     | { readonly type: "clear" };
@@ -46,6 +51,7 @@ const IDLE: ScrubState = {
     head: null,
     anchorX: null,
     fromPinned: false,
+    beforePress: null,
 };
 
 /** Pixels a press may wander and still be a click, on any data density. */
@@ -57,22 +63,32 @@ function nearAnchor(state: ScrubState, x: number): boolean {
     );
 }
 
+function afterPress(
+    state: ScrubState,
+    index: number,
+    x: number,
+): Omit<ScrubState, "beforePress"> {
+    if (state.phase === "follow") {
+        // Second click of click-move-click: pin, or cancel on the anchor.
+        return index === state.anchor || nearAnchor(state, x)
+            ? IDLE
+            : { ...state, phase: "pinned", head: index };
+    }
+    return {
+        phase: "drag",
+        anchor: index,
+        head: index,
+        anchorX: x,
+        fromPinned: state.phase === "pinned",
+    };
+}
+
 function scrubReducer(state: ScrubState, action: ScrubAction): ScrubState {
     switch (action.type) {
         case "press":
-            if (state.phase === "follow") {
-                // Second click of click-move-click: pin, or cancel on the anchor.
-                return action.index === state.anchor ||
-                    nearAnchor(state, action.x)
-                    ? IDLE
-                    : { ...state, phase: "pinned", head: action.index };
-            }
             return {
-                phase: "drag",
-                anchor: action.index,
-                head: action.index,
-                anchorX: action.x,
-                fromPinned: state.phase === "pinned",
+                ...afterPress(state, action.index, action.x),
+                beforePress: state,
             };
         case "hover": {
             if (state.phase !== "drag" && state.phase !== "follow") return state;
@@ -82,23 +98,34 @@ function scrubReducer(state: ScrubState, action: ScrubAction): ScrubState {
                     : action.index;
             return head === state.head ? state : { ...state, head };
         }
-        case "release":
-            if (state.phase !== "drag") return state;
-            if (state.head !== state.anchor) return { ...state, phase: "pinned" };
+        case "release": {
+            // The gesture is confirmed, so there is nothing left to restore.
+            const confirmed = { ...state, beforePress: null };
+            if (state.phase !== "drag") return confirmed;
+            if (state.head !== state.anchor) return { ...confirmed, phase: "pinned" };
             // A click without a drag: dismiss a pinned range, else anchor here.
-            return state.fromPinned ? IDLE : { ...state, phase: "follow" };
+            return state.fromPinned ? IDLE : { ...confirmed, phase: "follow" };
+        }
+        case "cancel":
+            return state.beforePress ?? IDLE;
         case "begin":
             return {
-                phase: "drag",
+                phase: "pinned",
                 anchor: action.index,
                 head: action.index,
                 anchorX: null,
                 fromPinned: false,
+                beforePress: null,
             };
         case "move":
-            return state.anchor === null ? state : { ...state, head: action.index };
+            if (state.anchor === null) return state;
+            // The keyboard took over a click anchor: the pointer must not move it.
+            return state.phase === "follow"
+                ? { ...state, phase: "pinned", head: action.index }
+                : { ...state, head: action.index };
         case "clear":
-            return state.phase === "idle" ? state : IDLE;
+            // Not by phase: a press that dismissed still holds its snapshot.
+            return IDLE;
     }
 }
 
@@ -112,7 +139,8 @@ function scrubReducer(state: ScrubState, action: ScrubAction): ScrubState {
  *   the pointer, the second click pins it.
  *
  * Leaving the chart keeps both: a drag may end outside the plot, a touch
- * leaves on every lift, and an anchor survives brushing past the edge.
+ * leaves on every lift, and an anchor survives brushing past the edge. A press
+ * the browser takes back for a scroll restores what it replaced.
  *
  * Either direction works; `range` is normalized (start ≤ end), so the change
  * always reads earlier → later. The range is held as indices, so it is dropped
@@ -130,9 +158,13 @@ export function useChartScrub<Datum>(
         first === undefined || last === undefined
             ? "empty"
             : `${data.length}:${Number(xAccessor(first))}:${Number(xAccessor(last))}`;
-    useEffect(() => {
+    // During render, not in an effect: React redoes this pass before it reaches
+    // children or commits, so old indices never paint on the new data.
+    const [seenTimeline, setSeenTimeline] = useState(timeline);
+    if (timeline !== seenTimeline) {
+        setSeenTimeline(timeline);
         dispatch({ type: "clear" });
-    }, [timeline]);
+    }
 
     const press = useCallback((index: number, x: number) => {
         dispatch({ type: "press", index, x });
@@ -147,6 +179,9 @@ export function useChartScrub<Datum>(
     );
     const release = useCallback(() => {
         dispatch({ type: "release" });
+    }, []);
+    const cancel = useCallback(() => {
+        dispatch({ type: "cancel" });
     }, []);
     // Keyboard path (Shift+←/→): anchor, then extend; any other key ends it.
     const begin = useCallback((index: number) => {
@@ -176,6 +211,7 @@ export function useChartScrub<Datum>(
         press,
         hover,
         release,
+        cancel,
         begin,
         move,
         end,
@@ -241,7 +277,7 @@ export function useChartPointer<Datum>({
         },
         onPointerDown: (event: PointerEvent<SVGRectElement>) => {
             // ctrlKey: macOS ctrl-click opens the context menu, so no release follows.
-            if (!scrubbable || !event.isPrimary) return;
+            if (!scrubbable || !event.isPrimary || isOtherPointer(event)) return;
             if (event.button !== 0 || event.ctrlKey) return;
             const idx = indexAt(event);
             if (idx == null) return;
@@ -262,7 +298,14 @@ export function useChartPointer<Datum>({
             onHoverEnd();
             if (pressedPointerRef.current === null) return;
             pressedPointerRef.current = null;
-            scrub.end();
+            scrub.cancel();
+        },
+        // Capture went without a pointerup or pointercancel, so this press has
+        // no other end; left held, it would block every later press.
+        onLostPointerCapture: (event: PointerEvent<SVGRectElement>) => {
+            if (pressedPointerRef.current !== event.pointerId) return;
+            pressedPointerRef.current = null;
+            scrub.cancel();
         },
     };
 }

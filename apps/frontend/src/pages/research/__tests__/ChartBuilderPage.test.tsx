@@ -4,6 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { toast } from "sonner";
+import type { ComposedSeries } from "@/components/charts";
 import ChartBuilderPage from "@/pages/research/ChartBuilderPage";
 import type {
     BuilderSeries,
@@ -15,8 +16,12 @@ import {
 } from "@/pages/research/chartBuilderLayouts";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { must } from "@/test/must";
+import type { ResearchChartPoint } from "@/types/research";
 
-const queryState = vi.hoisted(() => ({ loading: true }));
+const queryState = vi.hoisted(() => ({
+    loading: true,
+    points: [] as ResearchChartPoint[],
+}));
 
 vi.mock("sonner", () => ({
     toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -31,7 +36,10 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
         useQueries: () => [
             queryState.loading
                 ? { isFetching: true, data: undefined }
-                : { isFetching: false, data: { data: { points: [] } } },
+                : {
+                      isFetching: false,
+                      data: { data: { points: queryState.points } },
+                  },
         ],
     };
 });
@@ -74,7 +82,16 @@ vi.mock("@/hooks/useSymbolSearch", () => ({
 }));
 
 vi.mock("@/components/charts", () => ({
-    ComposedChart: () => <div data-testid="composed-chart" />,
+    ComposedChart: ({ series }: { series: ComposedSeries<unknown>[] }) => (
+        <ul data-testid="composed-chart">
+            {series.map((s) => (
+                <li key={s.key}>
+                    {s.label}
+                    {s.primary ? " (primary)" : ""}
+                </li>
+            ))}
+        </ul>
+    ),
     LineChart: () => <div data-testid="line-chart" />,
     getChartColor: () => "currentColor",
 }));
@@ -98,7 +115,18 @@ const STORED_STATE: BuilderState = {
     oscillatorSeriesId: "series-1",
 };
 
+const CHART_POINTS: ResearchChartPoint[] = [
+    { time: 1_700_000_000, close: 100, high: 101, low: 99, volume: 1_000 },
+    { time: 1_700_086_400, close: 110, high: 111, low: 109, volume: 2_000 },
+];
+
 let storageValues: Map<string, string>;
+
+function chartedSeries() {
+    return within(screen.getByTestId("composed-chart"))
+        .getAllByRole("listitem")
+        .map((row) => row.textContent);
+}
 
 function LocationProbe() {
     const location = useLocation();
@@ -130,7 +158,10 @@ describe("ChartBuilderPage oscillator state", () => {
         });
     });
 
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(() => {
+        queryState.points = [];
+        vi.unstubAllGlobals();
+    });
 
     it("names series controls and supports changing the axis from the keyboard", async () => {
         const user = userEvent.setup();
@@ -322,5 +353,75 @@ describe("ChartBuilderPage oscillator state", () => {
         renderPage();
 
         expect(screen.getByRole("button", { name: "SMA" })).toBeDisabled();
+    });
+
+    it("keeps the price series primary when the volume preset adds a second series", async () => {
+        const user = userEvent.setup();
+        queryState.loading = false;
+        queryState.points = CHART_POINTS;
+        renderPage();
+        expect(chartedSeries()).toEqual(["TEST (primary)"]);
+
+        await user.click(screen.getByText("Chart options"));
+        await user.click(
+            screen.getByRole("button", { name: "Price + volume" }),
+        );
+
+        expect(chartedSeries()).toEqual(["TEST (primary)", "TEST Volume"]);
+    });
+
+    it("keeps a candlestick price series primary beside volume", () => {
+        queryState.loading = false;
+        queryState.points = CHART_POINTS;
+        storageValues.set(
+            LOCAL_STORAGE_KEYS.CHART_BUILDER_LAYOUTS,
+            JSON.stringify(
+                createChartBuilderLibrary({
+                    ...STORED_STATE,
+                    series: [
+                        { ...STORED_SERIES, type: "candlestick" },
+                        {
+                            ...STORED_SERIES,
+                            id: "series-2",
+                            field: "volume",
+                            type: "bar",
+                            axis: "right",
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        renderPage();
+
+        expect(chartedSeries()).toEqual(["TEST (primary)", "TEST Volume"]);
+    });
+
+    it("flags no series when two price series overlap, even with volume", () => {
+        queryState.loading = false;
+        queryState.points = CHART_POINTS;
+        storageValues.set(
+            LOCAL_STORAGE_KEYS.CHART_BUILDER_LAYOUTS,
+            JSON.stringify(
+                createChartBuilderLibrary({
+                    ...STORED_STATE,
+                    series: [
+                        STORED_SERIES,
+                        { ...STORED_SERIES, id: "series-2", symbol: "OTHER" },
+                        {
+                            ...STORED_SERIES,
+                            id: "series-3",
+                            field: "volume",
+                            type: "bar",
+                            axis: "right",
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        renderPage();
+
+        expect(chartedSeries()).toEqual(["TEST", "OTHER", "TEST Volume"]);
     });
 });
