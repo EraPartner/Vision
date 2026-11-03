@@ -9,6 +9,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import * as connection from "../../src/database/connection.ts";
 import {
   mockConnection,
   mockPooledTxConnection,
@@ -21,19 +22,10 @@ type ClientQuery = (
   params?: readonly unknown[],
 ) => Promise<unknown>;
 
-const productionSurface = [
-  "default",
-  "query",
-  "queryPrepared",
-  "getClient",
-  "getAmbientTransactionClient",
-  "withTransaction",
-  "withSavepointIfInTransaction",
-  "checkConnection",
-  "getTableCount",
-  "getPoolStats",
-  "closePool",
-];
+/** Every function export of the real module (and its default export). */
+const productionSurface = Object.entries(connection)
+  .filter(([name, value]) => name === "default" || typeof value === "function")
+  .map(([name]) => name);
 
 describe("connection mock surface", () => {
   it.each([
@@ -43,6 +35,9 @@ describe("connection mock surface", () => {
   ])(
     "keeps the %s helper aligned with every production export",
     (_name, build) => {
+      expect(productionSurface).toEqual(
+        expect.arrayContaining(["query", "withTransaction", "__getAmbientTransactionClient"]),
+      );
       expect(Object.keys(build())).toEqual(
         expect.arrayContaining(productionSurface),
       );
