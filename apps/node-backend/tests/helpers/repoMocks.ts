@@ -39,6 +39,7 @@ export interface ConnectionMockSurface {
   withSavepointIfInTransaction: Mock;
   withReadSnapshot: Mock;
   withExclusiveWriter: Mock;
+  sameTransaction: Mock;
   checkConnection: Mock;
   getTableCount: Mock;
   getPoolStats: Mock;
@@ -123,6 +124,8 @@ function completeConnectionSurface<E extends object>(
     withSavepointIfInTransaction: vi.fn(),
     withReadSnapshot: vi.fn(),
     withExclusiveWriter: vi.fn(),
+    // Mock transactions hand nested scopes the same client object.
+    sameTransaction: vi.fn((a: unknown, b: unknown) => a === b),
     checkConnection: vi.fn(),
     getTableCount: vi.fn(),
     getPoolStats: vi.fn(),

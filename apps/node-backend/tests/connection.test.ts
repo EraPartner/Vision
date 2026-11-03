@@ -12,11 +12,14 @@ import {
   getTableCount,
   MINIMUM_SQLITE_VERSION,
   query,
+  sameTransaction,
   withExclusiveWriter,
   withReadSnapshot,
   withSavepointIfInTransaction,
   withTransaction,
 } from "../src/database/connection.ts";
+import type { PgPoolClient } from "../src/database/connection.ts";
+import { must } from "./helpers/must.ts";
 
 interface DbError {
   code?: string;
@@ -242,6 +245,29 @@ describe("transactions", () => {
       "SELECT name FROM conn_items WHERE name IN ('outer', 'inner', 'inner-ok') ORDER BY name",
     );
     expect(rows.map((r) => r.name)).toEqual(["inner-ok", "outer"]);
+  });
+
+  it("sameTransaction relates a savepoint's client to its parent and nothing else", async () => {
+    let first: PgPoolClient | undefined;
+    await withTransaction(async (outer) => {
+      first = outer;
+      await withTransaction(async (inner) => {
+        expect(inner).not.toBe(outer);
+        expect(sameTransaction(inner, outer)).toBe(true);
+        await withTransaction(async (deeper) => {
+          expect(sameTransaction(deeper, outer)).toBe(true);
+          await Promise.resolve();
+        });
+      });
+      await withReadSnapshot(async (snapshot) => {
+        expect(sameTransaction(snapshot, outer)).toBe(false);
+        await Promise.resolve();
+      });
+    });
+    await withTransaction(async (next) => {
+      expect(sameTransaction(next, must(first, "first transaction client"))).toBe(false);
+      await Promise.resolve();
+    });
   });
 
   it("withSavepointIfInTransaction rolls back only its own statements and passes through outside", async () => {

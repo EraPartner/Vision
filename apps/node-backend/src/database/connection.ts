@@ -431,9 +431,27 @@ function ambientStore(): TransactionStore | undefined {
   return store?.conn ? store : undefined;
 }
 
+/**
+ * The top-level transaction (or snapshot) each client belongs to. A nested
+ * withTransaction() shares its parent's savepoint counter, so that object
+ * names the outermost transaction.
+ */
+const clientTransactions = new WeakMap<PgPoolClient, object>();
+
+/**
+ * Whether two clients run in the same top-level transaction: a SAVEPOINT
+ * scope's client and its parent's client do, two separate transactions or
+ * snapshots do not (PostgreSQL code compared pooled clients by identity).
+ */
+export function sameTransaction(a: PgPoolClient, b: PgPoolClient): boolean {
+  if (a === b) return true;
+  const transaction = clientTransactions.get(a);
+  return transaction !== undefined && transaction === clientTransactions.get(b);
+}
+
 /** A client bound to one connection; used for transactions and snapshots. */
 function clientFor(store: TransactionStore): PgPoolClient {
-  return {
+  const client: PgPoolClient = {
     query<R>(
       text: string | { name: string; text: string; values?: readonly unknown[] | undefined },
       params?: readonly unknown[],
@@ -450,6 +468,8 @@ function clientFor(store: TransactionStore): PgPoolClient {
     },
     release() {},
   };
+  clientTransactions.set(client, store.savepointCounter);
+  return client;
 }
 
 /**
