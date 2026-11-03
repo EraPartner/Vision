@@ -1,5 +1,5 @@
 /**
- * GET /api/accounts/totals against real PostgreSQL: the accounts hub's
+ * GET /api/accounts/totals against the real database: the accounts hub's
  * converted balances, group subtotals and "Net cash" are computed on the
  * server (ADR-216). Each balance partition converts at the latest stored rate;
  * a partition without a rate is left out and its account counted, never added
@@ -42,7 +42,7 @@ async function addAccount(
 ): Promise<number> {
   const { rows } = await must(getTestPool(), "getTestPool()").query<{ id: number }>(
     `INSERT INTO accounts (name, type, currency, in_net_worth, is_active)
-     VALUES ($1, $2::account_type, $3, $4, $5) RETURNING id`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
     [name, type, currency, inNetWorth, isActive],
   );
   return must(rows[0], "row").id;
@@ -51,15 +51,18 @@ async function addAccount(
 const PAYEE = `account_totals_${process.pid}`;
 
 async function addTxn(accountId: number, amount: string, currency = "EUR") {
-  await must(getTestPool(), "getTestPool()").query(
-    `WITH payee AS (
-       INSERT INTO recipients (name, normalized_name) VALUES ($4, $4)
-       ON CONFLICT (normalized_name) DO UPDATE SET name = EXCLUDED.name
-       RETURNING id
-     )
-     INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
-     SELECT CURRENT_DATE - 1, $1, $2, $3, id FROM payee`,
-    [amount, currency, accountId, PAYEE],
+  const pool = must(getTestPool(), "getTestPool()");
+  // SQLite has no data-modifying CTE: upsert the payee, then insert.
+  const { rows } = await pool.query<{ id: number }>(
+    `INSERT INTO recipients (name, normalized_name) VALUES ($1, $1)
+     ON CONFLICT (normalized_name) DO UPDATE SET name = excluded.name
+     RETURNING id`,
+    [PAYEE],
+  );
+  await pool.query(
+    `INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
+     VALUES (add_days(today(), -1), vision_numeric($1, 18, 4), $2, $3, $4)`,
+    [amount, currency, accountId, must(rows[0], "payee").id],
   );
 }
 
@@ -74,7 +77,7 @@ describeDb("GET /api/accounts/totals (real DB)", () => {
   async function seed() {
     await must(getTestPool(), "getTestPool()").query(
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-       VALUES ('USD', '0.5', CURRENT_DATE, true)`,
+       VALUES ('USD', vision_numeric('0.5', 20, 10), today(), 1)`,
     );
     // 100 EUR + 100 USD in one account: 100 + 100 × 0.5 = 150 EUR.
     ids.checking = await addAccount("Checking");

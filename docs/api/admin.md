@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-29
-updated: 2026-10-29
+date: 2026-11-03
+updated: 2026-11-03
 tags:
   - api
   - admin
@@ -191,8 +191,10 @@ Run persisted Kinesis history sanitization for all investments where `price_prov
 
 ### GET /api/admin/database/stats (Phase 7)
 
-Retrieve current database table statistics from `pg_stat_user_tables`, largest table first
-(schema `DbStats` in `openapi.yaml`).
+Retrieve statistics for every user table of the SQLite database, largest table first (schema
+`DbStats` in `openapi.yaml`). The table list is read from `pragma_table_list` on each request;
+`sqlite_*` tables and the internal `vision_sequences` table are left out
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]).
 
 **Response:** `200 OK`
 
@@ -200,13 +202,13 @@ Retrieve current database table statistics from `pg_stat_user_tables`, largest t
 {
   "tables": [
     {
-      "schemaname": "public",
+      "schemaname": "main",
       "table_name": "transactions",
       "live_rows": "2453",
-      "dead_rows": "127",
-      "last_vacuum": null,
-      "last_autovacuum": "2026-04-24 10:15:32.123456+00",
-      "last_analyze": null,
+      "dead_rows": "0",
+      "last_vacuum": "2026-11-03T10:15:32.123Z",
+      "last_autovacuum": null,
+      "last_analyze": "2026-11-03T10:15:32.123Z",
       "last_autoanalyze": null,
       "size": "3200 kB",
       "size_bytes": "3276800"
@@ -217,16 +219,22 @@ Retrieve current database table statistics from `pg_stat_user_tables`, largest t
 ```
 
 - `live_rows`, `dead_rows` and `size_bytes` are BIGINT values, so they arrive as decimal strings.
-- `last_vacuum`, `last_autovacuum`, `last_analyze` and `last_autoanalyze` are `::text` casts, `null` for a table never vacuumed or analyzed. `last_vacuum` and `last_analyze` are manual runs, such as this page's VACUUM ([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
-- `size` and `db_size` are `pg_size_pretty` text.
+- `live_rows` is an exact `count(*)` of the table. `dead_rows` is always `"0"`: SQLite keeps no dead
+  row versions.
+- `last_vacuum` and `last_analyze` are ISO timestamps of the last run of
+  `POST /api/admin/database/vacuum` in this backend process, and `null` until one runs. SQLite does
+  not record maintenance runs, so a restart resets them. `last_vacuum` is the same for every table,
+  because `VACUUM` rebuilds the whole file. `last_autovacuum` and `last_autoanalyze` are always
+  `null`: SQLite has no autovacuum daemon.
+- `size_bytes` is the bytes of the table's pages plus its indexes' pages, from the `dbstat` virtual
+  table. A SQLite build without `dbstat` reports `size` as `"—"` and `size_bytes` as `"0"`, and the
+  tables are then ordered by row count.
+- `size` and `db_size` are formatted as `pg_size_pretty` formatted them (`bytes`, `kB`, `MB`, ...).
+  `db_size` is the database file plus its write-ahead log.
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of `GET /api/admin/database/stats` (`DbStats`), `GET /api/admin/providers/health` (`ProviderHealthList`), `POST /api/admin/providers/{provider}/probe` (`ProbeResult`), `GET /api/admin/metrics/requests` (`RouteMetricList`) and `GET /api/admin/endpoints` (`EndpointList`) with the shapes the routes already returned and `packages/types/src/contracts/admin.ts` already checked. This page previously described a `table` query parameter and a different stats body that the route never had.
 
-**Important Note on Row Counts:**
-
-- `live_rows` and `dead_rows` are estimates from PostgreSQL's `pg_stat_user_tables` view, not authoritative counts
-- These estimates are updated when VACUUM ANALYZE is executed; between runs, the values reflect the last known statistics
-- All tables display their current row count estimates regardless of vacuum/analyze history (newly created tables may show zero until their first VACUUM ANALYZE)
-- This is expected PostgreSQL behavior; see [[docs/features/database-maintenance|Database Maintenance Feature]] for context
+**Note on Row Counts:** `live_rows` is counted on each request, so it is exact without a prior
+`ANALYZE`. Before ADR-263 it was an estimate from PostgreSQL's `pg_stat_user_tables`.
 
 **Response:** `500 Internal Server Error`
 
@@ -246,7 +254,7 @@ See [[docs/features/database-maintenance|Database Maintenance Feature]] for deta
 
 ### POST /api/admin/database/vacuum (Phase 7)
 
-Run `VACUUM ANALYZE` on one or all tables.
+Run `VACUUM`, then `ANALYZE` on one table or on all tables, then `PRAGMA optimize`.
 
 **Request Body (JSON, optional):**
 
@@ -254,9 +262,10 @@ Run `VACUUM ANALYZE` on one or all tables.
 | ------- | -------------- | -------- | ---------------------------------------------------------- |
 | `table` | string \| null | No       | Table to vacuum; omit or send `null` to vacuum every table |
 
-`table` must be a non-empty string naming a table in `pg_stat_user_tables`. A non-string or empty
-`table` returns `400 VALIDATION_ERROR`; an unknown name returns `400` with `Unknown table: <name>`.
-The route always runs `VACUUM ANALYZE`.
+`table` must be a non-empty string naming a user table from `pragma_table_list`. A non-string or
+empty `table` returns `400 VALIDATION_ERROR`; an unknown name, a `sqlite_*` table or a name in the
+wrong case returns `400` with `Unknown table: <name>`. SQLite's `VACUUM` always rebuilds the whole
+database file, so `table` selects only which table `ANALYZE` refreshes.
 
 **Response:** `200 OK`
 
@@ -264,26 +273,16 @@ The route always runs `VACUUM ANALYZE`.
 { "ok": true, "data": { "vacuumed": "transactions" } }
 ```
 
-`vacuumed` is `"all"` when no table was given; "all" names every public table explicitly.
-The route first checks `has_table_privilege(..., 'MAINTAIN')` for each requested table. If one
-lacks it, the route returns `403` and vacuums nothing, because PostgreSQL itself would only warn
-and skip the table ([[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]).
-
-**Response:** `409 Conflict` (VACUUM already running)
-
-```json
-{
-  "ok": false,
-  "error": {
-    "code": "APP_ERROR",
-    "message": "VACUUM already running. Please wait."
-  }
-}
-```
+`vacuumed` is `"all"` when no table was given. The `403` for a missing `MAINTAIN` privilege is
+gone: the backend opens the database file itself and has no database roles
+([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] supersedes the role split of
+[[docs/adr/262-app-role-maintain-for-admin-vacuum|ADR-262]]). A failed `VACUUM` returns `500`.
 
 **Implementation note:**
 
-- Uses raw database client (not connection pool) because VACUUM cannot run inside a transaction
+- `VACUUM` cannot run inside a transaction, so the route takes the single writer connection
+  exclusively (`withExclusiveWriter`). It waits for running write transactions, and other writers
+  wait for it. A second request waits for the first instead of failing.
 - See [[docs/features/database-maintenance|Database Maintenance Feature]] for architectural details
 
 ---
@@ -302,7 +301,7 @@ Retrieve the column schema and primary key for a single table. Used by the data 
 
 | Parameter | Description                                                          |
 | --------- | -------------------------------------------------------------------- |
-| `table`   | Table name (validated against `pg_stat_user_tables`; 400 if unknown) |
+| `table`   | Table name (validated against `pragma_table_list`; 400 if unknown)   |
 
 **Response:** `200 OK` — envelope `{ ok: true, data: { table, columns, primaryKey } }`
 
@@ -341,8 +340,8 @@ Retrieve the column schema and primary key for a single table. Used by the data 
 | Field        | Description                                                                   |
 | ------------ | ----------------------------------------------------------------------------- |
 | `name`       | Column name                                                                   |
-| `dataType`   | PostgreSQL `data_type` from `information_schema.columns`                      |
-| `udtName`    | `udt_name` (useful for arrays, domains, enums)                                |
+| `dataType`   | PostgreSQL type name of the declared storage type (`numeric` for `DECIMAL_TEXT(p,s)`) |
+| `udtName`    | PostgreSQL `udt_name` of that type (`_text` for `TEXT_ARRAY`)                         |
 | `nullable`   | True when column allows NULL                                                  |
 | `hasDefault` | True when column has a DEFAULT expression                                     |
 | `generated`  | True when column is a generated/computed column                               |
@@ -361,7 +360,11 @@ Retrieve the column schema and primary key for a single table. Used by the data 
 
 ### GET /api/admin/database/tables/:table/rows (ADR-101)
 
-Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout = '15s'` block so it can neither mutate nor run beyond the bounded timeout. Each row includes a hidden `__xmin` field (PostgreSQL row version) used by the mutate endpoint for optimistic concurrency.
+Paginated, filterable, sortable read of table rows. Runs in one read snapshot on the read-only
+connection (`PRAGMA query_only`), so it cannot mutate the database. SQLite has no statement
+timeout, so a read is not cut off after a fixed time. Each row includes a hidden `__xmin` field
+used by the mutate endpoint for optimistic concurrency: a 32-character hex digest of the row's
+stored values (`quote()` of every column). It is not a PostgreSQL transaction id.
 
 **Auth:** admin Bearer + CSRF guard. **Rate limit:** `adminRateLimiter`.
 
@@ -369,7 +372,7 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
 
 | Parameter | Description                                          |
 | --------- | ---------------------------------------------------- |
-| `table`   | Table name (validated against `pg_stat_user_tables`) |
+| `table`   | Table name (validated against `pragma_table_list`)   |
 
 **Query Parameters:**
 
@@ -377,11 +380,17 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
 | --------- | --------------- | ----------- | ------------------------------------------------------------------------------------------------ |
 | `limit`   | integer         | 100         | Rows per page (max 500)                                                                          |
 | `cursor`  | string          | —           | Opaque continuation cursor from the preceding page; bound to the table, sort, direction, filters |
-| `orderBy` | string          | primary key | Column to sort by (validated against `information_schema.columns`)                               |
+| `orderBy` | string          | primary key | Column to sort by (validated against `pragma_table_xinfo`)                                       |
 | `dir`     | `asc` \| `desc` | `asc`       | Sort direction                                                                                   |
 | `filters` | JSON string     | —           | JSON array of `{column, op, value}` filter objects (see ops below)                               |
 
 **Supported filter `op` values:** `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE `%value%`), `startsWith` (ILIKE `value%`), `isnull`, `notnull`.
+
+Filters and sorting follow the declared storage type. `DECIMAL_TEXT` columns compare and sort by
+exact decimal value (`dec_*` functions), never as text or floats. Text sorts bytewise (SQLite's
+`BINARY` collation), and `jsonb` compares its canonical text. `contains` and `startsWith` match
+the stored text: canonical `YYYY-MM-DDTHH:MM:SS.ffffffZ` for timestamps, `true`/`false` for
+booleans and JSON text for arrays. A table without a primary key pages by `rowid`.
 
 **Response:** `200 OK`
 
@@ -399,7 +408,7 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
         "description": "Groceries",
         "date": "2026-06-15",
         "category_id": 3,
-        "__xmin": "7421836"
+        "__xmin": "3f1c9a0e5b7d2c4486a1f0e9d3b2c7a5"
       }
     ],
     "limit": 100,
@@ -409,7 +418,7 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
 }
 ```
 
-The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT(*)`, so large tables do not pay an unbounded count scan on every page. Hidden PostgreSQL text projections preserve exact cursor boundaries, including timestamp microseconds; those fields are removed before the response. `total` is present only when a short first page proves the exact total. The UI keeps prior cursors locally to support Previous. Changing the sort or filters starts again at page one.
+The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT(*)`, so large tables do not pay an unbounded count scan on every page. Hidden text projections of the stored values preserve exact cursor boundaries, including timestamp microseconds; those fields are removed before the response. `total` is present only when a short first page proves the exact total. The UI keeps prior cursors locally to support Previous. Changing the sort or filters starts again at page one.
 
 `DATE` cells (and `DATE[]` elements) are calendar-day strings (`YYYY-MM-DD`) in `/rows` and in the `after` rows of `/mutate`, whatever the backend time zone, so saving an unchanged date keeps the same day.
 
@@ -440,7 +449,7 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 
 | Parameter | Description                                          |
 | --------- | ---------------------------------------------------- |
-| `table`   | Table name (validated against `pg_stat_user_tables`) |
+| `table`   | Table name (validated against `pragma_table_list`)   |
 
 **Request Body:**
 
@@ -458,10 +467,10 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
     {
       "op": "update",
       "pk": { "id": 42 },
-      "xmin": "7421836",
+      "xmin": "3f1c9a0e5b7d2c4486a1f0e9d3b2c7a5",
       "set": { "description": "Updated desc" }
     },
-    { "op": "delete", "pk": { "id": 99 }, "xmin": "7310022" }
+    { "op": "delete", "pk": { "id": 99 }, "xmin": "9b04e6d1c2a83f57e0d4b6a1c9f2e7d3" }
   ],
   "dryRun": false
 }
@@ -477,9 +486,22 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 | `xmin`   | —                           | Optional — optimistic-concurrency token from `/rows` response | Optional — optimistic-concurrency token |
 | `set`    | —                           | Required — columns to change                                  | —                                       |
 
-**Optimistic concurrency (`xmin`):** When supplied, the row is locked `FOR UPDATE` and its current PostgreSQL `xmin` compared to the client's token. A mismatch (row was modified by another write since the client loaded it) or a missing row returns `409 Conflict`. Omitting `xmin` skips the check (last-write-wins).
+**Optimistic concurrency (`xmin`):** The batch runs in one `BEGIN IMMEDIATE` transaction on the
+single writer, so no other write runs between the version read and the write. When `xmin` is
+supplied, the row's current version digest is compared to the client's token. A mismatch (the
+row's stored values changed since the client loaded it) or a missing row returns
+`409 Conflict`. A write that stores the same values again keeps the digest, so it is not a
+conflict. Omitting `xmin` skips the check (last-write-wins).
 
-**Dry-run response (`dryRun: true`):** `200 OK` — returns generated SQL without executing it.
+Values are written through the storage function of the column's declared type
+(`vision_numeric(?, p, s)`, `vision_jsonb`, `vision_ts`, `ts_date`), so decimals are rounded half
+away from zero to the column's scale and stored as canonical text. Text input is read as
+PostgreSQL's input functions read it (`true`/`yes`/`on`/`1` for booleans, integers range-checked
+for `int4`/`int8`). Arrays take a JSON array, not a PostgreSQL array literal. Generated columns and
+the derived `mv_*` tables are read-only (`400`).
+
+**Dry-run response (`dryRun: true`):** `200 OK` — returns generated SQL without executing it. The
+preview inlines the bound values as literals, each inside its column's storage function.
 
 ```json
 {
@@ -490,11 +512,11 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
     "statements": [
       {
         "op": "insert",
-        "preview": "INSERT INTO \"transactions\" (\"amount\", \"description\") VALUES ($1, $2)"
+        "preview": "INSERT INTO \"transactions\" (\"amount\", \"description\") VALUES (vision_numeric('-15.00', 18, 4), 'Coffee') RETURNING *"
       },
       {
         "op": "update",
-        "preview": "UPDATE \"transactions\" SET \"description\" = $1 WHERE \"id\" = $2"
+        "preview": "UPDATE \"transactions\" SET \"description\" = 'Updated desc' WHERE \"id\" = 42 RETURNING *"
       }
     ]
   }
@@ -532,9 +554,10 @@ objects whose `op` is `insert`, `update`, or `delete`; `values`, `set`, and `pk`
 | `400`  | Malformed body (`changes`/`dryRun` shape), unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
 | `403`  | Insufficient database privileges for the operation (SQLSTATE `42501`)                                                                        |
 | `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                                                             |
+| `503`  | The wait for the database write lock timed out (SQLSTATE `55P03`); retry the request                                                         |
 | `500`  | Unexpected database error (rolled back)                                                                                                      |
 
-Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
+Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23001` RESTRICT foreign key, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 
 **Change log:** After commit, each applied change is emitted on the structured logger as `db-editor mutation committed` with the table, operation, and primary key. No database table records editor changes; migration `0004_remove_audit_history` dropped `db_editor_audit` ([[docs/adr/231-remove-audit-history|ADR-231]]).
 

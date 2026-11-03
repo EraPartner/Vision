@@ -39,7 +39,7 @@ const PREFIX = "Synthetic FX fund";
 async function investment(name: string, currency: string): Promise<number> {
   const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
-     VALUES ($1, $3, 'stock', $2, 0, 0, true) RETURNING id`,
+     VALUES ($1, $3, 'stock', $2, '0.000000', '0.0000', 1) RETURNING id`,
     [`${PREFIX} ${name}`, currency, `SYNFX${name}`],
   );
   return must(rows[0], "rows[0]").id;
@@ -54,15 +54,15 @@ async function txn(
 ) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, currency)
-     VALUES ($1, $2, $3::date, $4, $5)`,
-    [investmentId, type, date, amount, currency],
+     VALUES ($1, $2, ts_date($3), vision_numeric($4, 18, 4), $5)`,
+    [investmentId, type, date, String(amount), currency],
   );
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-     VALUES ($1, $2, $3, true)`,
+     VALUES ($1, vision_numeric($2, 20, 10), $3, 1)`,
     [code, rateToEur, rateDate],
   );
 }

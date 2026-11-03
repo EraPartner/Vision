@@ -123,10 +123,12 @@ describeDb("data import (real Postgres)", () => {
   beforeAll(acquireDbSuiteLock, 180_000);
 
   beforeEach(async () => {
-    vi.clearAllMocks();
     await pool().query("DELETE FROM recipient_bank_accounts");
     await pool().query("DELETE FROM recipients");
     await deleteAllCategoryFixtures(pool());
+    // The test pool runs through the same query() the importers use, so the
+    // cleanup statements are cleared before a test counts round trips.
+    vi.clearAllMocks();
   });
 
   afterEach(async () => {
@@ -176,7 +178,7 @@ describeDb("data import (real Postgres)", () => {
       expect(result.imported).toBe(0);
       expect(result.skipped).toBe(2);
       const { rows } = await pool().query<DbRow>(
-        "SELECT count(*)::int AS n FROM recipients",
+        "SELECT count(*) AS n FROM recipients",
       );
       expect(must(rows[0], "rows[0]").n).toBe(1);
       expectBatchedPathRan();
@@ -308,7 +310,7 @@ describeDb("data import (real Postgres)", () => {
       expect(recipientRepositoryMock.createOrGet).not.toHaveBeenCalled();
       expect(categoryRepositoryMock.createOrGet).not.toHaveBeenCalled();
       const { rows: assigned } = await pool().query<DbRow>(
-        `SELECT count(*)::int AS n FROM recipients WHERE default_category_id IS NOT NULL`,
+        `SELECT count(*) AS n FROM recipients WHERE default_category_id IS NOT NULL`,
       );
       expect(must(assigned[0], "assigned[0]").n).toBe(60);
       expectBatchedPathRan();
@@ -353,7 +355,7 @@ describeDb("data import (real Postgres)", () => {
 
       expect(result).toMatchObject({ imported: 1, skipped: 0, errors: 3 });
       const { rows } = await pool().query<DbRow>(
-        "SELECT count(*)::int AS n FROM categories WHERE legacy_compatible = true",
+        "SELECT count(*) AS n FROM categories WHERE legacy_compatible = true",
       );
       expect(must(rows[0], "rows[0]").n).toBe(1);
       expectBatchedPathRan();

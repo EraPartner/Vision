@@ -56,7 +56,7 @@ async function recipientId(): Promise<number> {
 async function insertTxn(date: string, amount: string, currency: string) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO transactions (date, amount, currency, account_id, recipient_id, is_active, is_transfer)
-     VALUES ($1::date, $2, $3, $4, $5, true, false)`,
+     VALUES (ts_date($1), vision_numeric($2, 18, 4), $3, $4, $5, 1, 0)`,
     [date, amount, currency, await accountId(), await recipientId()],
   );
 }
@@ -64,7 +64,7 @@ async function insertTxn(date: string, amount: string, currency: string) {
 async function setRate(code: string, rateToEur: string, rateDate: string) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-     VALUES ($1, $2, $3, true)`,
+     VALUES ($1, vision_numeric($2, 20, 10), $3, 1)`,
     [code, rateToEur, rateDate],
   );
 }

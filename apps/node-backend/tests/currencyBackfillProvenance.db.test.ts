@@ -8,15 +8,17 @@ import {
   it,
   vi,
 } from "vitest";
-import type { Pool as PgPool } from "pg";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   getTestPool,
   hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
-import { closePool } from "../src/database/connection.ts";
+import type { TestPool } from "./setup/db.ts";
+import {
+  closePool,
+  getPoolStats,
+  withTransaction,
+} from "../src/database/connection.ts";
 import {
   backfillPortfolioHistoricalRates,
   clearMemoryCache,
@@ -41,9 +43,8 @@ vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
   };
 });
 
-// Resolved in beforeAll: without TEST_DATABASE_URL the suite is skipped and
-// getTestPool() is null, so resolving it at import time would fail the file.
-let pool: PgPool;
+// Resolved in beforeAll, with the rest of the suite's database setup.
+let pool: TestPool;
 const day = "1950-02-03";
 const hash = "a".repeat(64);
 let investmentId: number;
@@ -63,7 +64,7 @@ async function transaction(
     `INSERT INTO portfolio_transactions
        (investment_id,type,date,amount,units,price_per_unit,currency,
         fx_rate_to_eur,import_batch_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,account_id)
-     VALUES ($1,'gift',$2,20,2,10,'USD',$3,$4,$5,$6,$7,$8) RETURNING id`,
+     VALUES ($1,'gift',$2,'20.0000','2.00000000','10.000000','USD',vision_numeric($3, 20, 10),$4,$5,$6,$7,$8) RETURNING id`,
     [
       investmentId,
       day,
@@ -84,7 +85,7 @@ type Snapshot = Record<string, unknown> & { fx_rate_to_eur: string | null };
 async function snapshot(id: number): Promise<Snapshot> {
   return firstRow(
     await pool.query<{ snapshot: Snapshot }>(
-      `SELECT ${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} AS snapshot
+      `SELECT ${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} AS "snapshot::json"
        FROM portfolio_transactions pt WHERE pt.id=$1`,
       [id],
     ),
@@ -92,11 +93,9 @@ async function snapshot(id: number): Promise<Snapshot> {
 }
 
 describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
-  beforeAll(async () => {
+  beforeAll(() => {
     pool = must(getTestPool(), "getTestPool()");
-    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
-    await acquireDbSuiteLock();
-  }, 180_000);
+  });
 
   beforeEach(async () => {
     clearMemoryCache();
@@ -122,7 +121,7 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       ),
     ).id;
     await pool.query(
-      "INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest) VALUES ('USD',0.5,$1,false)",
+      "INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest) VALUES ('USD',vision_numeric('0.5', 20, 10),$1,0)",
       [day],
     );
   });
@@ -132,7 +131,7 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
     clearMemoryCache();
     clearHistoricalCache();
     // The immutable receipt table can only be reset in this disposable suite.
-    await pool.query("TRUNCATE portfolio_import_reconciliation_journal");
+    await pool.query("DELETE FROM portfolio_import_reconciliation_journal");
     await pool.query(
       "DELETE FROM portfolio_transactions WHERE investment_id=$1",
       [investmentId],
@@ -149,7 +148,6 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
   });
 
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -174,7 +172,7 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
       ),
     ).id;
     await pool.query(
-      "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES ($1,$2,$3,'adopt','prefer_source',$4::jsonb,$5::jsonb)",
+      "INSERT INTO portfolio_import_reconciliation_journal(batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data) VALUES ($1,$2,$3,'adopt','prefer_source',vision_jsonb($4),vision_jsonb($5))",
       [
         batchId,
         stagingId,
@@ -228,7 +226,7 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
     expect(
       firstRow(
         await pool.query<{ rate: string }>(
-          "SELECT rate_to_eur::text AS rate FROM exchange_rates WHERE currency_code='USD' AND rate_date=$1",
+          "SELECT rate_to_eur AS rate FROM exchange_rates WHERE currency_code='USD' AND rate_date=$1",
           [day],
         ),
       ).rate,
@@ -259,53 +257,56 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
     "rechecks %s after waiting for a concurrent transaction update",
     async (field) => {
       const id = await transaction();
-      const holder = await pool.connect();
-      let backfill;
-      try {
-        await holder.query("BEGIN");
-        const pid = firstRow(
-          await holder.query<{ pid: number }>(
-            "SELECT pg_backend_pid() AS pid",
-          ),
-        ).pid;
-        await holder.query(
-          "SELECT id FROM portfolio_transactions WHERE id=$1 FOR UPDATE",
-          [id],
-        );
-        backfill = backfillPortfolioHistoricalRates();
-        await vi.waitFor(
-          async () => {
-            const blocked = await pool.query<{ count: number }>(
-              "SELECT count(*)::int AS count FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))",
-              [pid],
-            );
-            expect(firstRow(blocked).count).toBeGreaterThan(0);
-          },
-          { interval: 10, timeout: 3000 },
-        );
-        const assignment =
-          field === "dedup_fingerprint"
-            ? "dedup_fingerprint=$2,dedup_fingerprint_version=1"
+      const assignment =
+        field === "dedup_fingerprint"
+          ? "dedup_fingerprint=$2,dedup_fingerprint_version=1"
+          : field === "fx_rate_to_eur"
+            ? "fx_rate_to_eur=vision_numeric($2, 20, 10)"
             : `${field}=$2`;
-        const value =
-          field === "import_batch_id"
-            ? batchId
-            : field === "fx_rate_to_eur"
-              ? "0.75"
-              : hash;
-        await holder.query(
+      const value =
+        field === "import_batch_id"
+          ? batchId
+          : field === "fx_rate_to_eur"
+            ? "0.75"
+            : hash;
+      // The holder's open write transaction (BEGIN IMMEDIATE) stands where the
+      // PostgreSQL suite held the row with FOR UPDATE: the backfill's stamping
+      // UPDATE queues behind it and must re-check the row once it runs.
+      let held!: () => void;
+      let proceed: () => void = () => {};
+      const isHeld = new Promise<void>((resolve) => {
+        held = resolve;
+      });
+      const holder = withTransaction(async (client) => {
+        held();
+        await new Promise<void>((resolve) => {
+          proceed = resolve;
+        });
+        await client.query(
           `UPDATE portfolio_transactions SET ${assignment} WHERE id=$1`,
           [id, value],
         );
-        await holder.query("COMMIT");
+      });
+      await isHeld;
+      let backfill: ReturnType<typeof backfillPortfolioHistoricalRates> | undefined;
+      try {
+        backfill = backfillPortfolioHistoricalRates();
+        await vi.waitFor(
+          () => {
+            expect(getPoolStats().waitingCount).toBeGreaterThan(0);
+          },
+          { interval: 10, timeout: 3000 },
+        );
+        proceed();
+        await holder;
         expect(await backfill).toMatchObject({ stamped: 0 });
         expect((await snapshot(id)).fx_rate_to_eur).toBe(
           field === "fx_rate_to_eur" ? "0.7500000000" : null,
         );
       } finally {
-        await holder.query("ROLLBACK");
-        holder.release();
-        await backfill;
+        proceed();
+        await holder.catch(() => undefined);
+        await backfill?.catch(() => undefined);
       }
     },
   );

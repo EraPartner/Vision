@@ -275,11 +275,14 @@ describe("getUnindexedRatesToEurForDates", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledTimes(1);
     const [sql, params] = must(query.mock.calls[0], "query.mock.calls[0]");
-    expect(sql).toContain("FROM UNNEST");
-    expect(params).toEqual([
-      ["USD", "USD"],
-      [0.25, 0.5],
-      ["2025-04-02", "2025-04-01"],
+    // One statement: the rows travel as one JSON array, each rate as decimal
+    // text that vision_numeric() stores at the column's NUMERIC(20,10).
+    expect(sql).toContain("FROM json_each(");
+    expect(sql).toContain("vision_numeric(f.value ->> 1, 20, 10)");
+    expect(params).toHaveLength(1);
+    expect(JSON.parse(String(must(params, "params")[0]))).toEqual([
+      ["USD", "0.25", "2025-04-02"],
+      ["USD", "0.5", "2025-04-01"],
     ]);
 });
 
@@ -330,10 +333,10 @@ describe("getUnindexedRatesToEurForDates", () => {
     );
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenCalledTimes(1);
-    expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toEqual([
-      ["USD", "USD"],
-      [0.5, 0.25],
-      ["2025-04-01", "2020-01-04"],
+    const params = must(must(query.mock.calls[0], "query.mock.calls[0]")[1], "params");
+    expect(JSON.parse(String(params[0]))).toEqual([
+      ["USD", "0.5", "2025-04-01"],
+      ["USD", "0.25", "2020-01-04"],
     ]);
   });
 });

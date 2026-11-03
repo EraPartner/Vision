@@ -1707,7 +1707,7 @@
             "x": 940,
             "y": 740,
             "path": "apps/node-backend/src/services/dbEditor.ts",
-            "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (READ ONLY txn), batch insert/update/delete with xmin OCC; logs each committed change; debounces matview refresh for base tables (ADR-101)"
+            "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (read-only snapshot), batch insert/update/delete with row-version digest OCC; logs each committed change; debounces summary-table refresh for base tables (ADR-101, ADR-263)"
           },
           {
             "id": "sv.portfolioreconciliation",
@@ -4360,13 +4360,13 @@
                 "from": "be.routes",
                 "to": "sv.dbeditor",
                 "payload": "getTableRows(table, { limit, offset, orderBy, dir, filters, where })",
-                "annotation": "dbEditor.ts builds parameterized SELECT inside BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout='10s'. Rows include __xmin column (PostgreSQL row version)."
+                "annotation": "dbEditor.ts builds a parameterized SELECT and runs it in one read snapshot on the read-only connection (PRAGMA query_only). Rows include an __xmin column: a digest of the row's stored values (ADR-263)."
               },
               {
                 "from": "sv.dbeditor",
                 "to": "db.postgres",
-                "payload": "BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout='10s'; SELECT *, xmin FROM \"table\" WHERE … ORDER BY … LIMIT $n OFFSET $m; COMMIT",
-                "annotation": "READ ONLY transaction makes mutation structurally impossible. xmin is a system column exposed as __xmin in the response for optimistic-concurrency use at commit time."
+                "payload": "BEGIN; SELECT *, quote(col) || ',' || … AS __xmin FROM \"table\" WHERE … ORDER BY … LIMIT $n; COMMIT",
+                "annotation": "The query_only connection makes mutation structurally impossible. The quote() text of every column is hashed into __xmin for optimistic-concurrency use at commit time."
               },
               {
                 "from": "fe.pages",
@@ -4384,12 +4384,12 @@
                 "from": "be.routes",
                 "to": "sv.dbeditor",
                 "payload": "mutateTable(table, changes, dryRun=false)",
-                "annotation": "dbEditor.ts generates parameterized INSERT/UPDATE/DELETE statements. For updates/deletes with xmin supplied: locks row FOR UPDATE, compares xmin → 409 Conflict on mismatch. Constraint SQLSTATEs (23502/23503/23505/23514/22P02) mapped to friendly 400/409 messages."
+                "annotation": "dbEditor.ts generates parameterized INSERT/UPDATE/DELETE statements, each value inside its column's storage function (vision_numeric, vision_jsonb, vision_ts, ts_date). For updates/deletes with xmin supplied: re-reads the row's version digest in the same transaction → 409 Conflict on mismatch. Constraint SQLSTATEs (23502/23503/23001/23505/23514/22P02) mapped to friendly 400/409 messages; a write-lock timeout (55P03) to a retryable 503."
               },
               {
                 "from": "sv.dbeditor",
                 "to": "db.postgres",
-                "payload": "BEGIN; SELECT … FOR UPDATE (xmin check); INSERT/UPDATE/DELETE …; COMMIT",
+                "payload": "BEGIN IMMEDIATE; SELECT … AS __xmin (version check); INSERT/UPDATE/DELETE … RETURNING *; COMMIT",
                 "annotation": "All-or-nothing batch. After commit, each change is logged as db-editor mutation committed (table, op, pk); no audit table (ADR-231). Materialized-view base tables (transactions/recipients/categories) trigger scheduleRefresh() after commit."
               },
               {

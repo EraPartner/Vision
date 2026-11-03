@@ -12,30 +12,32 @@
  */
 
 import { Router } from "express";
+import { stat } from "node:fs/promises";
 import https from "https";
 import { sql } from "kysely";
 import { z } from "zod";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- admin table stats/VACUUM are legitimately DB-level (ADR-067 documented exemption)
 import {
   checkConnection,
-  getClient,
   getTableCount,
+  withExclusiveWriter,
 } from "../database/connection.ts";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption: checks the stats/VACUUM catalog rows above
 import { checkedRow, checkedRows, compileQuery } from "../database/db.ts";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption as above
 import {
   databaseSizeRowSchema,
-  tableStatsRowSchema,
-  userTableNameRowSchema,
+  tableRowCountRowSchema,
+  tableSizeRowSchema,
 } from "../database/rows/admin.ts";
+// eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption as above
+import type { TableStatsRow } from "../database/rows/admin.ts";
 import settings from "../config/config.ts";
 import { env } from "../config/env.ts";
 import { logger } from "../config/logger.ts";
 import { sanitizePersistedKinesisHistory } from "../services/priceProviderService.ts";
 import {
   AppError,
-  ForbiddenError,
   NotFoundError,
   ValidationError,
 } from "../middleware/errorHandler.ts";
@@ -49,6 +51,7 @@ import { adminMutateLimiter } from "../middleware/rateLimiter.ts";
 import { isAccuracyTableHealthy } from "../services/calculations/forecast/accuracyStore.ts";
 import {
   getTableMeta,
+  listUserTables,
   readRows,
   applyMutations,
 } from "../services/dbEditor.ts";
@@ -348,34 +351,135 @@ router.post(
 
 // ── Database Maintenance ───────────────────────────────────────────────────────
 
+/**
+ * PostgreSQL's pg_size_pretty(): bytes below 10 kB, then kB, MB, GB, TB and
+ * PB, each unit rounded half up once the value reaches 20 * 1024 - 1 of the
+ * smaller one. The same text the page showed before ADR-263.
+ */
+export function prettySize(bytes: number): string {
+  const units: Array<{ name: string; limit: number; round: boolean; bits: number }> = [
+    { name: "bytes", limit: 10 * 1024, round: false, bits: 0 },
+    { name: "kB", limit: 20 * 1024 - 1, round: true, bits: 10 },
+    { name: "MB", limit: 20 * 1024 - 1, round: true, bits: 20 },
+    { name: "GB", limit: 20 * 1024 - 1, round: true, bits: 30 },
+    { name: "TB", limit: 20 * 1024 - 1, round: true, bits: 40 },
+    { name: "PB", limit: 20 * 1024 - 1, round: true, bits: 50 },
+  ];
+  let size = Math.trunc(bytes);
+  for (const [i, unit] of units.entries()) {
+    const next = units[i + 1];
+    if (next === undefined || Math.abs(size) < unit.limit) {
+      if (unit.round) size = Math.trunc((size + (size < 0 ? -1 : 1)) / 2);
+      return `${size} ${unit.name}`;
+    }
+    const shift =
+      next.bits - unit.bits - (next.round ? 1 : 0) + (unit.round ? 1 : 0);
+    size = Math.trunc(size / 2 ** shift);
+  }
+  return `${size} bytes`;
+}
+
+/**
+ * When this backend process last ran VACUUM (the whole file) and ANALYZE (per
+ * table). SQLite records neither, so /database/stats reports these and NULL
+ * before the first run, as pg_stat_user_tables reported NULL for a table
+ * never vacuumed.
+ */
+const maintenanceRuns: { vacuumedAt: string | null; analyzedAt: Map<string, string> } = {
+  vacuumedAt: null,
+  analyzedAt: new Map(),
+};
+
+/** Whether this SQLite build has the dbstat virtual table (null: not probed yet). */
+let hasDbstat: boolean | null = null;
+
+/** Bytes of each table's b-tree plus its indexes' b-trees, from dbstat. */
+async function readTableSizes(): Promise<Map<string, string> | null> {
+  if (hasDbstat === false) return null;
+  try {
+    const rows = await checkedRows(
+      tableSizeRowSchema,
+      sql`SELECT s.tbl_name AS table_name, sum(d.pgsize) AS "size_bytes::bigint"
+            FROM dbstat AS d
+            JOIN sqlite_schema AS s ON s.name = d.name
+           WHERE d.aggregate = 1 AND s.type IN ('table', 'index')
+           GROUP BY s.tbl_name`,
+    );
+    hasDbstat = true;
+    return new Map(rows.map((r) => [r.table_name, r.size_bytes]));
+  } catch (err) {
+    // Builds without SQLITE_ENABLE_DBSTAT_VTAB (some system libraries) have
+    // no per-table page accounting; the page then shows sizes as unknown.
+    if (err instanceof Error && /no such table: dbstat/.test(err.message)) {
+      hasDbstat = false;
+      return null;
+    }
+    throw err;
+  }
+}
+
+/** On-disk size of the database: the file and its write-ahead log. */
+async function readDatabaseBytes(): Promise<number> {
+  const file = settings.database.path;
+  if (file && file !== ":memory:") {
+    try {
+      const main = await stat(file);
+      const wal = await stat(`${file}-wal`).catch(() => null);
+      return main.size + (wal?.size ?? 0);
+    } catch {
+      // Fall through to the page counters.
+    }
+  }
+  const row = await checkedRow(
+    databaseSizeRowSchema,
+    sql`SELECT c.page_count * s.page_size AS "size_bytes::bigint"
+          FROM pragma_page_count AS c, pragma_page_size AS s`,
+  );
+  return Number(row?.size_bytes ?? 0);
+}
+
 router.get("/database/stats", async (_req, res) => {
-  const [tables, size] = await Promise.all([
-    checkedRows(
-      tableStatsRowSchema,
-      sql`
-      SELECT
-        schemaname,
-        relname AS table_name,
-        n_live_tup AS live_rows,
-        n_dead_tup AS dead_rows,
-        last_vacuum::text,
-        last_autovacuum::text,
-        last_analyze::text,
-        last_autoanalyze::text,
-        pg_size_pretty(pg_total_relation_size(relid)) AS size,
-        pg_total_relation_size(relid) AS size_bytes
-      FROM pg_stat_user_tables
-      ORDER BY size_bytes DESC
-    `,
-    ),
-    checkedRow(
-      databaseSizeRowSchema,
-      sql`SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size`,
-    ),
-  ]);
+  const names = [...(await listUserTables({ fresh: true }))].sort();
+  const counts = names.length > 0
+    ? await checkedRows(
+        tableRowCountRowSchema,
+        sql.join(
+          names.map(
+            (name) =>
+              sql`SELECT ${name} AS table_name, count(*) AS "live_rows::bigint" FROM ${sql.id(name)}`,
+          ),
+          sql` UNION ALL `,
+        ),
+      )
+    : [];
+  const liveRows = new Map(counts.map((r) => [r.table_name, r.live_rows]));
+  const sizes = await readTableSizes();
+  const tables: TableStatsRow[] = names.map((name) => {
+    const sizeBytes = sizes?.get(name) ?? (sizes ? "0" : null);
+    return {
+      schemaname: "main",
+      table_name: name,
+      live_rows: liveRows.get(name) ?? "0",
+      dead_rows: "0",
+      last_vacuum: maintenanceRuns.vacuumedAt,
+      last_autovacuum: null,
+      last_analyze: maintenanceRuns.analyzedAt.get(name) ?? null,
+      last_autoanalyze: null,
+      size: sizeBytes === null ? "—" : prettySize(Number(sizeBytes)),
+      size_bytes: sizeBytes ?? "0",
+    };
+  });
+  // Largest first, as `ORDER BY size_bytes DESC`; without dbstat, by rows.
+  tables.sort((a, b) => {
+    const bySize = Number(b.size_bytes) - Number(a.size_bytes);
+    if (bySize !== 0) return bySize;
+    const byRows = Number(b.live_rows) - Number(a.live_rows);
+    if (byRows !== 0) return byRows;
+    return a.table_name.localeCompare(b.table_name);
+  });
   res.ok({
     tables,
-    db_size: size?.db_size ?? null,
+    db_size: prettySize(await readDatabaseBytes()),
   });
 });
 
@@ -385,60 +489,31 @@ router.get("/database/stats", async (_req, res) => {
 router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
   const { table } = parseInput(vacuumBodySchema, req.body ?? {});
 
-  // Validate table name against actual user tables to prevent injection.
-  // PostgreSQL does not fail a VACUUM the role may not run: it logs
-  // "permission denied to vacuum ..., skipping it" as a WARNING and reports
-  // success. Check the MAINTAIN privilege (PostgreSQL 17+) up front so a
-  // skipped table is a 403, never a false success.
-  const allowed = await checkedRows(
-    userTableNameRowSchema,
-    sql`
-      SELECT relname, has_table_privilege(relid, 'MAINTAIN') AS can_maintain
-      FROM pg_stat_user_tables
-      WHERE schemaname = 'public'
-      ORDER BY relname
-    `,
-  );
-  const allowedNames = new Set(allowed.map((r) => r.relname));
-
-  if (table != null && !allowedNames.has(table)) {
+  // Validate the table name against the catalog's user tables; the request
+  // value is only a lookup key, the catalog's copy is what gets quoted.
+  const tables = await listUserTables({ fresh: true });
+  const target = table == null ? null : ([...tables].find((name) => name === table) ?? null);
+  if (table != null && target === null) {
     throw new ValidationError(`Unknown table: ${table}`);
   }
 
-  const targets = allowed.filter((r) => table == null || r.relname === table);
-  const denied = targets.filter((r) => !r.can_maintain).map((r) => r.relname);
-  if (denied.length > 0) {
-    throw new ForbiddenError(
-      `Insufficient database privileges to VACUUM ${denied.join(", ")}`,
-    );
-  }
-
-  // VACUUM cannot run inside a transaction block — use raw client
-  const client = await getClient();
-  try {
-    await client.query("SET statement_timeout = 120000");
-    // Table names come from pg_stat_user_tables above and are quoted as
-    // identifiers. VACUUM rejects parameterized identifiers, so they cannot
-    // be bound parameters. "All" names every public table explicitly: a bare
-    // VACUUM would also try the system catalogs, which only their owner may
-    // vacuum.
-    if (targets.length > 0) {
-      const vacuum = compileQuery(
-        sql`VACUUM ANALYZE ${sql.join(targets.map((r) => sql.id(r.relname)))}`,
-      );
-      await client.query(vacuum.sql);
-    }
-  } catch (err) {
-    if (err instanceof Error && "code" in err && err.code === "42501") {
-      // insufficient_privilege
-      const target = table ?? "all tables";
-      throw new ForbiddenError(
-        `Insufficient database privileges to VACUUM ${target}`,
-      );
-    }
-    throw err;
-  } finally {
-    client.release();
+  // SQLite's VACUUM rebuilds the whole file; it must run outside any
+  // transaction, so it takes the writer exclusively (waiting for running
+  // transactions). ANALYZE then refreshes the planner statistics of the
+  // requested table (or of every table), and PRAGMA optimize lets SQLite
+  // finish whatever else its planner asks for.
+  const analyze = target === null
+    ? "ANALYZE"
+    : compileQuery(sql`ANALYZE ${sql.id(target)}`).sql;
+  await withExclusiveWriter((writer) => {
+    writer.exec("VACUUM");
+    writer.exec(analyze);
+    writer.exec("PRAGMA optimize");
+  });
+  const finishedAt = new Date().toISOString();
+  maintenanceRuns.vacuumedAt = finishedAt;
+  for (const name of target === null ? tables : [target]) {
+    maintenanceRuns.analyzedAt.set(name, finishedAt);
   }
 
   res.ok({ vacuumed: table ?? "all" });

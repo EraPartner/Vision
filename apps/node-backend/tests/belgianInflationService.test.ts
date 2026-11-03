@@ -29,6 +29,22 @@ import { mockOf } from "./helpers/mockOf.ts";
 const query = vi.mocked(rawQuery);
 const getClient = vi.mocked(rawGetClient);
 
+/**
+ * Wait for a scheduled background refresh to finish. It persists through the
+ * shared `query` spy and replaces the memory cache, so one left running would
+ * consume the next test's queued results and overwrite its cache.
+ */
+async function backgroundRefreshSettled() {
+  await vi.waitFor(() => {
+    const debugMessages = mockOf(logger, "debug").mock.calls.map((call) => call[0]);
+    const warnings = mockOf(logger, "warn").mock.calls.length;
+    expect(
+      debugMessages.includes("Belgian inflation background refresh completed") ||
+        warnings > 0,
+    ).toBe(true);
+  });
+}
+
 describe("belgianInflationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -342,6 +358,7 @@ describe("belgianInflationService", () => {
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
+    await backgroundRefreshSettled();
 
     vi.unstubAllGlobals();
   });
@@ -411,7 +428,7 @@ describe("belgianInflationService", () => {
     // Three rows × three params per row = 9 params bound to the single query.
     expect(params).toHaveLength(9);
     // VALUES list contains three placeholder groups.
-    expect(sql.match(/\$\d+::date/g)).toHaveLength(3);
+    expect(sql.match(/ts_date\(\?\)/g)).toHaveLength(3);
 
     vi.unstubAllGlobals();
   });
@@ -461,6 +478,7 @@ describe("belgianInflationService", () => {
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
+    await backgroundRefreshSettled();
 
     vi.unstubAllGlobals();
   });

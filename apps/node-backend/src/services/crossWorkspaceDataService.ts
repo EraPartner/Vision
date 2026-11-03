@@ -18,7 +18,10 @@ import {
 } from "./currency/currencyConversionService.ts";
 import { getPortfolioSummary } from "./portfolio/portfolioSummaryService.ts";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
-import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
+import {
+  balancePartsColumn,
+  computedBalanceByCurrencyAggLateral,
+} from "../repositories/accountBalanceSql.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import type { RateTable } from "../types/rows.ts";
 import { storedCurrencyCode } from "../lib/currencyCode.ts";
@@ -102,10 +105,10 @@ export async function assembleRebalanceInputs({
   // parts → a 0 entry, as before).
   const rows = await checkedRows(
     rebalanceCashAccountRowSchema,
-    sql`SELECT a.id, a.name, a.currency, bp.balance_parts
+    sql`SELECT a.id, a.name, a.currency, ${balancePartsColumn()}
        FROM accounts a
-       ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${todayAppDateString()}::date` })}
-      WHERE a.spendable = true AND a.is_active = true
+       ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${todayAppDateString()}` })}
+      WHERE a.spendable AND a.is_active
       ORDER BY a.name`,
   );
 

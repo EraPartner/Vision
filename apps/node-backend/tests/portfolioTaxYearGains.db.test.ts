@@ -29,8 +29,8 @@ const describeDb = hasTestDatabase() ? describe : describe.skip;
 async function stock(name: string, currency = "EUR", price = 50) {
   const { rows } = await must(getTestPool(), "test pool").query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
-     VALUES ($1, $1, 'stock', $2, $3, 0, true) RETURNING id`,
-    [name, currency, price],
+     VALUES ($1, $1, 'stock', $2, vision_numeric($3, 18, 6), '0.0000', 1) RETURNING id`,
+    [name, currency, String(price)],
   );
   return must(rows[0], "rows[0]").id;
 }
@@ -54,15 +54,25 @@ async function txn(
 ) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, taxes, currency, fx_rate_to_eur)
-     VALUES ($1, $2, $3::date, $4, $5, $6, $7, $8)`,
-    [investmentId, type, date, amount, units, taxes, currency, fxRateToEur],
+     VALUES ($1, $2, ts_date($3), vision_numeric($4, 18, 4), vision_numeric($5, 18, 8),
+             vision_numeric($6, 18, 4), $7, vision_numeric($8, 20, 10))`,
+    [
+      investmentId,
+      type,
+      date,
+      String(amount),
+      units === null ? null : String(units),
+      String(taxes),
+      currency,
+      fxRateToEur,
+    ],
   );
 }
 
 async function setRate(code: string, rateToEur: string, rateDate: string, isLatest: boolean) {
   await must(getTestPool(), "test pool").query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-     VALUES ($1, $2, $3, $4)`,
+     VALUES ($1, vision_numeric($2, 20, 10), $3, $4)`,
     [code, rateToEur, rateDate, isLatest],
   );
 }

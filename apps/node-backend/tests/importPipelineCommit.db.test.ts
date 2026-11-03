@@ -3,13 +3,14 @@ import {
   rollbackBatch,
 } from "../src/repositories/importBatchRepository.ts";
 /**
- * Real-Postgres tests for the import pipeline COMMIT phase.
+ * Real-database tests for the import pipeline COMMIT phase.
  *
  * The mock suite (importPipeline.test.ts) choreographs SQL results on a fake
- * client, so it asserts the statements we wrote rather than the rows Postgres
- * actually returns. Commit is the phase that decides which real bank rows
+ * client, so it asserts the statements we wrote rather than the rows the
+ * database actually returns. Commit is the phase that decides which real bank rows
  * enter the ledger and which are silently discarded as duplicates, and its
- * verdicts depend on genuine NUMERIC equality, genuine NULL semantics, the
+ * verdicts depend on genuine decimal equality (dec_eq over DECIMAL_TEXT),
+ * genuine NULL semantics, the
  * partial unique index over versioned fingerprints, and rows inserted
  * earlier in the same transaction. All four are invisible to a mock.
  *
@@ -25,7 +26,6 @@ import {
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -33,17 +33,19 @@ import {
   vi,
 } from "vitest";
 import {
-  acquireDbSuiteLock,
   closeTestPool,
   deleteAllCategoryFixtures,
   getTestPool,
   hasTestDatabase,
-  releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import { getImportBatchPreview } from "../src/services/importBatchService.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
-import { closePool } from "../src/database/connection.ts";
+import {
+  closePool,
+  getPoolStats,
+  withTransaction,
+} from "../src/database/connection.ts";
 import {
   assignImportIdentities,
   budgetingIdentityBase,
@@ -60,21 +62,51 @@ vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 
-// Only dereferenced inside the describeDb-gated suite, which is skipped
-// without a test database.
-const pool = getTestPool() as NonNullable<ReturnType<typeof getTestPool>>;
+const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;
-// A row-lock waiter waits on the holder's transaction id; a session queued
-// for a table lock (DDL, TRUNCATE) does not, so it cannot pass for the claim.
-const ROW_LOCK_WAITERS = `SELECT count(*)::int AS n
-  FROM pg_locks l JOIN pg_stat_activity gate ON gate.pid = $1
-  WHERE NOT l.granted AND l.locktype = 'transactionid'
-    AND l.transactionid = gate.backend_xid`;
+
+/**
+ * Hold the database write lock (an open BEGIN IMMEDIATE) until `release()`,
+ * as the PostgreSQL suite held the batch row with SELECT … FOR UPDATE: every
+ * claim queues behind it. Work started after this resolves runs outside the
+ * holder's transaction, as another session's did.
+ */
+async function holdWriteLock(): Promise<{ release: () => Promise<void> }> {
+  let release!: () => void;
+  let held!: () => void;
+  const isHeld = new Promise<void>((resolve) => {
+    held = resolve;
+  });
+  const done = withTransaction(async () => {
+    held();
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  });
+  await isHeld;
+  return {
+    release: async () => {
+      release();
+      await done;
+    },
+  };
+}
+
+/** Wait until `n` writers queue behind the held write lock. */
+async function waitForQueuedWriters(n: number): Promise<number> {
+  const deadline = Date.now() + 5000;
+  let waiting = getPoolStats().waitingCount;
+  while (waiting < n && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    waiting = getPoolStats().waitingCount;
+  }
+  return waiting;
+}
 
 interface IdRow {
   id: number;
 }
-/** BIGINT ids come back from node-postgres as strings. */
+/** BIGINT ids come back from the driver as strings. */
 interface Int8IdRow {
   id: string;
 }
@@ -199,7 +231,8 @@ async function stageRow(
         dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence,
         resolved_recipient_id, user_override_recipient_id, matched_pattern_id,
         override_category_id)
-     VALUES ($1, $2, 'matched', $3, $4, $5, $6, $7, $8, $9, $10,
+     VALUES ($1, $2, 'matched', $3, $4, $5, $6, vision_numeric($7, 20, 4), $8,
+             vision_numeric($9, 20, 4), $10,
              $11, $12, $13, $14, $15, $16, $17, $18, $19)
      RETURNING id`,
     [
@@ -252,7 +285,7 @@ async function insertTxn(over: FixtureRow = {}): Promise<TransactionId> {
     `INSERT INTO transactions
        (date, account_id, recipient_id, category_id, amount, currency, memo, comment,
         import_batch_id, dedup_fingerprint, dedup_fingerprint_version, is_active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+     VALUES ($1,$2,$3,$4,vision_numeric($5, 18, 4),$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
     [
       t.date,
       accountId,
@@ -319,9 +352,9 @@ interface CommittedTxnRow {
 async function committedTxns(batchId: number) {
   const { rows } = await pool.query<CommittedTxnRow>(
     `SELECT t.id, to_char(t.date,'YYYY-MM-DD') AS date,
-            t.amount::text AS amount, t.memo,
+            t.amount, t.memo,
             a.name AS bank_account, t.recipient_id, t.category_id, t.currency,
-            t.balance::text AS balance, t.dedup_fingerprint, t.matched_pattern_id
+            t.balance, t.dedup_fingerprint, t.matched_pattern_id
        FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id
        WHERE t.import_batch_id = $1 ORDER BY t.id`,
     [batchId],
@@ -329,9 +362,7 @@ async function committedTxns(batchId: number) {
   return rows;
 }
 
-describeDb("importPipeline commit (real Postgres)", () => {
-  beforeAll(acquireDbSuiteLock, 180_000);
-
+describeDb("importPipeline commit (real database)", () => {
   beforeEach(async () => {
     await wipe();
     await seedFixtures();
@@ -342,7 +373,6 @@ describeDb("importPipeline commit (real Postgres)", () => {
   });
 
   afterAll(async () => {
-    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });
@@ -362,47 +392,22 @@ describeDb("importPipeline commit (real Postgres)", () => {
         ).rows[0],
         "review-race category",
       ).id;
-      const gate = await pool.connect();
+      const gate = await holdWriteLock();
       const work: Promise<unknown>[] = [];
       try {
-        await gate.query("BEGIN");
-        // Count only sessions queued on the gate's row lock: other DB test
-        // files share the database, and their table-lock waiters made the
-        // first claim look queued before it was, so the second claim could
-        // win the row lock.
-        const gatePid = must(
-          (await gate.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
-            .rows[0],
-          "gate backend pid",
-        ).pid;
-        await gate.query(
-          "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
-          [batchId],
-        );
         const override = () => overrideCategory({ batchId, rowId, categoryId });
         const commit = () => commitBatch({ batchId });
         work.push(overrideFirst ? override() : commit());
         const observedFirst = Promise.allSettled(work);
-        const deadline = Date.now() + 5000;
-        let waiters = 0;
-        while (Date.now() < deadline) {
-          waiters = must(
-            (await pool.query<{ n: number }>(ROW_LOCK_WAITERS, [gatePid]))
-              .rows[0],
-            "row-lock waiter count",
-          ).n;
-          if (waiters > 0) break;
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        expect(waiters).toBeGreaterThan(0);
+        // The first claim is queued on the write lock before the second starts.
+        expect(await waitForQueuedWriters(1)).toBeGreaterThan(0);
         work.push(overrideFirst ? commit() : override());
         const outcomes = Promise.allSettled(work);
-        await gate.query("COMMIT");
+        await gate.release();
         const results = await outcomes;
         await observedFirst;
-        // PostgreSQL does not promise that the session queued first on a row
-        // lock acquires it first, so assert serialization, not arrival order:
-        // an override that wins lands in the commit, one that loses gets 409.
+        // Assert serialization, not arrival order: an override that wins lands
+        // in the commit, one that loses gets 409.
         const [overrideResult, commitResult] = overrideFirst
           ? results
           : [results[1], results[0]];
@@ -419,8 +424,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
           overrideWon ? categoryId : fx.categoryId,
         );
       } finally {
-        await gate.query("ROLLBACK");
-        gate.release();
+        await gate.release();
         await Promise.allSettled(work);
       }
     },
@@ -435,47 +439,22 @@ describeDb("importPipeline commit (real Postgres)", () => {
         [batchId],
       );
       await stageRow(batchId, 0);
-      const gate = await pool.connect();
+      const gate = await holdWriteLock();
       const work: Promise<unknown>[] = [];
       try {
-        await gate.query("BEGIN");
-        // Count only sessions queued on the gate's row lock: other DB test
-        // files share the database, and their table-lock waiters made the
-        // first claim look queued before it was, so the second claim could
-        // win the row lock.
-        const gatePid = must(
-          (await gate.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"))
-            .rows[0],
-          "gate backend pid",
-        ).pid;
-        await gate.query(
-          "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
-          [batchId],
-        );
         const rollback = () => rollbackBatch(batchId);
         const commit = () => commitBatch({ batchId });
         work.push(rollbackFirst ? rollback() : commit());
         const firstObserved = Promise.allSettled(work);
-        const deadline = Date.now() + 5000;
-        let waiters = 0;
-        while (Date.now() < deadline) {
-          waiters = must(
-            (await pool.query<{ n: number }>(ROW_LOCK_WAITERS, [gatePid]))
-              .rows[0],
-            "row-lock waiter count",
-          ).n;
-          if (waiters > 0) break;
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        expect(waiters).toBeGreaterThan(0);
+        // The first claim is queued on the write lock before the second starts.
+        expect(await waitForQueuedWriters(1)).toBeGreaterThan(0);
         work.push(rollbackFirst ? commit() : rollback());
         const outcomes = Promise.allSettled(work);
-        await gate.query("COMMIT");
+        await gate.release();
         const results = await outcomes;
         await firstObserved;
-        // PostgreSQL does not promise that the session queued first on a row
-        // lock acquires it first, so assert serialization, not arrival order:
-        // exactly one claim wins and the batch ends in that claim's state.
+        // Assert serialization, not arrival order: exactly one claim wins and
+        // the batch ends in that claim's state.
         const [rollbackResult, commitResult] = rollbackFirst
           ? results
           : [results[1], results[0]];
@@ -499,8 +478,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
           ).status,
         ).toBe(rollbackWon ? "aborted" : "committing");
       } finally {
-        await gate.query("ROLLBACK");
-        gate.release();
+        await gate.release();
         await Promise.allSettled(work);
       }
     },
@@ -667,7 +645,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
     ]);
     // No twin account minted for the re-cased label.
     const { rows } = await pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM accounts
+      `SELECT count(*) AS n FROM accounts
         WHERE lower(btrim(name)) = lower(btrim('BE68 5390 0754 7034'))`,
     );
     expect(must(rows[0], "count row").n).toBe(1);
@@ -719,7 +697,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
     });
     // The import resolved onto the account selected by the update.
     const { rows } = await pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'fresh edited account'`,
+      `SELECT count(*) AS n FROM accounts WHERE lower(btrim(name)) = 'fresh edited account'`,
     );
     expect(must(rows[0], "count row").n).toBe(1);
   });
@@ -786,7 +764,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
       autoLinkedCount: 0,
     });
     const { rows: after } = await pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
+      `SELECT count(*) AS n FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
       [label],
     );
     expect(must(after[0], "count row").n).toBe(1);

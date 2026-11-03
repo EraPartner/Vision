@@ -22,7 +22,6 @@ import {
   applyPatterns as rawApplyPatterns,
 } from "../src/services/recipientPatternService.ts";
 import { must } from "./helpers/must.ts";
-import { listAt } from "./helpers/responseBody.ts";
 
 // The connection module is replaced by mockTxConnection below; `poolQuery` is
 // the pool-side sink it adds. `query`/`poolQuery` stay untyped spies, like
@@ -41,12 +40,14 @@ const baseWithTransaction = must(withTransaction.getMockImplementation(), "withT
 
 /**
  * A statement with its bound values inlined, identifier quotes dropped and
- * lowercased, so routing reads the same for hand-written and built SQL.
+ * lowercased, so routing reads the same for hand-written SQL (`$1`) and SQL
+ * built by Kysely's SQLite compiler (`?`).
  */
 function stmt(sql: unknown, params: unknown[] = []): string {
+  let next = 0;
   return String(sql)
-    .replace(/\$(\d+)/g, (_, i: string) => {
-      const value = params[Number(i) - 1];
+    .replace(/\$(\d+)|\?/g, (_, i: string | undefined) => {
+      const value = i === undefined ? params[next++] : params[Number(i) - 1];
       return typeof value === "string" ? `'${value}'` : JSON.stringify(value);
     })
     .replace(/"/g, "")
@@ -116,17 +117,37 @@ describe("validateBatch", () => {
     adapter_name: "kbc",
   });
 
-  function getValidationUpdate() {
+  /** One staging row's values in the validation UPDATE's JSON array. */
+  type ValidationValues = {
+    id: string;
+    status: string;
+    fingerprint: string | null;
+    source_record_hash: string | null;
+    fingerprint_version: number | null;
+    occurrence: number | null;
+    error_message: string | null;
+  };
+
+  /** The per-chunk validation UPDATE: its rows travel as one JSON array. */
+  function validationRows(): ValidationValues[] {
     const call = must(
-      poolQuery.mock.calls.find(([sql]) => sql.includes("FROM unnest")),
+      poolQuery.mock.calls.find(([sql]) =>
+        sql.includes("UPDATE import_staging_rows") && sql.includes("json_each"),
+      ),
       "the validation UPDATE",
     );
     const params = must(call[1], "the validation UPDATE params");
+    expect(params).toHaveLength(1);
+    return JSON.parse(String(params[0])) as ValidationValues[];
+  }
+
+  function getValidationUpdate() {
+    const rows = validationRows();
     return {
-      statuses: params[1],
-      hashes: listAt(params, 2),
-      sourceHashes: listAt(params, 3),
-      occurrences: params[5],
+      statuses: rows.map((r) => r.status),
+      hashes: rows.map((r) => r.fingerprint),
+      sourceHashes: rows.map((r) => r.source_record_hash),
+      occurrences: rows.map((r) => r.occurrence),
     };
   }
 
@@ -174,21 +195,19 @@ describe("validateBatch", () => {
   ])("stores the rejection reason %s", async (reason, overrides) => {
     setupPending({ ...baseRow, ...overrides });
     await validateBatch({ batchId: 8 });
-    const call = must(poolQuery.mock.calls.find(([sql]) =>
-      sql.includes("FROM unnest"),
-    ), "unnest statement");
-    expect(must(call[1], "call params")[1]).toEqual(["error"]);
-    expect(must(call[1], "call params")[6]).toEqual([reason]);
+    const rows = validationRows();
+    expect(rows.map((r) => r.status)).toEqual(["error"]);
+    expect(rows.map((r) => r.error_message)).toEqual([reason]);
   });
 
   it("stores no rejection reason for a usable row", async () => {
     setupPending({ ...baseRow, amount: "12" });
     await validateBatch({ batchId: 9 });
-    const call = must(poolQuery.mock.calls.find(([sql]) =>
-      sql.includes("FROM unnest"),
-    ), "unnest statement");
-    expect(must(call[1], "call params")[1]).toEqual(["validated"]);
-    expect(must(call[1], "call params")[6]).toEqual([null]);
+    const rows = validationRows();
+    expect(rows.map((r) => r.status)).toEqual(["validated"]);
+    expect(rows.map((r) => r.error_message)).toEqual([null]);
+    // The staging id stays exact BIGINT text in the JSON.
+    expect(rows.map((r) => r.id)).toEqual(["1"]);
   });
 
   it("keeps identical occurrences and assigns distinct fingerprints", async () => {
@@ -378,8 +397,12 @@ describe("matchBatch", () => {
     ), "UPDATE statement");
     expect(updateCall[0]).toContain("'matched'");
     const updateParams = must(updateCall[1], "updateCall params");
-    expect(updateParams[0]).toEqual(["2"]); // staging row ids (BIGINT text)
-    expect(updateParams[1]).toEqual([null]); // resolved_recipient_id stays NULL
+    const values = JSON.parse(String(updateParams[0])) as Array<{
+      id: string;
+      recipient_id: number | null;
+    }>;
+    expect(values.map((v) => v.id)).toEqual(["2"]); // staging row ids (BIGINT text)
+    expect(values.map((v) => v.recipient_id)).toEqual([null]); // resolved_recipient_id stays NULL
   });
 });
 
@@ -464,7 +487,7 @@ describe("commitBatch", () => {
       if (stmt(sql).includes("where dedup_fingerprint_version")) return Promise.resolve({ rows: [] });
       if (sql.includes("dedup_fingerprint IS NULL AND tx_hash"))
         return Promise.resolve({ rows: [] });
-      if (stmt(sql).includes("count(*)::int as n")) return Promise.resolve({ rows: [{ n: 0 }] });
+      if (stmt(sql).includes("count(*) as n")) return Promise.resolve({ rows: [{ n: 0 }] });
       if (stmt(sql).includes("insert into transactions")) {
         expect(must(params, "insert params").slice(11, 14)).toEqual([
           "source-hash-1",
@@ -501,7 +524,7 @@ describe("commitBatch", () => {
       if (stmt(sql).includes("insert into accounts"))
         return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
       if (stmt(sql).includes("where dedup_fingerprint_version")) return Promise.resolve({ rows: [] });
-      if (stmt(sql).includes("count(*)::int as n")) return Promise.resolve({ rows: [{ n: 1 }] });
+      if (stmt(sql).includes("count(*) as n")) return Promise.resolve({ rows: [{ n: 1 }] });
       return Promise.resolve({ rows: [] });
     });
 
@@ -513,7 +536,7 @@ describe("commitBatch", () => {
     });
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
-        stmt(sql).includes("count(*)::int as n"),
+        stmt(sql).includes("count(*) as n"),
       ),
     ).toBe(true);
   });
@@ -545,7 +568,7 @@ describe("commitBatch", () => {
       if (stmt(sql).includes("insert into accounts"))
         return Promise.resolve({ rows: [{ id: BE12_ACCOUNT_ID }] });
       if (stmt(sql).includes("where dedup_fingerprint_version")) return Promise.resolve({ rows: [] });
-      if (stmt(sql).includes("count(*)::int as n")) return Promise.resolve({ rows: [{ n: 1 }] });
+      if (stmt(sql).includes("count(*) as n")) return Promise.resolve({ rows: [{ n: 1 }] });
       if (stmt(sql).includes("insert into transactions"))
         return Promise.resolve({ rows: [{ id: 100 }] });
       return Promise.resolve({ rows: [] });
@@ -585,7 +608,7 @@ describe("commitBatch", () => {
     });
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
-        stmt(sql).includes("count(*)::int as n"),
+        stmt(sql).includes("count(*) as n"),
       ),
     ).toBe(false);
   });
@@ -603,7 +626,7 @@ describe("commitBatch", () => {
     poolQuery.mockImplementation((sql: string, params?: unknown[]) => {
       if (stmt(sql, params).includes("set status = 'committing'"))
         return Promise.resolve({ rows: [{ adapter_name: "belfius" }] });
-      if (/SELECT COUNT\(\*\)::int AS total/.test(sql)) {
+      if (/SELECT COUNT\(\*\) AS total FROM transactions/.test(sql)) {
         countReads += 1;
         return Promise.resolve({ rows: [{ total: countReads === 1 ? 5 : 6 }] });
       }
@@ -752,9 +775,10 @@ describe("commitBatch", () => {
     const errorUpdate = must(poolQuery.mock.calls.find(([sql, params]) =>
       stmt(sql, params).includes("status = 'error'"),
     ), "matching statement");
+    // The staging ids travel as one JSON array of BIGINT text.
     expect(errorUpdate[1]).toEqual(
       expect.arrayContaining([
-        ["1"],
+        '["1"]',
         expect.stringContaining("unresolved recipient"),
       ]),
     );
@@ -843,7 +867,7 @@ describe("commitBatch", () => {
     const errorUpdate = must(poolQuery.mock.calls.find(([sql, params]) =>
       stmt(sql, params).includes("status = 'error'"),
     ), "matching statement");
-    expect(errorUpdate[1]).toContainEqual(["1"]);
+    expect(errorUpdate[1]).toContainEqual('["1"]');
   });
 
   it("rejects a non-integer staging row.id before issuing SAVEPOINT", async () => {

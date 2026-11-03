@@ -667,9 +667,9 @@ async function loadFromDatabase(
     .select(["month_date", "monthly_rate"])
     .orderBy("month_date", "asc");
   if (startMonth)
-    builder = builder.where("month_date", ">=", sql<Date>`${`${startMonth}-01`}::date`);
+    builder = builder.where("month_date", ">=", sql<Date>`ts_date(${`${startMonth}-01`})`);
   if (endMonth)
-    builder = builder.where("month_date", "<=", sql<Date>`${`${endMonth}-01`}::date`);
+    builder = builder.where("month_date", "<=", sql<Date>`ts_date(${`${endMonth}-01`})`);
   const rows = await checkedRows(belgianInflationMonthRowSchema, builder);
 
   return rows
@@ -680,7 +680,7 @@ async function loadFromDatabase(
     .filter((row): row is BelgianInflationRate => Boolean(row.month));
 }
 
-// Postgres caps each query at 65535 bind parameters. With 3 params per row
+// SQLite caps each statement at 32766 bind parameters. With 3 params per row
 // (month_date, monthly_rate, source), 1000 rows per chunk leaves headroom.
 const INFLATION_INSERT_CHUNK = 1000;
 
@@ -697,7 +697,7 @@ async function saveToDatabase(
         .insertInto("belgian_inflation_rates")
         .values(
           chunk.map((rate) => ({
-            month_date: sql<Date>`${`${rate.month}-01`}::date`,
+            month_date: sql<Date>`ts_date(${`${rate.month}-01`})`,
             monthly_rate: rate.monthly_rate,
             source,
           })),

@@ -77,13 +77,15 @@ export async function validateBatch({
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
-    const ids: string[] = [];
-    const statuses: string[] = [];
-    const txHashes: (string | null)[] = [];
-    const sourceRecordHashes: (string | null)[] = [];
-    const fingerprintVersions: (number | null)[] = [];
-    const occurrences: (number | null)[] = [];
-    const errorMessages: (string | null)[] = [];
+    const updates: Array<{
+      id: string;
+      status: string;
+      fingerprint: string | null;
+      source_record_hash: string | null;
+      fingerprint_version: number | null;
+      occurrence: number | null;
+      error_message: string | null;
+    }> = [];
     for (const row of chunk) {
       // Every pending row is one of batchRows, which keyed identityById.
       const identity = requiredValue(
@@ -91,36 +93,47 @@ export async function validateBatch({
         "every pending row is one of batchRows, which keyed identityById",
       );
       const issue = validateRow(row);
-      ids.push(row.id);
       if (issue) {
         errors++;
-        statuses.push("error");
-        txHashes.push(null);
-        sourceRecordHashes.push(identity.sourceRecordHash);
-        fingerprintVersions.push(null);
-        occurrences.push(null);
-        errorMessages.push(issue);
+        updates.push({
+          id: row.id,
+          status: "error",
+          fingerprint: null,
+          source_record_hash: identity.sourceRecordHash,
+          fingerprint_version: null,
+          occurrence: null,
+          error_message: issue,
+        });
       } else {
-        statuses.push("validated");
-        txHashes.push(identity.fingerprint);
-        sourceRecordHashes.push(identity.sourceRecordHash);
-        fingerprintVersions.push(identity.version);
-        occurrences.push(identity.occurrence);
-        errorMessages.push(null);
+        updates.push({
+          id: row.id,
+          status: "validated",
+          fingerprint: identity.fingerprint,
+          source_record_hash: identity.sourceRecordHash,
+          fingerprint_version: identity.version,
+          occurrence: identity.occurrence,
+          error_message: null,
+        });
       }
     }
-    await sql`UPDATE import_staging_rows s
+    // One statement per chunk: the rows travel as one JSON array.
+    await sql`UPDATE import_staging_rows
           SET status        = v.status,
               source_record_hash = v.source_record_hash,
               dedup_fingerprint = v.fingerprint,
               dedup_fingerprint_version = v.fingerprint_version,
               dedup_occurrence = v.occurrence,
-              error_message = v.error_message
-         FROM unnest(${ids}::bigint[], ${statuses}::text[], ${txHashes}::text[],
-                     ${sourceRecordHashes}::text[], ${fingerprintVersions}::smallint[],
-                     ${occurrences}::integer[], ${errorMessages}::text[])
-              AS v(id, status, fingerprint, source_record_hash, fingerprint_version, occurrence, error_message)
-        WHERE s.id = v.id`.execute(db);
+              error_message = v.error_message,
+              updated_at = now()
+         FROM (SELECT CAST(value ->> 'id' AS INTEGER) AS id,
+                      value ->> 'status' AS status,
+                      value ->> 'fingerprint' AS fingerprint,
+                      value ->> 'source_record_hash' AS source_record_hash,
+                      value ->> 'fingerprint_version' AS fingerprint_version,
+                      value ->> 'occurrence' AS occurrence,
+                      value ->> 'error_message' AS error_message
+                 FROM json_each(${JSON.stringify(updates)})) AS v
+        WHERE import_staging_rows.id = v.id`.execute(db);
     seen += chunk.length;
     if (onProgress) onProgress({ phase: "validating", current: seen, total });
   }
