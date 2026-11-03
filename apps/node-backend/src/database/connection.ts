@@ -47,10 +47,11 @@ export interface PgQueryResult<R = unknown> {
 
 /** A handle that runs statements on one connection (a transaction's, usually). */
 export interface PgPoolClient {
-  query: (
-    text: string | { name: string; text: string; values?: unknown[] | undefined },
-    params?: unknown[],
-  ) => Promise<PgQueryResult>;
+  /** `R` types the rows, as node-postgres's `query<R>()` did; nothing checks it at run time. */
+  query: <R = Record<string, unknown>>(
+    text: string | { name: string; text: string; values?: readonly unknown[] | undefined },
+    params?: readonly unknown[],
+  ) => Promise<PgQueryResult<R>>;
   release: (err?: Error | boolean) => void;
 }
 
@@ -433,13 +434,16 @@ function ambientStore(): TransactionStore | undefined {
 /** A client bound to one connection; used for transactions and snapshots. */
 function clientFor(store: TransactionStore): PgPoolClient {
   return {
-    query(text, params) {
+    query<R>(
+      text: string | { name: string; text: string; values?: readonly unknown[] | undefined },
+      params?: readonly unknown[],
+    ) {
       const conn = store.conn;
       if (!conn) return Promise.reject(new Error("This transaction has already ended"));
       const sqlText = typeof text === "string" ? text : text.text;
       const values = typeof text === "string" ? params : (text.values ?? params);
       try {
-        return Promise.resolve(execute(conn, sqlText, values));
+        return Promise.resolve(execute<R>(conn, sqlText, values));
       } catch (err) {
         return Promise.reject(err instanceof Error ? err : new Error(String(err)));
       }

@@ -201,6 +201,9 @@ function timestampForFile(date = new Date()): string {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
 }
 
+/** Error code of a start-up refused because the pre-migration copy failed. */
+export const PRE_MIGRATION_BACKUP_FAILED = "PRE_MIGRATION_BACKUP_FAILED";
+
 /** Write a consistent copy of the database with VACUUM INTO and prune old copies. */
 export function writePreMigrationBackup(
   db: DatabaseSync,
@@ -214,7 +217,12 @@ export function writePreMigrationBackup(
     backupDir,
     `${path.basename(dbFile, path.extname(dbFile))}-v${fromVersion}-to-v${toVersion}-${timestampForFile()}.sqlite3`,
   );
-  db.prepare("VACUUM INTO ?").run(target);
+  try {
+    db.prepare("VACUUM INTO ?").run(target);
+  } catch (err) {
+    rmSync(target, { force: true });
+    throw err;
+  }
   const copies = readdirSync(backupDir)
     .filter((f) => f.endsWith(".sqlite3"))
     .map((f) => ({ f, t: statSync(path.join(backupDir, f)).mtimeMs }))
@@ -257,13 +265,24 @@ export function migrateConnection(
 
   let backupFile: string | undefined;
   if (!options.skipBackup && current && dbFile !== ":memory:") {
-    backupFile = writePreMigrationBackup(
-      db,
-      dbFile,
-      current.version,
-      last.version,
-      options.backupDir,
-    );
+    try {
+      backupFile = writePreMigrationBackup(
+        db,
+        dbFile,
+        current.version,
+        last.version,
+        options.backupDir,
+      );
+    } catch (err) {
+      // Nothing was migrated. The desktop app shows this code's own message.
+      throw Object.assign(
+        new Error(
+          `Vision could not back up the database before migrating it: ${err instanceof Error ? err.message : String(err)}`,
+          { cause: err },
+        ),
+        { code: PRE_MIGRATION_BACKUP_FAILED },
+      );
+    }
     logger.info("pre-migration backup written", { file: backupFile });
   }
 

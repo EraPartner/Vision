@@ -13,6 +13,7 @@ import { openDatabase } from "../../src/database/connection.ts";
 import {
   LEDGER_TABLE,
   MIGRATIONS_DIR,
+  PRE_MIGRATION_BACKUP_FAILED,
   PRE_MIGRATION_BACKUPS_KEPT,
   loadMigrations,
   migrateConnection,
@@ -181,6 +182,26 @@ describe("the runner's refusals", () => {
     });
     const copies = readdirSync(path.join(path.dirname(file), "pre-migration-backups"));
     expect(copies.some((f) => f.includes("-v1-to-v3-"))).toBe(true);
+  });
+
+  it("refuses to migrate, and changes nothing, when the pre-migration copy cannot be written", async () => {
+    const file = freshFile();
+    await runMigrations(file, { dir: migrationsDir({ "0001_baseline.sql": baseline }) });
+    withDb(file, (db) => db.exec("INSERT INTO items (name) VALUES ('kept')"));
+    const before = fingerprintOf(file);
+    // A regular file where the backup directory should be: mkdir fails.
+    const blocked = path.join(root, `blocked-${counter}`);
+    writeFileSync(blocked, "");
+    const next = migrationsDir({
+      "0001_baseline.sql": baseline,
+      "0002_add_note.sql": "ALTER TABLE items ADD COLUMN note TEXT;",
+    });
+    await expect(runMigrations(file, { dir: next, backupDir: path.join(blocked, "copies") })).rejects.toMatchObject({
+      code: PRE_MIGRATION_BACKUP_FAILED,
+      message: expect.stringMatching(/^Vision could not back up the database before migrating it: /u) as unknown,
+    });
+    expect(fingerprintOf(file)).toBe(before);
+    withDb(file, (db) => expect(readLedger(db).map((r) => r.name)).toEqual(["0001_baseline"]));
   });
 
   it("keeps only the newest pre-migration copies", async () => {

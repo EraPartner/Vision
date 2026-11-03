@@ -493,7 +493,16 @@ function sleep(ms: number): Promise<void> {
  * The message of the backend's last "Failed to start application" log line,
  * so the shell can show why startup stopped instead of polling until timeout.
  */
-export function lastStartupError(log: string): string | undefined {
+/** Why the backend stopped during start-up, from its last failure log line. */
+export interface BackendStartupFailure {
+  message: string;
+  /** The error's code when it had one, for example PRE_MIGRATION_BACKUP_FAILED. */
+  code?: string;
+}
+
+export function lastStartupFailure(
+  log: string,
+): BackendStartupFailure | undefined {
   const line = log
     .split("\n")
     .reverse()
@@ -502,11 +511,19 @@ export function lastStartupError(log: string): string | undefined {
   if (!json?.startsWith("{")) return undefined;
   try {
     const parsed: unknown = JSON.parse(json);
-    const error = isRecord(parsed) ? parsed.error : undefined;
-    return typeof error === "string" && error ? error : undefined;
+    if (!isRecord(parsed)) return undefined;
+    const { error, code } = parsed;
+    if (typeof error !== "string" || !error) return undefined;
+    return typeof code === "string" && code
+      ? { message: error, code }
+      : { message: error };
   } catch {
     return undefined;
   }
+}
+
+export function lastStartupError(log: string): string | undefined {
+  return lastStartupFailure(log)?.message;
 }
 
 export function isDetailedHealthReady(result: unknown): boolean {
@@ -1578,14 +1595,17 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   }
 
   /** Why the backend from the last start() exited, or undefined while it runs. */
-  async function backendStartupFailure(): Promise<string | undefined> {
+  async function backendStartupFailure(): Promise<
+    BackendStartupFailure | undefined
+  > {
     if (!backendExit) return undefined;
     const log = await fs.promises
       .readFile(paths.backendLog, "utf8")
       .catch(() => "");
     return (
-      lastStartupError(log.slice(-65_536)) ??
-      `The Vision backend stopped during startup (exit code ${backendExit.code ?? "unknown"}).`
+      lastStartupFailure(log.slice(-65_536)) ?? {
+        message: `The Vision backend stopped during startup (exit code ${backendExit.code ?? "unknown"}).`,
+      }
     );
   }
 

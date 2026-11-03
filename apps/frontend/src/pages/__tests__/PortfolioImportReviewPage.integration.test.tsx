@@ -74,7 +74,7 @@ vi.mock("@/hooks/useAccounts", () => ({
 
 const API_BASE = "http://localhost:3002";
 
-// node-postgres returns the BIGINT id and NUMERIC columns as strings.
+// The backend returns the BIGINT id and NUMERIC columns as strings.
 const previewRow = (id: number, index: number) => ({
     id: String(id),
     row_index: index,

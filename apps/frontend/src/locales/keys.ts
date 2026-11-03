@@ -925,6 +925,7 @@ export type TranslationKey =
   | "app.errorPageTitle"
   | "app.failedPrepareEmbedded"
   | "app.failedStart"
+  | "app.legacyPostgresData"
   | "app.preMigrationBackupFailed"
   | "app.rendererErrorPageMessage"
   | "app.running"

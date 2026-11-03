@@ -322,10 +322,17 @@ void test("native first start persists and unreferences an argument-array backen
     `2026-10-19T18:45:42.511Z [ERROR] Failed to start application {"error":"Database has application objects but no migration ledger"}\n`,
   );
   (child as unknown as EventEmitter).emit("exit");
-  assert.equal(
-    await runtime.backendStartupFailure(),
-    "Database has application objects but no migration ledger",
+  assert.deepEqual(await runtime.backendStartupFailure(), {
+    message: "Database has application objects but no migration ledger",
+  });
+  await fs.promises.appendFile(
+    runtime.paths.backendLog,
+    `2026-10-19T18:45:43.000Z [ERROR] Failed to start application {"error":"Vision could not back up the database before migrating it: disk full","code":"PRE_MIGRATION_BACKUP_FAILED"}\n`,
   );
+  assert.deepEqual(await runtime.backendStartupFailure(), {
+    message: "Vision could not back up the database before migrating it: disk full",
+    code: "PRE_MIGRATION_BACKUP_FAILED",
+  });
 });
 
 void test("Vision 2.0 data without a SQLite database stops startup and stays untouched", async (t) => {

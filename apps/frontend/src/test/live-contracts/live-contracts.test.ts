@@ -7,7 +7,7 @@
  *
  * The fast workspace unit suite excludes this file. The root test:frontend
  * command and CI's test-live-api-contracts job set LIVE_API_BASE and start a
- * disposable native PostgreSQL-backed stack before running it.
+ * disposable backend on its own SQLite database before running it.
  */
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll } from "vitest";

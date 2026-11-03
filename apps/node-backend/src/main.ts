@@ -406,6 +406,15 @@ function bootSummary(extraPhase = "backend_total") {
   }
 }
 
+/**
+ * The start-up failure log line's fields. The desktop runtime reads `error`
+ * and `code` from the last such line to explain why the backend stopped.
+ */
+function startupFailure(err: unknown): { error: string; code?: string } {
+  const code = typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
+  return typeof code === "string" ? { error: errorMessage(err), code } : { error: errorMessage(err) };
+}
+
 async function start() {
   // The API has no per-request authentication: the loopback bind, the Host
   // guard and the CSRF guard are its whole boundary (ADR-233). Any other bind
@@ -480,9 +489,7 @@ async function start() {
       process.exit(1);
     });
   } catch (err) {
-    logger.error("Failed to start application", {
-      error: errorMessage(err),
-    });
+    logger.error("Failed to start application", startupFailure(err));
     process.exit(1);
   }
 }
@@ -577,8 +584,6 @@ process.on("uncaughtException", (err) => {
 });
 
 start().catch((err: unknown) => {
-  logger.error("Failed to start application", {
-    error: errorMessage(err),
-  });
+  logger.error("Failed to start application", startupFailure(err));
   process.exit(1);
 });

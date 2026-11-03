@@ -55,7 +55,7 @@ describe("migrated schema contracts", () => {
     ]) {
       expect(await objectType(name), name).toBeNull();
     }
-    const functions = await pool.query<DbRow>(
+    const functions = await pool.query(
       "SELECT name FROM pragma_function_list WHERE name LIKE 'audit_chain%'",
     );
     expect(functions.rows).toEqual([]);

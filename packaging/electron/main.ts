@@ -789,7 +789,26 @@ function pingReady(timeoutMs = 2000): Promise<{ ready: boolean } | undefined> {
 // Same cadence/budget as pollHealth, but waits for warmup readiness, not just
 // liveness. Used only for the initial navigation; restart/update flows keep using
 // the lighter pollHealth liveness probe.
-class BackendStartupError extends Error {}
+class BackendStartupError extends Error {
+  readonly code: string | undefined;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/** The backend's start-up failure as the dialog explains it. */
+function backendStartupDetail(error: BackendStartupError): string {
+  if (error.code === "PRE_MIGRATION_BACKUP_FAILED") {
+    return t(
+      "app.preMigrationBackupFailed",
+      { error: error.message },
+      error.message,
+    );
+  }
+  return error.message;
+}
 
 function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -799,7 +818,8 @@ function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
       if (status && status.ready) return resolve();
       // A backend that already exited will never answer; stop waiting.
       const failure = await activeRuntime?.backendStartupFailure();
-      if (failure) return reject(new BackendStartupError(failure));
+      if (failure)
+        return reject(new BackendStartupError(failure.message, failure.code));
       tries += 1;
       if (tries >= maxAttempts) return reject(new Error("timeout"));
       const interval =
@@ -1063,7 +1083,7 @@ function pollAndLoad({ building = false } = {}): void {
           buttons: [t("common.ok", null, "OK")],
           title: APP_NAME,
           message: t("app.failedStart", null, "Vision could not start."),
-          detail: error.message,
+          detail: backendStartupDetail(error),
         });
         return;
       }
