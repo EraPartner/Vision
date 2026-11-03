@@ -51,7 +51,7 @@ import fs from "fs";
 import { parse as rawParse } from "csv-parse/sync";
 import { logger } from "../src/config/logger.ts";
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { recipientRepository as rawRecipientRepository } from "../src/repositories/recipientRepository.ts";
 import { categoryRepository as rawCategoryRepository } from "../src/repositories/categoryRepository.ts";
 import { recipientBankAccountRepository as rawRecipientBankAccountRepository } from "../src/repositories/recipientBankAccountRepository.ts";
@@ -231,7 +231,7 @@ describe("Data Import Service", () => {
           created: true,
         }),
       );
-      query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+      query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
 
       await importRecipientsCSV("/tmp/recipients.csv");
 
@@ -405,7 +405,7 @@ describe("Data Import Service", () => {
       recipientRepository.createOrGet.mockResolvedValue(
         partial<RecipientCreateOrGet>({ recipient: { id: 1 }, created: true }),
       );
-      query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+      query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
 
       const result = await importRecipientsCSV("/tmp/recipients.csv");
 

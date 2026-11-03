@@ -99,8 +99,10 @@ directory on first launch. See
 [`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for the data layout
 and rollback.
 
-**Coming from Vision 2.0?** Its data was in PostgreSQL. Move it once with the transition script
-before you use the new version: [`docs/guides/sqlite-transition.md`](docs/guides/sqlite-transition.md).
+**Coming from Vision 2.0?** Its data was in PostgreSQL, which this version does not read. Convert a
+Vision 2.0 backup with `bun run transition:v2 -- <backup file>` from a checkout of commit
+[`dd4cc71`](https://github.com/EraPartner/Vision/tree/dd4cc71), the last one with the transition
+script.
 
 ### Build the app from source
 
@@ -183,7 +185,7 @@ Vision/
 ├── packaging/electron/    # Desktop shell and native runtime
 ├── db/migrations/         # SQLite migrations
 ├── i18n/source/           # Locale sources, compiled to apps/frontend/src/locales/
-├── scripts/               # Repository tooling (locales, checks, the 2.0 transition script)
+├── scripts/               # Repository tooling (locales, checks)
 ├── config/                # Shared tool configuration
 ├── docs/                  # Obsidian knowledge base (ADRs, features, guides, reference)
 └── openapi.yaml           # REST API contract

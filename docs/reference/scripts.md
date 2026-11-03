@@ -132,7 +132,6 @@ database and keeps the newest three.
 | `db:new`          | Create `db/migrations/NNNN_<name>.sql` (`bun run db:new -- <name>`)                                  |
 | `db:codegen`      | Regenerate `schema.generated.ts` and `schemaMap.generated.ts` in `apps/node-backend/src/database/` from an in-memory database built by the migrations, with `apps/node-backend/db-codegen.config.json`; `--verify` exits 1 on drift |
 | `db:index-stats`  | List the indexes of the `transactions` table with their columns, and their sizes when the SQLite build has `dbstat` |
-| `transition:v2`   | Convert a Vision 2.0 (PostgreSQL) backup into the SQLite database once (`bun run transition:v2 -- <backup>`); see [[docs/guides/sqlite-transition\|Moving Vision 2.0 data to SQLite]] |
 
 `apps/node-backend/scripts/sqlite-mcp.ts` is not a package script. It is the read-only SQLite MCP
 server that `.mcp.json` registers for Claude Code as `vision-sqlite`; it opens only the file named

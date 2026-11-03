@@ -6,7 +6,7 @@ vi.mock('../src/database/connection.ts', () => mockConnection());
 vi.mock('../src/config/logger.ts', () => ({ logger: mockLogger() }));
 
 import { query as rawQuery } from '../src/database/connection.ts';
-import type { PgQueryResult } from '../src/database/connection.ts';
+import type { DbQueryResult } from '../src/database/connection.ts';
 import repo from '../src/repositories/customParserConfigRepository.ts';
 import { partial } from './helpers/partial.ts';
 import { must } from "./helpers/must.ts";
@@ -40,14 +40,14 @@ describe('customParserConfigRepository.getAll', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('orders by name and maps config_json to config', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [dbRow()] }));
     const result = await repo.getAll();
     expect(result[0]).toMatchObject({ id: 1, name: 'My Bank', config: SAMPLE_CONFIG });
     expect(result[0]).not.toHaveProperty('config_json');
   });
 
   it('parses config_json when stored as a string', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ config_json: JSON.stringify(SAMPLE_CONFIG) })] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [dbRow({ config_json: JSON.stringify(SAMPLE_CONFIG) })] }));
     const result = await repo.getAll();
     expect(must(result[0], "result[0]").config).toEqual(SAMPLE_CONFIG);
   });
@@ -57,13 +57,13 @@ describe('customParserConfigRepository.getById / getByName', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns undefined when not found', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
     expect(await repo.getById(99)).toBeUndefined();
     expect(await repo.getByName('nope')).toBeUndefined();
   });
 
   it('returns a mapped row when found', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [dbRow()] }));
     const result = await repo.getById(1);
     expect(result).toMatchObject({ id: 1, config: SAMPLE_CONFIG });
   });
@@ -73,7 +73,7 @@ describe('customParserConfigRepository.create', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('inserts name + serialized config and returns the mapped row', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [dbRow()] }));
     const result = await repo.create({ name: 'My Bank', config: SAMPLE_CONFIG });
     const [, params] = must(query.mock.calls[0], "query.mock.calls[0]");
     expect(must(params, "params")[0]).toBe('My Bank');
@@ -87,12 +87,12 @@ describe('customParserConfigRepository.delete', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns true when a row was deleted', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1 }] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [{ id: 1 }] }));
     expect(await repo.delete(1)).toBe(true);
   });
 
   it('returns false when nothing was deleted', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
     expect(await repo.delete(99)).toBe(false);
   });
 });
@@ -111,7 +111,7 @@ describe('customParserConfigRepository stored config contract', () => {
 
   it('accepts stored configs of both kinds, including legacy rows without number_format', async () => {
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [dbRow(), dbRow({ id: 2, kind: 'portfolio', config_json: PORTFOLIO_CONFIG })],
       }),
     );
@@ -121,7 +121,7 @@ describe('customParserConfigRepository stored config contract', () => {
 
   it('throws on a stored config the save path would reject, naming paths but not values', async () => {
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [dbRow({ id: 7, config_json: { ...SAMPLE_CONFIG, amountColumn: '', encoding: 'SECRET-ENC' } })],
       }),
     );
@@ -139,7 +139,7 @@ describe('customParserConfigRepository stored config contract', () => {
 
   it('checks a portfolio row against the portfolio schema', async () => {
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [dbRow({ kind: 'portfolio', config_json: { dateColumn: 'Date', defaultAssetClass: 'stock' } })],
       }),
     );
@@ -151,7 +151,7 @@ describe('customParserConfigRepository stored config contract', () => {
     vi.stubEnv('ENVIRONMENT', '');
     vi.stubEnv('NODE_ENV', 'production');
     const broken = { ...SAMPLE_CONFIG, dateColumn: 42, encoding: 'SECRET-ENC' };
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ config_json: broken })] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [dbRow({ config_json: broken })] }));
 
     const error = await repo.getById(1).catch((err: unknown) => err);
 

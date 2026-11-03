@@ -24,7 +24,7 @@
  * Writes: a Date becomes canonical UTC text, a boolean 0/1, an array or a
  * plain object JSON text, `undefined` NULL.
  */
-import { formatInstant, instantFromDate, parseDate } from "./pgTime.ts";
+import { formatInstant, instantFromDate, parseDate } from "./timestamps.ts";
 
 export type SqlParam = null | number | bigint | string | Uint8Array;
 

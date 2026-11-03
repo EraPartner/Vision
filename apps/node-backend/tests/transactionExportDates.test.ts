@@ -22,8 +22,8 @@ import {
   withReadSnapshot as rawWithReadSnapshot,
 } from "../src/database/connection.ts";
 import type {
-  PgPoolClient,
-  PgQueryResult,
+  DbClient,
+  DbQueryResult,
 } from "../src/database/connection.ts";
 import {
   streamBulkTransactionExport,
@@ -85,9 +85,9 @@ function mockRes() {
 function primeQueries(rows: unknown[]) {
   dbQuery
     .mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ "?column?": 1 }] }),
+      partial<DbQueryResult>({ rows: [{ "?column?": 1 }] }),
     ) // probe
-    .mockResolvedValueOnce(partial<PgQueryResult>({ rows })); // single chunk (< EXPORT_CHUNK_SIZE ends the loop)
+    .mockResolvedValueOnce(partial<DbQueryResult>({ rows })); // single chunk (< EXPORT_CHUNK_SIZE ends the loop)
 }
 
 beforeEach(() => {
@@ -115,7 +115,7 @@ describe("export date serialization", () => {
   it("destroys and rejects a response when a database failure happens after headers", async () => {
     dbQuery
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ "?column?": 1 }] }),
+        partial<DbQueryResult>({ rows: [{ "?column?": 1 }] }),
       )
       .mockRejectedValueOnce(new Error("stream failed"));
     const res = mockRes();
@@ -252,7 +252,7 @@ describe("bulk export service snapshot", () => {
   function useSnapshotResults(...results: object[]) {
     const query = vi.fn();
     for (const result of results) query.mockResolvedValueOnce(result);
-    const client = partial<PgPoolClient>({ query, release: vi.fn() });
+    const client = partial<DbClient>({ query, release: vi.fn() });
     const settled: string[] = [];
     withReadSnapshot.mockImplementation(async (fn) => {
       try {

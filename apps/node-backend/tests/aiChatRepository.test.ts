@@ -5,7 +5,7 @@ import { mockConnection } from "./helpers/repoMocks.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { aiChatRepository } from "../src/repositories/aiChatRepository.ts";
 import { conversationRow } from "./helpers/aiRows.ts";
 
@@ -13,7 +13,7 @@ const query = rawQuery as unknown as Mock<
   (
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 
 describe("aiChatRepository.listConversations", () => {

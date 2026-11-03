@@ -207,18 +207,18 @@ export function portfolioPerformanceSnapshotDbRow(
 }
 
 /** A local-midnight `Date`, as node-postgres parses a DATE column. */
-export function pgLocalDate(ymd: string): Date {
+export function dbLocalDate(ymd: string): Date {
   const [y = NaN, m = NaN, d = NaN] = ymd.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
 /** A NUMERIC value as node-postgres returns it (a string), keeping NULL. */
-function pgNumericOf(value: unknown): string | null {
+function dbNumericOf(value: unknown): string | null {
   return value === null || value === undefined ? null : plainString(value);
 }
 
 /** A timestamp value as node-postgres returns it (a `Date`). */
-function pgTimestampOf(value: unknown): Date {
+function dbTimestampOf(value: unknown): Date {
   return value instanceof Date ? value : new Date(plainString(value));
 }
 
@@ -232,18 +232,18 @@ export function toPgSummaryInvestmentRow(
 ): SummaryInvestmentDbRow {
   return summaryInvestmentDbRow({
     ...(row as Partial<SummaryInvestmentDbRow>),
-    current_price: pgNumericOf(row.current_price) ?? "0",
-    interest_rate: pgNumericOf(row.interest_rate) ?? "0",
-    cadastral_income: pgNumericOf(row.cadastral_income),
-    municipality_tax_rate: pgNumericOf(row.municipality_tax_rate),
+    current_price: dbNumericOf(row.current_price) ?? "0",
+    interest_rate: dbNumericOf(row.interest_rate) ?? "0",
+    cadastral_income: dbNumericOf(row.cadastral_income),
+    municipality_tax_rate: dbNumericOf(row.municipality_tax_rate),
     maturity_date:
-      row.maturity_date == null ? null : pgLocalDate(plainString(row.maturity_date)),
+      row.maturity_date == null ? null : dbLocalDate(plainString(row.maturity_date)),
     price_provider:
       typeof row.price_provider === "string" ? row.price_provider : "manual",
     price_updated_at:
-      row.price_updated_at == null ? null : pgTimestampOf(row.price_updated_at),
-    created_at: pgTimestampOf(row.created_at ?? CREATED),
-    updated_at: pgTimestampOf(row.updated_at ?? CREATED),
+      row.price_updated_at == null ? null : dbTimestampOf(row.price_updated_at),
+    created_at: dbTimestampOf(row.created_at ?? CREATED),
+    updated_at: dbTimestampOf(row.updated_at ?? CREATED),
   });
 }
 
@@ -258,12 +258,12 @@ export function toPgMathTxRow(
   return portfolioMathTxDbRow({
     ...(row as Partial<PortfolioMathTxDbRow>),
     id: plainString(row.id ?? 1),
-    amount: pgNumericOf(row.amount) ?? "0",
-    units: pgNumericOf(row.units) ?? "0",
-    fees: pgNumericOf(row.fees) ?? "0",
-    taxes: pgNumericOf(row.taxes) ?? "0",
-    fee_units: pgNumericOf(row.fee_units) ?? "0",
-    fx_rate_to_eur: pgNumericOf(row.fx_rate_to_eur),
+    amount: dbNumericOf(row.amount) ?? "0",
+    units: dbNumericOf(row.units) ?? "0",
+    fees: dbNumericOf(row.fees) ?? "0",
+    taxes: dbNumericOf(row.taxes) ?? "0",
+    fee_units: dbNumericOf(row.fee_units) ?? "0",
+    fx_rate_to_eur: dbNumericOf(row.fx_rate_to_eur),
     date,
     day: typeof row.day === "string" ? row.day : date,
   });

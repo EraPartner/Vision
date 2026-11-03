@@ -38,21 +38,21 @@ import {
   query as rawQuery,
   queryPrepared as rawQueryPrepared,
 } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import infoRepository from "../src/repositories/infoRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepository.ts";
 import { makePlannedTransactionRow } from "./builders/domainRows.ts";
 
 const query = rawQuery as unknown as Mock<
-  (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (text: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 const queryPrepared = rawQueryPrepared as unknown as Mock<
   (
     name: string,
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 
@@ -84,7 +84,7 @@ const prevPeriod = () => {
 };
 
 // pg hands a DATE back as a local-midnight Date.
-const pgDay = (ymd: string) => new Date(`${ymd}T00:00:00`);
+const dbDay = (ymd: string) => new Date(`${ymd}T00:00:00`);
 
 describe("InfoRepository", () => {
   beforeEach(() => {
@@ -107,7 +107,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay("2026-02-01") }],
+            rows: [{ first_data_date: dbDay("2026-02-01") }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -166,7 +166,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay("2026-02-01") }],
+            rows: [{ first_data_date: dbDay("2026-02-01") }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -227,7 +227,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay(todayKey) }],
+            rows: [{ first_data_date: dbDay(todayKey) }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -303,7 +303,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay(todayKey) }],
+            rows: [{ first_data_date: dbDay(todayKey) }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -343,7 +343,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay(firstDayKey) }],
+            rows: [{ first_data_date: dbDay(firstDayKey) }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -413,7 +413,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay("2026-02-01") }],
+            rows: [{ first_data_date: dbDay("2026-02-01") }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -455,7 +455,7 @@ describe("InfoRepository", () => {
         // the fallback and returns the seed date directly.
         if (sql.includes("first_data_date")) {
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay(todayKey) }],
+            rows: [{ first_data_date: dbDay(todayKey) }],
           });
         }
         if (
@@ -521,7 +521,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay(firstDataDate) }],
+            rows: [{ first_data_date: dbDay(firstDataDate) }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -782,7 +782,7 @@ describe("InfoRepository", () => {
           return Promise.resolve({ rows: [] });
         if (sql.includes("first_data_date"))
           return Promise.resolve({
-            rows: [{ first_data_date: pgDay(todayKey) }],
+            rows: [{ first_data_date: dbDay(todayKey) }],
           });
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -833,20 +833,20 @@ describe("InfoRepository", () => {
                 recipient_name: "Amazon",
                 tx_count: "15",
                 total_abs_amount: "750.50",
-                first_seen: pgDay("2025-01-15"),
-                last_seen: pgDay("2026-03-01"),
+                first_seen: dbDay("2025-01-15"),
+                last_seen: dbDay("2026-03-01"),
                 currency: "EUR",
-                date: pgDay("2026-03-01"),
+                date: dbDay("2026-03-01"),
               },
               {
                 recipient_id: 2,
                 recipient_name: "Walmart",
                 tx_count: "8",
                 total_abs_amount: "420.00",
-                first_seen: pgDay("2025-06-01"),
-                last_seen: pgDay("2026-02-28"),
+                first_seen: dbDay("2025-06-01"),
+                last_seen: dbDay("2026-02-28"),
                 currency: "EUR",
-                date: pgDay("2026-02-28"),
+                date: dbDay("2026-02-28"),
               },
             ],
           });
@@ -860,7 +860,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Amazon",
                 period: currentPeriod(),
                 currency: "EUR",
-                date: pgDay(`${currentPeriod()}-01`),
+                date: dbDay(`${currentPeriod()}-01`),
                 abs_amount: "120.00",
               },
               {
@@ -868,7 +868,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Amazon",
                 period: prevPeriod(),
                 currency: "EUR",
-                date: pgDay(`${prevPeriod()}-01`),
+                date: dbDay(`${prevPeriod()}-01`),
                 abs_amount: "80.00",
               },
               {
@@ -876,7 +876,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Walmart",
                 period: currentPeriod(),
                 currency: "EUR",
-                date: pgDay(`${currentPeriod()}-01`),
+                date: dbDay(`${currentPeriod()}-01`),
                 abs_amount: "60.00",
               },
             ],
@@ -960,10 +960,10 @@ describe("InfoRepository", () => {
                 recipient_name: "Shop",
                 tx_count: "5",
                 total_abs_amount: "200",
-                first_seen: pgDay("2025-01-01"),
-                last_seen: pgDay("2026-03-01"),
+                first_seen: dbDay("2025-01-01"),
+                last_seen: dbDay("2026-03-01"),
                 currency: "EUR",
-                date: pgDay("2026-03-01"),
+                date: dbDay("2026-03-01"),
               },
             ],
           });
@@ -975,7 +975,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Shop",
                 period: currentPeriod(),
                 currency: "EUR",
-                date: pgDay(`${currentPeriod()}-01`),
+                date: dbDay(`${currentPeriod()}-01`),
                 abs_amount: "50",
               },
             ],
@@ -1041,8 +1041,8 @@ describe("InfoRepository", () => {
                 post_anchor_count: "25",
                 date: "2026-03-01",
                 transaction_count: "25",
-                first_transaction: pgDay("2025-01-01"),
-                last_transaction: pgDay("2026-03-01"),
+                first_transaction: dbDay("2025-01-01"),
+                last_transaction: dbDay("2026-03-01"),
               },
             ],
           });
@@ -1222,7 +1222,7 @@ describe("InfoRepository", () => {
           rows: [
             makePlannedTransactionRow({
               id: 1,
-              planned_date: pgDay("2026-07-05"),
+              planned_date: dbDay("2026-07-05"),
               amount: "-20",
               currency: "EUR",
               recipient_name: "Rent",
@@ -1232,7 +1232,7 @@ describe("InfoRepository", () => {
             }),
             makePlannedTransactionRow({
               id: 2,
-              planned_date: pgDay("2026-07-05"),
+              planned_date: dbDay("2026-07-05"),
               amount: "50",
               currency: "EUR",
               recipient_name: "Salary",
@@ -1323,7 +1323,7 @@ describe("InfoRepository", () => {
           rows: [
             makePlannedTransactionRow({
               id: 1,
-              planned_date: pgDay("2026-06-10"),
+              planned_date: dbDay("2026-06-10"),
               amount: "-50",
               currency: "EUR",
               recipient_name: "Gym",
@@ -1359,7 +1359,7 @@ describe("InfoRepository", () => {
           rows: [
             makePlannedTransactionRow({
               id: 1,
-              planned_date: pgDay("2025-12-03"),
+              planned_date: dbDay("2025-12-03"),
               amount: "-30",
               currency: "EUR",
               recipient_name: "Cleaner",
@@ -1396,7 +1396,7 @@ describe("InfoRepository", () => {
           rows: [
             makePlannedTransactionRow({
               id: 1,
-              planned_date: pgDay("2026-10-07"),
+              planned_date: dbDay("2026-10-07"),
               amount: "-15",
               currency: "EUR",
               recipient_name: "Gym",
@@ -1432,7 +1432,7 @@ describe("InfoRepository", () => {
           rows: [
             makePlannedTransactionRow({
               id: 1,
-              planned_date: pgDay("2025-11-01"),
+              planned_date: dbDay("2025-11-01"),
               amount: "-5",
               currency: "EUR",
               recipient_name: "Coffee",
@@ -1540,14 +1540,14 @@ describe("InfoRepository", () => {
               currency: "EUR",
               is_spending: true,
               cnt: "1",
-              date: pgDay("2026-01-01"),
+              date: dbDay("2026-01-01"),
             },
             {
               amount: "-20",
               currency: "EUR",
               is_spending: true,
               cnt: "1",
-              date: pgDay("2026-01-02"),
+              date: dbDay("2026-01-02"),
             },
           ],
         })
@@ -1558,20 +1558,20 @@ describe("InfoRepository", () => {
               currency: "EUR",
               is_spending: true,
               cnt: "1",
-              date: pgDay("2026-03-03"),
+              date: dbDay("2026-03-03"),
             },
             {
               amount: "1",
               currency: "EUR",
               is_spending: false,
               cnt: "1",
-              date: pgDay("2026-03-03"),
+              date: dbDay("2026-03-03"),
             },
           ],
         })
         // Third call: the unfiltered ledger-start probe. A first row back at the
         // window floor means the full 6 observed months apply.
-        .mockResolvedValueOnce({ rows: [{ first_date: pgDay("2025-09-04") }] });
+        .mockResolvedValueOnce({ rows: [{ first_date: dbDay("2025-09-04") }] });
 
       // Pin the clock so the calendar-day denominators are deterministic.
       vi.useFakeTimers();

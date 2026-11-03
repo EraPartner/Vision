@@ -14,7 +14,7 @@ participant "ApiClient" as API
 participant "RecipientsRouter" as Router
 participant "RecipientMergeService" as Service
 participant "Repositories" as Repos
-participant "PostgreSQL" as DB
+participant "SQLite" as DB
 
 group View aliases
   User -> Page : View Recipient Details

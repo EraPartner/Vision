@@ -675,8 +675,8 @@ SQL uses the `sql` tag, and `queryRows`/`queryOne` remain for SQL strings that s
 | Rule             | Detail                                                                                                                                                                              |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema location  | Add the schema to the area module `database/rows/<area>.ts` (`admin`, `ai`, `analysis`, `catalog`, `imports`, `info`, `ledger`, `portfolio`, `portfolioImport`), importing the `pg*` primitives from `database/rowSchemas.ts`. Export the row type as `z.output<typeof schema>` next to it (re-export it from `types/rows.ts` when other layers use it), so the type and the check cannot drift. |
-| Driver types     | Use the `pg*` primitives: `pgNumeric`/`pgBigint` are strings, `pgDate`/`pgTimestamptz` are `Date`, `pgInt` is a number. The SQLite driver converts a column by its declared type and an expression by its alias hint (`AS "n::bigint"`, `::bool`, `::json`, `::timestamptz`, `::date`), so rows keep the shapes node-postgres returned ([[docs/reference/sqlite-sql-dialect#Expression columns\|dialect]]). |
-| Branded columns  | Entity ids and currency columns use the branded keys (`pgAccountId`, `pgCategoryId`, …, `pgCurrency`), which brand input and output alike so the schema stays check-only ([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]). |
+| Driver types     | Use the `pg*` primitives: `dbNumeric`/`dbBigint` are strings, `dbDate`/`dbTimestamptz` are `Date`, `dbInt` is a number. The SQLite driver converts a column by its declared type and an expression by its alias hint (`AS "n::bigint"`, `::bool`, `::json`, `::timestamptz`, `::date`), so rows keep the shapes node-postgres returned ([[docs/reference/sqlite-sql-dialect#Expression columns\|dialect]]). |
+| Branded columns  | Entity ids and currency columns use the branded keys (`dbAccountId`, `dbCategoryId`, …, `dbCurrency`), which brand input and output alike so the schema stays check-only ([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]). |
 | Check only       | A `RowSchema<T>` has the same input and output type, so coercions and transforms do not compile. Callers get the exact objects the driver returned, extra columns included.          |
 | Columns          | Plain `z.object` ignores unlisted columns, so `SELECT t.*` keeps working after a migration adds one. `.optional()` marks a column only some projections select; `.nullable()` marks SQL NULL. |
 | Transactions     | Pass the `client` as the fourth argument inside `withTransaction`.                                                                                                                  |
@@ -687,7 +687,7 @@ SQL uses the `sql` tag, and `queryRows`/`queryOne` remain for SQL strings that s
 | Cost             | `checkRows` stops at the first failing row, so a systematic mismatch is one error.                                                                                                  |
 
 Almost every repository and service read uses these helpers. Tests that mock `query` build rows
-with the pg-shaped helpers in `tests/helpers/pgRows.ts`, `tests/helpers/portfolioPgRows.ts`
+with the pg-shaped helpers in `tests/helpers/rowFixtures.ts`, `tests/helpers/portfolioRowFixtures.ts`
 (portfolio, investment, price and snapshot rows) and `tests/helpers/aiRows.ts` (AI, analysis,
 monitor and dossier rows).
 

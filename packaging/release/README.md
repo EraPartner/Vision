@@ -5,9 +5,9 @@ database and attachments on your Mac. Normal installation and daily use do not r
 a database server or a separately installed Chrome.
 
 > **Coming from Vision 2.0?** Vision 2.0 kept its data in PostgreSQL. This version keeps it in one
-> SQLite file and does not start while it finds Vision 2.0 data without one. Make a backup in
-> Vision 2.0 before you install, then follow the transition guide:
-> https://github.com/EraPartner/Vision/blob/main/docs/guides/sqlite-transition.md
+> SQLite file and does not read Vision 2.0 data: it starts empty. Make a backup in Vision 2.0
+> before you install, then convert it with `bun run transition:v2 -- <backup file>` from a
+> checkout of commit `dd4cc71` (https://github.com/EraPartner/Vision/tree/dd4cc71).
 
 ## What's in this release
 
@@ -125,8 +125,8 @@ Use the in-app backup controls to create a `.visionbak` file. A backup holds a c
 database, the attachments and supported frontend/localStorage state, with optional AES-256-GCM
 encryption. Restore rejects a newer schema, stages a fresh database and attachment tree, and
 activates them only after validation. A failed activation rolls both back. Backups made by
-Vision 2.0 hold PostgreSQL data: restore one only after the transition script has converted it
-(`bun run transition:v2 -- <backup> --to-backup <new file>`, see the transition guide).
+Vision 2.0 use an older format and are refused; the transition script at `dd4cc71` converts one
+with `--to-backup <new file>`.
 
 Keep at least one backup outside `~/Library/Application Support/Vision` before uninstalling or
 performing a rollback.
@@ -137,7 +137,6 @@ performing a rollback.
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
 | **macOS could not verify Vision**                            | Allow the first launch once, as described in [Install the app](#2-install-the-app).                |
 | **Vision reports a corrupt or wrong-version native runtime** | Reinstall the same Vision release.                                                                 |
-| **Vision found data from Vision 2.0 and did not start**      | Move the data once with the transition script; see the transition guide linked above.              |
 | **Vision could not back up the database before migrating**   | Fix the reason the message names (often a full disk), then open Vision again. Nothing was changed. |
 | **Backend does not become ready**                            | Open Vision logs from the recovery screen and inspect `backend.log`.                               |
 

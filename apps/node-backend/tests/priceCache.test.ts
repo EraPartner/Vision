@@ -10,7 +10,7 @@ vi.mock("../src/config/logger.ts", () => ({
 }));
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
   toNumber,
   isValidPrice,
@@ -30,12 +30,12 @@ import {
   __PRICE_CACHE_TTL_MS as PRICE_CACHE_TTL_MS,
 } from "../src/services/prices/priceCache.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
-import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
+import { dbLocalDate } from "./helpers/portfolioRowFixtures.ts";
 import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 
 beforeEach(() => {
@@ -109,7 +109,7 @@ describe("dateOnlyToTimestampMs", () => {
   });
 
   it("accepts a pg-read DATE (local-midnight Date object) — the DB cache read shape", () => {
-    // String(pgDate) is "Wed Jul 01 2026 …" — the old split('-') path NaN'd on
+    // String(dbDate) is "Wed Jul 01 2026 …" — the old split('-') path NaN'd on
     // it, so EVERY DB-cached price-history read returned [] (silent live
     // re-fetch / empty chart under db_only), in every deployment.
     expect(dateOnlyToTimestampMs(new Date(2025, 3, 15))).toBe(
@@ -312,8 +312,8 @@ describe("loadHistoricalPointsFromDatabase", () => {
   it("normalizes rows from query result", async () => {
     query.mockResolvedValueOnce({
       rows: [
-        { price_date: pgLocalDate("2025-04-02"), close_price: "110.000000" },
-        { price_date: pgLocalDate("2025-04-01"), close_price: "100.000000" },
+        { price_date: dbLocalDate("2025-04-02"), close_price: "110.000000" },
+        { price_date: dbLocalDate("2025-04-01"), close_price: "100.000000" },
       ],
     });
     const r = await loadHistoricalPointsFromDatabase(1);
@@ -396,7 +396,7 @@ describe("loadLatestHistoricalPointByInvestmentIds", () => {
       rows: [
         {
           investment_id: 7,
-          price_date: pgLocalDate("2026-01-02"),
+          price_date: dbLocalDate("2026-01-02"),
           close_price: "12.5",
         },
       ],

@@ -23,10 +23,8 @@ import {
   createNativeRuntime,
   parseDatabaseToolOutput,
   packagedMigrationVersion,
-  LEGACY_POSTGRES_DATA_CODE,
   PACKAGED_DATABASE_TOOL,
   SOURCE_DATABASE_TOOL,
-  TRANSITION_COMMAND,
   type NativeRuntimeOptions,
   type PortProbeServer,
   type RunFile,
@@ -245,7 +243,7 @@ void test("native first-start layout keeps the database inside application data,
   assert.equal(fs.existsSync(runtime.paths.database), false);
 });
 
-void test("native layout strips retired secrets but keeps Vision 2.0 credentials for a downgrade", async (t) => {
+void test("native layout strips retired secrets, including the old database server's", async (t) => {
   const temp = await tempDir(t, "vision-native-retired-env-");
   const runtime = sourceRuntime(temp, { runtimeId: "vision_retired_env_test" });
   await runtime.ensureLayout();
@@ -268,7 +266,7 @@ void test("native layout strips retired secrets but keeps Vision 2.0 credentials
   const cleaned = await fs.promises.readFile(runtime.paths.env, "utf8");
   assert.equal(
     cleaned,
-    `${current}DATABASE_URL=postgresql://vision_app:redacted@127.0.0.1:54329/vision\nFRED_API_KEY=kept\n`,
+    `${current}FRED_API_KEY=kept\n`,
   );
   await runtime.ensureLayout();
   assert.equal(await fs.promises.readFile(runtime.paths.env, "utf8"), cleaned);
@@ -334,62 +332,6 @@ void test("native first start persists and unreferences an argument-array backen
     message: "Vision could not back up the database before migrating it: disk full",
     code: "PRE_MIGRATION_BACKUP_FAILED",
   });
-});
-
-void test("Vision 2.0 data without a SQLite database stops startup and stays untouched", async (t) => {
-  const temp = await tempDir(t, "vision-native-legacy-");
-  let spawns = 0;
-  const runtime = sourceRuntime(temp, {
-    runtimeId: "vision",
-    isPortFree: () => Promise.resolve(true),
-    spawnProcess: () => {
-      spawns += 1;
-      return fakeChild({ pid: 123_457 });
-    },
-  });
-  const legacy = path.join(temp, "native", "vision", "postgres", "data");
-  assert.equal(runtime.paths.legacyPostgresData, legacy);
-  await fs.promises.mkdir(path.join(legacy, "base"), { recursive: true });
-  await fs.promises.writeFile(path.join(legacy, "PG_VERSION"), "18\n");
-  await fs.promises.writeFile(path.join(legacy, "base", "1"), "cluster");
-  const before = await directoryFingerprint(legacy);
-  const beforeStat = await fs.promises.stat(path.join(legacy, "PG_VERSION"));
-
-  await assert.rejects(runtime.start(), (error: unknown) => {
-    assert.ok(hasCode(LEGACY_POSTGRES_DATA_CODE)(error));
-    assert.ok(error instanceof Error);
-    assert.ok(error.message.includes(TRANSITION_COMMAND));
-    assert.ok(error.message.includes(legacy));
-    assert.ok(isRecord(error));
-    assert.equal(error.dataDirectory, legacy);
-    assert.equal(error.command, "bun run transition:v2 -- <backup file>");
-    assert.equal(error.backups, path.join(temp, "pre-update-backups"));
-    return true;
-  });
-  assert.equal(spawns, 0);
-  assert.equal(fs.existsSync(runtime.paths.database), false);
-  assert.deepEqual(await directoryFingerprint(legacy), before);
-  assert.equal(
-    (await fs.promises.stat(path.join(legacy, "PG_VERSION"))).mtimeMs,
-    beforeStat.mtimeMs,
-  );
-
-  // Once a SQLite database exists (the transition installed it), both may coexist.
-  await fs.promises.writeFile(runtime.paths.database, sqliteFile(1));
-  await runtime.start();
-  assert.equal(spawns, 1);
-  assert.deepEqual(await directoryFingerprint(legacy), before);
-});
-
-void test("an empty Vision 2.0 data directory does not block a fresh start", async (t) => {
-  const temp = await tempDir(t, "vision-native-legacy-empty-");
-  const runtime = sourceRuntime(temp, {
-    runtimeId: "vision",
-    isPortFree: () => Promise.resolve(true),
-    spawnProcess: () => fakeChild({ pid: 123_458 }),
-  });
-  await fs.promises.mkdir(runtime.paths.legacyPostgresData, { recursive: true });
-  assert.equal((await runtime.start()).status, "started");
 });
 
 void test("startup error is read from the last failed backend start in the log", () => {

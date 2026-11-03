@@ -457,14 +457,10 @@ router.get("/database/stats", async (_req, res) => {
   const tables: TableStatsRow[] = names.map((name) => {
     const sizeBytes = sizes?.get(name) ?? (sizes ? "0" : null);
     return {
-      schemaname: "main",
       table_name: name,
       live_rows: liveRows.get(name) ?? "0",
-      dead_rows: "0",
       last_vacuum: maintenanceRuns.vacuumedAt,
-      last_autovacuum: null,
       last_analyze: maintenanceRuns.analyzedAt.get(name) ?? null,
-      last_autoanalyze: null,
       size: sizeBytes === null ? "—" : prettySize(Number(sizeBytes)),
       size_bytes: sizeBytes ?? "0",
     };

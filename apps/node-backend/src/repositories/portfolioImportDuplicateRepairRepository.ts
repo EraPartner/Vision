@@ -14,7 +14,7 @@ import { requireRow } from "../database/rowContracts.ts";
 import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
-import { canonicalTimestamp } from "../database/sqlite/pgTime.ts";
+import { canonicalTimestamp } from "../database/sqlite/timestamps.ts";
 import { portfolioIncomeTransactionSnapshotSql } from "../database/sqlite/schemaFunctions.ts";
 import {
   bigintIdRowSchema,

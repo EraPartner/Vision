@@ -55,7 +55,7 @@ import {
   stageBatch as stagePortfolioBatch,
 } from "../src/services/portfolioImportPipeline/stage.ts";
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import type { CustomTransactionParserConfig } from "../src/services/importPipeline/adapters/generic.ts";
 import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import { must } from "./helpers/must.ts";
@@ -65,7 +65,7 @@ const query = rawQuery as unknown as Mock<
   (
     sql: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 
 /** Parsed rows as an adapter returns them: the array carries its skip count. */

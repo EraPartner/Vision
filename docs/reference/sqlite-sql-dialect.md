@@ -84,7 +84,7 @@ SELECT EXISTS (SELECT 1 FROM tags) AS "has_tags::bool",
 
 Hints: `::bool`, `::json`, `::timestamptz`, `::date`, `::bigint` (decimal string), `::text`.
 Without a hint `count(*)` reads as a `number`; row schemas accept a number or a string for
-`pgBigint` and always yield a string.
+`dbBigint` and always yield a string.
 
 ## Parameters
 

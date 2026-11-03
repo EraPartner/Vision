@@ -14,7 +14,7 @@ participant "Ollama client\nintegrations/ollama/client.ts" as Client
 participant "Configured Ollama endpoint" as Ollama
 participant "Tool registry\naiChat/tools/index.ts" as Tools
 participant "Shared TypeScript\nai-chat/toolPresentation.ts" as Presentation
-database "PostgreSQL\naiChatRepository + application data" as DB
+database "SQLite\naiChatRepository + application data" as DB
 
 group 1. Start and persist the turn
   User -> Frontend : Send message

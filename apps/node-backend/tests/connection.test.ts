@@ -18,7 +18,7 @@ import {
   withSavepointIfInTransaction,
   withTransaction,
 } from "../src/database/connection.ts";
-import type { PgPoolClient } from "../src/database/connection.ts";
+import type { DbClient } from "../src/database/connection.ts";
 import { must } from "./helpers/must.ts";
 
 interface DbError {
@@ -260,7 +260,7 @@ describe("transactions", () => {
   });
 
   it("sameTransaction relates a savepoint's client to its parent and nothing else", async () => {
-    let first: PgPoolClient | undefined;
+    let first: DbClient | undefined;
     await withTransaction(async (outer) => {
       first = outer;
       await withTransaction(async (inner) => {

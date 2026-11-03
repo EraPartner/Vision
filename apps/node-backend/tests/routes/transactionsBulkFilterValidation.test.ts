@@ -80,7 +80,7 @@ import {
   getClient as rawGetClient,
   query as rawQuery,
 } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 
 const dbQuery = vi.mocked(rawQuery);
 const getClient = vi.mocked(rawGetClient);
@@ -156,8 +156,8 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
     // the 5000-row cap rather than by validation — it must not be mistaken for
     // an empty filter and rejected.
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 1 }] } as PgQueryResult)
-      .mockResolvedValueOnce({ rows: [{ id: 11 }] } as PgQueryResult);
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] } as DbQueryResult)
+      .mockResolvedValueOnce({ rows: [{ id: 11 }] } as DbQueryResult);
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
@@ -174,10 +174,10 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
 
   it("still accepts a well-formed filter unchanged", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 2 }] } as PgQueryResult)
+      .mockResolvedValueOnce({ rows: [{ n: 2 }] } as DbQueryResult)
       .mockResolvedValueOnce({
         rows: [{ id: 11 }, { id: 22 }],
-      } as PgQueryResult);
+      } as DbQueryResult);
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})

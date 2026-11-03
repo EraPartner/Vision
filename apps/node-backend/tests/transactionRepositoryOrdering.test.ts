@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
-import { txRow } from "./helpers/pgRows.ts";
+import { txRow } from "./helpers/rowFixtures.ts";
 import {
   asTransactionId,
 } from "@vision/types/brands";

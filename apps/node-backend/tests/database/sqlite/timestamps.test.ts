@@ -1,13 +1,13 @@
 /**
  * Date/time golden tests: expected outputs come from PostgreSQL 18.6 with
- * `TimeZone = 'Europe/Brussels'` (pgTime.golden.json). The functions read the
+ * `TimeZone = 'Europe/Brussels'` (timestamps.golden.json). The functions read the
  * session zone from the process, so this file runs in the same zone.
  */
 process.env.TZ = "Europe/Brussels";
 
 import { describe, expect, it } from "vitest";
 
-import { parseInterval } from "../../../src/database/sqlite/pgTime.ts";
+import { parseInterval } from "../../../src/database/sqlite/timestamps.ts";
 import { loadFixture, openDb, outcome, scalar } from "./harness.ts";
 import type { SqlArg } from "./harness.ts";
 
@@ -18,7 +18,7 @@ interface Vector {
   error?: string;
 }
 
-const vectors = loadFixture<Vector>("pgTime.golden.json");
+const vectors = loadFixture<Vector>("timestamps.golden.json");
 const db = openDb();
 
 const sqlFor: Record<string, string> = {

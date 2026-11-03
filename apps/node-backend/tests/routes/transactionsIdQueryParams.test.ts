@@ -73,7 +73,7 @@ import rawTransactionRepository from "../../src/repositories/transactionReposito
 import type { TransactionFilters } from "../../src/repositories/transactionRepository.ts";
 import { markTransfer } from "../../src/services/transferReconciliationService.ts";
 import { query as rawDbQuery } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
 import type { ConvertedRow } from "../../src/services/currency/currencyConversionService.ts";
 import { attachmentRepository as rawAttachmentRepository } from "../../src/services/attachmentRecordService.ts";
@@ -103,7 +103,7 @@ const exportQuery = () => must(dbQuery.mock.calls[0], "dbQuery.mock.calls[0]");
 /** The export streams: a row-probe query, then the chunked page query. */
 const armExport = () => {
   dbQuery
-    .mockResolvedValueOnce({ rows: [{}] } as PgQueryResult)
+    .mockResolvedValueOnce({ rows: [{}] } as DbQueryResult)
     .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 };
 

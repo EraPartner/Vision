@@ -21,17 +21,17 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 /** INTEGER / SMALLINT / SERIAL, and a bare SQLite `count(*)`. */
-export const pgInt = z.int();
+export const dbInt = z.int();
 /** NUMERIC / DECIMAL: the exact decimal text. */
-export const pgNumeric = z.string();
+export const dbNumeric = z.string();
 /** BIGINT / BIGSERIAL, and `count(*)` read with a `::bigint` alias hint. */
-export const pgBigint = z.string();
+export const dbBigint = z.string();
 /** DATE: a local-midnight `Date`, NOT a 'YYYY-MM-DD' string. */
-export const pgDate = z.date();
+export const dbDate = z.date();
 /** TIMESTAMPTZ. */
-export const pgTimestamptz = z.date();
+export const dbTimestamptz = z.date();
 /** A `to_char(..., 'YYYY-MM-DD')` projection (a Vision SQL function). */
-export const pgDayString = z.string();
+export const dbDayString = z.string();
 
 // ---------------------------------------------------------------------------
 // Branded keys and currency codes (ADR-220)
@@ -45,67 +45,67 @@ export const pgDayString = z.string();
  */
 
 /** `accounts.id` and every column referencing it. */
-export const pgAccountId = z.int().brand<"AccountId", "inout">();
+export const dbAccountId = z.int().brand<"AccountId", "inout">();
 /** `transactions.id` and every column referencing it. */
-export const pgTransactionId = z.int().brand<"TransactionId", "inout">();
+export const dbTransactionId = z.int().brand<"TransactionId", "inout">();
 /** `categories.id` and every column referencing it. */
-export const pgCategoryId = z.int().brand<"CategoryId", "inout">();
+export const dbCategoryId = z.int().brand<"CategoryId", "inout">();
 /** `recipients.id` and every column referencing it. */
-export const pgRecipientId = z.int().brand<"RecipientId", "inout">();
+export const dbRecipientId = z.int().brand<"RecipientId", "inout">();
 /** `tags.id` and every column referencing it. */
-export const pgTagId = z.int().brand<"TagId", "inout">();
+export const dbTagId = z.int().brand<"TagId", "inout">();
 /** `transaction_splits.id` and every column referencing it. */
-export const pgSplitId = z.int().brand<"SplitId", "inout">();
+export const dbSplitId = z.int().brand<"SplitId", "inout">();
 /** `planned_transactions.id` and every column referencing it. */
-export const pgPlannedTransactionId = z.int().brand<"PlannedTransactionId", "inout">();
+export const dbPlannedTransactionId = z.int().brand<"PlannedTransactionId", "inout">();
 /** `investments.id` and every column referencing it. */
-export const pgInvestmentId = z.int().brand<"InvestmentId", "inout">();
+export const dbInvestmentId = z.int().brand<"InvestmentId", "inout">();
 /** `portfolio_transactions.id` and every column referencing it. */
-export const pgPortfolioTransactionId = z.int().brand<"PortfolioTransactionId", "inout">();
+export const dbPortfolioTransactionId = z.int().brand<"PortfolioTransactionId", "inout">();
 
 /**
  * A currency column. The ISO shape is enforced by the tables' CHECK
  * constraints, not here: some are NOT VALID on long-lived databases, and a
  * legacy row must not turn every read of it into a contract failure.
  */
-export const pgCurrency = z.string().brand<"CurrencyCode", "inout">();
+export const dbCurrency = z.string().brand<"CurrencyCode", "inout">();
 
 /** A bare `SELECT COUNT(*)` row. */
 export const countRowSchema = z
-  .object({ count: pgBigint })
+  .object({ count: dbBigint })
   .describe("count row");
 
 /** A `SELECT id` / `RETURNING id` row over an INTEGER/SERIAL key. */
-export const idRowSchema = z.object({ id: pgInt }).describe("id row");
+export const idRowSchema = z.object({ id: dbInt }).describe("id row");
 
 /** `SELECT id` / `RETURNING id` over `accounts`. */
 export const accountKeyRowSchema = z
-  .object({ id: pgAccountId })
+  .object({ id: dbAccountId })
   .describe("account id row");
 /** `SELECT id` / `RETURNING id` over `transactions`. */
 export const transactionKeyRowSchema = z
-  .object({ id: pgTransactionId })
+  .object({ id: dbTransactionId })
   .describe("transaction id row");
 /** `SELECT id` / `RETURNING id` over `categories`. */
 export const categoryKeyRowSchema = z
-  .object({ id: pgCategoryId })
+  .object({ id: dbCategoryId })
   .describe("category id row");
 /** `SELECT id` / `RETURNING id` over `recipients`. */
 export const recipientKeyRowSchema = z
-  .object({ id: pgRecipientId })
+  .object({ id: dbRecipientId })
   .describe("recipient id row");
 /** `SELECT id` / `RETURNING id` over `planned_transactions`. */
 export const plannedTransactionKeyRowSchema = z
-  .object({ id: pgPlannedTransactionId })
+  .object({ id: dbPlannedTransactionId })
   .describe("planned transaction id row");
 /** `SELECT id` / `RETURNING id` over `tags`. */
-export const tagKeyRowSchema = z.object({ id: pgTagId }).describe("tag id row");
+export const tagKeyRowSchema = z.object({ id: dbTagId }).describe("tag id row");
 /**
  * `SELECT id` / `RETURNING id` over `transaction_splits`.
  * @public
  */
 export const splitKeyRowSchema = z
-  .object({ id: pgSplitId })
+  .object({ id: dbSplitId })
   .describe("split id row");
 
 /**
@@ -113,7 +113,7 @@ export const splitKeyRowSchema = z
  * `::text` in SQL, so a string; NULL when the account has no rows.
  */
 export const balancePartsSchema = z
-  .array(z.object({ currency: pgCurrency, balance: pgNumeric }))
+  .array(z.object({ currency: dbCurrency, balance: dbNumeric }))
   .nullable();
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ export const balancePartsSchema = z
 /** A tag as attached to a transaction / planned transaction sub-collection. */
 export const transactionTagRefSchema = z
   .object({
-    id: pgTagId,
+    id: dbTagId,
     slug: z.string(),
     color: z.string().nullable(),
     is_active: z.boolean(),
@@ -132,48 +132,48 @@ export const transactionTagRefSchema = z
 
 /** `attachTagsToRows`' junction read. */
 export const transactionTagRowSchema = transactionTagRefSchema
-  .extend({ transaction_id: pgTransactionId })
+  .extend({ transaction_id: dbTransactionId })
   .describe("transaction tag row");
 
 /** A row of `transactions` as returned by `SELECT t.*`. */
 export const transactionRowSchema = z
   .object({
-    id: pgTransactionId,
-    date: pgDate,
+    id: dbTransactionId,
+    date: dbDate,
     /** NUMERIC(18,4) */
-    amount: pgNumeric,
+    amount: dbNumeric,
     /** VARCHAR(3); NOT NULL + DEFAULT 'EUR' from migration 0046, nullable on older rows. */
-    currency: pgCurrency.nullable(),
+    currency: dbCurrency.nullable(),
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094). */
-    balance: pgNumeric.nullable(),
+    balance: dbNumeric.nullable(),
     /** Internal bank chronology; omitted from API rows. */
-    bank_sequence: pgNumeric.nullable().optional(),
+    bank_sequence: dbNumeric.nullable().optional(),
     memo: z.string().nullable(),
     comment: z.string().nullable(),
     /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
     bank_account: z.string().nullable().optional(),
     /** FK → accounts (migration 0050). */
-    account_id: pgAccountId.nullable().optional(),
-    recipient_id: pgRecipientId.nullable(),
-    recipient_bank_account_id: pgInt.nullable(),
-    category_id: pgCategoryId.nullable(),
+    account_id: dbAccountId.nullable().optional(),
+    recipient_id: dbRecipientId.nullable(),
+    recipient_bank_account_id: dbInt.nullable(),
+    category_id: dbCategoryId.nullable(),
     is_active: z.boolean(),
     /** BIGINT FK → import_batches. */
-    import_batch_id: pgBigint.nullable().optional(),
-    matched_pattern_id: pgInt.nullable().optional(),
+    import_batch_id: dbBigint.nullable().optional(),
+    matched_pattern_id: dbInt.nullable().optional(),
     /** Internal SHA-256 of the staged literal record; omitted from API rows. */
     source_record_hash: z.string().nullable().optional(),
     /** Internal versioned import identity; omitted from API rows. */
     dedup_fingerprint: z.string().nullable().optional(),
-    dedup_fingerprint_version: pgInt.nullable().optional(),
+    dedup_fingerprint_version: dbInt.nullable().optional(),
     is_transfer: z.boolean().optional(),
-    transfer_peer_id: pgTransactionId.nullable().optional(),
+    transfer_peer_id: dbTransactionId.nullable().optional(),
     transfer_source: z
       .enum(["auto", "manual", "opening", "adjustment", "brokerage"])
       .nullable()
       .optional(),
-    created_at: pgTimestamptz.nullable().optional(),
-    updated_at: pgTimestamptz.nullable().optional(),
+    created_at: dbTimestamptz.nullable().optional(),
+    updated_at: dbTimestamptz.nullable().optional(),
   })
   .describe("transactions row");
 
@@ -185,9 +185,9 @@ export const enrichedTransactionDbRowSchema = transactionRowSchema
   .extend({
     recipient_name: z.string().nullable(),
     category_name: z.string().nullable(),
-    effective_category_id: pgCategoryId.nullable().optional(),
+    effective_category_id: dbCategoryId.nullable().optional(),
     /** NUMERIC window sum, only with `includeBalance`. */
-    running_balance: pgNumeric.optional(),
+    running_balance: dbNumeric.optional(),
   })
   .describe("enriched transactions row");
 
@@ -195,26 +195,26 @@ export const enrichedTransactionDbRowSchema = transactionRowSchema
 export const uncategorisedPageRowSchema = enrichedTransactionDbRowSchema
   .extend({
     /** COUNT(*)::int */
-    total_count: pgInt,
+    total_count: dbInt,
     /** ROW_NUMBER() is BIGINT. */
-    _row_order: pgBigint,
+    _row_order: dbBigint,
   })
   .describe("uncategorised transactions page row");
 
 /** The `total_count` every `getUncategorisedWithCount` row carries. */
 export const uncategorisedTotalRowSchema = z
-  .object({ total_count: pgInt })
+  .object({ total_count: dbInt })
   .describe("uncategorised transactions total row");
 
 /** Projection of `listRecentUnlinked`; `transaction_date` is `t.date` aliased. */
 export const unlinkedTransactionRowSchema = z
   .object({
-    id: pgTransactionId,
-    recipient_id: pgRecipientId.nullable(),
-    recipient_cluster_id: pgRecipientId.nullable(),
-    amount: pgNumeric,
-    transaction_date: pgDate,
-    currency: pgCurrency.nullable(),
+    id: dbTransactionId,
+    recipient_id: dbRecipientId.nullable(),
+    recipient_cluster_id: dbRecipientId.nullable(),
+    amount: dbNumeric,
+    transaction_date: dbDate,
+    currency: dbCurrency.nullable(),
     memo: z.string().nullable(),
     recipient_name: z.string().nullable(),
   })
@@ -245,38 +245,38 @@ export const transferLegRowSchema = transactionRowSchema
 /** A row of `planned_transactions` as returned by `SELECT pt.*`. */
 export const plannedTransactionRowSchema = z
   .object({
-    id: pgPlannedTransactionId,
-    planned_date: pgDate,
+    id: dbPlannedTransactionId,
+    planned_date: dbDate,
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
-    amount: pgNumeric,
-    currency: pgCurrency.nullable(),
+    amount: dbNumeric,
+    currency: dbCurrency.nullable(),
     memo: z.string().nullable(),
     comment: z.string().nullable(),
     url: z.string().nullable(),
     /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
     bank_account: z.string().nullable().optional(),
-    account_id: pgAccountId.nullable().optional(),
-    recipient_id: pgRecipientId.nullable(),
-    category_id: pgCategoryId.nullable(),
+    account_id: dbAccountId.nullable().optional(),
+    recipient_id: dbRecipientId.nullable(),
+    category_id: dbCategoryId.nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
-    recurrence_end_date: pgDate.nullable().optional(),
-    max_occurrences: pgInt.nullable().optional(),
-    reminder_days_before: pgInt.nullable().optional(),
+    recurrence_end_date: dbDate.nullable().optional(),
+    max_occurrences: dbInt.nullable().optional(),
+    reminder_days_before: dbInt.nullable().optional(),
     is_loan: z.boolean(),
     loan_type: z.string().nullable(),
-    loan_principal: pgNumeric.nullable(),
-    loan_annual_interest_rate: pgNumeric.nullable(),
-    loan_term_months: pgInt.nullable(),
-    loan_start_date: pgDate.nullable(),
-    loan_payment_day: pgInt.nullable(),
-    loan_regular_payment_amount: pgNumeric.nullable(),
-    loan_first_payment_date: pgDate.nullable(),
+    loan_principal: dbNumeric.nullable(),
+    loan_annual_interest_rate: dbNumeric.nullable(),
+    loan_term_months: dbInt.nullable(),
+    loan_start_date: dbDate.nullable(),
+    loan_payment_day: dbInt.nullable(),
+    loan_regular_payment_amount: dbNumeric.nullable(),
+    loan_first_payment_date: dbDate.nullable(),
     is_executed: z.boolean(),
-    last_executed_date: pgDate.nullable(),
+    last_executed_date: dbDate.nullable(),
     is_active: z.boolean(),
-    created_at: pgTimestamptz.nullable().optional(),
-    updated_at: pgTimestamptz.nullable().optional(),
+    created_at: dbTimestamptz.nullable().optional(),
+    updated_at: dbTimestamptz.nullable().optional(),
   })
   .describe("planned_transactions row");
 
@@ -290,51 +290,51 @@ export const plannedTransactionListRowSchema = plannedTransactionRowSchema
 
 /** A `getAll` page row: the list row plus `COUNT(*) OVER()`. */
 export const plannedTransactionPageRowSchema = plannedTransactionListRowSchema
-  .extend({ total_count: pgBigint })
+  .extend({ total_count: dbBigint })
   .describe("planned_transactions page row");
 
 /** A row of `planned_transaction_executions` (`SELECT *`, migration 0001). */
 export const plannedExecutionRowSchema = z
   .object({
-    id: pgInt,
-    planned_transaction_id: pgPlannedTransactionId,
-    executed_transaction_id: pgTransactionId,
-    execution_date: pgDate,
-    created_at: pgTimestamptz.nullable().optional(),
+    id: dbInt,
+    planned_transaction_id: dbPlannedTransactionId,
+    executed_transaction_id: dbTransactionId,
+    execution_date: dbDate,
+    created_at: dbTimestamptz.nullable().optional(),
   })
   .describe("planned_transaction_executions row");
 
 /** One installment of `planned_transaction_loan_schedule` (detail projection). */
 export const loanScheduleRowSchema = z
   .object({
-    installment_number: pgInt,
-    due_date: pgDate,
-    payment_amount: pgNumeric,
-    principal_amount: pgNumeric,
-    interest_amount: pgNumeric,
-    remaining_principal: pgNumeric,
+    installment_number: dbInt,
+    due_date: dbDate,
+    payment_amount: dbNumeric,
+    principal_amount: dbNumeric,
+    interest_amount: dbNumeric,
+    remaining_principal: dbNumeric,
   })
   .describe("loan schedule row");
 
 /** The list-path installment projection, keyed by its planned transaction. */
 export const keyedLoanScheduleRowSchema = loanScheduleRowSchema
-  .extend({ planned_transaction_id: pgPlannedTransactionId })
+  .extend({ planned_transaction_id: dbPlannedTransactionId })
   .describe("keyed loan schedule row");
 
 /** The list-path tag projection, keyed by its planned transaction. */
 export const plannedTagRowSchema = transactionTagRefSchema
-  .extend({ planned_transaction_id: pgPlannedTransactionId })
+  .extend({ planned_transaction_id: dbPlannedTransactionId })
   .describe("planned transaction tag row");
 
 /** Narrow projection of `listActiveUnexecuted`. */
 export const plannedMatchCandidateRowSchema = z
   .object({
-    id: pgPlannedTransactionId,
-    recipient_id: pgRecipientId.nullable(),
-    recipient_cluster_id: pgRecipientId.nullable(),
-    amount: pgNumeric,
-    planned_date: pgDate,
-    currency: pgCurrency.nullable(),
+    id: dbPlannedTransactionId,
+    recipient_id: dbRecipientId.nullable(),
+    recipient_cluster_id: dbRecipientId.nullable(),
+    amount: dbNumeric,
+    planned_date: dbDate,
+    currency: dbCurrency.nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
     memo: z.string().nullable(),
@@ -345,10 +345,10 @@ export const plannedMatchCandidateRowSchema = z
 /** Narrow projection of `getForForecast`. */
 export const plannedForecastRowSchema = z
   .object({
-    id: pgPlannedTransactionId,
-    planned_date: pgDate,
-    amount: pgNumeric,
-    currency: pgCurrency.nullable(),
+    id: dbPlannedTransactionId,
+    planned_date: dbDate,
+    amount: dbNumeric,
+    currency: dbCurrency.nullable(),
     memo: z.string().nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
@@ -360,16 +360,16 @@ export const plannedForecastRowSchema = z
 /** Narrow projection of `getForCommitmentProjection`. */
 export const plannedCommitmentRowSchema = z
   .object({
-    id: pgPlannedTransactionId,
-    planned_date: pgDate,
-    amount: pgNumeric,
-    currency: pgCurrency.nullable(),
+    id: dbPlannedTransactionId,
+    planned_date: dbDate,
+    amount: dbNumeric,
+    currency: dbCurrency.nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
-    recurrence_end_date: pgDate.nullable(),
-    max_occurrences: pgInt.nullable(),
+    recurrence_end_date: dbDate.nullable(),
+    max_occurrences: dbInt.nullable(),
     /** COUNT(*)::int */
-    execution_count: pgInt,
+    execution_count: dbInt,
   })
   .describe("planned commitment row");
 
@@ -380,12 +380,12 @@ export const plannedCommitmentRowSchema = z
 /** A row of `accounts` as projected by `accountRepository`'s `COLUMNS` list. */
 export const accountRowSchema = z
   .object({
-    id: pgAccountId,
+    id: dbAccountId,
     /** Canonical name; unique on `lower(btrim(name))` (migration 0066). */
     name: z.string(),
     display_name: z.string().nullable(),
     institution: z.string().nullable(),
-    currency: pgCurrency,
+    currency: dbCurrency,
     /** `account_type` enum: checking|savings|brokerage|crypto_exchange|wallet|pension|liability. */
     type: z.string(),
     /** `account_liquidity_class` enum. */
@@ -398,11 +398,11 @@ export const accountRowSchema = z
     owner: z.string(),
     multi_currency_cash: z.boolean(),
     has_cash_sleeve: z.boolean(),
-    funding_account_id: pgAccountId.nullable(),
+    funding_account_id: dbAccountId.nullable(),
     is_active: z.boolean(),
-    closed_at: pgTimestamptz.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    closed_at: dbTimestamptz.nullable(),
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
   })
   .describe("accounts row");
 
@@ -412,9 +412,9 @@ export const accountBalanceQueryRowSchema = accountRowSchema
     /** jsonb partitions; `balance` is cast `::text` in SQL, so a string. */
     balance_parts: balancePartsSchema,
     has_transactions: z.boolean(),
-    anchor_date: pgDayString.nullable(),
+    anchor_date: dbDayString.nullable(),
     /** Bare COUNT(*) */
-    post_anchor_count: pgBigint.nullable(),
+    post_anchor_count: dbBigint.nullable(),
     /**
      * json_build_object over the NUMERIC column: JSON encodes it as a number,
      * so `balance` arrives as a JS number (unlike `balance_parts`).
@@ -422,9 +422,9 @@ export const accountBalanceQueryRowSchema = accountRowSchema
     statement_balances: z
       .array(
         z.object({
-          currency: pgCurrency,
+          currency: dbCurrency,
           balance: z.number(),
-          balance_date: pgDayString,
+          balance_date: dbDayString,
         }),
       )
       .nullable(),
@@ -434,10 +434,10 @@ export const accountBalanceQueryRowSchema = accountRowSchema
 /** An `account_statement_balances` row as `upsertStatementBalance` returns it. */
 export const statementBalanceRowSchema = z
   .object({
-    account_id: pgAccountId,
-    currency: pgCurrency,
-    balance: pgNumeric,
-    balance_date: pgDayString,
+    account_id: dbAccountId,
+    currency: dbCurrency,
+    balance: dbNumeric,
+    balance_date: dbDayString,
   })
   .describe("account statement balance row");
 
@@ -448,46 +448,46 @@ export const statementBalanceRowSchema = z
 /** A raw `transaction_splits` row (`SELECT *` / `RETURNING *`). */
 export const transactionSplitRowSchema = z
   .object({
-    id: pgSplitId,
-    transaction_id: pgTransactionId,
-    recipient_id: pgRecipientId,
+    id: dbSplitId,
+    transaction_id: dbTransactionId,
+    recipient_id: dbRecipientId,
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
-    amount: pgNumeric,
+    amount: dbNumeric,
     note: z.string().nullable(),
     is_settled: z.boolean(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
+    created_at: dbTimestamptz,
+    updated_at: dbTimestamptz,
     /** Joined on the read paths (the FK makes the LEFT JOIN always match). */
     recipient_name: z.string().optional(),
     /** NUMERIC sum of `split_payments` on the read paths. */
-    amount_paid: pgNumeric.optional(),
+    amount_paid: dbNumeric.optional(),
   })
   .describe("transaction_splits row");
 
 /** A raw `getOwedByRecipientRows` row: the split plus its parent transaction. */
 export const owedSplitRawRowSchema = transactionSplitRowSchema
   .extend({
-    transaction_date: pgDate,
+    transaction_date: dbDate,
     transaction_memo: z.string().nullable(),
-    transaction_amount: pgNumeric,
-    transaction_currency: pgCurrency.nullable(),
+    transaction_amount: dbNumeric,
+    transaction_currency: dbCurrency.nullable(),
     bank_account: z.string().nullable(),
     transaction_recipient_name: z.string().nullable(),
-    amount_paid: pgNumeric,
+    amount_paid: dbNumeric,
   })
   .describe("owed split row");
 
 /** A raw `getOwedExportRowsByRecipient` row, before `amount` is coerced. */
 export const owedExportRawRowSchema = z
   .object({
-    date: pgDate,
+    date: dbDate,
     bank_account: z.string().nullable(),
     recipient_name: z.string().nullable(),
     memo: z.string().nullable(),
     /** NUMERIC remaining amount */
-    amount: pgNumeric,
-    currency: pgCurrency.nullable(),
-    balance: pgNumeric.nullable(),
+    amount: dbNumeric,
+    currency: dbCurrency.nullable(),
+    balance: dbNumeric.nullable(),
     category_name: z.string(),
     comment: z.string().nullable(),
   })
@@ -496,47 +496,47 @@ export const owedExportRawRowSchema = z
 /** An `agg_split_outstanding` summary row (`getOwedSummaryRows`). */
 export const splitOutstandingRowSchema = z
   .object({
-    recipient_id: pgRecipientId,
+    recipient_id: dbRecipientId,
     recipient_name: z.string(),
-    total_owed: pgNumeric,
-    total_paid: pgNumeric,
+    total_owed: dbNumeric,
+    total_paid: dbNumeric,
     /** Bare COUNT() */
-    split_count: pgBigint,
+    split_count: dbBigint,
   })
   .describe("split outstanding row");
 
 /** `getOwedSummaryRows`: one row per (recipient group, transaction currency). */
 export const splitOutstandingCurrencyRowSchema = splitOutstandingRowSchema
-  .extend({ currency: pgCurrency.nullable() })
+  .extend({ currency: dbCurrency.nullable() })
   .describe("split outstanding currency row");
 
 /** `getOwedRemainingByCurrency`: a recipient group's unsettled remainder per currency. */
 export const owedRemainingCurrencyRowSchema = z
   .object({
-    currency: pgCurrency.nullable(),
-    remaining: pgNumeric,
+    currency: dbCurrency.nullable(),
+    remaining: dbNumeric,
     /** Bare COUNT() */
-    split_count: pgBigint,
+    split_count: dbBigint,
   })
   .describe("owed remaining currency row");
 
 /** SPLIT_TOTALS_SQL: both aggregates are NUMERIC. */
 export const splitTotalsRowSchema = z
   .object({
-    transaction_total: pgNumeric,
-    current_split_total: pgNumeric,
+    transaction_total: dbNumeric,
+    current_split_total: dbNumeric,
   })
   .describe("split totals row");
 
 /** A raw `split_payments` row (`SELECT *` / `RETURNING *`). */
 export const splitPaymentRowSchema = z
   .object({
-    id: pgInt,
-    split_id: pgSplitId,
+    id: dbInt,
+    split_id: dbSplitId,
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
-    amount: pgNumeric,
-    paid_at: pgDate,
+    amount: dbNumeric,
+    paid_at: dbDate,
     note: z.string().nullable(),
-    created_at: pgTimestamptz,
+    created_at: dbTimestamptz,
   })
   .describe("split_payments row");

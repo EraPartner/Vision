@@ -25,22 +25,22 @@ vi.mock(
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import portfolioTransactionReadRepository, {
   __resetPortfolioTransactionSchemaCache,
 } from "../src/repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import type { PortfolioUnitEventDbRow } from "../src/database/rows/portfolio.ts";
 import {
-  pgLocalDate,
+  dbLocalDate,
   portfolioTransactionDbRow,
   portfolioUnitEventDbRow,
-} from "./helpers/portfolioPgRows.ts";
+} from "./helpers/portfolioRowFixtures.ts";
 import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 
 /**
@@ -258,7 +258,7 @@ describe("portfolioTransactionService.remove", () => {
             id: asPortfolioTransactionId(44),
             investment_id: asInvestmentId(1),
             type: "buy",
-            date: pgLocalDate("2025-01-01"),
+            date: dbLocalDate("2025-01-01"),
             units: "5",
           }),
         ],
@@ -313,7 +313,7 @@ describe("portfolioTransactionService.remove", () => {
             id: asPortfolioTransactionId(46),
             investment_id: asInvestmentId(1),
             type: "sell",
-            date: pgLocalDate("2025-02-01"),
+            date: dbLocalDate("2025-02-01"),
             units: "7",
           }),
         ],
@@ -670,7 +670,7 @@ describe("portfolioTransactionRepository.update", () => {
             id: asPortfolioTransactionId(13),
             investment_id: asInvestmentId(1),
             type: "sell",
-            date: pgLocalDate("2026-03-24"),
+            date: dbLocalDate("2026-03-24"),
             amount: "1000",
             units: "1",
             price_per_unit: "1000",

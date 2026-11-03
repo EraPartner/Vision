@@ -11,7 +11,7 @@ import {
 import {
   toPgMathTxRow,
   toPgSummaryInvestmentRow,
-} from "./helpers/portfolioPgRows.ts";
+} from "./helpers/portfolioRowFixtures.ts";
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../src/config/logger.ts", () => ({
@@ -39,7 +39,7 @@ vi.mock("../src/repositories/settingsRepository.ts", () => ({
 
 import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.ts";
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { settingsRepository as rawSettingsRepository } from "../src/repositories/settingsRepository.ts";
 import { listLatestStoredRates } from "../src/services/currency/currencyConversionService.ts";
 import {
@@ -50,7 +50,7 @@ import { must } from "./helpers/must.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 const settingsRepository = vi.mocked(rawSettingsRepository);
 

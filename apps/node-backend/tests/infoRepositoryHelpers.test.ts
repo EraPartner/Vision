@@ -4,7 +4,7 @@ import { mockConnection } from "./helpers/repoMocks.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
   mvAvailable,
   clearMvCache,
@@ -126,7 +126,7 @@ describe("mvAvailable", () => {
   });
 
   it("returns true and caches when the view exists with rows", async () => {
-    query.mockResolvedValue({ rows: [{ "?column?": 1 }] } as PgQueryResult);
+    query.mockResolvedValue({ rows: [{ "?column?": 1 }] } as DbQueryResult);
 
     expect(await mvAvailable("mv_category_totals")).toBe(true);
     expect(await mvAvailable("mv_category_totals")).toBe(true);
@@ -138,7 +138,7 @@ describe("mvAvailable", () => {
     try {
       query.mockResolvedValueOnce({
         rows: [{ "?column?": 1 }],
-      } as PgQueryResult);
+      } as DbQueryResult);
       expect(await mvAvailable("mv_category_totals")).toBe(true);
       expect(query).toHaveBeenCalledTimes(1);
 
@@ -180,7 +180,7 @@ describe("mvAvailable", () => {
 
       query.mockResolvedValueOnce({
         rows: [{ "?column?": 1 }],
-      } as PgQueryResult);
+      } as DbQueryResult);
       expect(await mvAvailable("mv_monthly_summary")).toBe(true);
       expect(query).toHaveBeenCalledTimes(2);
     } finally {
@@ -196,7 +196,7 @@ describe("mvAvailable", () => {
   });
 
   it("clearMvCache forces a re-check on the next call", async () => {
-    query.mockResolvedValue({ rows: [{ "?column?": 1 }] } as PgQueryResult);
+    query.mockResolvedValue({ rows: [{ "?column?": 1 }] } as DbQueryResult);
 
     expect(await mvAvailable("mv_category_totals")).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);

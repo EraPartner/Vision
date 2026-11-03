@@ -99,7 +99,7 @@ package "Backend (Node.js/Express)" {
   }
 }
 
-database "PostgreSQL" as DB {
+database "SQLite" as DB {
   package "Tables" {
     class transactions
     class categories

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
-import { accountBalanceRow, accountRow } from "./helpers/pgRows.ts";
+import { accountBalanceRow, accountRow } from "./helpers/rowFixtures.ts";
 import {
   asAccountId,
   asCurrencyCode,
@@ -39,7 +39,7 @@ import {
   query as rawQuery,
   withTransaction as rawWithTransaction,
 } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
 import { must } from "./helpers/must.ts";
@@ -48,7 +48,7 @@ const query = rawQuery as unknown as Mock<
   (
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 
 const withTransaction = rawWithTransaction as unknown as Mock<

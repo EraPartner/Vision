@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import { mockTxConnection } from "./helpers/repoMocks.ts";
-import { accountRow } from "./helpers/pgRows.ts";
+import { accountRow } from "./helpers/rowFixtures.ts";
 import {
   asAccountId,
   asCurrencyCode,
@@ -44,7 +44,7 @@ vi.mock(
 );
 
 import * as connection from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
   __collidingAnchorCurrencies as collidingAnchorCurrencies,
   mergeAccounts,
@@ -61,7 +61,7 @@ type SqlSpy = Mock<
   (
     sql: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 // mockTxConnection adds the `poolQuery` sink, which the real module lacks.
 const { query, poolQuery } = connection as unknown as {

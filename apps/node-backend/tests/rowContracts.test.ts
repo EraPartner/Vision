@@ -8,7 +8,7 @@ import type { Mock } from "vitest";
 import { z } from "zod";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { mockLogger } from "./helpers/mockLogger.ts";
-import { accountBalanceRow, txRow } from "./helpers/pgRows.ts";
+import { accountBalanceRow, txRow } from "./helpers/rowFixtures.ts";
 import {
   asCurrencyCode,
   asTransactionId,

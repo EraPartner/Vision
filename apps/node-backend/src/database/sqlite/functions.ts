@@ -18,7 +18,7 @@ import { ftsMatch, ftsRank } from "./fts.ts";
 import { canonicalJsonbText, isCanonicalJsonbText, quoteJsonbString } from "./jsonb.ts";
 import * as N from "./numeric.ts";
 import type { Dec } from "./numeric.ts";
-import * as T from "./pgTime.ts";
+import * as T from "./timestamps.ts";
 import { compareCodePoints, ilike, jsonContains, like, regexpMatch, similarity } from "./text.ts";
 
 /** What `now()` reads: the transaction start inside a transaction. */

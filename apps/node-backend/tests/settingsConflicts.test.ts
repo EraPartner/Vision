@@ -6,7 +6,7 @@ import {
   withTransaction as rawWithTransaction,
 } from "../src/database/connection.ts";
 import repo from "../src/repositories/settingsRepository.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { partial } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
 
@@ -15,7 +15,7 @@ const withTransaction = vi.mocked(rawWithTransaction);
 beforeEach(() => vi.clearAllMocks());
 describe("conditional whole-value settings replacement", () => {
   it("uses persisted JSON equality for existing values and sends a complete replacement", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rowCount: 1 }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rowCount: 1 }));
     const expected = {
       exists: true,
       value: { nested: { a: 1, b: 2 }, remove: true },
@@ -33,26 +33,26 @@ describe("conditional whole-value settings replacement", () => {
     );
   });
   it("rejects stale saves without an unconditional fallback", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rowCount: 0 }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rowCount: 0 }));
     await expect(
       repo.replace("app_settings", {}, { exists: true, value: {} }),
     ).rejects.toMatchObject({ status: 409 });
     expect(query).toHaveBeenCalledOnce();
   });
   it("uses insert-only creation, so a concurrent creator conflicts", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rowCount: 0 }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rowCount: 0 }));
     await expect(
       repo.replace("app_settings", {}, { exists: false }),
     ).rejects.toMatchObject({ status: 409 });
   });
   it("distinguishes persisted JSON null from absent rows and revives legacy display values only", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ value: null }] }),
+        partial<DbQueryResult>({ rows: [{ value: null }] }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ value: '{"mode":"dark"}' }] }),
+        partial<DbQueryResult>({ rows: [{ value: '{"mode":"dark"}' }] }),
       );
     expect(await repo.getRecord("theme_settings")).toEqual({
       expected: { exists: false },
@@ -67,15 +67,15 @@ describe("conditional whole-value settings replacement", () => {
     });
   });
   it("protects deletion with the loaded value", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rowCount: 0 }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rowCount: 0 }));
     await expect(
       repo.deleteExpected("app_settings", { exists: true, value: {} }),
     ).rejects.toMatchObject({ status: 409 });
   });
   it("wraps ordered bulk saves in one transaction and propagates conflict", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rowCount: 1 }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rowCount: 0 }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rowCount: 1 }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rowCount: 0 }));
     await expect(
       repo.replaceMany(
         { theme_settings: {}, app_settings: {} },

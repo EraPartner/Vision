@@ -21,7 +21,7 @@ import {
   plannedTransactionListRowSchema,
   plannedTransactionKeyRowSchema,
   plannedTransactionPageRowSchema,
-  pgRecipientId,
+  dbRecipientId,
   tagKeyRowSchema,
   transactionTagRefSchema,
 } from "../database/rowSchemas.ts";
@@ -521,7 +521,7 @@ export const plannedTransactionRepository = {
       plannedTransactionListRowSchema.extend({
         execution_count: z.number(),
         duplicate: z.boolean(),
-        recipient_cluster_id: pgRecipientId.nullable(),
+        recipient_cluster_id: dbRecipientId.nullable(),
       }),
       selectPlannedFields(plannedJoins().where("pt.id", "=", id)).select(
         (eb) => [

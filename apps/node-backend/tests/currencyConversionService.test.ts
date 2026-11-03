@@ -29,12 +29,12 @@ import {
   withTransaction as rawWithTransaction,
 } from "../src/database/connection.ts";
 import type {
-  PgPoolClient,
-  PgQueryResult,
+  DbClient,
+  DbQueryResult,
 } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";
 import { partial } from "./helpers/partial.ts";
-import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
+import { dbLocalDate } from "./helpers/portfolioRowFixtures.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
 import { must } from "./helpers/must.ts";
 
@@ -42,11 +42,11 @@ import { mockOf } from "./helpers/mockOf.ts";
 // The cases prime `query` with bare `{ rows }` results and never read
 // `rowCount`, so the mock is typed with a partial result.
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 const withTransaction = vi.mocked(rawWithTransaction);
 
-type QueryResultFixture = Partial<PgQueryResult>;
+type QueryResultFixture = Partial<DbQueryResult>;
 type QueryHandler =
   | QueryResultFixture
   | ((params: readonly unknown[], sql: string) => QueryResultFixture);
@@ -572,7 +572,7 @@ describe("Currency Conversion Service", () => {
         "LEFT JOIN exchange_rates",
         {
           rows: [
-            { currency_code: "USD", rate_date: pgLocalDate("2024-01-01") },
+            { currency_code: "USD", rate_date: dbLocalDate("2024-01-01") },
           ],
         },
       ],
@@ -580,7 +580,7 @@ describe("Currency Conversion Service", () => {
         "GROUP BY pt.currency",
         {
           rows: [
-            { currency_code: "USD", rate_date: pgLocalDate("2024-01-01") },
+            { currency_code: "USD", rate_date: dbLocalDate("2024-01-01") },
           ],
         },
       ],
@@ -628,7 +628,7 @@ describe("Currency Conversion Service", () => {
         "LEFT JOIN exchange_rates",
         {
           rows: [
-            { currency_code: "USD", rate_date: pgLocalDate("2026-02-01") },
+            { currency_code: "USD", rate_date: dbLocalDate("2026-02-01") },
           ],
         },
       ],
@@ -636,7 +636,7 @@ describe("Currency Conversion Service", () => {
         "GROUP BY pt.currency",
         {
           rows: [
-            { currency_code: "USD", rate_date: pgLocalDate("2026-02-01") },
+            { currency_code: "USD", rate_date: dbLocalDate("2026-02-01") },
           ],
         },
       ],
@@ -696,7 +696,7 @@ describe("Currency Conversion Service", () => {
         "GROUP BY pt.currency",
         {
           rows: [
-            { currency_code: "USD", rate_date: pgLocalDate("2020-03-07") },
+            { currency_code: "USD", rate_date: dbLocalDate("2020-03-07") },
           ],
         },
       ],
@@ -756,7 +756,7 @@ describe("Currency Conversion Service", () => {
         "GROUP BY pt.currency",
         {
           rows: [
-            { currency_code: "USD", rate_date: pgLocalDate("2020-03-07") },
+            { currency_code: "USD", rate_date: dbLocalDate("2020-03-07") },
           ],
         },
       ],
@@ -851,7 +851,7 @@ describe("Currency Conversion Service", () => {
       // Statements inside the transaction run through the ambient query(),
       // not the client.
       withTransaction.mockImplementation(async (fn) =>
-        fn(partial<PgPoolClient>({ query: vi.fn() })),
+        fn(partial<DbClient>({ query: vi.fn() })),
       );
       global.fetch = vi.fn().mockImplementation((url) =>
         Promise.resolve(String(url).includes("ecb")

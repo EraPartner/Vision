@@ -17,7 +17,7 @@ import {
   query as rawQuery,
   withTransaction,
 } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { asAccountId } from "@vision/types/brands";
 import {
   closeAccount,
@@ -31,7 +31,7 @@ const query = rawQuery as unknown as Mock<
   (
     text: string,
     params?: readonly unknown[],
-  ) => Promise<Partial<PgQueryResult>>
+  ) => Promise<Partial<DbQueryResult>>
 >;
 
 beforeEach(() => {

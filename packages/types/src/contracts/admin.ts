@@ -2,26 +2,22 @@ import { z } from "zod";
 
 import { WireTimestampSchema, wireCollectionOf } from "./common.ts";
 
-/** A BIGINT counter from `pg_stat_user_tables`: node-postgres returns its text. */
-const PgBigintTextSchema = z.string().regex(/^\d+$/);
+/** A BIGINT counter, as decimal text. */
+const BigintTextSchema = z.string().regex(/^\d+$/);
 
 /**
- * One row of `GET /api/admin/database/stats` (routes/admin.ts). The counters
- * and `size_bytes` are BIGINT, so they arrive as strings; the vacuum/analyze
- * times are `::text` casts and NULL for a table never vacuumed. `last_vacuum`
- * and `last_analyze` are manual runs, the `auto` pair autovacuum runs.
+ * One row of `GET /api/admin/database/stats` (routes/admin.ts). The row count
+ * and `size_bytes` are BIGINT, so they arrive as strings; `last_vacuum` and
+ * `last_analyze` are the times this backend last ran VACUUM/ANALYZE, NULL
+ * until then.
  */
 export const DbTableStatSchema = z.looseObject({
-  schemaname: z.string(),
   table_name: z.string(),
-  live_rows: PgBigintTextSchema,
-  dead_rows: PgBigintTextSchema,
+  live_rows: BigintTextSchema,
   last_vacuum: z.string().nullable(),
-  last_autovacuum: z.string().nullable(),
   last_analyze: z.string().nullable(),
-  last_autoanalyze: z.string().nullable(),
   size: z.string(),
-  size_bytes: PgBigintTextSchema,
+  size_bytes: BigintTextSchema,
 });
 
 /** `GET /api/admin/database/stats`. */

@@ -41,7 +41,7 @@ cloud "Price Providers" as Providers {
   class Manual <<User Entry>>
 }
 
-database "PostgreSQL" as DB {
+database "SQLite" as DB {
   table "investments"
   table "asset_price_history"
 }

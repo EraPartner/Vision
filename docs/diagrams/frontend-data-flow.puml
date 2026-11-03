@@ -86,7 +86,7 @@ package "Backend (Node.js)" {
   class ExpressRoutes
   class Repositories
   class Services
-  class "Database (PostgreSQL)" as Database
+  class "Database (SQLite)" as Database
 }
 
 package "Shared TypeScript" {

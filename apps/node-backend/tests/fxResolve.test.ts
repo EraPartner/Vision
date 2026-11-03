@@ -8,13 +8,13 @@ vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
 import { autoResolveFxRateToEur } from "../src/services/portfolio/fxResolve.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 
 describe("autoResolveFxRateToEur", () => {

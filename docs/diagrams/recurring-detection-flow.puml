@@ -11,7 +11,7 @@ participant "RecurringDetectionPanel\nuseRecurringPatterns" as Panel
 participant "Express routes\ninfo/statistics.ts + plannedTransactions.ts" as Routes
 participant "recurringDetectionService" as Detection
 participant "plannedTransactionService" as Planned
-database PostgreSQL as DB
+database SQLite as DB
 
 group 1. Read suggestions
   User -> Panel : Open planned payments

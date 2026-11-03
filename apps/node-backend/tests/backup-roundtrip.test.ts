@@ -44,7 +44,6 @@ interface BundleOptions {
 interface OpenedBundle {
   metadata: Readonly<Record<string, unknown>>;
   databasePath: string | null;
-  dbSqlPath: string | null;
   attachmentsDir: string | null;
   frontendState: unknown;
   cleanup: () => void;
@@ -217,7 +216,6 @@ describe("createBundle + openBundle (plain)", () => {
       expect(result.metadata.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
       // db.sqlite3 is the same file, byte for byte
-      expect(result.dbSqlPath).toBeNull();
       expect(sha256(must(result.databasePath, "databasePath"))).toBe(database.sha256);
 
       // attachments tree preserved
@@ -467,24 +465,17 @@ describe("openBundle error conditions", () => {
     await expect(openBundle(noDbPath)).rejects.toThrow(/db\.sqlite3|corrupt/i);
   });
 
-  it("opens a Vision 2.0 bundle (db.sql) without a database, for the caller to refuse", async () => {
+  it("refuses a bundle of an older format by its format", async () => {
     const legacyPath = join(TEST_TMP, "legacy_v2.visionbak");
     const archive = await createZipWriter(legacyPath);
     await archive.append(
       "metadata.json",
       JSON.stringify({ bundleVersion: 1, schemaHead: "0005_x", appVersion: "2.0.0", deviceId: "dev", encrypted: false }),
     );
-    await archive.append("db.sql", "-- pg_dump output\n");
+    await archive.append("db.sql", "-- dump\n");
     await archive.finalize();
 
-    const result = await openBundle(legacyPath);
-    try {
-      expect(result.databasePath).toBeNull();
-      expect(result.dbSqlPath).not.toBeNull();
-      expect(result.metadata.bundleVersion).toBe(1);
-    } finally {
-      result.cleanup();
-    }
+    await expect(openBundle(legacyPath)).rejects.toMatchObject({ code: "BACKUP_FORMAT_UNSUPPORTED" });
   });
 
   it("throws on a zip missing metadata.json", async () => {

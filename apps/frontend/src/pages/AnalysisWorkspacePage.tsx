@@ -3035,15 +3035,6 @@ export default function AnalysisWorkspacePage() {
                                             version: selectedSaved.version,
                                         })}
                                     </p>
-                                    {selectedSaved.needsReview && (
-                                        <Alert>
-                                            <AlertDescription>
-                                                {t(
-                                                    "analysis.needsReview.message",
-                                                )}
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
                                     <Button
                                         size="sm"
                                         variant="outline"
@@ -3328,17 +3319,6 @@ export default function AnalysisWorkspacePage() {
                                                     <>
                                                         v{saved.version} ·{" "}
                                                         {saved.refreshStatus}
-                                                        {saved.needsReview && (
-                                                            <Badge
-                                                                variant="warning"
-                                                                size="sm"
-                                                                className="ml-2"
-                                                            >
-                                                                {t(
-                                                                    "analysis.needsReview.badge",
-                                                                )}
-                                                            </Badge>
-                                                        )}
                                                         {saved.lastError && (
                                                             <span className="block whitespace-normal text-destructive">
                                                                 {
@@ -3362,8 +3342,7 @@ export default function AnalysisWorkspacePage() {
                                                         <DropdownMenuItem
                                                             disabled={
                                                                 savedAction ||
-                                                                saveMutation.isPending ||
-                                                                saved.needsReview
+                                                                saveMutation.isPending
                                                             }
                                                             onSelect={() =>
                                                                 void savedOperation(

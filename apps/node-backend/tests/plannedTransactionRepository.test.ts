@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import { mockPooledTxConnection } from "./helpers/repoMocks.ts";
-import { plannedExecutionRow, plannedRow } from "./helpers/pgRows.ts";
+import { plannedExecutionRow, plannedRow } from "./helpers/rowFixtures.ts";
 import {
   asAccountId,
   asPlannedTransactionId,

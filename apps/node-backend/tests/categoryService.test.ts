@@ -8,7 +8,7 @@ vi.mock("../src/database/connection.ts", () =>
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { resolveCategoryIdByName } from "../src/services/categoryService.ts";
 import { must } from "./helpers/must.ts";
 
@@ -20,14 +20,14 @@ beforeEach(() => {
 
 describe("resolveCategoryIdByName", () => {
   it("resolves a path match by its normalized name", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 12 }] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [{ id: 12 }] }));
 
     await expect(resolveCategoryIdByName("Income:Dividends")).resolves.toBe(12);
     expect(must(query.mock.calls[0], "query.mock.calls[0]")[1]).toContain("INCOME:DIVIDENDS");
   });
 
   it("resolves a depth-four path without splitting display text", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 23 }] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ id: 23 }] }));
 
     await expect(
       resolveCategoryIdByName("Home:Utilities:Power:Solar"),
@@ -37,14 +37,14 @@ describe("resolveCategoryIdByName", () => {
 
   it("rejects ambiguous rendered paths and requires an id", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ id: 1 }, { id: 2 }] }),
+      partial<DbQueryResult>({ rows: [{ id: 1 }, { id: 2 }] }),
     );
 
     await expect(resolveCategoryIdByName("A:B:C")).rejects.toThrow("ambiguous");
   });
 
   it("rejects a name when no active category matches", async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValue(partial<DbQueryResult>({ rows: [] }));
 
     await expect(resolveCategoryIdByName("Income:Dividends")).rejects.toThrow(
       "does not exist",
@@ -53,8 +53,8 @@ describe("resolveCategoryIdByName", () => {
 
   it("resolves a merged legacy name through its durable alias", async () => {
     query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 42 }] }));
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }))
+      .mockResolvedValueOnce(partial<DbQueryResult>({ rows: [{ id: 42 }] }));
 
     await expect(resolveCategoryIdByName("Food:Groceries")).resolves.toBe(42);
     expect(must(query.mock.calls[1], "query.mock.calls[1]")[0]).toContain("category_merge_aliases");

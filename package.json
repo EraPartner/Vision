@@ -47,7 +47,6 @@
     "db:status": "bun run apps/node-backend/scripts/db-migrate.ts status",
     "db:new": "bun run apps/node-backend/scripts/db-migrate.ts new",
     "db:codegen": "bun run apps/node-backend/scripts/db-codegen.ts",
-    "transition:v2": "bun scripts/vision-v2-to-sqlite.ts",
     "search:ast": "ast-grep run",
     "db:index-stats": "bun run apps/node-backend/scripts/index-stats.ts",
     "quotes:densify": "bun run apps/node-backend/scripts/densify-asset-history.ts",

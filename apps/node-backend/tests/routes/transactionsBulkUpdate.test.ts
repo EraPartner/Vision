@@ -49,7 +49,7 @@ import {
   getClient as rawGetClient,
   query as rawQuery,
 } from "../../src/database/connection.ts";
-import type { PgQueryResult } from "../../src/database/connection.ts";
+import type { DbQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 import { must } from "../helpers/must.ts";
 import { loose } from "../helpers/partial.ts";
@@ -134,7 +134,7 @@ describe("POST /bulk-update — success paths", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("updates a single field and schedules a refresh", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] } as PgQueryResult); // category exists
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] } as DbQueryResult); // category exists
     const clientQuery = vi
       .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
@@ -156,8 +156,8 @@ describe("POST /bulk-update — success paths", () => {
 
   it("updates multiple fields in one statement", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ id: 7 }] } as PgQueryResult) // category exists
-      .mockResolvedValueOnce({ rows: [{ id: 99 }] } as PgQueryResult); // recipient exists
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] } as DbQueryResult) // category exists
+      .mockResolvedValueOnce({ rows: [{ id: 99 }] } as DbQueryResult); // recipient exists
     const clientQuery = vi
       .fn<(sql: string, params?: unknown[]) => unknown>()
       .mockResolvedValueOnce({})
@@ -206,7 +206,7 @@ describe("POST /bulk-update — success paths", () => {
 
   it("reports filter selection drift to zero without scheduling reconciliation", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
+      .mockResolvedValueOnce({ rows: [{ n: 0 }] } as DbQueryResult)
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const clientQuery = vi
       .fn<(sql: string, params?: unknown[]) => unknown>()

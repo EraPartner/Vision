@@ -123,8 +123,6 @@ export interface AnalysisVisualPlanSource {
 }
 export interface AnalysisCustomSqlSource {
   kind: "custom-sql";
-  /** "postgresql": written before ADR-263 and flagged "needs review" until saved again. */
-  dialect: "postgresql" | "sqlite";
   text: string;
   datasetIds: string[];
   parameterBindings: Array<{
@@ -699,7 +697,9 @@ const visualPlanSchema = z
 const customSqlSchema = z
   .object({
     kind: z.literal("custom-sql"),
-    dialect: z.enum(["postgresql", "sqlite"]),
+    // Ignored. Definition versions are immutable, and versions saved by
+    // Vision 2.1.0 and earlier name the SQL dialect here.
+    dialect: z.string().optional(),
     text: z.string().min(1).max(1_000_000),
     datasetIds: z.array(identifierSchema).min(1).max(64),
     parameterBindings: z

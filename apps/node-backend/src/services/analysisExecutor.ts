@@ -18,7 +18,7 @@ import type { ChildProcess } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { withReadSnapshot } from "../database/connection.ts";
-import type { PgPoolClient } from "../database/connection.ts";
+import type { DbClient } from "../database/connection.ts";
 import { toSqlParam } from "../database/sqlite/values.ts";
 import { APPROVED_ANALYSIS_RELATIONS } from "./analysisCatalog.ts";
 import type {
@@ -346,7 +346,7 @@ function storedValueHint(declaredType: string): string {
   return "";
 }
 
-async function copyView(client: PgPoolClient, view: string): Promise<SandboxTable> {
+async function copyView(client: DbClient, view: string): Promise<SandboxTable> {
   const source = `vision_analysis_${view}`;
   const info = await client.query<{ name: string; type: string }>(
     "SELECT name, type FROM pragma_table_info($1) ORDER BY cid",

@@ -27,7 +27,7 @@ import { errorMessage } from "../lib/errors.ts";
 import { registerFunctions } from "./sqlite/functions.ts";
 import { registerSchemaFunctions } from "./sqlite/schemaFunctions.ts";
 import type { ConnectionClock } from "./sqlite/functions.ts";
-import { instantFromDate } from "./sqlite/pgTime.ts";
+import { instantFromDate } from "./sqlite/timestamps.ts";
 import { scanSql } from "./sqlite/sqlText.ts";
 import { planColumn, readsBigint, toSqlParams, withBigIntInput } from "./sqlite/values.ts";
 import type { ColumnPlan } from "./sqlite/values.ts";
@@ -40,24 +40,19 @@ export const MINIMUM_SQLITE_VERSION = "3.39.0";
  * What a query returns: rows and the number of rows a write touched (or
  * returned). Same shape as node-postgres's result for the fields Vision used.
  */
-export interface PgQueryResult<R = unknown> {
+export interface DbQueryResult<R = unknown> {
   rows: R[];
   rowCount: number | null;
 }
 
 /** A handle that runs statements on one connection (a transaction's, usually). */
-export interface PgPoolClient {
+export interface DbClient {
   /** `R` types the rows, as node-postgres's `query<R>()` did; nothing checks it at run time. */
   query: <R = Record<string, unknown>>(
     text: string | { name: string; text: string; values?: readonly unknown[] | undefined },
     params?: readonly unknown[],
-  ) => Promise<PgQueryResult<R>>;
+  ) => Promise<DbQueryResult<R>>;
   release: (err?: Error | boolean) => void;
-}
-
-export interface QueryOptions {
-  /** Kept for call compatibility; SQLite has no transient connection errors to retry. */
-  retries?: number;
 }
 
 interface PreparedStatement {
@@ -323,7 +318,7 @@ export function resetStatementStats(): void {
 }
 
 /** Run one statement on a connection, synchronously. */
-function execute<R>(conn: Connection, sqlText: string, params: readonly unknown[] | undefined): PgQueryResult<R> {
+function execute<R>(conn: Connection, sqlText: string, params: readonly unknown[] | undefined): DbQueryResult<R> {
   const scanned = scanSql(sqlText);
   const bound = toSqlParams(params);
   const started = performance.now();
@@ -436,22 +431,22 @@ function ambientStore(): TransactionStore | undefined {
  * withTransaction() shares its parent's savepoint counter, so that object
  * names the outermost transaction.
  */
-const clientTransactions = new WeakMap<PgPoolClient, object>();
+const clientTransactions = new WeakMap<DbClient, object>();
 
 /**
  * Whether two clients run in the same top-level transaction: a SAVEPOINT
  * scope's client and its parent's client do, two separate transactions or
  * snapshots do not (PostgreSQL code compared pooled clients by identity).
  */
-export function sameTransaction(a: PgPoolClient, b: PgPoolClient): boolean {
+export function sameTransaction(a: DbClient, b: DbClient): boolean {
   if (a === b) return true;
   const transaction = clientTransactions.get(a);
   return transaction !== undefined && transaction === clientTransactions.get(b);
 }
 
 /** A client bound to one connection; used for transactions and snapshots. */
-function clientFor(store: TransactionStore): PgPoolClient {
-  const client: PgPoolClient = {
+function clientFor(store: TransactionStore): DbClient {
+  const client: DbClient = {
     query<R>(
       text: string | { name: string; text: string; values?: readonly unknown[] | undefined },
       params?: readonly unknown[],
@@ -476,7 +471,7 @@ function clientFor(store: TransactionStore): PgPoolClient {
  * The transaction client of the withTransaction() this code runs inside,
  * or null. Exported for callers that adapt to ambient-transaction mode.
  */
-function getAmbientTransactionClient(): PgPoolClient | null {
+function getAmbientTransactionClient(): DbClient | null {
   const store = ambientStore();
   return store ? clientFor(store) : null;
 }
@@ -488,8 +483,7 @@ function getAmbientTransactionClient(): PgPoolClient | null {
 export async function query<R = unknown>(
   text: string,
   params?: readonly unknown[],
-  _opts: QueryOptions = {},
-): Promise<PgQueryResult<R>> {
+): Promise<DbQueryResult<R>> {
   const store = ambientStore();
   if (store?.conn) return execute<R>(store.conn, text, params);
   const scanned = scanSql(text);
@@ -519,7 +513,7 @@ export async function queryPrepared(
   _name: string,
   text: string,
   params?: readonly unknown[],
-): Promise<PgQueryResult> {
+): Promise<DbQueryResult> {
   return query(text, params);
 }
 
@@ -528,7 +522,7 @@ export async function queryPrepared(
  * runs BEGIN IMMEDIATE; a nested call runs under a SAVEPOINT on the same
  * connection. COMMIT on success, ROLLBACK on throw.
  */
-export async function withTransaction<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
   const parentStore = ambientStore();
   if (parentStore?.conn) {
     if (parentStore.activeNested) {
@@ -625,7 +619,7 @@ export async function withSavepointIfInTransaction<T>(name: string, fn: () => Pr
  * read-only connection holds a read transaction for the duration, so every
  * query inside sees the same state (PostgreSQL's REPEATABLE READ READ ONLY).
  */
-export async function withReadSnapshot<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
+export async function withReadSnapshot<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
   getWriter();
   const conn = makeConnection(databaseFile(), "snapshot");
   const store: TransactionStore = { conn, savepointCounter: { value: 0 }, activeNested: null };
@@ -646,7 +640,7 @@ export async function withReadSnapshot<T>(fn: (client: PgPoolClient) => Promise<
 }
 
 /** A client for code that runs a sequence of statements; prefer withTransaction(). */
-export function getClient(): Promise<PgPoolClient> {
+export function getClient(): Promise<DbClient> {
   return Promise.resolve({
     query: (text, params) =>
       typeof text === "string" ? query(text, params) : query(text.text, text.values ?? params),
@@ -723,8 +717,5 @@ export async function withExclusiveWriter<T>(fn: (db: DatabaseSync) => T | Promi
     release();
   }
 }
-
-const pool = { query, connect: getClient, end: closePool };
-export default pool;
 
 export { getAmbientTransactionClient as __getAmbientTransactionClient };

@@ -19,7 +19,7 @@ import {
   query,
   withTransaction,
 } from "../../src/database/connection.ts";
-import type { PgPoolClient } from "../../src/database/connection.ts";
+import type { DbClient } from "../../src/database/connection.ts";
 
 /** A result row whose columns a test reads without a fixed shape. */
 export type DbRow = Record<string, unknown>;
@@ -31,7 +31,7 @@ export interface TestQueryResult<R> {
 
 export interface TestPool {
   query<R = DbRow>(text: string, params?: readonly unknown[]): Promise<TestQueryResult<R>>;
-  connect(): Promise<PgPoolClient>;
+  connect(): Promise<DbClient>;
   end(): Promise<void>;
 }
 
@@ -95,7 +95,7 @@ class RollbackSignal extends Error {}
  * `BEGIN … ROLLBACK` on a dedicated client). Code under test that calls
  * `query()` or `withTransaction()` inside `fn` joins the same transaction.
  */
-export async function inRollbackTransaction<T>(fn: (client: PgPoolClient) => Promise<T>): Promise<T> {
+export async function inRollbackTransaction<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
   let result: T | undefined;
   try {
     await withTransaction(async (client) => {
@@ -113,7 +113,7 @@ export async function inRollbackTransaction<T>(fn: (client: PgPoolClient) => Pro
  * surrounding transaction stays usable.
  */
 export async function expectSqlError(
-  client: Pick<PgPoolClient, "query">,
+  client: Pick<DbClient, "query">,
   text: string,
   params: readonly unknown[],
   code: string,

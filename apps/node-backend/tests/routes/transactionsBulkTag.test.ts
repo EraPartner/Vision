@@ -30,7 +30,7 @@ vi.mock('../../src/database/connection.ts', () => mockPooledTxConnection());
 const { default: transactionsRouter } = await import('../../src/routes/transactions.ts');
 
 import { getClient as rawGetClient, query as rawQuery } from '../../src/database/connection.ts';
-import type { PgQueryResult } from '../../src/database/connection.ts';
+import type { DbQueryResult } from '../../src/database/connection.ts';
 import { scheduleReconcile } from '../../src/services/transferReconciliationService.ts';
 
 const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
@@ -93,7 +93,7 @@ describe('POST /bulk-tag — success paths', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('adds tags and returns correct counts', async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as PgQueryResult);
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as DbQueryResult);
     const clientQuery = vi.fn()
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [{ transaction_id: 1 }, { transaction_id: 2 }] }) // INSERT
@@ -110,7 +110,7 @@ describe('POST /bulk-tag — success paths', () => {
   });
 
   it('removes tags and returns correct counts', async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as PgQueryResult);
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as DbQueryResult);
     const clientQuery = vi.fn()
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [{ transaction_id: 1 }] }) // DELETE
@@ -126,8 +126,8 @@ describe('POST /bulk-tag — success paths', () => {
 
   it('adds and removes in a single transaction', async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as PgQueryResult) // add_slugs lookup
-      .mockResolvedValueOnce({ rows: [{ id: 11, slug: 'work-trip' }] } as PgQueryResult); // remove_slugs lookup
+      .mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as DbQueryResult) // add_slugs lookup
+      .mockResolvedValueOnce({ rows: [{ id: 11, slug: 'work-trip' }] } as DbQueryResult); // remove_slugs lookup
     const clientQuery = vi.fn()
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [{ transaction_id: 1 }] }) // INSERT
@@ -149,7 +149,7 @@ describe('POST /bulk-tag — atomicity', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('rolls back and does not call scheduleReconcile when transaction fails', async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as PgQueryResult);
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] } as DbQueryResult);
     const clientQuery = vi.fn()
       .mockResolvedValueOnce({}) // BEGIN
       .mockRejectedValueOnce(new Error('DB exploded')) // INSERT fails

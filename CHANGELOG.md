@@ -15,12 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0] — 2026-11-03
 
 > [!IMPORTANT]
-> **Vision 2.0 data must be moved once.** Vision now keeps its data in one SQLite file instead of
-> a private PostgreSQL server ([ADR-263]). It refuses to start while it finds Vision 2.0 data and
-> no SQLite database. Make a backup in Vision 2.0 first, then run
-> `bun run transition:v2 -- <backup file>` from a repository checkout. The script only reads the
-> backup, verifies every table before it installs anything and never overwrites a database. See
-> [`docs/guides/sqlite-transition.md`](docs/guides/sqlite-transition.md).
+> **Vision 2.1.0 does not read Vision 2.0 data.** Vision now keeps its data in one SQLite file
+> instead of a private PostgreSQL server ([ADR-263]). It starts with an empty database next to
+> Vision 2.0's data and never reads or changes that data. To move Vision 2.0 data, make a backup
+> in Vision 2.0, then run `bun run transition:v2 -- <backup file>` from a checkout of commit
+> [`dd4cc71`](https://github.com/EraPartner/Vision/tree/dd4cc71), the last one with the transition
+> script. It verifies every table before it installs anything and never overwrites a database.
 
 ### Changed
 
@@ -31,18 +31,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Migrations** run in one transaction, refuse a database written by a newer Vision, and write
   a copy of a database that holds data before they change it. Vision does not start when that
   copy fails.
-- **Backups** hold a SQLite copy of the database. Backups from Vision 2.0 restore only after
-  `bun run transition:v2 -- <backup> --to-backup <new file>` converts them.
+- **Backups** hold a SQLite copy of the database (backup format 2). Older backups are refused by
+  their format; the transition script at `dd4cc71` converts a Vision 2.0 backup with
+  `--to-backup <new file>`.
 - **Custom analysis SQL** runs in the SQLite dialect, in a separate process that holds only
   in-memory copies of the analysis views it names, and that is killed when a statement runs past
-  its limit. Saved analyses written for PostgreSQL are kept and
-  marked "Needs review"; they run again once saved from the SQL editor.
+  its limit. SQL saved by Vision 2.0 in the PostgreSQL dialect runs as SQLite SQL and fails where
+  the dialects differ; edit it in the SQL editor.
 
 ### Removed
 
 - The bundled PostgreSQL 18 server and its payload, database roles and grants, `pg` and the
   PostgreSQL tooling (`native:prepare`, `test:db`, `db:lint`). Development and tests need no
   database server.
+- The Vision 2.0 compatibility code ([ADR-265]): the transition script (kept at `dd4cc71`), the
+  startup refusal over Vision 2.0 data, the Vision 2.0 backup refusal and the "Needs review" flag
+  for PostgreSQL custom SQL.
+- The PostgreSQL-only columns of the database maintenance page and of
+  `GET /api/admin/database/stats` (`schemaname`, `dead_rows`, `last_autovacuum`,
+  `last_autoanalyze`).
 - macOS 12 support: its system SQLite is older than 3.39. The 2.0.0 app already required macOS 13.
 
 ### Added
@@ -264,3 +271,4 @@ planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 [ADR-261]: docs/adr/261-ticker-and-settings-material-hosts-and-20-fps-aurora.md
 [ADR-263]: docs/adr/263-sqlite-replaces-postgresql.md
 [ADR-264]: docs/adr/264-desktop-calendar-days-in-system-zone.md
+[ADR-265]: docs/adr/265-retire-vision-2-compatibility.md

@@ -5,7 +5,7 @@ actor User
 participant "Investigation client\nReact panel / native AIInvestigationModel" as UI
 participant "AI research routes" as API
 participant "Investigation service\n(serial queue)" as Orchestrator
-database "PostgreSQL\njobs, steps, passages" as DB
+database "SQLite\njobs, steps, passages" as DB
 participant "Bounded typed tools\n(local data, documents,\noptional public research)" as Tools
 participant "Configured Ollama" as Ollama
 

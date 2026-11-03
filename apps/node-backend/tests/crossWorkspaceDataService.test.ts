@@ -16,7 +16,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { getPortfolioSummary as rawGetPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import type { PortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import {
@@ -49,7 +49,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
       }),
     );
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           {
             id: 10,
@@ -88,7 +88,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
       partial<PortfolioSummary>({ summaries: [] }),
     );
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           {
             id: 10,
@@ -122,7 +122,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
       partial<PortfolioSummary>({ summaries: [] }),
     );
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           {
             id: 10,
@@ -159,7 +159,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
     // identity conversion is restored afterwards): 100 USD becomes 50 EUR.
     convertToCurrency.mockResolvedValueOnce(50);
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           {
             id: 10,
@@ -202,7 +202,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
       partial<PortfolioSummary>({ summaries: [] }),
     );
     query.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [{ id: 12, name: "Fresh", currency: "EUR", balance_parts: null }],
       }),
     );

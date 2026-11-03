@@ -12,7 +12,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 import { partial } from "./helpers/partial.ts";
@@ -22,7 +22,7 @@ const query = vi.mocked(rawQuery);
 const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 
 // pg hands a DATE back as a local-midnight Date.
-const pgDay = (ymd: string) => new Date(`${ymd}T00:00:00`);
+const dbDay = (ymd: string) => new Date(`${ymd}T00:00:00`);
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.useRealTimers());
@@ -31,46 +31,46 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
   it("aggregates by recipient and merges currencies via FX conversion", async () => {
     // First call: top spenders raw query.
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [
           {
             recipient_id: 1,
             recipient_name: "Alice",
             currency: "EUR",
-            date: pgDay("2025-03-15"),
+            date: dbDay("2025-03-15"),
             total_abs_amount: "100",
             tx_count: "4",
-            first_seen: pgDay("2025-01-01"),
-            last_seen: pgDay("2025-03-15"),
+            first_seen: dbDay("2025-01-01"),
+            last_seen: dbDay("2025-03-15"),
           },
           {
             recipient_id: 1,
             recipient_name: "Alice",
             currency: "USD",
-            date: pgDay("2025-04-01"),
+            date: dbDay("2025-04-01"),
             total_abs_amount: "50",
             tx_count: "1",
-            first_seen: pgDay("2025-04-01"),
-            last_seen: pgDay("2025-04-01"),
+            first_seen: dbDay("2025-04-01"),
+            last_seen: dbDay("2025-04-01"),
           },
           {
             recipient_id: 2,
             recipient_name: "Bob",
             currency: "EUR",
-            date: pgDay("2025-02-15"),
+            date: dbDay("2025-02-15"),
             total_abs_amount: "40",
             tx_count: "2",
-            first_seen: pgDay("2025-02-01"),
-            last_seen: pgDay("2025-02-15"),
+            first_seen: dbDay("2025-02-01"),
+            last_seen: dbDay("2025-02-15"),
           },
         ],
       }),
     );
     // Second call: month-over-month raw query.
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     // Third call: current/previous month keys derived in-DB.
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [{ current_period: "2025-04", prev_period: "2025-03" }],
       }),
     );
@@ -128,10 +128,10 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
   });
 
   it("emits month-over-month entries for recipients with both periods", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [{ current_period: "2025-04", prev_period: "2025-03" }],
       }),
     );
@@ -204,10 +204,10 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
   });
 
   it("caps month-over-month list to top-10 by current spend", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
+      partial<DbQueryResult>({
         rows: [{ current_period: "2025-04", prev_period: "2025-03" }],
       }),
     );
@@ -239,7 +239,7 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
 
 describe("recipientInsightsRepository.getRecipientByYear", () => {
   it("groups by year and recipient with absolute EUR sums", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     // cnt is the grouped row's transaction count (SQL now aggregates per group).
     convertRowsToEur.mockResolvedValueOnce([
       { year: 2024, recipient_id: 1, name: "Alice", amount_eur: -100, cnt: 1 },
@@ -259,7 +259,7 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
   });
 
   it("limits each year to top 20 recipients by spend", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     convertRowsToEur.mockResolvedValueOnce(
       Array.from({ length: 25 }, (_, i) => ({
         year: 2025,
@@ -295,7 +295,7 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
   });
 
   it("binds a recipient exclusion id at the int4 ceiling instead of dropping it", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     convertRowsToEur.mockResolvedValueOnce([]);
     await recipientInsightsRepository.getRecipientByYear({
       targetCurrency: "EUR",
@@ -308,7 +308,7 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
 
 describe("recipientInsightsRepository.getRecipientPivot", () => {
   it("short-circuits when every selected recipient id is unknown", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
 
     await expect(
       recipientInsightsRepository.getRecipientPivot({
@@ -343,9 +343,9 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
 
   it("retains a selected recipient at the int4 ceiling", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ id: 2147483647 }] }),
+      partial<DbQueryResult>({ rows: [{ id: 2147483647 }] }),
     );
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     convertRowsToEur.mockResolvedValueOnce([]);
 
     await recipientInsightsRepository.getRecipientPivot({
@@ -360,7 +360,7 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
   });
 
   it("groups by period+recipient and sorts ascending by total", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     convertRowsToEur.mockResolvedValueOnce([
       {
         period: "2025-04",
@@ -401,7 +401,7 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
   });
 
   it("surfaces affected currencies when historical conversion falls back", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    query.mockResolvedValueOnce(partial<DbQueryResult>({ rows: [] }));
     convertRowsToEur.mockResolvedValueOnce([
       {
         period: "2025-04",

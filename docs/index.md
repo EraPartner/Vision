@@ -220,9 +220,9 @@ LIMIT 10
 Vision keeps its data in one SQLite file, `database/vision.sqlite3` in the application data
 directory, opened in-process by the backend. The desktop package no longer carries a database
 server, and there are no database roles, ports or credentials. Migrations restart at
-`db/migrations/0001_baseline.sql`, and backups carry `db.sqlite3`. Vision 2.0 data moves once
-through `bun run transition:v2`. See [[docs/adr/263-sqlite-replaces-postgresql|ADR-263]],
-[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]] and
+`db/migrations/0001_baseline.sql`, and backups carry `db.sqlite3`. Vision 2.1.0 does not read
+Vision 2.0 data; the transition script lives at commit `dd4cc71`. See
+[[docs/adr/263-sqlite-replaces-postgresql|ADR-263]] and
 [[docs/reference/sqlite-sql-dialect|SQLite SQL dialect]].
 
 ### 2026-10-28 — Mac optimisation phases E to I (ADR-255 to ADR-260)

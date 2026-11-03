@@ -31,7 +31,7 @@ cloud "External API" as ECB {
   class ECB_API <<External Service>>
 }
 
-database "PostgreSQL" as DB {
+database "SQLite" as DB {
   table "exchange_rates"
 }
 

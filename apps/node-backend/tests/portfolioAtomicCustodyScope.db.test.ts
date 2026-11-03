@@ -8,7 +8,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
-import type { PgPoolClient } from "../src/database/connection.ts";
+import type { DbClient } from "../src/database/connection.ts";
 import { loose } from "./helpers/partial.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
@@ -419,7 +419,7 @@ describe.skipIf(!hasTestDatabase())(
             portfolioCustodyWriteHistory(
               [],
               must(events[0], "events[0]"),
-              loose<PgPoolClient>({}),
+              loose<DbClient>({}),
             );
             return Promise.resolve();
           },

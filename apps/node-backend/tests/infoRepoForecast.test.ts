@@ -21,7 +21,7 @@ vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
 });
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import {
   batchConvertGroupsWithHistoricalRateFallback as rawBatchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers as rawGetIncludeTransfers,
@@ -36,7 +36,7 @@ import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { must } from "./helpers/must.ts";
 
 const query = rawQuery as unknown as Mock<
-  (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (text: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 const batchConvertGroupsWithHistoricalRateFallback = mockedBatchConvertGroups(
   rawBatchConvertGroupsWithHistoricalRateFallback,
@@ -63,11 +63,11 @@ const isLedgerStartSql = (sql: string) => /MIN\(t\.date\)/i.test(sql);
  * rows — is what sets the historical-average divisor.
  */
 function stubQueries(firstDate: string | null = null) {
-  const pgFirstDate = firstDate ? new Date(`${firstDate}T00:00:00`) : null;
+  const dbFirstDate = firstDate ? new Date(`${firstDate}T00:00:00`) : null;
   query.mockImplementation((sql) =>
     Promise.resolve(
       isLedgerStartSql(sql)
-        ? { rows: [{ first_date: pgFirstDate }] }
+        ? { rows: [{ first_date: dbFirstDate }] }
         : { rows: [] },
     ),
   );

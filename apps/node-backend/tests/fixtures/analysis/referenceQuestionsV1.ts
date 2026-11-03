@@ -729,7 +729,6 @@ function makeDefinition(item: ReferenceCase): AnalysisDefinition {
   const source: AnalysisDefinition["source"] = customSql
     ? {
         kind: "custom-sql",
-        dialect: "postgresql",
         text: customSql,
         datasetIds: item.datasets,
         parameterBindings: must(item.sqlParameterIds, "item.sqlParameterIds").map((parameterId) => {

@@ -43,13 +43,13 @@ export interface CategoryNodePatch {
 }
 
 /** SQLSTATE of a pg error (`undefined` for anything else). */
-function pgErrorCode(error: unknown): unknown {
+function dbErrorCode(error: unknown): unknown {
   return errorCode(error);
 }
 
 /** A foreign key refused the write: 23503, or 23001 for a RESTRICT action. */
 function isForeignKeyViolation(error: unknown): boolean {
-  const code = pgErrorCode(error);
+  const code = dbErrorCode(error);
   return code === "23503" || code === "23001";
 }
 
@@ -226,7 +226,7 @@ export async function createCategoryNode({
         })
         .execute();
     } catch (error) {
-      if (pgErrorCode(error) === "23505")
+      if (dbErrorCode(error) === "23505")
         throw conflict(
           "A category with this name already exists under the parent",
         );
@@ -279,11 +279,11 @@ export async function updateCategoryNode(
         .where("id", "=", id)
         .execute();
     } catch (error) {
-      if (pgErrorCode(error) === "23505")
+      if (dbErrorCode(error) === "23505")
         throw conflict(
           "A category with this name already exists under the parent",
         );
-      if (pgErrorCode(error) === "23514")
+      if (dbErrorCode(error) === "23514")
         throw conflict(
           "A category cannot be moved below itself or a descendant",
         );
@@ -448,7 +448,7 @@ export async function mergeCategoryNodes(
       if (source.hierarchy_only) await upsertRootAlias(source.general, targetId);
       await db.deleteFrom("categories").where("id", "=", sourceId).execute();
     } catch (error) {
-      if (pgErrorCode(error) === "23505")
+      if (dbErrorCode(error) === "23505")
         throw conflict(
           "Merge would duplicate a category membership or sibling name; resolve the conflict first",
         );

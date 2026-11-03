@@ -73,17 +73,10 @@ database. Directories are created with mode `0700`.
 ### Vision 2.0 data
 
 Vision 2.0 kept its data in a private PostgreSQL cluster in
-`<userData>/native/vision/postgres/data`. When that directory has contents and no
-`database/vision.sqlite3` exists, Vision refuses to start, so that a first launch never creates an
-empty database over real data. The dialog says "Vision found data from Vision 2.0 on this Mac and
-did not start", names the untouched data directory and `<userData>/pre-update-backups`, and gives
-the transition command (`bun run transition:v2 -- <backup file>`). Vision only checks whether the
-directory has contents; it never changes or deletes it.
-
-A `runtime.env` written by Vision 2.0 may still hold its PostgreSQL credentials. They stay in the
-file for Vision 2.0, and no child process receives them. Follow
-[[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]] to convert a Vision 2.0 backup
-once.
+`<userData>/native/vision/postgres/data`. This version never reads, changes or deletes that
+directory; delete it yourself once you no longer need it. A `runtime.env` written by Vision 2.0
+may still hold its PostgreSQL credentials; the next layout check removes them from the file, and
+no child process receives them.
 
 ## Start development
 
@@ -170,10 +163,8 @@ it journal the switch in `runtime-state.json`, stop the backend and swap the dat
 The schema version a backup records is the latest version in the database's `vision_migrations`
 ledger.
 
-A Vision 2.0 bundle carries a PostgreSQL `db.sql` instead of `db.sqlite3`. The app never reads it:
-restore refuses it with `BACKUP_POSTGRESQL_V2` and names the transition command. Convert such a
-backup with `bun run transition:v2 -- <backup> --to-backup <new.visionbak>` first
-([[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]).
+A bundle of an older format (Vision 2.0 and earlier wrote format 1, with a PostgreSQL dump instead
+of `db.sqlite3`) is refused with `BACKUP_FORMAT_UNSUPPORTED`.
 
 `bun run native:isolated-smoke` exercises the complete encrypted-bundle journey in a temporary
 application-data directory with its own SQLite database. It verifies exact synthetic account,
@@ -226,7 +217,6 @@ restore before activation. Reintroducing another runtime requires a new architec
 ## Related
 
 - [[docs/adr/263-sqlite-replaces-postgresql|ADR-263: SQLite replaces PostgreSQL]]
-- [[docs/guides/sqlite-transition|Moving Vision 2.0 data to SQLite]]
 - [[docs/adr/133-native-only-runtime-and-delivery|ADR-133: Native-only runtime and delivery]]
 - [[docs/adr/113-native-macos-runtime|ADR-113: Native macOS runtime]]
 - [[docs/adr/114-native-deterministic-demo-runtime|ADR-114: Native deterministic Demo runtime]]

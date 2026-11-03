@@ -9,7 +9,7 @@ vi.mock("../src/config/logger.ts", () => ({
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 import { partial } from "./helpers/partial.ts";
 import { must } from "./helpers/must.ts";
@@ -170,7 +170,7 @@ function install(
 ) {
   const dispatch = makeDispatch(stagingRows, investments, captured);
   query.mockImplementation((sql, params) =>
-    Promise.resolve(partial<PgQueryResult>(dispatch(sql, params))),
+    Promise.resolve(partial<DbQueryResult>(dispatch(sql, params))),
   );
 }
 

@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import { z } from "zod";
 import { checkedRows, db } from "../database/db.ts";
-import { pgBigint, pgInt, pgTransactionId } from "../database/rowSchemas.ts";
+import { dbBigint, dbInt, dbTransactionId } from "../database/rowSchemas.ts";
 import type { ImportedTransactionInput } from "./transactionRepository.ts";
 
 export interface BulkImportRow extends ImportedTransactionInput {
@@ -51,9 +51,9 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
   // removed: space, tab, LF, CR, form feed and vertical tab.
   const identities = await checkedRows(
     z.object({
-      staging_id: pgBigint,
+      staging_id: dbBigint,
       duplicate: z.boolean(),
-      legacy_count: pgInt,
+      legacy_count: dbInt,
     }),
     sql`
     WITH input AS (
@@ -104,9 +104,9 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
   const inserted = candidates.length > 0
     ? await checkedRows(
         z.object({
-          id: pgTransactionId,
+          id: dbTransactionId,
           dedup_fingerprint: z.string(),
-          dedup_fingerprint_version: pgInt,
+          dedup_fingerprint_version: dbInt,
         }),
         sql`
     INSERT INTO transactions (date, account_id, recipient_id, category_id, amount, memo, currency, balance,

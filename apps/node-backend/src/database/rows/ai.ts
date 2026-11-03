@@ -10,10 +10,10 @@
  */
 import { z } from "zod";
 import type { AiInvestigationPlan } from "@vision/types/aiResearch";
-import { pgInt, pgTimestamptz } from "../rowSchemas.ts";
+import { dbInt, dbTimestamptz } from "../rowSchemas.ts";
 
 /** A UUID column. */
-const pgUuid = z.string();
+const dbUuid = z.string();
 
 /** A JSONB column constrained (by its only writers) to a JSON object. */
 export const jsonObject = z.record(z.string(), z.unknown());
@@ -38,11 +38,11 @@ export function storedJsonObject<T extends object>() {
 /** `aiChatRepository`'s `CONVERSATION_COLUMNS` (timestamps aliased to camelCase). */
 export const aiConversationRowSchema = z
   .object({
-    id: pgUuid,
+    id: dbUuid,
     title: z.string(),
     model: z.string(),
-    createdAt: pgTimestamptz,
-    updatedAt: pgTimestamptz,
+    createdAt: dbTimestamptz,
+    updatedAt: dbTimestamptz,
   })
   .describe("ai_conversations row");
 export type AiConversationRow = z.output<typeof aiConversationRowSchema>;
@@ -50,8 +50,8 @@ export type AiConversationRow = z.output<typeof aiConversationRowSchema>;
 /** `aiChatRepository`'s `MESSAGE_COLUMNS` (snake_case aliased to camelCase). */
 export const aiMessageRowSchema = z
   .object({
-    id: pgUuid,
-    conversationId: pgUuid,
+    id: dbUuid,
+    conversationId: dbUuid,
     /** CHECK (role IN ('user','assistant','tool','system')). */
     role: z.enum(["user", "assistant", "tool", "system"]),
     content: z.string().nullable(),
@@ -66,18 +66,18 @@ export const aiMessageRowSchema = z
     toolResult: z.unknown(),
     /** CHECK (status IN ('complete','streaming','aborted','error')). */
     status: z.enum(["complete", "streaming", "aborted", "error"]),
-    createdAt: pgTimestamptz,
+    createdAt: dbTimestamptz,
   })
   .describe("ai_messages row");
 export type AiMessageRow = z.output<typeof aiMessageRowSchema>;
 
 /** `SELECT count(*) AS total` (a bare SQLite count is a number). */
 export const intTotalRowSchema = z
-  .object({ total: pgInt })
+  .object({ total: dbInt })
   .describe("int total row");
 
 /** A `RETURNING id` row of a UUID-keyed table. */
-export const uuidIdRowSchema = z.object({ id: pgUuid }).describe("uuid id row");
+export const uuidIdRowSchema = z.object({ id: dbUuid }).describe("uuid id row");
 
 // ---------------------------------------------------------------------------
 // AI investigations (ai_investigation_jobs + ai_investigation_steps)
@@ -86,8 +86,8 @@ export const uuidIdRowSchema = z.object({ id: pgUuid }).describe("uuid id row");
 /** `aiInvestigationRepository`'s `COLUMNS` projection. */
 export const aiInvestigationJobRowSchema = z
   .object({
-    id: pgUuid,
-    conversationId: pgUuid.nullable(),
+    id: dbUuid,
+    conversationId: dbUuid.nullable(),
     question: z.string(),
     route: z.string(),
     model: z.string().nullable(),
@@ -111,11 +111,11 @@ export const aiInvestigationJobRowSchema = z
     result: z.unknown(),
     /** `error_json`: usually `{ code, message }`. */
     error: z.unknown(),
-    cancelRequestedAt: pgTimestamptz.nullable(),
-    startedAt: pgTimestamptz.nullable(),
-    completedAt: pgTimestamptz.nullable(),
-    createdAt: pgTimestamptz,
-    updatedAt: pgTimestamptz,
+    cancelRequestedAt: dbTimestamptz.nullable(),
+    startedAt: dbTimestamptz.nullable(),
+    completedAt: dbTimestamptz.nullable(),
+    createdAt: dbTimestamptz,
+    updatedAt: dbTimestamptz,
   })
   .describe("ai_investigation_jobs row");
 export type AiInvestigationJobRow = z.output<
@@ -127,13 +127,13 @@ export const aiInvestigationStepRowSchema = z
   .object({
     stepId: z.string(),
     state: z.string(),
-    attempt: pgInt,
+    attempt: dbInt,
     /** `result_json`: the tool result envelope, or NULL. */
     result: z.unknown(),
     /** `error_json`. */
     error: z.unknown(),
-    startedAt: pgTimestamptz.nullable(),
-    completedAt: pgTimestamptz.nullable(),
+    startedAt: dbTimestamptz.nullable(),
+    completedAt: dbTimestamptz.nullable(),
   })
   .describe("ai_investigation_steps row");
 export type AiInvestigationStepRow = z.output<
@@ -143,15 +143,15 @@ export type AiInvestigationStepRow = z.output<
 /** `startStep`'s `RETURNING *` (raw `ai_investigation_steps` columns). */
 export const aiInvestigationStepTableRowSchema = z
   .object({
-    job_id: pgUuid,
+    job_id: dbUuid,
     step_id: z.string(),
     state: z.string(),
-    attempt: pgInt,
+    attempt: dbInt,
     result_json: z.unknown(),
     error_json: z.unknown(),
-    started_at: pgTimestamptz.nullable(),
-    completed_at: pgTimestamptz.nullable(),
-    updated_at: pgTimestamptz,
+    started_at: dbTimestamptz.nullable(),
+    completed_at: dbTimestamptz.nullable(),
+    updated_at: dbTimestamptz,
   })
   .describe("ai_investigation_steps table row");
 export type AiInvestigationStepTableRow = z.output<
@@ -165,23 +165,23 @@ export type AiInvestigationStepTableRow = z.output<
 /** `aiResearchDocumentRepository`'s `DOCUMENT_COLUMNS` (camelCase aliases). */
 export const researchDocumentRowSchema = z
   .object({
-    id: pgUuid,
+    id: dbUuid,
     title: z.string(),
     sourceName: z.string(),
     mediaType: z.string(),
     contentSha256: z.string(),
-    version: pgInt,
+    version: dbInt,
     extractionStatus: z.string(),
     extractionError: z.string().nullable(),
-    createdAt: pgTimestamptz,
-    updatedAt: pgTimestamptz,
+    createdAt: dbTimestamptz,
+    updatedAt: dbTimestamptz,
   })
   .describe("ai_research_documents row");
 export type ResearchDocumentRow = z.output<typeof researchDocumentRowSchema>;
 
 /** `COALESCE(MAX(version),0)+1`: INTEGER arithmetic, a number. */
 export const nextVersionRowSchema = z
-  .object({ version: pgInt })
+  .object({ version: dbInt })
   .describe("next research document version row");
 
 /** `embedding_json` as `createDocument` writes it. */
@@ -196,16 +196,16 @@ export type ResearchPassageEmbedding = z.output<
 /** A passage joined to its document (`semanticCandidates`). */
 export const researchPassageRowSchema = z
   .object({
-    id: pgUuid,
-    documentId: pgUuid,
-    ordinal: pgInt,
-    pageNumber: pgInt.nullable(),
+    id: dbUuid,
+    documentId: dbUuid,
+    ordinal: dbInt,
+    pageNumber: dbInt.nullable(),
     section: z.string().nullable(),
     content: z.string(),
     embedding: researchPassageEmbeddingSchema.nullable(),
     title: z.string(),
     sourceName: z.string(),
-    version: pgInt,
+    version: dbInt,
     documentHash: z.string(),
   })
   .describe("ai_research_passages row");

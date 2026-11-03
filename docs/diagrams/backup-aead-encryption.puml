@@ -11,7 +11,7 @@ participant "BackupTab\n(settings)" as UI
 participant "useBackup" as Hook
 participant "Electron main\n(packaging/electron/main.ts)" as Main
 participant "backup service\n(backup/restore.ts)" as Backup
-database  "PostgreSQL" as DB
+database  "SQLite\n(vision.sqlite3)" as DB
 participant "Attachments\n($ATTACHMENTS_DIR)" as Files
 participant "localStorage\n(frontend-state)" as LS
 
@@ -21,7 +21,7 @@ group Create backup
   Hook -> Main : ipc invoke 'backup:run'
   Main -> Main : acquire maintenance guard; pause watchdog
   Main -> Main : stop backend writer
-  Main -> DB   : pg_dump >> bundle/db.sql (PostgreSQL remains running)
+  Main -> DB   : database tool snapshot (VACUUM INTO, verified) >> bundle/db.sqlite3
   Main -> Files: copy $ATTACHMENTS_DIR/* >> bundle/attachments/
   Main -> Main : finally restart backend; await detailed readiness
   Main -> Main : release maintenance guard; resume watchdog
@@ -54,7 +54,7 @@ group Restore backup
     Backup -> Main : BUNDLE_SCHEMA_NEWER
     Main -> UI     : "upgrade Vision first"
   end
-  Main -> DB    : restore into staged database; retain previous database
+  Main -> DB    : verify db.sqlite3 (checksum, integrity, schema);\nstage as new database generation; retain previous one
   Main -> Main  : persist attachment switch intent before renames
   Main -> Files : activate staged attachment tree; retain previous tree
   Main -> Main  : require detailed readiness before finalization

@@ -28,7 +28,7 @@ import { registerFunctions } from "../../src/database/sqlite/functions.ts";
 import type { ConnectionClock } from "../../src/database/sqlite/functions.ts";
 import { canonicalJsonbText } from "../../src/database/sqlite/jsonb.ts";
 import { coerceTypmod, formatDec, parseDecimalText } from "../../src/database/sqlite/numeric.ts";
-import { formatInstant, instantFromDate } from "../../src/database/sqlite/pgTime.ts";
+import { formatInstant, instantFromDate } from "../../src/database/sqlite/timestamps.ts";
 import {
   PORTFOLIO_INCOME_SNAPSHOT_COLUMNS,
   portfolioIncomeTransactionSnapshotSql,

@@ -35,7 +35,7 @@ import type {
 import { translateSqliteError } from "../database/sqlite/errors.ts";
 import { registerFunctions } from "../database/sqlite/functions.ts";
 import type { ConnectionClock } from "../database/sqlite/functions.ts";
-import { instantFromDate, isDateText } from "../database/sqlite/pgTime.ts";
+import { instantFromDate, isDateText } from "../database/sqlite/timestamps.ts";
 import { scanSql } from "../database/sqlite/sqlText.ts";
 
 /** A value copied from a view or bound as a parameter. */

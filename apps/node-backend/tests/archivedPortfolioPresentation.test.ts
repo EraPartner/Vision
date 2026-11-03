@@ -7,7 +7,7 @@ import {
 import {
   toPgSummaryInvestmentRow,
   toPgMathTxRow,
-} from "./helpers/portfolioPgRows.ts";
+} from "./helpers/portfolioRowFixtures.ts";
 import type { InvestmentSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import { asInvestmentId } from "@vision/types/brands";
 

@@ -51,11 +51,11 @@ import {
 } from "../src/services/priceProviderService.ts";
 import type { InvestmentRow } from "../src/types/rows.ts";
 import { query as rawQuery } from "../src/database/connection.ts";
-import type { PgQueryResult } from "../src/database/connection.ts";
+import type { DbQueryResult } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
 import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.ts";
-import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
+import { dbLocalDate } from "./helpers/portfolioRowFixtures.ts";
 import { must } from "./helpers/must.ts";
 
 /** The spy behind `obj[key]`, read without taking an unbound method reference. */
@@ -67,13 +67,13 @@ function methodMock<T extends object, K extends keyof T>(obj: T, key: K) {
 const latestUsdRate = (rateToEur: string) => ({
   currency_code: "USD",
   rate_to_eur: rateToEur,
-  rate_date: pgLocalDate("2026-01-02"),
+  rate_date: dbLocalDate("2026-01-02"),
   fetched_at: new Date("2026-01-02T10:00:00Z"),
 });
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
-  (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
+  (sql: string, params?: readonly unknown[]) => Promise<Partial<DbQueryResult>>
 >;
 
 describe("Price Provider Service", () => {
@@ -734,8 +734,8 @@ describe("Price Provider Service", () => {
 
       query.mockResolvedValue({
         rows: [
-          { price_date: pgLocalDate("2026-01-01"), close_price: "100" },
-          { price_date: pgLocalDate("2026-01-10"), close_price: "120" },
+          { price_date: dbLocalDate("2026-01-01"), close_price: "100" },
+          { price_date: dbLocalDate("2026-01-10"), close_price: "120" },
         ],
       });
 
@@ -762,11 +762,11 @@ describe("Price Provider Service", () => {
       query
         .mockResolvedValueOnce({
           rows: [
-            { price_date: pgLocalDate("2026-01-01"), close_price: "100" },
-            { price_date: pgLocalDate("2026-01-02"), close_price: "101" },
-            { price_date: pgLocalDate("2026-01-03"), close_price: "1200" },
-            { price_date: pgLocalDate("2026-01-04"), close_price: "102" },
-            { price_date: pgLocalDate("2026-01-05"), close_price: "103" },
+            { price_date: dbLocalDate("2026-01-01"), close_price: "100" },
+            { price_date: dbLocalDate("2026-01-02"), close_price: "101" },
+            { price_date: dbLocalDate("2026-01-03"), close_price: "1200" },
+            { price_date: dbLocalDate("2026-01-04"), close_price: "102" },
+            { price_date: dbLocalDate("2026-01-05"), close_price: "103" },
           ],
         })
         .mockResolvedValueOnce({});
@@ -799,7 +799,7 @@ describe("Price Provider Service", () => {
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({
-          rows: [{ price_date: pgLocalDate("2023-11-14"), close_price: "710" }],
+          rows: [{ price_date: dbLocalDate("2023-11-14"), close_price: "710" }],
         });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -843,7 +843,7 @@ describe("Price Provider Service", () => {
       const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
 
       query.mockResolvedValue({
-        rows: [{ price_date: pgLocalDate("2026-01-03"), close_price: "104.5" }],
+        rows: [{ price_date: dbLocalDate("2026-01-03"), close_price: "104.5" }],
       });
 
       vi.spyOn(globalThis, "fetch").mockRejectedValue(
@@ -872,7 +872,7 @@ describe("Price Provider Service", () => {
       const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
 
       query.mockResolvedValue({
-        rows: [{ price_date: pgLocalDate("2026-01-03"), close_price: "104.5" }],
+        rows: [{ price_date: dbLocalDate("2026-01-03"), close_price: "104.5" }],
       });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -1076,7 +1076,7 @@ describe("Price Provider Service", () => {
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({
-          rows: [{ price_date: pgLocalDate("2026-01-01"), close_price: "100" }],
+          rows: [{ price_date: dbLocalDate("2026-01-01"), close_price: "100" }],
         });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -1151,7 +1151,7 @@ describe("Price Provider Service", () => {
 
     it("falls back to cached db points when kinesis has no symbol", async () => {
       query.mockResolvedValueOnce({
-        rows: [{ price_date: pgLocalDate("2026-01-03"), close_price: "104.5" }],
+        rows: [{ price_date: dbLocalDate("2026-01-03"), close_price: "104.5" }],
       });
 
       const points = await fetchHistoricalPrices(
@@ -1172,8 +1172,8 @@ describe("Price Provider Service", () => {
     it("returns db-only custom history when dbOnly mode is enabled", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          { price_date: pgLocalDate("2026-01-01"), close_price: "99" },
-          { price_date: pgLocalDate("2026-01-02"), close_price: "101" },
+          { price_date: dbLocalDate("2026-01-01"), close_price: "99" },
+          { price_date: dbLocalDate("2026-01-02"), close_price: "101" },
         ],
       });
 
@@ -1195,7 +1195,7 @@ describe("Price Provider Service", () => {
 
     it("returns db fallback for unsupported providers", async () => {
       query.mockResolvedValueOnce({
-        rows: [{ price_date: pgLocalDate("2026-01-04"), close_price: "88" }],
+        rows: [{ price_date: dbLocalDate("2026-01-04"), close_price: "88" }],
       });
 
       const points = await fetchHistoricalPrices(
@@ -1228,11 +1228,11 @@ describe("Price Provider Service", () => {
         .mockResolvedValueOnce({ rows: [{ id: 42 }] })
         .mockResolvedValueOnce({
           rows: [
-            { price_date: pgLocalDate("2026-01-01"), close_price: "100" },
-            { price_date: pgLocalDate("2026-01-02"), close_price: "101" },
-            { price_date: pgLocalDate("2026-01-03"), close_price: "1200" },
-            { price_date: pgLocalDate("2026-01-04"), close_price: "102" },
-            { price_date: pgLocalDate("2026-01-05"), close_price: "103" },
+            { price_date: dbLocalDate("2026-01-01"), close_price: "100" },
+            { price_date: dbLocalDate("2026-01-02"), close_price: "101" },
+            { price_date: dbLocalDate("2026-01-03"), close_price: "1200" },
+            { price_date: dbLocalDate("2026-01-04"), close_price: "102" },
+            { price_date: dbLocalDate("2026-01-05"), close_price: "103" },
           ],
         })
         .mockResolvedValueOnce({ rows: [] });

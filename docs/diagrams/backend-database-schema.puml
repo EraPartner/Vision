@@ -875,12 +875,12 @@ end note
 note bottom of portfolio_import_batches
   Portfolio CSV/Saxo XLSX statement batches (ADR-078, ADR-177).
   Mirrors import_batches but portfolio-shaped.
-  Included in the whole-database pg_dump backup.
+  Included in the whole-database SQLite snapshot backup.
 end note
 
 ' Materialized views (read-only projections — listed for reference)
 note as MV_NOTE
-  Materialized views (refreshed by materializedViewService):
+  Summary tables (refilled by materializedViewService):
    - mv_monthly_summary
    - mv_category_totals
   Retired zero-reader projections:

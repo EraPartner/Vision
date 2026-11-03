@@ -105,13 +105,7 @@ export function validateBackupDest(dir: unknown): string | null {
   return null;
 }
 
-// .sql and .enc stay selectable so a Vision 2.0 dump gets the transition message.
-const ALLOWED_RESTORE_EXTS = new Set([
-  ".visionbak",
-  ".sqlite3",
-  ".enc",
-  ".sql",
-]);
+const ALLOWED_RESTORE_EXTS = new Set([".visionbak", ".sqlite3", ".enc"]);
 export function hasAllowedRestoreExt(p: unknown): boolean {
   const lower = String(p).toLowerCase();
   if (lower.endsWith(".visionbak.enc")) return true;

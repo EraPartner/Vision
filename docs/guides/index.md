@@ -38,7 +38,6 @@ SORT title ASC
 
 - [[docs/guides/contributing|Contributing Guide]] - How to contribute to Vision
 - [[docs/guides/migrations|Database Migration Guide]] - Creating, checking, running, and rolling back the SQLite migrations in `db/migrations/`
-- [[docs/guides/sqlite-transition|Moving Vision 2.0 Data to SQLite]] - The one-time transition checklist and script for a Vision 2.0 (PostgreSQL) installation
 - [[docs/guides/how-to-add-api-endpoint|How to Add an API Endpoint]] - Step-by-step backend API guide
 - [[docs/guides/how-to-add-new-page|How to Add a New Page]] - Step-by-step frontend page guide
 - [[docs/guides/how-to-add-react-component|How to Add a React Component]] - Step-by-step frontend component guide

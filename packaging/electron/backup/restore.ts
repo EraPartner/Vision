@@ -26,7 +26,7 @@ import {
   parseSqliteHeader,
   readFileHead,
 } from "../runtime/database-stats";
-import { TRANSITION_COMMAND, packagedMigrationVersion } from "../runtime/native";
+import { packagedMigrationVersion } from "../runtime/native";
 import { validateBackupDest } from "../runtime/ipc-schemas";
 import type { NativeRestoreRuntime } from "./native-transport";
 
@@ -111,22 +111,6 @@ export function resolveDatabaseEnvironment(): Promise<{
 }> {
   // Deferred so a missing native runtime rejects instead of throwing.
   return Promise.resolve().then(() => ({ nativeRuntime: getNativeRuntime() }));
-}
-
-export const BACKUP_POSTGRESQL_V2_CODE = "BACKUP_POSTGRESQL_V2";
-
-/**
- * A Vision 2.0 backup holds a PostgreSQL dump. Vision converts it once with
- * the repository's transition script and never reads the dump itself.
- */
-export function postgresBackupError(): Error & { code: string } {
-  return Object.assign(
-    new Error(
-      "This backup was made by Vision 2.0 (PostgreSQL) and cannot be restored directly. " +
-        `Convert it once with the transition script from a Vision repository checkout: ${TRANSITION_COMMAND}`,
-    ),
-    { code: BACKUP_POSTGRESQL_V2_CODE },
-  );
 }
 
 function notVisionBackupError(): Error & { code: string } {
@@ -296,9 +280,6 @@ export async function runBundleRestore(
   const { metadata, databasePath, attachmentsDir, frontendState, cleanup } =
     opened;
   try {
-    // A Vision 2.0 bundle carries a PostgreSQL dump (db.sql), which only the
-    // transition script converts. It is never read here.
-    if (!databasePath) throw postgresBackupError();
     const nativeRuntime = getNativeRuntime();
     // metadata.json is untrusted bundle content. Activation verifies the
     // database itself and refuses it unless it matches what metadata recorded.
@@ -342,8 +323,8 @@ async function sqliteFileSchemaVersion(file: string): Promise<number | undefined
 
 /**
  * Restores a bare database file: a Vision SQLite database (for example a
- * pre-migration backup the backend wrote). Vision 2.0's `.sql` and `.sql.enc`
- * PostgreSQL dumps are refused with the transition command.
+ * pre-migration backup the backend wrote), optionally encrypted. Any other
+ * file is refused.
  */
 export async function runRestore(
   filePath: string,
@@ -363,13 +344,8 @@ export async function runRestore(
     cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
   }
   try {
-    if (!(await isSqliteDatabaseFile(restoreSource))) {
-      // The single-file encrypted format and bare .sql files are Vision 2.0
-      // PostgreSQL dumps; only the magic bytes were read to tell them apart.
-      if (restoreSource !== filePath || /\.sql$/i.test(filePath))
-        throw postgresBackupError();
+    if (!(await isSqliteDatabaseFile(restoreSource)))
       throw notVisionBackupError();
-    }
     const nativeRuntime = getNativeRuntime();
     const fileVersion = await sqliteFileSchemaVersion(restoreSource);
     if (fileVersion !== undefined)
