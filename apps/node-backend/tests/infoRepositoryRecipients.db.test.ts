@@ -490,9 +490,10 @@ describe.skipIf(!hasTestDatabase())(
           cap: string;
           beyond_cap_still_prev_month: boolean;
         }>(`
-        SELECT to_char(
+        SELECT to_char(LEAST(
                  (date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
-                 + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date), 'YYYY-MM-DD') AS cap,
+                 + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date),
+                 date_trunc('month', ${TODAY_SQL})::date - 1), 'YYYY-MM-DD') AS cap,
                ((date_trunc('month', ${TODAY_SQL}) - INTERVAL '1 month')::date
                  + (${TODAY_SQL} - DATE_TRUNC('month', ${TODAY_SQL})::date) + 1)
                  < date_trunc('month', ${TODAY_SQL})::date AS beyond_cap_still_prev_month
@@ -511,7 +512,9 @@ describe.skipIf(!hasTestDatabase())(
           date: cap,
           amount: "-7.00",
           recipientId: rec.colruyt,
-        }); // exactly on the cap → in
+        }); // exactly on the cap → in. LEAST keeps it in the previous month when
+        // today's day-of-month is past that month's end (e.g. 31 Oct → 30 Sep).
+        // Without it the row landed on the 1st of the current month.
         if (beyondIsTestable) {
           // Only assertable when cap+1 is still inside the previous month: for a
           // short previous month and a late day-of-month the cap lands past its
