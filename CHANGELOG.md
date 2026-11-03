@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-03
+
 > [!IMPORTANT]
 > **Vision 2.0 data must be moved once.** Vision now keeps its data in one SQLite file instead of
 > a private PostgreSQL server ([ADR-263]). It refuses to start while it finds Vision 2.0 data and
@@ -41,7 +43,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The bundled PostgreSQL 18 server and its payload, database roles and grants, `pg` and the
   PostgreSQL tooling (`native:prepare`, `test:db`, `db:lint`). Development and tests need no
   database server.
-- macOS 12 support: its system SQLite is older than 3.39.
+- macOS 12 support: its system SQLite is older than 3.39. The 2.0.0 app already required macOS 13.
+
+### Added
+
+- **Range compare on every price chart**, including security prices: drag, or click then click,
+  to read the change between two points; the result stays pinned until cleared (#389).
+
+### Fixed
+
+- **Calendar days follow the Mac's time zone** ([ADR-264]): the backend now starts in the Mac's
+  zone, so "today" no longer lags the screen after local midnight east of Brussels (#395).
+- **Special social security contribution (CSSS)** is computed on total net income, as art. 107,
+  2° defines it, instead of on net professional income only (#386).
+- The backup-on-quit notification stays on screen before Vision exits (#387).
+- The app always reaches its backend on 127.0.0.1, never a listener on `[::1]` (#393).
+- Release README: first-launch steps for macOS 15 and later, and the macOS 13 minimum (#392).
 
 ## [2.0.0] — 2026-10-28
 
@@ -197,7 +214,8 @@ First tagged release of Vision: self-hosted financial transaction manager with t
 CRUD and categorization, multi-adapter bank CSV import, portfolio tracking, Belgian tax,
 planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 
-[Unreleased]: https://github.com/EraPartner/Vision/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/EraPartner/Vision/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/EraPartner/Vision/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/EraPartner/Vision/compare/v1.0.2...v2.0.0
 [1.0.2]: https://github.com/EraPartner/Vision/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/EraPartner/Vision/compare/v1.0.0...v1.0.1
@@ -245,3 +263,4 @@ planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 [ADR-260]: docs/adr/260-ledger-card-material-on-a-pseudo.md
 [ADR-261]: docs/adr/261-ticker-and-settings-material-hosts-and-20-fps-aurora.md
 [ADR-263]: docs/adr/263-sqlite-replaces-postgresql.md
+[ADR-264]: docs/adr/264-desktop-calendar-days-in-system-zone.md
