@@ -152,7 +152,14 @@ so what services read stays what node-postgres returned. Bound values convert th
   modifier is forbidden by the source check; day steps use `add_days(date, n)`.
 - `now()` returns the transaction start time inside a transaction and the statement time outside
   one, as in PostgreSQL. "Today" and day boundaries of timestamps use the backend process's time
-  zone, which is the zone the PostgreSQL session used.
+  zone, which is the zone the PostgreSQL session used. On the desktop that is the Mac's zone, the
+  zone [[docs/adr/264-desktop-calendar-days-in-system-zone|ADR-264]] also gives `APP_TIMEZONE`, so
+  SQL `today()` and the backend's `todayAppDateString()` agree. Only an `APP_TIMEZONE` pinned in
+  `runtime.env` can differ from the SQL day, as it could from PostgreSQL's `CURRENT_DATE`.
+- `ts_date(x)` is `x::date`: a stored timestamp gives its local date; other text gives the date
+  it was written with, as PostgreSQL's date input does. Builder writes read booleans, dates and
+  timestamps with PostgreSQL's input rules (`'yes'`, `'2026-01-05T23:30:00Z'`, a `Date`), so
+  routes that forward loose values keep working.
 - `ilike()`, `regexp` (JavaScript regular expressions), `similarity()` (pg_trgm's trigram rule),
   `json_contains()` for `@>`, `gen_random_uuid()` and `to_char()` for the formats Vision uses are
   JavaScript functions. AI research passages drop the tsvector column; `vision_fts_match()` and
