@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the surfaces that read the shared computed balance and
+ * Real-database (SQLite) tests for the surfaces that read the shared computed balance and
  * had to be migrated off its single cross-currency `SUM(t2.amount)`:
  *
  *   - the accounts hub          — `accountService.list` (computed_balance + drift)

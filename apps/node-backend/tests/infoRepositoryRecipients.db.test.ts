@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for infoRepositoryRecipients — `getRecipientInsights`,
+ * Real-database (SQLite) tests for infoRepositoryRecipients — `getRecipientInsights`,
  * `getRecipientByYear` and `getRecipientPivot`.
  *
  * DB-backed complement to infoRepositoryRecipients.test.ts (which stays: it runs

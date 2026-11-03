@@ -442,7 +442,7 @@ jobs:
       - name: Run backend tests with coverage
         env:
           VISION_RUN_PERFORMANCE_PROBES: "1"
-        run: cd apps/node-backend && bun vitest run --coverage
+        run: bun run --filter financial-transaction-manager-node test:coverage
 
       - name: Build production frontend
         run: CI=1 bun run build

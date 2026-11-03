@@ -187,7 +187,7 @@ export const accountCurrencyRowSchema = accountRowSchema
   .pick({ id: true, currency: true })
   .describe("account currency row");
 
-/** `closeAccount`'s FOR UPDATE lock row. */
+/** `closeAccount`'s active-state row, read in its write transaction. */
 export const accountActiveRowSchema = accountRowSchema
   .pick({ id: true, is_active: true })
   .describe("account active row");

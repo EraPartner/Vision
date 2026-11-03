@@ -501,5 +501,3 @@ export function canonical(value: unknown): string | null {
   return parsed === null ? null : formatDec(parsed);
 }
 
-/** Exported for the aggregate implementations and tests. */
-export const internal = { need, upscale, integerDigits, nbaseLead, checked };

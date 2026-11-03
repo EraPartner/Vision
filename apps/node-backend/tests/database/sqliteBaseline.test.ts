@@ -87,9 +87,9 @@ interface Scenarios {
   scenarios: Scenario[];
 }
 
-const readJson = <T>(name: string): T => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8")) as T;
-const manifest = readJson<Manifest>("sqliteBaseline.manifest.json");
-const fixture = readJson<Scenarios>("sqliteBaseline.scenarios.json");
+const readJson = (name: string): unknown => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"));
+const manifest = readJson("sqliteBaseline.manifest.json") as Manifest;
+const fixture = readJson("sqliteBaseline.scenarios.json") as Scenarios;
 const BASELINE = readFileSync(new URL("../../../../db/migrations/0001_baseline.sql", import.meta.url), "utf8");
 
 function pgColumn(raw: RawColumn): PgColumn {
@@ -271,7 +271,7 @@ function text(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "number" || typeof v === "bigint") return String(v);
   if (typeof v === "string") return v;
-  throw new Error(`unexpected value ${String(v)}`);
+  throw new Error(`unexpected value ${Object.prototype.toString.call(v)}`);
 }
 
 type Result = { error: PgError } | { rows: (string | null)[][] } | { ok: true };
@@ -783,7 +783,7 @@ describe("schemaFunctions: vision_raise", () => {
 
   it("uses P0001 for a malformed SQLSTATE and leaves out an empty constraint", () => {
     expect(() => db.prepare("SELECT vision_raise('bad', '', 'm')").get()).toThrow(
-      expect.objectContaining({ code: "P0001", message: "m" }) as unknown as Error,
+      expect.objectContaining({ code: "P0001", message: "m" }),
     );
     let thrown: unknown;
     try {
@@ -802,7 +802,7 @@ describe("schemaFunctions: vision_raise", () => {
                INSERT INTO transactions (id, date, amount, recipient_id) VALUES (1, '2026-01-01', '-10.0000', 1);
                INSERT INTO transaction_splits (id, transaction_id, recipient_id, amount) VALUES (1, 1, 1, '10.0000')`);
       expect(() => db.exec("UPDATE transactions SET amount = '-1.0000' WHERE id = 1")).toThrow(
-        expect.objectContaining({ code: "23514", message: "transaction 1 amount -1.0000 is below its split total 10.0000" }) as unknown as Error,
+        expect.objectContaining({ code: "23514", message: "transaction 1 amount -1.0000 is below its split total 10.0000" }),
       );
       expect(all(db, "SELECT amount FROM transactions WHERE id = 1")).toEqual([{ amount: "-10.0000" }]);
     } finally {

@@ -55,7 +55,8 @@ export function canonicalDecimal(value: unknown, precision: number | null, scale
   if (typeof value === "string") text = value;
   else if (typeof value === "number" || typeof value === "bigint") text = String(value);
   else if (typeof value === "object" && typeof (value as { toFixed?: unknown }).toFixed === "function") {
-    text = String(value);
+    // A Decimal.js value prints its exact digits.
+    text = (value as { toString(): string }).toString();
   } else {
     return value;
   }

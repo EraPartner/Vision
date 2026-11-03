@@ -254,11 +254,6 @@ export function dateInputText(text: string): string {
   return formatDate(written?.[1] === undefined ? localDateOf(instant) : parseDate(written[1]));
 }
 
-/** Today in the session zone. */
-export function today(now: Date = new Date()): string {
-  return formatDate(localDateOf(instantFromDate(now)));
-}
-
 export function addMonthsToDate(date: CivilDate, months: number): CivilDate {
   if (!Number.isInteger(months)) throw new TimeError(`month count must be whole: ${months}`, "22023");
   const zeroBased = date.year * 12 + (date.month - 1) + months;

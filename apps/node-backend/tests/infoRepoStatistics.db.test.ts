@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for infoRepositoryStatistics.
+ * Real-database (SQLite) tests for infoRepositoryStatistics.
  *
  * DB-backed complement to infoRepoStatistics.test.ts (which stays: it runs
  * without a DB). The mock suite feeds pre-shaped rows into the JS aggregation

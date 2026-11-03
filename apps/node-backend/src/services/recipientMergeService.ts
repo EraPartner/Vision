@@ -64,7 +64,8 @@ export async function mergeRecipients(
 
   // Composed from repository methods: the ambient transaction context routes
   // each repo call onto this transaction's client, so the whole repoint sequence
-  // shares all participants' FOR UPDATE locks and rolls back as one.
+  // runs in one write transaction on the single SQLite writer (ADR-263) and
+  // rolls back as one.
   return withTransaction(async () => {
     const lockIds = [...new Set([primaryId, ...ids])].sort((a, b) => a - b);
     const participants = await recipientRepository.lockByIdsForMerge(lockIds);

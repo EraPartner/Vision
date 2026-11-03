@@ -45,7 +45,8 @@ function sqlText(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   if (value instanceof Uint8Array) return new TextDecoder().decode(value);
-  return String(value);
+  // SQLite hands a function only NULL, numbers, text and blobs.
+  return Object.prototype.toString.call(value);
 }
 
 /** `RAISE EXCEPTION ... USING ERRCODE = sqlstate, CONSTRAINT = constraint`. */

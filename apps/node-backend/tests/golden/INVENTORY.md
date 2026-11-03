@@ -48,8 +48,8 @@ no aggregation input/expected golden pairs there.
 
 The helper property tests use integer-cent oracles. They do not exercise SQL
 selection/grouping, exclusion filters, FX lookup, or yearly-query parity. The
-separate database suites require `TEST_DATABASE_URL`; a skipped database suite
-must not be reported as passed coverage.
+separate database suites run in every backend test run on a per-file SQLite copy
+of the migrated schema (ADR-263) and never skip.
 
 ## Regeneration policy
 

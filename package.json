@@ -41,7 +41,7 @@
     "test:packages": "bun run --filter '@vision/shared-utils' test",
     "test:all": "bun scripts/run-parallel.ts \"backend=bun run --filter 'financial-transaction-manager-node' test\" \"frontend=bun run test:frontend\"",
     "test:coverage": "bun run --filter 'vision-frontend' test:coverage",
-    "test:watch": "cd apps/node-backend && VISION_RUN_PERFORMANCE_PROBES=${VISION_RUN_PERFORMANCE_PROBES:-1} bun vitest watch",
+    "test:watch": "VISION_RUN_PERFORMANCE_PROBES=${VISION_RUN_PERFORMANCE_PROBES:-1} bun run --filter financial-transaction-manager-node test:watch",
     "db:migrate": "bun run apps/node-backend/scripts/db-migrate.ts up",
     "db:migrate:down": "bun run apps/node-backend/scripts/db-migrate.ts down",
     "db:status": "bun run apps/node-backend/scripts/db-migrate.ts status",

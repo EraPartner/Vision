@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the canonical 3-level effective-category resolution
+ * Real-database (SQLite) tests for the canonical 3-level effective-category resolution
  * on the aggregation surfaces that used to resolve only TWO levels:
  *
  *   • monthly summary — live path (infoRepositoryMonthly) and the

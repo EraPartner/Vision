@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for D6 (ADR-095 addendum 2026-07-10): instrument-less
+ * Real-database (SQLite) tests for D6 (ADR-095 addendum 2026-07-10): instrument-less
  * dividend/interest/fee/tax brokerage rows route 'cash' and land as ONE signed
  * `transactions` row on the sleeve, categorized by configured active IDs.
  *

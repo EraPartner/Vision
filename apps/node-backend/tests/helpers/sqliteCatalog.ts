@@ -105,15 +105,6 @@ export async function indexes(table: string): Promise<CatalogIndex[]> {
   return rows;
 }
 
-/** The indexed column names (or NULL for expression parts) of one index. */
-export async function indexColumns(index: string): Promise<Array<string | null>> {
-  const { rows } = await pool.query<{ name: string | null }>(
-    "SELECT name FROM pragma_index_info($1) ORDER BY seqno",
-    [index],
-  );
-  return rows.map((row) => row.name);
-}
-
 /** Triggers on a table with their CREATE text. */
 export async function triggers(table: string): Promise<Array<{ name: string; sql: string }>> {
   const { rows } = await pool.query<{ name: string; sql: string }>(

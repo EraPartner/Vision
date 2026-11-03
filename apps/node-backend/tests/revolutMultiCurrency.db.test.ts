@@ -1,5 +1,5 @@
 /**
- * Real-Postgres end-to-end tests for a MULTI-CURRENCY Revolut import.
+ * Real-database (SQLite) end-to-end tests for a MULTI-CURRENCY Revolut import.
  *
  * ADR-089's addendum (decision D2, 2026-07-10) settled that a Revolut account
  * stays ONE `accounts` row holding several currencies, rather than being split

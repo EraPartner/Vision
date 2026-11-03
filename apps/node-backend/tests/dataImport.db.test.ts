@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the recipient/category CSV importers.
+ * Real-database (SQLite) tests for the recipient/category CSV importers.
  *
  * The mock suite (dataImportService.test.ts) stubs the repositories, so it
  * pins the per-row fallback and nothing else. This suite exists because the
@@ -119,7 +119,7 @@ async function recipientRow(normalizedName: string) {
   return rows[0] ?? null;
 }
 
-describeDb("data import (real Postgres)", () => {
+describeDb("data import (real SQLite database)", () => {
   beforeAll(acquireDbSuiteLock, 180_000);
 
   beforeEach(async () => {

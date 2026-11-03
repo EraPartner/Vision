@@ -1,5 +1,5 @@
 /**
- * Real-Postgres tests for the ADR-088 account_id contract across planned
+ * Real-database (SQLite) tests for the ADR-088 account_id contract across planned
  * transactions, split owed views, and transaction export. Both the fresh
  * compatibility schema and the manually contracted schema must work: the
  * canonical tables are written through account_id only, while API-facing

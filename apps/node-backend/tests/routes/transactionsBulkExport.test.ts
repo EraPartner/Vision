@@ -50,9 +50,7 @@ const bulkExport = (body: object) =>
 function useSnapshotResults(...results: object[]) {
   const query = vi.fn();
   for (const result of results) query.mockResolvedValueOnce(result);
-  vi.mocked(withReadSnapshot).mockImplementation(
-    async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
-  );
+  vi.mocked(withReadSnapshot).mockImplementation(async (fn) => fn({ query, release: vi.fn() }));
   return { query };
 }
 
