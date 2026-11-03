@@ -15,6 +15,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { updateStatusKeys, useUpdateStatus } from "@/hooks/useUpdateStatus";
 import { cn } from "@/lib/utils";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
+import { releaseNotesSummary } from "@/lib/releaseNotes";
 import {
     SettingsSection,
     SettingsGroup,
@@ -54,6 +55,9 @@ export const AboutSection = memo(function AboutSection({
     const [checkedUpdateStatus, setCheckedUpdateStatus] =
         useState<UpdateCheckStatus | null>(null);
     const updateStatus = checkedUpdateStatus ?? polledUpdateStatus ?? null;
+    const releaseSummary = updateStatus?.release_notes
+        ? releaseNotesSummary(updateStatus.release_notes)
+        : "";
     const [checkingUpdate, setCheckingUpdate] = useState(false);
     const [applyPhase, setApplyPhase] = useState<ApplyPhase>("idle");
     const applyingUpdate = applyPhase !== "idle" && applyPhase !== "done";
@@ -271,12 +275,11 @@ export const AboutSection = memo(function AboutSection({
                                             )}
                                         </span>
                                     )}
-                                {!updateStatus.up_to_date &&
-                                    updateStatus.release_notes && (
-                                        <span className="line-clamp-2 block">
-                                            {updateStatus.release_notes}
-                                        </span>
-                                    )}
+                                {!updateStatus.up_to_date && releaseSummary && (
+                                    <span className="line-clamp-2 block">
+                                        {releaseSummary}
+                                    </span>
+                                )}
                                 {updateStatus.error && (
                                     <span className="block text-destructive">
                                         {updateStatus.error}
