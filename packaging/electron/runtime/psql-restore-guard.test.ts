@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { psqlRestoreGuardArgs } from "./psql-restore-guard";
 
-const KEY = "gqnVQ6F4imcFbGKpuwXEGo0ADr2S2I8m";
+const KEY = "pgdumpkey";
 const GUARD = ["--command", "\\restrict fixedkey"];
 
 async function guardFor(t: test.TestContext, sql: string): Promise<string[]> {
