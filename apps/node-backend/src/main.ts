@@ -412,7 +412,8 @@ function bootSummary(extraPhase = "backend_total") {
  */
 function startupFailure(err: unknown): { error: string; code?: string } {
   const code = typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
-  return typeof code === "string" ? { error: errorMessage(err), code } : { error: errorMessage(err) };
+  const error = errorMessage(err) ?? String(err);
+  return typeof code === "string" ? { error, code } : { error };
 }
 
 async function start() {
