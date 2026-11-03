@@ -95,7 +95,8 @@ describe("@@ and ts_rank_cd", () => {
     expect(matrices.map((m) => m.passages.length * m.queries.length)).toEqual([3763, 645]);
   });
 
-  it("vision_fts_match() equals `@@` for every passage and query", () => {
+  // 4408 SQL calls each: about 1.5 s alone, past 5 s under CI coverage and load.
+  it("vision_fts_match() equals `@@` for every passage and query", { timeout: 30_000 }, () => {
     const mismatches: string[] = [];
     for (const matrix of matrices) matrix.passages.map(expand).forEach((passage, p) => {
       matrix.queries.forEach((query, q) => {
@@ -107,7 +108,7 @@ describe("@@ and ts_rank_cd", () => {
     expect(mismatches).toEqual([]);
   });
 
-  it("vision_fts_rank() equals ts_rank_cd's float4 for every passage and query", () => {
+  it("vision_fts_rank() equals ts_rank_cd's float4 for every passage and query", { timeout: 30_000 }, () => {
     const mismatches: string[] = [];
     for (const matrix of matrices) matrix.passages.map(expand).forEach((passage, p) => {
       matrix.queries.forEach((query, q) => {
