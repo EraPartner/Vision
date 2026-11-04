@@ -108,6 +108,12 @@ function applyPragmas(db: DatabaseSync, role: Connection["role"]): void {
       // and triggers; a build that defaults trusted_schema to OFF would
       // refuse them.
       "PRAGMA trusted_schema = ON",
+      // A 16 MiB page cache per connection (SQLite's default is 2 MiB), so a
+      // typical Vision file stays cached across screens, and temporary
+      // B-trees for ORDER BY / GROUP BY / DISTINCT without an index stay in
+      // memory instead of temporary files.
+      "PRAGMA cache_size = -16384",
+      "PRAGMA temp_store = MEMORY",
     ].join(";\n"),
   );
   if (role !== "writer") db.exec("PRAGMA query_only = ON");
@@ -706,6 +712,15 @@ export async function closePool(): Promise<void> {
       reader = null;
     }
     if (writer) {
+      try {
+        // SQLite's advice for long-lived connections: refresh the planner
+        // statistics at close. analysis_limit bounds each ANALYZE to a
+        // sample; 0x10002 also covers tables this connection never read
+        // (SQLite 3.46+; older versions ignore that bit).
+        writer.db.exec("PRAGMA analysis_limit = 400; PRAGMA optimize = 0x10002");
+      } catch (err) {
+        logger.warn(`PRAGMA optimize at close failed: ${errorMessage(err)}`);
+      }
       try {
         writer.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (err) {

@@ -228,6 +228,13 @@ transaction.
   starts with `SELECT`, `VALUES` or `EXPLAIN`, or a `WITH` whose main statement is a `SELECT`
   (`sqlText.ts`). `CASE ... END` and `replace(...)` do not make a read a write; a misrouted write
   fails on the reader rather than writing.
+- Every connection runs with foreign keys on, `synchronous = FULL`, `fullfsync`, a 16 MiB page
+  cache (`cache_size = -16384`) and `temp_store = MEMORY`. `closePool()` runs
+  `PRAGMA optimize` (bounded by `analysis_limit = 400`) before its WAL checkpoint, so the planner
+  has statistics after the first clean shutdown.
+- Kysely writes to a money column (`MoneyColumn`) take decimal text. Convert a JavaScript number
+  with `decimalText()` from `database/columnTypes.ts`; the write plugin rounds it to the column's
+  scale.
 - `withTransaction(fn)` runs `fn` in `BEGIN IMMEDIATE`; a nested call becomes a savepoint.
   `withReadSnapshot(fn)` gives a consistent read-only snapshot for long exports.
 - Never run unrelated `query()` calls in parallel inside one transaction with `Promise.all`

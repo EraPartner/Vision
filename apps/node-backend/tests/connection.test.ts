@@ -421,6 +421,21 @@ describe("snapshots and maintenance", () => {
     expect(order).toEqual(["tx", "exclusive"]);
   });
 
+  it("closePool() refreshes the planner statistics", async () => {
+    await closePool();
+    const { rows } = await query<{ n: number }>(
+      "SELECT count(*) AS n FROM sqlite_schema WHERE type = 'table' AND name = 'sqlite_stat1'",
+    );
+    expect(rows[0]?.n).toBe(1);
+  });
+
+  it("runs every connection with a 16 MiB page cache and in-memory temporary storage", async () => {
+    const { rows } = await query("PRAGMA cache_size");
+    expect(rows[0]).toEqual({ cache_size: -16384 });
+    const temp = await query("PRAGMA temp_store");
+    expect(temp.rows[0]).toEqual({ temp_store: 2 });
+  });
+
   it("reports health and reopens after closePool()", async () => {
     expect(await checkConnection()).toBe(true);
     expect(await getTableCount()).toBeGreaterThan(0);
