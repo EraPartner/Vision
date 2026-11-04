@@ -78,6 +78,43 @@ describe("the repository's migrations", () => {
     });
   });
 
+  it("index the child columns of every foreign key", async () => {
+    // Without one, deleting a parent row scans the child table per row.
+    const file = freshFile();
+    await runMigrations(file);
+    const unindexed = withDb(file, (db) => {
+      const out: string[] = [];
+      const tables = db
+        .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+        .all() as Array<{ name: string }>;
+      for (const { name } of tables) {
+        const quoted = `"${name.replaceAll('"', '""')}"`;
+        const keys = new Map<number, string[]>();
+        for (const fk of db.prepare(`PRAGMA foreign_key_list(${quoted})`).all() as Array<{ id: number; seq: number; from: string }>) {
+          const cols = keys.get(fk.id) ?? [];
+          cols[fk.seq] = fk.from;
+          keys.set(fk.id, cols);
+        }
+        const leads = (db.prepare(`PRAGMA index_list(${quoted})`).all() as Array<{ name: string }>).map((i) =>
+          (db.prepare(`PRAGMA index_info("${i.name.replaceAll('"', '""')}")`).all() as Array<{ name: string | null }>).map(
+            (c) => c.name,
+          ),
+        );
+        leads.push(
+          (db.prepare(`PRAGMA table_info(${quoted})`).all() as Array<{ name: string; pk: number }>)
+            .filter((c) => c.pk > 0)
+            .sort((a, b) => a.pk - b.pk)
+            .map((c) => c.name),
+        );
+        for (const cols of keys.values()) {
+          if (!leads.some((index) => cols.every((c, i) => index[i] === c))) out.push(`${name}(${cols.join(",")})`);
+        }
+      }
+      return out;
+    });
+    expect(unindexed).toEqual([]);
+  });
+
   it("reach the same schema from every earlier version as from an empty database", async () => {
     const fresh = freshFile();
     await runMigrations(fresh);

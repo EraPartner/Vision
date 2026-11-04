@@ -1,0 +1,16 @@
+-- Rollback of 0002_index_foreign_keys: drops the indexes it added; no data changes.
+
+DROP INDEX idx_accounts_funding_account_id;
+DROP INDEX idx_ai_investigation_jobs_conversation_id;
+DROP INDEX idx_analysis_monitor_observations_analysis_run_id;
+DROP INDEX idx_category_root_aliases_target_category_id;
+DROP INDEX idx_insight_dismissals_recipient_id;
+DROP INDEX idx_manual_transaction_dedup_claims_transaction_id;
+DROP INDEX idx_portfolio_asset_adjustment_sources_staging_row_id;
+DROP INDEX idx_portfolio_asset_adjustments_account_id;
+DROP INDEX idx_portfolio_asset_transfers_source_account_id;
+DROP INDEX idx_portfolio_asset_transfers_destination_account_id;
+DROP INDEX idx_portfolio_import_duplicate_repair_journal_original_batch;
+DROP INDEX idx_portfolio_import_income_recognition_journal_unit_row;
+DROP INDEX idx_saved_analyses_last_successful_run_id;
+DROP INDEX idx_saved_analysis_runs_definition_version;
