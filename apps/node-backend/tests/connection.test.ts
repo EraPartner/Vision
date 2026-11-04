@@ -9,9 +9,11 @@ import {
   checkConnection,
   closePool,
   getPoolStats,
+  getStatementStats,
   getTableCount,
   MINIMUM_SQLITE_VERSION,
   query,
+  resetStatementStats,
   sameTransaction,
   withExclusiveWriter,
   withReadSnapshot,
@@ -104,6 +106,21 @@ describe("statements", () => {
   it("returns the number of rows a write touched", async () => {
     const result = await query("UPDATE conn_items SET flag = $1 WHERE name = $2", [false, "map"]);
     expect(result).toEqual({ rows: [], rowCount: 1 });
+  });
+
+  it("refuses to bind objects whose JSON text would be {}", async () => {
+    await expect(query("SELECT $1 AS v", [new Map([["a", 1]])])).rejects.toThrow(/cannot bind a Map/);
+    await expect(query("SELECT $1 AS v", [new Set([1])])).rejects.toThrow(/cannot bind a Set/);
+    const { rows } = await query<{ v: string }>("SELECT $1 AS v", [{ a: 1 }]);
+    expect(rows[0]?.v).toBe('{"a":1}');
+  });
+
+  it("counts the rows each statement returned or touched in the statement statistics", async () => {
+    resetStatementStats();
+    await query("SELECT name FROM conn_items WHERE name = $1", ["map"]);
+    await query("SELECT name FROM conn_items WHERE name = $1", ["map"]);
+    const stats = getStatementStats().find((s) => s.query === "SELECT name FROM conn_items WHERE name = ?1");
+    expect(stats).toMatchObject({ calls: 2, rows: 2 });
   });
 
   it("runs multi-statement text without parameters", async () => {
@@ -208,6 +225,43 @@ describe("transactions", () => {
     await tx;
     const after = await query<{ n: number }>("SELECT count(*) AS n FROM conn_items WHERE name = 'uncommitted'");
     expect(after.rows[0]?.n).toBe(1);
+  });
+
+  it("plain reads with CASE or replace() run on the reader, not behind a running transaction", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let started!: () => void;
+    const didStart = new Promise<void>((r) => (started = r));
+    const tx = withTransaction(async () => {
+      await query("INSERT INTO conn_items (name) VALUES ('held')");
+      started();
+      await gate;
+    });
+    await didStart;
+    // Before the fix these waited for the write lock: CASE ... END and
+    // replace( read as write keywords. Each must answer while the lock is held.
+    const reads = Promise.all([
+      query<{ k: string }>("SELECT CASE WHEN count(*) > 0 THEN 'some' ELSE 'none' END AS k FROM conn_items WHERE name = 'held'"),
+      query<{ k: string }>("SELECT replace('a-b', '-', '+') AS k"),
+      query<{ k: string }>("WITH t(x) AS (SELECT 'end') SELECT CASE x WHEN 'end' THEN 'done' END AS k FROM t"),
+    ]);
+    const first = await Promise.race([reads.then(() => "reads"), new Promise((r) => setTimeout(() => r("timeout"), 2000))]);
+    release();
+    await tx;
+    expect(first).toBe("reads");
+    // The reader sees committed data only, so not the transaction's row.
+    expect((await reads).map((r) => r.rows[0]?.k)).toEqual(["none", "a+b", "done"]);
+    await query("DELETE FROM conn_items WHERE name = 'held'");
+  });
+
+  it("a WITH ... INSERT still writes through the writer", async () => {
+    await query("WITH n(name) AS (SELECT 'cte-write') INSERT INTO conn_items (name) SELECT name FROM n");
+    await query("WITH n(name) AS (SELECT 'cte-replace') REPLACE INTO conn_items (name) SELECT name FROM n");
+    const { rows } = await query<{ n: number }>(
+      "SELECT count(*) AS n FROM conn_items WHERE name IN ('cte-write', 'cte-replace')",
+    );
+    expect(rows[0]?.n).toBe(2);
+    await query("DELETE FROM conn_items WHERE name IN ('cte-write', 'cte-replace')");
   });
 
   it("now() is the transaction start time inside a transaction", async () => {

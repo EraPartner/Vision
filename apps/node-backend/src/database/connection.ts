@@ -59,6 +59,8 @@ interface PreparedStatement {
   stmt: StatementSync;
   /** Column plans for statements that return rows; null for plain writes. */
   plan: ColumnPlan[] | null;
+  /** The statement's key in the timing statistics, normalised once. */
+  statsKey: string;
 }
 
 interface Connection {
@@ -249,7 +251,7 @@ function prepare(conn: Connection, text: string): PreparedStatement {
     stmt.setReadBigInts(true);
     plan = plan.map((c) => ({ ...c, read: withBigIntInput(c.read) }));
   }
-  prepared = { stmt, plan };
+  prepared = { stmt, plan, statsKey: statsKeyOf(text) };
   conn.statements.set(text, prepared);
   if (conn.statements.size > STATEMENT_CACHE_LIMIT) {
     const oldest = conn.statements.keys().next().value;
@@ -258,12 +260,16 @@ function prepare(conn: Connection, text: string): PreparedStatement {
   return prepared;
 }
 
-function rowsFromArrays(plan: ColumnPlan[], raw: unknown[]): Record<string, unknown>[] {
+function rowsFromArrays(plan: readonly ColumnPlan[], raw: unknown[]): Record<string, unknown>[] {
+  // Runs for every row every read returns: an indexed loop, because
+  // plan.entries() allocates an iterator and a [index, column] pair per cell.
   const rows = new Array<Record<string, unknown>>(raw.length);
+  const width = plan.length;
   for (let r = 0; r < raw.length; r++) {
     const values = raw[r] as unknown[];
     const row: Record<string, unknown> = {};
-    for (const [c, column] of plan.entries()) {
+    for (let c = 0; c < width; c++) {
+      const column = plan[c] as ColumnPlan;
       row[column.key] = column.read(values[c]);
     }
     rows[r] = row;
@@ -281,8 +287,12 @@ interface StatementStats {
 const statementStats = new Map<string, StatementStats>();
 const STATS_LIMIT = 1000;
 
-function recordTiming(text: string, ms: number, rows: number): void {
-  const key = text.replace(/\s+/g, " ").trim().slice(0, 500);
+function statsKeyOf(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+/** `key` comes from {@link statsKeyOf}; prepared statements keep theirs. */
+function recordTiming(key: string, ms: number, rows: number): void {
   let stats = statementStats.get(key);
   if (!stats) {
     if (statementStats.size >= STATS_LIMIT) {
@@ -324,6 +334,8 @@ function execute<R>(conn: Connection, sqlText: string, params: readonly unknown[
   const started = performance.now();
   const inTransaction = conn.clock.transactionStart !== null;
   if (!inTransaction) conn.clock.statementStart = instantFromDate(new Date());
+  let statsKey: string | undefined;
+  let rowCount = 0;
   try {
     if (scanned.multipleStatements) {
       if (bound.length > 0) throw new Error("Parameters cannot be bound to multi-statement SQL");
@@ -331,13 +343,16 @@ function execute<R>(conn: Connection, sqlText: string, params: readonly unknown[
       return { rows: [], rowCount: null };
     }
     const prepared = prepare(conn, scanned.text);
+    statsKey = prepared.statsKey;
     if (prepared.plan) {
       const raw = prepared.stmt.all(...bound) as unknown[];
       const rows = rowsFromArrays(prepared.plan, raw) as R[];
-      return { rows, rowCount: rows.length };
+      rowCount = rows.length;
+      return { rows, rowCount };
     }
     const info = prepared.stmt.run(...bound);
-    return { rows: [], rowCount: Number(info.changes) };
+    rowCount = Number(info.changes);
+    return { rows: [], rowCount };
   } catch (err) {
     const translated = translateSqliteError(err, resolveUniqueIndex);
     logger.error(`Query failed: ${scanned.text.slice(0, 200)}`, { error: errorMessage(translated) });
@@ -345,7 +360,7 @@ function execute<R>(conn: Connection, sqlText: string, params: readonly unknown[
   } finally {
     if (!inTransaction) conn.clock.statementStart = null;
     const ms = performance.now() - started;
-    recordTiming(scanned.text, ms, 0);
+    recordTiming(statsKey ?? statsKeyOf(scanned.text), ms, rowCount);
     if (ms > 1000) {
       logger.warn(`Slow query (${Math.round(ms)}ms): ${scanned.text.slice(0, 100)}`);
     } else if (settings.database.echo) {
