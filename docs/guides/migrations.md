@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-11-03
-updated: 2026-11-03
+date: 2026-11-04
+updated: 2026-11-04
 tags: [guide, database, migrations, sqlite, destructive-ddl, ci]
 description: How to create, run, check and roll back Vision's SQLite migrations, including the table-rebuild procedure for changes ALTER TABLE cannot make
 aliases: [migration-guide, database-schema, schema-changes]
@@ -55,7 +55,9 @@ disposable copy, never at the database the app uses.
   backups record.
 - Before migrating a database that holds data, the runner writes a `VACUUM INTO` copy to
   `pre-migration-backups/` next to the database, named
-  `<file>-v<from>-to-v<to>-<time>.sqlite3`, and keeps the newest three.
+  `<file>-v<from>-to-v<to>-<time>.sqlite3`, and keeps the newest three. The copy must pass
+  `PRAGMA integrity_check` and `PRAGMA foreign_key_check` on a read-only handle; a copy that fails
+  is removed and start-up stops with `PRE_MIGRATION_BACKUP_FAILED`, before anything is migrated.
 
 The runner refuses, and changes nothing, when the database:
 

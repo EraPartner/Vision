@@ -204,6 +204,30 @@ describe("the runner's refusals", () => {
     withDb(file, (db) => expect(readLedger(db).map((r) => r.name)).toEqual(["0001_baseline"]));
   });
 
+  it("refuses to migrate, and keeps no copy, when the pre-migration copy fails verification", async () => {
+    const file = freshFile();
+    const backupDir = path.join(root, `unverified-${counter}`);
+    const parentChild =
+      "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT NOT NULL);" +
+      "CREATE TABLE notes (id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL REFERENCES items(id));";
+    await runMigrations(file, { dir: migrationsDir({ "0001_baseline.sql": parentChild }) });
+    // A row that points at a missing parent, written with enforcement off: a
+    // copy of this file could not be restored through the backup checks.
+    withDb(file, (db) => db.exec("PRAGMA foreign_keys = OFF; INSERT INTO notes (item_id) VALUES (42);"));
+    const before = fingerprintOf(file);
+    const next = migrationsDir({
+      "0001_baseline.sql": parentChild,
+      "0002_add_note.sql": "ALTER TABLE items ADD COLUMN note TEXT;",
+    });
+    await expect(runMigrations(file, { dir: next, backupDir })).rejects.toMatchObject({
+      code: PRE_MIGRATION_BACKUP_FAILED,
+      message: expect.stringMatching(/the copy has foreign key violations: notes row 1 -> items/u) as unknown,
+    });
+    expect(fingerprintOf(file)).toBe(before);
+    withDb(file, (db) => expect(readLedger(db).map((r) => r.name)).toEqual(["0001_baseline"]));
+    expect(readdirSync(backupDir)).toEqual([]);
+  });
+
   it("keeps only the newest pre-migration copies", async () => {
     const file = freshFile();
     const backupDir = path.join(root, `copies-${counter}`);
