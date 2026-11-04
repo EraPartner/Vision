@@ -204,7 +204,34 @@ function timestampForFile(date = new Date()): string {
 /** Error code of a start-up refused because the pre-migration copy failed. */
 export const PRE_MIGRATION_BACKUP_FAILED = "PRE_MIGRATION_BACKUP_FAILED";
 
-/** Write a consistent copy of the database with VACUUM INTO and prune old copies. */
+/**
+ * Prove a copy can be restored before anything relies on it: SQLite's
+ * integrity_check (pages, indexes, NOT NULL and every CHECK) and
+ * foreign_key_check, on a read-only handle. Throws on the first problem.
+ */
+function verifyCopy(file: string): void {
+  const copy = openDatabase(file, "inspect");
+  try {
+    const integrity = copy.prepare("PRAGMA integrity_check").all() as Array<{ integrity_check: string }>;
+    if (integrity.length !== 1 || integrity[0]?.integrity_check !== "ok") {
+      throw new Error(
+        `the copy failed integrity_check: ${integrity.slice(0, 5).map((r) => r.integrity_check).join("; ")}`,
+      );
+    }
+    const violations = foreignKeyViolations(copy);
+    if (violations.length > 0) {
+      throw new Error(`the copy has foreign key violations: ${violations.join("; ")}`);
+    }
+  } finally {
+    copy.close();
+  }
+}
+
+/**
+ * Write a consistent copy of the database with VACUUM INTO, verify it, and
+ * prune old copies. A copy that fails verification is removed and the error
+ * thrown, so nothing is migrated without a restorable copy.
+ */
 export function writePreMigrationBackup(
   db: DatabaseSync,
   dbFile: string,
@@ -219,6 +246,7 @@ export function writePreMigrationBackup(
   );
   try {
     db.prepare("VACUUM INTO ?").run(target);
+    verifyCopy(target);
   } catch (err) {
     rmSync(target, { force: true });
     throw err;

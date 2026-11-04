@@ -33,6 +33,7 @@ import { sql } from "kysely";
 import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRow, db } from "../database/db.ts";
+import { decimalText } from "../database/columnTypes.ts";
 import {
   adjustmentRowSchema,
   reconcileDriftRowSchema,
@@ -193,7 +194,7 @@ export async function reconcileAccount(
           .values({
             account_id: asAccountId(accountId),
             currency: asCurrencyCode(reconcileCurrency),
-            balance: computed,
+            balance: decimalText(computed),
             balance_date: today,
           })
           .onConflict((oc) =>
@@ -234,7 +235,7 @@ export async function reconcileAccount(
         .insertInto("transactions")
         .values({
           date: today,
-          amount: drift,
+          amount: decimalText(drift),
           currency: asCurrencyCode(base.currency),
           memo: ADJUSTMENT_MEMO,
           account_id: asAccountId(accountId),

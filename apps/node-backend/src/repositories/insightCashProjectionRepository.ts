@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import { asCurrencyCode } from "@vision/types/brands";
 import { checkedRow, db } from "../database/db.ts";
+import { decimalText } from "../database/columnTypes.ts";
 import { withTransaction } from "../database/connection.ts";
 import { cashProjectionRowSchema } from "../database/rows/info.ts";
 
@@ -44,7 +45,7 @@ async function saveProjection(
         month_start: monthStart(month),
         currency: code,
         method_id: methodId,
-        month_end_net_cashflow: value,
+        month_end_net_cashflow: decimalText(value),
       })
       .onConflict((oc) =>
         oc.columns(["month_start", "currency", "method_id"]).doUpdateSet({

@@ -22,7 +22,8 @@
  * suffix is removed from the row key.
  *
  * Writes: a Date becomes canonical UTC text, a boolean 0/1, an array or a
- * plain object JSON text, `undefined` NULL.
+ * plain object JSON text, `undefined` NULL. A Map, Set, Error, RegExp,
+ * Promise or ArrayBuffer is refused: its JSON text is `{}`.
  */
 import { formatInstant, instantFromDate, parseDate } from "./timestamps.ts";
 
@@ -200,6 +201,23 @@ function isDecimalLike(v: object): v is DecimalLike {
   return typeof candidate.toFixed === "function" && typeof candidate.isFinite === "function" && "d" in candidate;
 }
 
+/**
+ * Objects JSON.stringify turns into `{}`: a Map's entries, a Set's members,
+ * an Error's message or an ArrayBuffer's bytes would be stored as an empty
+ * object without a trace.
+ */
+function lossyJsonKind(v: object): string | null {
+  if (v instanceof Map) return "Map";
+  if (v instanceof Set) return "Set";
+  if (v instanceof WeakMap) return "WeakMap";
+  if (v instanceof WeakSet) return "WeakSet";
+  if (v instanceof Promise) return "Promise";
+  if (v instanceof RegExp) return "RegExp";
+  if (v instanceof Error) return "Error";
+  if (v instanceof ArrayBuffer) return "ArrayBuffer";
+  return null;
+}
+
 /** Convert one bound value to what SQLite stores. */
 export function toSqlParam(value: unknown): SqlParam {
   if (value === null || value === undefined) return null;
@@ -217,6 +235,10 @@ export function toSqlParam(value: unknown): SqlParam {
       if (value instanceof Uint8Array) return value;
       if (Array.isArray(value)) return JSON.stringify(value);
       if (isDecimalLike(value)) return value.toString();
+      const lossy = lossyJsonKind(value);
+      if (lossy !== null) {
+        throw new TypeError(`cannot bind a ${lossy} to SQLite: its JSON text would be "{}"`);
+      }
       return JSON.stringify(value);
     }
     default:

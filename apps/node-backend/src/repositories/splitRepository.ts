@@ -8,6 +8,7 @@
 import { sql } from "kysely";
 import { query, withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, compileQuery, db } from "../database/db.ts";
+import { decimalText } from "../database/columnTypes.ts";
 import type { BuiltQuery } from "../database/db.ts";
 import {
   countRowSchema,
@@ -223,7 +224,7 @@ export async function insertSplitInTransaction(
     splitKeyRowSchema,
     db
       .insertInto("transaction_splits")
-      .values({ transaction_id, recipient_id, amount, note: note || null })
+      .values({ transaction_id, recipient_id, amount: decimalText(amount), note: note || null })
       .returning("id"),
     client,
   );
@@ -267,7 +268,7 @@ export async function insertSplitsBatchInTransaction(
         splits.map((split) => ({
           transaction_id: transactionId,
           recipient_id: split.recipient_id,
-          amount: split.amount,
+          amount: decimalText(split.amount),
           note: split.note || null,
         })),
       )
@@ -334,7 +335,7 @@ export async function insertPaymentInTransaction(
     splitPaymentRowSchema,
     db
       .insertInto("split_payments")
-      .values({ split_id, amount, note: note || null, paid_at })
+      .values({ split_id, amount: decimalText(amount), note: note || null, paid_at })
       .returningAll(),
     client,
   );

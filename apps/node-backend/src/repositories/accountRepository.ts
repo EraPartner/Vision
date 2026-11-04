@@ -13,6 +13,7 @@
 import { sql } from "kysely";
 import { query } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
+import { decimalText } from "../database/columnTypes.ts";
 import {
   accountBalanceQueryRowSchema,
   accountKeyRowSchema,
@@ -431,7 +432,7 @@ export const accountRepository = {
         .values({
           account_id: accountId,
           currency,
-          balance,
+          balance: decimalText(balance),
           balance_date: balanceDate,
         })
         .onConflict((oc) =>

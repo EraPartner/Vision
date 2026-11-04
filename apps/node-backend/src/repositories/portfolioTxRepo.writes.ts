@@ -2,6 +2,7 @@
 
 import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
+import { decimalText } from "../database/columnTypes.ts";
 import type { PortfolioTxnType } from "../database/schema.generated.ts";
 import {
   portfolioTransactionDbRowSchema,
@@ -88,8 +89,8 @@ export async function insert(
         amount: sql<string>`vision_numeric(${decimalParam(payload.amount ?? null)}, 18, 4)`,
         units: payload.units ?? null,
         price_per_unit: payload.price_per_unit ?? null,
-        fees: payload.fees ?? 0,
-        taxes: payload.taxes ?? 0,
+        fees: decimalText(payload.fees ?? 0),
+        taxes: decimalText(payload.taxes ?? 0),
         dividend_amount_convention:
           payload.dividend_amount_convention ?? "unknown",
         currency: sql<CurrencyCode>`${payload.currency ?? null}`,

@@ -4,9 +4,12 @@
  * - `$1`-style placeholders (hand-written node-postgres SQL) become `?1`,
  *   which SQLite binds by position; text inside quotes and comments is left
  *   alone.
- * - A statement is routed to the read connection only when it starts with
- *   SELECT, WITH or VALUES and contains no data-changing keyword outside
- *   quotes; everything else goes to the writer.
+ * - A statement is routed to the read connection when it starts with
+ *   SELECT, VALUES or EXPLAIN and holds no data-changing keyword, or starts
+ *   with WITH and its main statement is a SELECT; everything else goes to
+ *   the writer. Words that also occur in plain reads do not count: `END`
+ *   closes every CASE expression and `replace(` is a string function. A
+ *   misrouted write fails on the reader (PRAGMA query_only), never silently.
  * - Text that holds more than one statement is reported so the caller can
  *   run it with `exec()` (prepare() would silently compile only the first).
  */
@@ -19,11 +22,18 @@ export interface ScannedSql {
   firstKeyword: string;
 }
 
+/**
+ * Words that can only begin a statement that changes data or state. Inside a
+ * statement that starts with SELECT, WITH, VALUES or EXPLAIN they can mean
+ * only that the statement writes (a CTE's main statement, a multi-statement
+ * text): SQLite has no `SELECT ... FOR UPDATE`. Not listed: `END`, which
+ * closes every CASE expression, and `REPLACE`, which is checked separately
+ * because `replace(...)` is a string function.
+ */
 const WRITE_WORDS = new Set([
   "INSERT",
   "UPDATE",
   "DELETE",
-  "REPLACE",
   "UPSERT",
   "CREATE",
   "DROP",
@@ -34,7 +44,6 @@ const WRITE_WORDS = new Set([
   "REINDEX",
   "BEGIN",
   "COMMIT",
-  "END",
   "ROLLBACK",
   "SAVEPOINT",
   "RELEASE",
@@ -48,6 +57,13 @@ const cache = new Map<string, ScannedSql>();
 
 function isWordChar(c: string): boolean {
   return /[A-Za-z0-9_]/.test(c);
+}
+
+/** True when the next token after position `i` (skipping blanks) is `(`. */
+function callFollows(sql: string, i: number): boolean {
+  let j = i;
+  while (j < sql.length && /\s/.test(sql[j] ?? "")) j++;
+  return sql[j] === "(";
 }
 
 export function scanSql(sql: string): ScannedSql {
@@ -123,7 +139,9 @@ export function scanSql(sql: string): ScannedSql {
       const word = sql.slice(i, j).toUpperCase();
       if (statementEnded) multiple = true;
       if (!firstKeyword && /^[A-Z]/.test(word)) firstKeyword = word;
-      if (WRITE_WORDS.has(word)) sawWrite = true;
+      // A statement word (END, REPLACE) at the start still routes to the writer:
+      // READ_STARTS does not hold it.
+      if (WRITE_WORDS.has(word) || (word === "REPLACE" && !callFollows(sql, j))) sawWrite = true;
       out += sql.slice(i, j);
       i = j;
       continue;

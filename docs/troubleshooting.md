@@ -2,7 +2,7 @@
 title: Troubleshooting & FAQ
 type: reference
 status: active
-date: 2026-11-03
+date: 2026-11-04
 tags:
   [
     troubleshooting,
@@ -127,7 +127,7 @@ Never print the passphrase. A signed and notarized production build provides the
 | `INVALID_PASSPHRASE`                | Encrypted backup authentication failed            | Re-enter the passphrase; do not modify the bundle                                                                                             |
 | `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema              | Upgrade Vision before restoring                                                                                                               |
 | `BACKUP_FORMAT_UNSUPPORTED`         | Backup uses an older backup format                | Vision 2.0 backups: convert with the transition script at commit `dd4cc71` (`--to-backup <new.visionbak>`)                                    |
-| `PRE_MIGRATION_BACKUP_FAILED`       | The copy before a migration could not be written  | Free disk space or fix permissions in `database/`, then start Vision again; nothing was migrated                                              |
+| `PRE_MIGRATION_BACKUP_FAILED`       | The copy before a migration could not be written or failed its integrity check | Free disk space or fix permissions in `database/`, then start Vision again; if the message names `integrity_check` or foreign key violations, restore a verified backup. Nothing was migrated |
 | `PORT_COLLISION`                    | An unknown process owns the backend loopback port | Identify and stop the exact process or choose a valid development port                                                                        |
 | `APP_ERROR`                         | Sanitized backend failure                         | Correlate the request ID with structured logs                                                                                                 |
 
