@@ -109,6 +109,14 @@ export interface BelgianTaxSlice {
      */
     markYearAsFiled: (year: number, reference?: string) => Promise<void>;
     unmarkYearAsFiled: (year: number) => void;
+    /**
+     * Move the live household forward to `year` (the current income year) when it is older:
+     * the old live year is archived as its snapshot (when none exists) and the live household
+     * becomes the saved snapshot of `year`, or the old live household moved to `year`. The
+     * viewed year follows. No-op before hydration, after a failed or unreadable load, or when
+     * the live year is not older.
+     */
+    _advanceLiveYear: (year: number) => void;
     _hydrate: (
         runtime: HouseholdRuntime,
         household: BelgianTaxHouseholdV2,
@@ -447,6 +455,29 @@ export const createBelgianTaxSlice: StateCreator<
                     year,
                     "unfiled",
                 ),
+            };
+        }),
+    _advanceLiveYear: (year) =>
+        set((state) => {
+            const runtime = householdRuntime;
+            const live = state.household;
+            if (
+                !runtime ||
+                !live ||
+                state.isLoading ||
+                state.householdLoadFailed ||
+                state.storedHouseholdUnreadable ||
+                year <= live.taxYear
+            )
+                return state;
+            const saved = state.householdSnapshots[year];
+            const next: BelgianTaxHouseholdV2 = saved
+                ? { ...structuredClone(saved), taxYear: year }
+                : { ...structuredClone(live), taxYear: year };
+            return {
+                ...commitLiveHousehold(runtime, state, live, next),
+                viewedYear: year,
+                isViewingHistorical: false,
             };
         }),
     _hydrate: (

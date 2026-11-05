@@ -26,6 +26,7 @@ import { apiClient } from "@/lib/api";
 import { adoptSettingBaselines } from "@/lib/api/settings";
 import { getBelgianTaxOverview } from "@/lib/api/belgianTax";
 import logger from "@/lib/logger";
+import { todayLocal } from "@/lib/timezone";
 import { loadHouseholdRuntime } from "@/lib/belgianTax/loadHouseholdRuntime";
 
 const HOUSEHOLD_SETTINGS_KEY = "belgian_tax_household_v2";
@@ -35,7 +36,11 @@ const BelgianTaxProfileScope = createContext(false);
 
 type PublicBelgianTaxProfileState = Omit<
     BelgianTaxSlice,
-    "_hydrate" | "_beginHydration" | "_markHydrationFailed" | "_markSaveError"
+    | "_hydrate"
+    | "_beginHydration"
+    | "_markHydrationFailed"
+    | "_markSaveError"
+    | "_advanceLiveYear"
 >;
 
 const selectPublicState = (
@@ -83,6 +88,7 @@ export function BelgianTaxProfileProvider({
     const markHydrationFailed = useSettingsStore(
         (state) => state._markHydrationFailed,
     );
+    const advanceLiveYear = useSettingsStore((state) => state._advanceLiveYear);
 
     useEffect(() => beginHydration(), [beginHydration]);
 
@@ -147,6 +153,9 @@ export function BelgianTaxProfileProvider({
                         overview.householdSnapshots,
                         "Failed to save the upgraded Belgian tax household snapshots:",
                     );
+                // The live household is the current income year: a new calendar year archives
+                // the previous one and the change is saved like any live edit.
+                advanceLiveYear(todayLocal().getFullYear());
             })
             .catch((err: unknown) => {
                 if (cancelled) return;
@@ -157,7 +166,7 @@ export function BelgianTaxProfileProvider({
             cancelled = true;
             controller.abort();
         };
-    }, [hydrate, markHydrationFailed, markSaveError]);
+    }, [hydrate, markHydrationFailed, markSaveError, advanceLiveYear]);
 
     useEffect(
         () =>
