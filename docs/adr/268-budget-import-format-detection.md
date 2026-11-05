@@ -3,7 +3,17 @@ title: "ADR-268: Detect the bank format of a budget import"
 type: adr
 status: Accepted
 date: 2026-11-05
-tags: [adr, import, csv, bank-adapters, saved-custom-parsers, detection, adr-066, adr-078]
+tags:
+  [
+    adr,
+    import,
+    csv,
+    bank-adapters,
+    saved-custom-parsers,
+    detection,
+    adr-066,
+    adr-078,
+  ]
 description: "The budget import card starts on Detect automatically. It recognises the eight built-in bank formats with the backend adapters' own signatures (moved to shared-utils) and a saved custom parser whose mapped columns are all in the file's header. Overlapping built-in formats resolve in registry order; a file that fits a built-in format and a saved parser, or several saved parsers, waits for a manual choice. Manual choice stays available."
 aliases: [adr-268, budget import detection, bank format detection]
 related_code:
