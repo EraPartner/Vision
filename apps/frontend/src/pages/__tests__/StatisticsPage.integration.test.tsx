@@ -97,8 +97,28 @@ describe("StatisticsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows the 24-month default and persists explicit All time in the URL", async () => {
+    it("opens on All time and persists an explicit 24-month window in the URL (ADR-266)", async () => {
         const user = userEvent.setup();
+        const monthlyParams: URLSearchParams[] = [];
+        server.use(
+            http.get(
+                `${API_BASE}/api/aggregations/monthly-summary`,
+                ({ request }) => {
+                    monthlyParams.push(new URL(request.url).searchParams);
+                    return emptyAggregation({
+                        months: [],
+                        summary: {
+                            total_spending: 0,
+                            total_income: 0,
+                            net_amount: 0,
+                            transaction_count: 0,
+                            period_start: null,
+                            period_end: null,
+                        },
+                    });
+                },
+            ),
+        );
         renderWithApp(
             <>
                 <StatisticsPage />
@@ -110,22 +130,34 @@ describe("StatisticsPage (integration)", () => {
         await screen.findByRole("heading", { name: /no data yet/i });
         const range = screen.getByRole("radiogroup", { name: /date range/i });
         expect(
-            within(range).getByRole("radio", { name: "Last 24 months" }),
+            within(range).getByRole("radio", { name: "All time" }),
         ).toHaveAttribute("aria-checked", "true");
         expect(screen.getByTestId("location-search")).toHaveTextContent("");
+        expect(monthlyParams.length).toBeGreaterThan(0);
+        for (const params of monthlyParams) {
+            expect(params.get("all_time")).toBe("true");
+            expect(params.has("start_date")).toBe(false);
+        }
 
         await user.click(
-            within(range).getByRole("radio", { name: "All time" }),
+            within(range).getByRole("radio", { name: "Last 24 months" }),
         );
-
         await waitFor(() =>
             expect(screen.getByTestId("location-search")).toHaveTextContent(
-                "?window=all",
+                "?window=24m",
             ),
         );
-        expect(screen.getByRole("radio", { name: "All time" })).toHaveAttribute(
-            "aria-checked",
-            "true",
+        expect(
+            screen.getByRole("radio", { name: "Last 24 months" }),
+        ).toHaveAttribute("aria-checked", "true");
+
+        await user.click(
+            screen.getByRole("radio", { name: "All time" }),
+        );
+        await waitFor(() =>
+            expect(screen.getByTestId("location-search")).toHaveTextContent(
+                "",
+            ),
         );
     });
 

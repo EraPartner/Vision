@@ -2,8 +2,8 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-11-03
-last_modified: 2026-11-03
+date: 2026-11-05
+last_modified: 2026-11-05
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, summary tables (the former materialized views), chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
@@ -143,8 +143,8 @@ a later comparison.
 Some low-frequency paths deliberately preserve simpler or more complete
 semantics until production measurements justify extra complexity:
 
-- Statistics category/recipient/tag pivots use the page's rolling 24-month
-  default; `?window=all` requests full history. A
+- Statistics category/recipient/tag pivots use the page's window, which
+  defaults to full history (ADR-266); `?window=24m` bounds it to 24 months. A
   five-minute, inflight-deduplicated statistics cache absorbs repeat visits and
   is synchronously invalidated by transaction reconciliation/refresh and
   category or recipient mutation funnels; tag-only changes fall back to the

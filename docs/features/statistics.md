@@ -2,9 +2,9 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-11-03
-updated: 2026-11-03
-last_modified: 2026-11-03
+date: 2026-11-05
+updated: 2026-11-05
+last_modified: 2026-11-05
 tags:
   [
     feature,
@@ -59,10 +59,13 @@ page key are unchanged. It is the primary analytics dashboard for transaction da
 
 ## Current Status
 
-The Statistics page uses server-side aggregation endpoints. Its default date range is the latest
-24 calendar months, including the current partial month. The page header carries a two-segment
-`SegmentedControl` (**Last 24 months | All time**, a radio group labelled "Date range"). The choice
-is encoded as `?window=all`; the default omits the parameter so shared links remain compact.
+The Statistics page uses server-side aggregation endpoints. It opens on **All time**, so the
+pivot table's year selector and the year-over-year views cover the whole ledger
+([[docs/adr/266-insights-default-all-time|ADR-266]]). The page header carries a two-segment
+`SegmentedControl` (**Last 24 months | All time**, a radio group labelled "Date range"). Last 24
+months (the latest 24 calendar months, including the current partial month) is encoded as
+`?window=24m`; the default omits the parameter, and a legacy `?window=all` link still opens All
+time.
 
 Next to it, a ••• menu ("More actions") holds **Export PDF…** (the `ExportDialog`, rendered with
 `trigger={null}` and controlled open state; offered only once there is data) and **Customize…**
@@ -472,8 +475,8 @@ Two new query parameters added to `GET /api/transactions`:
 
 **Component:** `[[apps/frontend/src/features/statistics/CategoryPivotTable.tsx]]`
 
-The page defaults to a rolling 24-month range; `?window=all` exposes full
-history. The pivot mounts at most 12 period columns at once. It starts on the
+The page defaults to full history; `?window=24m` selects the rolling 24-month
+range (ADR-266). The pivot mounts at most 12 period columns at once. It starts on the
 newest period window, renders that window chronologically, and exposes every
 older or newer window through keyboard-operable Previous and Next controls.
 Totals and export input still cover the complete selected range. Backend pivots
