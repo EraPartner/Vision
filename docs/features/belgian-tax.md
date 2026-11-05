@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-10-28
-updated: 2026-10-29
+updated: 2026-11-05
 tags:
   [
     feature,
@@ -719,6 +719,7 @@ The Belgian Tax Overview and Portfolio Tax pages share a year switcher that lets
 ### Storage
 
 - `belgian_tax_household_v2` — live, active household (always represents the user's current income year). Until phase B2 this was `belgian_tax_profile`, which is now only read once for the upgrade (see [Storage and upgrade](#storage-and-upgrade)).
+- Year rollover (2026-11-05): after hydration the provider calls `_advanceLiveYear(current calendar year)`. When the live household is older, its year is archived as a snapshot (when none exists) and the live household becomes the saved snapshot of the current year, or the old live household moved to it; the viewed year follows and the change is saved like a live edit. It never moves the live year backwards and skips a failed or unreadable load. Until then nothing advanced the live year, so in 2026 the page still opened on 2025 and showed 2026 as a saved historical profile.
 - `belgian_tax_household_snapshots_v2` — JSONB `Record<incomeYear, BelgianTaxHouseholdV2>` of frozen snapshots (formerly `belgian_tax_profile_snapshots_v1`). Created automatically when the live household's `taxYear` advances; can also be seeded retroactively for years that show up in the year list only because of transaction data.
 
 ### Store and compatibility hook surface

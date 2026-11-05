@@ -325,6 +325,54 @@ describe("Belgian tax settings slice", () => {
         ).toEqual(["created"]);
     });
 
+    it("advances the live year to the current year, adopting that year's saved profile", () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        hydrate(
+            {
+                ...DEFAULT_BELGIAN_TAX_PROFILE,
+                taxYear: year - 1,
+                grossAnnualIncome: 40_000,
+            },
+            {
+                [year]: {
+                    ...DEFAULT_BELGIAN_TAX_PROFILE,
+                    taxYear: year,
+                    grossAnnualIncome: 55_000,
+                },
+            },
+        );
+        useSettingsStore.getState()._advanceLiveYear(year);
+        const state = useSettingsStore.getState();
+        expect(state.profile.taxYear).toBe(year);
+        expect(state.profile.grossAnnualIncome).toBe(55_000);
+        expect(state.viewedYear).toBe(year);
+        expect(state.isViewingHistorical).toBe(false);
+        expect(state.snapshots[year - 1]?.grossAnnualIncome).toBe(40_000);
+        expect(state.snapshots[year]?.grossAnnualIncome).toBe(55_000);
+    });
+
+    it("advances the live year by moving the live profile when the year has no saved profile", () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        hydrate({
+            ...DEFAULT_BELGIAN_TAX_PROFILE,
+            taxYear: year - 1,
+            grossAnnualIncome: 40_000,
+        });
+        useSettingsStore.getState()._advanceLiveYear(year);
+        const state = useSettingsStore.getState();
+        expect(state.profile.taxYear).toBe(year);
+        expect(state.profile.grossAnnualIncome).toBe(40_000);
+        expect(state.snapshots[year - 1]?.taxYear).toBe(year - 1);
+        expect(state.snapshotExistsForYear(year)).toBe(false);
+    });
+
+    it("never moves the live year backwards", () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        const before = useSettingsStore.getState().household;
+        useSettingsStore.getState()._advanceLiveYear(year - 1);
+        expect(useSettingsStore.getState().household).toBe(before);
+    });
+
     it("updateHouseholdSnapshot keeps the year, recomputes the projection and audits the household diff", async () => {
         const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
         useSettingsStore.getState().createSnapshotFromLive(year);
