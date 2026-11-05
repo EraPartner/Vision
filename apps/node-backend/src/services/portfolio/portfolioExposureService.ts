@@ -169,10 +169,161 @@ export async function upsertPortfolioExposureBundle(input: unknown) {
     throw invalidSource(
       "Fund holdings documents may target only ETF investments",
     );
-  return repository.upsertExposureBundle({
+  const keptManualInvestmentIds = await repository.listManualClassificationIds(
+    bundle.classifications.flatMap((item) =>
+      item.investmentId === undefined ? [] : [item.investmentId],
+    ),
+  );
+  const sources = await repository.upsertExposureBundle({
     classifications: bundle.classifications,
     fundDocuments,
   });
+  // Imports never overwrite a classification set in the app (ADR-267); the
+  // caller reports which supplied targets kept their manual values.
+  return { ...sources, keptManualInvestmentIds };
+}
+
+const manualClassification = z.strictObject({
+  investmentId: z.number().int().positive(),
+  issuerName: z.string().trim().min(1).max(256),
+  sector: z.string().trim().min(1).max(128).optional(),
+  issuerCountryCode: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .optional(),
+});
+export const manualClassificationChangesSchema = z
+  .strictObject({
+    set: z.array(manualClassification).max(5_000).default([]),
+    clear: z.array(z.number().int().positive()).max(5_000).default([]),
+  })
+  .superRefine((value, context) => {
+    const seen = new Set<number>();
+    for (const id of [
+      ...value.set.map((item) => item.investmentId),
+      ...value.clear,
+    ]) {
+      if (seen.has(id))
+        context.addIssue({
+          code: "custom",
+          message: "Each investment may appear only once per request",
+        });
+      seen.add(id);
+    }
+  });
+
+const normalizedName = (value: string) =>
+  value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en");
+
+/**
+ * Issuer id for a hand-entered issuer name: reuse the id of the holding's own
+ * classification or of any stored classification with the same name, so a
+ * direct holding and a fund constituent of one issuer group together;
+ * otherwise derive a stable id from the name.
+ */
+function issuerIdFor(
+  name: string,
+  own: ExposureClassificationRow | undefined,
+  byName: ReadonlyMap<string, string>,
+) {
+  const key = normalizedName(name);
+  if (own && normalizedName(own.issuerName) === key) return own.issuerId;
+  return byName.get(key) ?? `name:${key}`.slice(0, 128);
+}
+
+/**
+ * Holdings a user can classify by hand, each with its current direct
+ * classification, plus the issuers and sectors already in use (for
+ * suggestions).
+ */
+export async function getExposureClassifications() {
+  const [investments, sources] = await Promise.all([
+    repository.listClassifiableInvestments(),
+    repository.listExposureSources(),
+  ]);
+  const direct = new Map(
+    sources.classifications
+      .filter((item) => item.investmentId != null)
+      .map((item) => [Number(item.investmentId), item]),
+  );
+  const withFundDocument = new Set(
+    sources.documents.map((item) => Number(item.investmentId)),
+  );
+  const issuers = new Map<string, string>();
+  const sectors = new Set<string>();
+  for (const item of sources.classifications) {
+    if (!issuers.has(item.issuerId)) issuers.set(item.issuerId, item.issuerName);
+    if (item.sector) sectors.add(item.sector);
+  }
+  return {
+    items: investments.map((investment) => {
+      const classification = direct.get(investment.id);
+      return {
+        investmentId: investment.id,
+        name: investment.name,
+        symbol: investment.symbol,
+        assetClass: investment.assetClass,
+        // A fund holdings document takes precedence over a manual whole-fund
+        // classification (look-through is more precise; ADR-267).
+        hasFundDocument: withFundDocument.has(investment.id),
+        classification: classification
+          ? {
+              issuerId: classification.issuerId,
+              issuerName: classification.issuerName,
+              sector: classification.sector,
+              issuerCountryCode: classification.issuerCountryCode,
+              origin: classification.origin,
+              sourceLabel: classification.sourceLabel,
+              updatedAt: classification.updatedAt,
+            }
+          : null,
+      };
+    }),
+    issuers: [...issuers]
+      .map(([issuerId, issuerName]) => ({ issuerId, issuerName }))
+      .sort((a, b) => a.issuerName.localeCompare(b.issuerName, "en")),
+    sectors: [...sectors].sort((a, b) => a.localeCompare(b, "en")),
+  };
+}
+
+/**
+ * Set or clear classifications by hand (ADR-267). A set row becomes 'manual'
+ * and later imports skip it; a cleared row is deleted, so the next import may
+ * classify that holding again.
+ */
+export async function saveExposureClassifications(input: unknown) {
+  const parsed = manualClassificationChangesSchema.safeParse(input);
+  if (!parsed.success)
+    throw invalidSource(
+      "The classification changes are invalid",
+      parsed.error.issues,
+    );
+  const { set, clear } = parsed.data;
+  const targetIds = [...set.map((item) => item.investmentId), ...clear];
+  const targets = await repository.listExposureTargets(targetIds);
+  const known = new Set<number>(targets.map((item) => item.id));
+  if (targetIds.some((id) => !known.has(id)))
+    throw invalidSource("Classifications must target existing investments");
+  const sources = await repository.listExposureSources();
+  const own = new Map(
+    sources.classifications
+      .filter((item) => item.investmentId != null)
+      .map((item) => [Number(item.investmentId), item]),
+  );
+  const byName = new Map<string, string>();
+  for (const item of sources.classifications) {
+    const key = normalizedName(item.issuerName);
+    if (!byName.has(key)) byName.set(key, item.issuerId);
+  }
+  await repository.saveManualClassifications({
+    set: set.map((item) => ({
+      ...item,
+      issuerName: item.issuerName.trim().replace(/\s+/g, " "),
+      issuerId: issuerIdFor(item.issuerName, own.get(item.investmentId), byName),
+    })),
+    clear,
+  });
+  return getExposureClassifications();
 }
 
 function aggregateDimension(
@@ -314,7 +465,12 @@ function aggregatePortfolioExposure(
     const value = money(holding.currentValue);
     const source = documents.get(holding.id);
     if (!source) {
-      if (["etf", "fund"].includes(holding.asset_class.toLowerCase()))
+      // A fund without a holdings document is uncovered unless the user
+      // classified the whole fund explicitly (ADR-267).
+      if (
+        ["etf", "fund"].includes(holding.asset_class.toLowerCase()) &&
+        !direct.has(holding.id)
+      )
         uncovered = uncovered.plus(value);
       else
         contributions.push({

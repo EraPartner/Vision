@@ -4,6 +4,8 @@ import { must } from "../helpers/must.ts";
 const exposure = vi.hoisted(() => ({
   getPortfolioExposure: vi.fn(),
   upsertPortfolioExposureBundle: vi.fn(),
+  getExposureClassifications: vi.fn(),
+  saveExposureClassifications: vi.fn(),
 }));
 
 vi.mock(
@@ -103,5 +105,23 @@ describe("portfolio exposure routes", () => {
         { ok: vi.fn() },
       ),
     ).rejects.toBe(failure);
+  });
+
+  it("maps invalid manual classification changes to a safe 400", async () => {
+    exposure.saveExposureClassifications.mockRejectedValue(
+      Object.assign(new Error("private detail"), {
+        code: "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+        issues: [{ path: ["set"], message: "Invalid" }],
+      }),
+    );
+    await expect(
+      routeHandler("put", "/exposure/classifications")(
+        { body: { set: [] } },
+        { ok: vi.fn() },
+      ),
+    ).rejects.toMatchObject({
+      code: "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+      message: "The classification changes are invalid",
+    });
   });
 });

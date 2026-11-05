@@ -404,6 +404,8 @@ export const exposureClassificationRowSchema = z
     sector: z.string().nullable(),
     issuerCountryCode: z.string().nullable(),
     sourceLabel: z.string(),
+    /** 'import' (source bundle) or 'manual' (set in the app; imports skip it). */
+    origin: z.enum(["import", "manual"]),
     createdAt: dbTimestamptz,
     updatedAt: dbTimestamptz,
   })
@@ -446,6 +448,21 @@ export const fundHoldingsDocumentRowSchema = z
 export const exposureTargetRowSchema = z
   .object({ id: dbInvestmentId, assetClass: z.string() })
   .describe("exposure target row");
+
+/** `listManualClassificationIds`. */
+export const exposureTargetIdRowSchema = z
+  .object({ id: dbInvestmentId })
+  .describe("exposure target id row");
+
+/** `listClassifiableInvestments`: an active holding the user can classify. */
+export const classifiableInvestmentRowSchema = z
+  .object({
+    id: dbInvestmentId,
+    name: z.string(),
+    symbol: z.string().nullable(),
+    assetClass: z.string(),
+  })
+  .describe("classifiable investment row");
 
 // ---------------------------------------------------------------------------
 // Investments
@@ -831,6 +848,9 @@ export type RetagDestinationAccountRow = z.output<
 >;
 export type RetagLockedTransactionRow = z.output<
   typeof retagLockedTransactionRowSchema
+>;
+export type ClassifiableInvestmentDbRow = z.output<
+  typeof classifiableInvestmentRowSchema
 >;
 export type EligibleYieldSourceDbRow = z.output<
   typeof eligibleYieldSourceRowSchema

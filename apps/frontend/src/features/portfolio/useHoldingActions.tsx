@@ -4,9 +4,11 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { AddPortfolioTxnDialog } from "./AddPortfolioTxnDialog";
+import { ClassifyHoldingsDialog } from "./ClassifyHoldingsDialog";
 import { HoldingActionsMenu } from "./assetPageParts";
 import { InvestmentDetailDialog } from "./InvestmentDetailDialog";
 import type { TranslationKey } from "@/locales/keys";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface UseHoldingActionsOptions {
     deleteTitleKey: TranslationKey;
@@ -36,6 +38,7 @@ export function useHoldingActions({
     const [txnInvestment, setTxnInvestment] =
         useState<InvestmentSummary | null>(null);
     const [txnOpen, setTxnOpen] = useState(false);
+    const [classifyId, setClassifyId] = useState<InvestmentId | null>(null);
 
     const openDetail = (holding: InvestmentSummary) => {
         setDetailInvestmentId(holding.id);
@@ -81,6 +84,13 @@ export function useHoldingActions({
                     onOpenChange={setTxnOpen}
                 />
             )}
+            <ClassifyHoldingsDialog
+                open={classifyId !== null}
+                onOpenChange={(open) => {
+                    if (!open) setClassifyId(null);
+                }}
+                investmentIds={classifyId === null ? undefined : [classifyId]}
+            />
             <ConfirmDialog />
         </>
     );
@@ -91,6 +101,7 @@ export function useHoldingActions({
             deleteLabel={t(deleteTitleKey)}
             onDetails={openDetail}
             onAddTransaction={openAddTransaction}
+            onClassify={(h) => setClassifyId(h.id)}
             onArchive={(h) => void archiveInvestment(h)}
             onDelete={(h) => void removeInvestment(h)}
             className={className}

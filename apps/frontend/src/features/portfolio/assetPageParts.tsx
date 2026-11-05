@@ -5,6 +5,7 @@ import {
     Eye,
     FileDown,
     Plus,
+    Tags,
     Trash2,
     type LucideIcon,
 } from "lucide-react";
@@ -137,17 +138,19 @@ interface HoldingActionsMenuProps {
     deleteLabel: string;
     onDetails: (holding: InvestmentSummary) => void;
     onAddTransaction: (holding: InvestmentSummary) => void;
+    onClassify: (holding: InvestmentSummary) => void;
     onArchive: (holding: InvestmentSummary) => void;
     onDelete: (holding: InvestmentSummary) => void;
     className?: string | undefined;
 }
 
-/** Row ••• menu: details, add transaction, archive, delete. */
+/** Row ••• menu: details, add transaction, classify, archive, delete. */
 export function HoldingActionsMenu({
     holding,
     deleteLabel,
     onDetails,
     onAddTransaction,
+    onClassify,
     onArchive,
     onDelete,
     className,
@@ -165,6 +168,10 @@ export function HoldingActionsMenu({
             <DropdownMenuItem onSelect={() => onAddTransaction(holding)}>
                 <Plus className="mr-2 h-4 w-4 text-label-secondary" />
                 {t("portfolio.addTransaction")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onClassify(holding)}>
+                <Tags className="mr-2 h-4 w-4 text-label-secondary" />
+                {t("portfolio.classify.menu")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => onArchive(holding)}>

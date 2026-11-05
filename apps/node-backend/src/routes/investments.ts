@@ -25,7 +25,9 @@ import {
   bulkRetagTransactions,
 } from "../services/investmentService.ts";
 import {
+  getExposureClassifications,
   getPortfolioExposure,
+  saveExposureClassifications,
   upsertPortfolioExposureBundle,
 } from "../services/portfolio/portfolioExposureService.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
@@ -147,6 +149,20 @@ router.put("/exposure/sources", async (req, res) => {
   } catch (error) {
     if (!isExposureSourceError(error)) throw error;
     throw new ValidationError("The exposure source bundle is invalid", {
+      code: error.code,
+      details: { issues: error.issues },
+    });
+  }
+});
+router.get("/exposure/classifications", async (_req, res) => {
+  res.ok(await getExposureClassifications());
+});
+router.put("/exposure/classifications", async (req, res) => {
+  try {
+    res.ok(await saveExposureClassifications(req.body));
+  } catch (error) {
+    if (!isExposureSourceError(error)) throw error;
+    throw new ValidationError("The classification changes are invalid", {
       code: error.code,
       details: { issues: error.issues },
     });

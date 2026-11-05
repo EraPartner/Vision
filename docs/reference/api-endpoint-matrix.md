@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-11-03
-updated: 2026-11-03
-last_modified: 2026-11-03
+date: 2026-11-05
+updated: 2026-11-05
+last_modified: 2026-11-05
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 288
+api_operation_count: 290
 tags:
   [
     reference,
@@ -420,6 +420,8 @@ opening anchors without changing request fields, response shape or operation cou
 | POST   | `/api/investments/refresh-prices`      | Refresh all prices                                                 | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/exposure`            | Issuer, sector, and issuer-country exposure with uncovered weight  | —          | [[docs/api/investments\|Investments]] |
 | PUT    | `/api/investments/exposure/sources`    | Upsert explicit classifications and typed fund-holdings documents  | —          | [[docs/api/investments\|Investments]] |
+| GET    | `/api/investments/exposure/classifications` | Holdings with their classification for editing by hand  | —          | [[docs/api/investments\|Investments]] |
+| PUT    | `/api/investments/exposure/classifications` | Set or clear holding classifications by hand (manual wins) | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/transactions`        | Bulk portfolio transactions                                        | —          | [[docs/api/investments\|Investments]] |
 | PUT    | `/api/investments/transactions/broker` | Bulk broker re-tag; a repeat is a no-write replay                  | 30 req/min | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id/price-history`   | Historical price data (db_only=true by default for offline safety) | —          | [[docs/api/investments\|Investments]] |

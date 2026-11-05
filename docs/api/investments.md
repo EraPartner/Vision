@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-11-03
-last_modified: 2026-11-03
-updated: 2026-11-03
+date: 2026-11-05
+last_modified: 2026-11-05
+updated: 2026-11-05
 tags:
   [
     api,
@@ -157,8 +157,10 @@ The `fundSources` list reports every attached fund's as-of date, read-time age, 
 state, and coverage state even when the fund has no classified constituent contribution.
 
 Unsupported rows and missing fund weight remain uncovered. They are not scaled to 100 percent.
-Missing classifications remain unclassified. Vision does not infer economic foreign-exchange
-exposure.
+Missing classifications remain unclassified. An ETF without a holdings document counts as uncovered
+unless it has a direct classification, in which case its whole value is classified
+([[docs/adr/267-manual-holding-classifications|ADR-267]]). Vision does not infer economic
+foreign-exchange exposure.
 
 ### PUT /api/investments/exposure/sources
 
@@ -167,13 +169,33 @@ typed identifier and supply issuer plus optional sector and issuer-country value
 attach the strict [[docs/reference/fund-holdings-import-contract|version-1 holdings document]] to an
 investment. The supplied `shareClassIdentifier` must exactly occur in the document's share-class
 identity, the investment must exist, and a fund document may target only an ETF investment.
-Matching targets are updated atomically; sources omitted from the bundle are not deleted.
+Matching targets are updated atomically; sources omitted from the bundle are not deleted. A
+classification set by hand (origin `manual`) is never overwritten: the response lists those
+supplied targets in `keptManualInvestmentIds`.
 
 Invalid shapes, duplicate targets, mismatched share classes, or invalid holdings documents return
 `400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`, with the validation issues in `error.details.issues`.
 Unexpected persistence failures remain server errors. This
 is an additive, non-breaking API change. See
 [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]].
+
+### GET /api/investments/exposure/classifications
+
+Lists every active holding (ETFs included) with `hasFundDocument` and its direct classification
+(`issuerId`, `issuerName`, `sector`, `issuerCountryCode`, `origin` `import` or `manual`,
+`sourceLabel`, `updatedAt`) or `null`, plus the `issuers` and `sectors` already in use, for the
+Classify holdings sheet ([[docs/adr/267-manual-holding-classifications|ADR-267]]).
+
+### PUT /api/investments/exposure/classifications
+
+Sets or clears classifications by hand in one transaction. Body: `set` (rows of `investmentId`,
+`issuerName`, optional `sector` and `issuerCountryCode`) and `clear` (investment IDs); each
+investment may appear once. Set rows are stored with origin `manual` and source label
+`Set in Vision`, so later source imports skip them. The issuer ID is reused from the holding's own
+classification or any stored classification with the same issuer name (case and spacing
+ignored); otherwise it is `name:<normalized name>`. Cleared rows are deleted, so a later import
+may classify the holding again. Returns the updated list. Unknown investments, duplicates or invalid
+values return `400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`. Additive, non-breaking.
 
 ### GET /api/investments/providers
 

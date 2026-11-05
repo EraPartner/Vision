@@ -2,7 +2,8 @@ import { enumGuard, onGuarded } from "@/lib/enumGuard";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Upload } from "lucide-react";
+import { AlertTriangle, Tags, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -23,10 +24,12 @@ import {
 } from "@/components/ui/segmented-control";
 import { Money } from "@/components/shared/Money";
 import {
+    exposureClassificationsQueryKey,
     portfolioExposureQueryKey,
     usePortfolioExposureQuery,
 } from "@/hooks/portfolio/usePortfolioExposure";
 import type { CurrencyCode } from "@vision/types/brands";
+import { ClassifyHoldingsDialog } from "./ClassifyHoldingsDialog";
 
 type Dimension = "issuer" | "sector" | "issuerCountry";
 const isDimension = enumGuard<Dimension>({
@@ -36,7 +39,8 @@ const isDimension = enumGuard<Dimension>({
 });
 
 export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
+    const [classifyOpen, setClassifyOpen] = useState(false);
     const formatPercent = usePercentFormatter();
     const sourceInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
@@ -46,11 +50,20 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
     const upsert = useMutation({
         mutationFn: (bundle: unknown) =>
             apiClient.upsertPortfolioExposureSources(bundle),
-        onSuccess: () => {
+        onSuccess: (result) => {
             setError(null);
             void queryClient.invalidateQueries({
                 queryKey: portfolioExposureQueryKey(),
             });
+            void queryClient.invalidateQueries({
+                queryKey: exposureClassificationsQueryKey,
+            });
+            // Imports skip classifications set by hand (ADR-267).
+            const kept = Array.isArray(result["keptManualInvestmentIds"])
+                ? result["keptManualInvestmentIds"].length
+                : 0;
+            if (kept > 0)
+                toast.info(tc("portfolio.classify.keptOnImport", kept));
         },
         onError: (cause) => setError(apiErrorToMessage(cause, t)),
     });
@@ -107,20 +120,35 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-                <SegmentedControl
-                    size="sm"
-                    value={dimension}
-                    onValueChange={onGuarded(isDimension, setDimension)}
-                    aria-label={t("portfolio.exposure.dimensionLabel")}
-                >
-                    {(["issuer", "sector", "issuerCountry"] as const).map(
-                        (value) => (
-                            <SegmentedControlItem key={value} value={value}>
-                                {t(`portfolio.exposure.${value}`)}
-                            </SegmentedControlItem>
-                        ),
-                    )}
-                </SegmentedControl>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <SegmentedControl
+                        size="sm"
+                        value={dimension}
+                        onValueChange={onGuarded(isDimension, setDimension)}
+                        aria-label={t("portfolio.exposure.dimensionLabel")}
+                    >
+                        {(["issuer", "sector", "issuerCountry"] as const).map(
+                            (value) => (
+                                <SegmentedControlItem key={value} value={value}>
+                                    {t(`portfolio.exposure.${value}`)}
+                                </SegmentedControlItem>
+                            ),
+                        )}
+                    </SegmentedControl>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setClassifyOpen(true)}
+                    >
+                        <Tags aria-hidden="true" />
+                        {t("portfolio.classify.open")}
+                    </Button>
+                </div>
+                <ClassifyHoldingsDialog
+                    open={classifyOpen}
+                    onOpenChange={setClassifyOpen}
+                />
                 {query.isLoading && (
                     <p
                         role="status"

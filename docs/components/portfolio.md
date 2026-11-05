@@ -2,8 +2,8 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-11-05
+updated: 2026-11-05
 tags:
   [
     components,
@@ -328,10 +328,10 @@ import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog"
 
 Stocks, crypto, metals, real estate and savings share two modules in `features/portfolio/` ([[docs/adr/187-completeness-sweep|ADR-187]]):
 
-- `assetPageParts.tsx` exports `Figure` (secondary hero figure), `FactRow` (one `dt`/`dd` line of a holding card), `AssetPageActions` (primary _Add investment_ plus a header ••• menu with _Export PDF_, hidden when `showExport` is false as on the Crypto page, and _Import history_) and `HoldingActionsMenu` (row ••• menu: Details, Add transaction, Archive, Delete).
+- `assetPageParts.tsx` exports `Figure` (secondary hero figure), `FactRow` (one `dt`/`dd` line of a holding card), `AssetPageActions` (primary _Add investment_ plus a header ••• menu with _Export PDF_, hidden when `showExport` is false as on the Crypto page, and _Import history_) and `HoldingActionsMenu` (row ••• menu: Details, Add transaction, Classify…, Archive, Delete).
 - `useHoldingActions.tsx` mounts the controlled `InvestmentDetailDialog` and `AddPortfolioTxnDialog` once per page (`dialogs`) and runs Archive and Delete through `useConfirmDialog`. The detail selection stores the holding ID and resolves it from the current `usePortfolio().allSummaries` each render, so an open detail window follows refreshed totals and transaction rows instead of keeping the opening snapshot. Reordering preserves the selected holding; archived holdings remain resolvable and a removed holding no longer renders a detail dialog.
 
-`PortfolioExposureCard`'s dimension toggle is a `SegmentedControl`. `AddToWatchlistDialog` has a Cancel button. `TotalValueCard` and `netContributionSparkline` no longer exist.
+`PortfolioExposureCard`'s dimension toggle is a `SegmentedControl`; next to it, _Classify holdings_ opens `ClassifyHoldingsDialog` (all active holdings: search, multi-select, apply a sector or country to the selection, per-row sector, issuer country via `CountryCombobox` and issuer; the row menu opens it for one holding; ADR-267). `classificationChanges.ts` turns edited rows into the `set`/`clear` body. `AddToWatchlistDialog` has a Cancel button. `TotalValueCard` and `netContributionSparkline` no longer exist.
 
 ## Portfolio Tax Components
 

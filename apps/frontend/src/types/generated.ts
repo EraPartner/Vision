@@ -2330,6 +2330,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/investments/exposure/classifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List holdings with their direct classification for editing by hand */
+        get: operations["getPortfolioExposureClassifications"];
+        /**
+         * Set or clear holding classifications by hand
+         * @description Set rows are stored as manual classifications that later source imports skip. Cleared rows are deleted so a later import may classify the holding again. The issuer id is reused from an existing classification with the same issuer name.
+         */
+        put: operations["savePortfolioExposureClassifications"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/investments/providers": {
         parameters: {
             query?: never;
@@ -7164,6 +7185,41 @@ export interface components {
                 shareClassIdentifier: components["schemas"]["PortfolioSecurityIdentifier"];
                 document: components["schemas"]["FundHoldingsDocument"];
             }[];
+        };
+        /** @description Investments may appear once across set and clear. Set rows become manual and imports skip them; cleared rows are deleted. */
+        PortfolioManualClassificationChanges: {
+            set?: {
+                investmentId: number;
+                issuerName: string;
+                sector?: string;
+                issuerCountryCode?: string;
+            }[];
+            clear?: number[];
+        };
+        PortfolioExposureClassifications: {
+            items: {
+                investmentId: number;
+                name: string;
+                symbol: string | null;
+                assetClass: string;
+                hasFundDocument: boolean;
+                classification: {
+                    issuerId: string;
+                    issuerName: string;
+                    sector: string | null;
+                    issuerCountryCode: string | null;
+                    /** @enum {string} */
+                    origin: "import" | "manual";
+                    sourceLabel: string;
+                    /** Format: date-time */
+                    updatedAt: string;
+                } | null;
+            }[];
+            issuers: {
+                issuerId: string;
+                issuerName: string;
+            }[];
+            sectors: string[];
         };
         PortfolioExposureContribution: {
             /** @enum {string} */
@@ -13844,7 +13900,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Persisted exposure sources */
+            /** @description Persisted exposure sources. keptManualInvestmentIds lists supplied investment targets whose classification was set by hand and so was left unchanged. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13854,6 +13910,61 @@ export interface operations {
                 };
             };
             /** @description Invalid classification */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPortfolioExposureClassifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active holdings, their classification, and the issuers and sectors in use */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioExposureClassifications"];
+                    };
+                };
+            };
+        };
+    };
+    savePortfolioExposureClassifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortfolioManualClassificationChanges"];
+            };
+        };
+        responses: {
+            /** @description The updated classification list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioExposureClassifications"];
+                    };
+                };
+            };
+            /** @description Invalid change */
             400: {
                 headers: {
                     [name: string]: unknown;

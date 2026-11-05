@@ -1,5 +1,8 @@
 import { apiRequest } from "@/lib/api/client";
-import { PortfolioExposureSchema } from "@vision/types/contracts";
+import {
+    PortfolioExposureClassificationsSchema,
+    PortfolioExposureSchema,
+} from "@vision/types/contracts";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 import type { components } from "@/types/generated";
 
@@ -67,3 +70,54 @@ export const upsertPortfolioExposureSources = (bundle: unknown) =>
         method: "PUT",
         body: JSON.stringify(bundle),
     });
+
+export type ClassificationOrigin = "import" | "manual";
+export interface HoldingClassification {
+    issuerId: string;
+    issuerName: string;
+    sector: string | null;
+    issuerCountryCode: string | null;
+    origin: ClassificationOrigin;
+    sourceLabel: string;
+    updatedAt: string;
+}
+export interface ClassifiableHolding {
+    investmentId: InvestmentId;
+    name: string;
+    symbol: string | null;
+    assetClass: string;
+    /** A fund holdings document overrides a whole-fund classification. */
+    hasFundDocument: boolean;
+    classification: HoldingClassification | null;
+}
+export interface PortfolioExposureClassifications {
+    items: ClassifiableHolding[];
+    issuers: Array<{ issuerId: string; issuerName: string }>;
+    sectors: string[];
+}
+export interface ClassificationChanges {
+    set: Array<{
+        investmentId: InvestmentId;
+        issuerName: string;
+        sector?: string;
+        issuerCountryCode?: string;
+    }>;
+    clear: InvestmentId[];
+}
+
+export const getPortfolioExposureClassifications = () =>
+    apiRequest<PortfolioExposureClassifications>(
+        "/api/investments/exposure/classifications",
+        { schema: PortfolioExposureClassificationsSchema },
+    );
+export const savePortfolioExposureClassifications = (
+    changes: ClassificationChanges,
+) =>
+    apiRequest<PortfolioExposureClassifications>(
+        "/api/investments/exposure/classifications",
+        {
+            method: "PUT",
+            body: JSON.stringify(changes),
+            schema: PortfolioExposureClassificationsSchema,
+        },
+    );
