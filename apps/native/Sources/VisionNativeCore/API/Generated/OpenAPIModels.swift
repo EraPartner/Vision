@@ -7280,37 +7280,32 @@ extension OpenAPI {
     }
 
     public struct DbTableStat: Codable, Equatable, Sendable {
-        public let schemaname: String
         public let tableName: String
-        /// BIGINT estimate from pg_stat_user_tables, as decimal text
+        /// Exact row count (count(*)), as decimal text
         public let liveRows: String
-        /// BIGINT estimate from pg_stat_user_tables, as decimal text
-        public let deadRows: String
-        public let lastAutovacuum: String?
-        public let lastAutoanalyze: String?
-        /// pg_size_pretty of the total relation size
+        /// When this backend last ran VACUUM (ISO 8601)
+        public let lastVacuum: String?
+        /// When this backend last ran ANALYZE on the table (ISO 8601)
+        public let lastAnalyze: String?
+        /// Human-readable size of the table and its indexes
         public let size: String
         /// BIGINT byte count, as decimal text
         public let sizeBytes: String
 
-        public init(schemaname: String, tableName: String, liveRows: String, deadRows: String, lastAutovacuum: String? = nil, lastAutoanalyze: String? = nil, size: String, sizeBytes: String) {
-            self.schemaname = schemaname
+        public init(tableName: String, liveRows: String, lastVacuum: String? = nil, lastAnalyze: String? = nil, size: String, sizeBytes: String) {
             self.tableName = tableName
             self.liveRows = liveRows
-            self.deadRows = deadRows
-            self.lastAutovacuum = lastAutovacuum
-            self.lastAutoanalyze = lastAutoanalyze
+            self.lastVacuum = lastVacuum
+            self.lastAnalyze = lastAnalyze
             self.size = size
             self.sizeBytes = sizeBytes
         }
 
         enum CodingKeys: String, CodingKey {
-            case schemaname = "schemaname"
             case tableName = "table_name"
             case liveRows = "live_rows"
-            case deadRows = "dead_rows"
-            case lastAutovacuum = "last_autovacuum"
-            case lastAutoanalyze = "last_autoanalyze"
+            case lastVacuum = "last_vacuum"
+            case lastAnalyze = "last_analyze"
             case size = "size"
             case sizeBytes = "size_bytes"
         }
@@ -8037,11 +8032,11 @@ extension OpenAPI {
     }
 
     public struct ImportBatch: Codable, Equatable, Sendable {
-        /// PostgreSQL BIGINT serialized by node-postgres as a string.
+        /// BIGINT id serialized as a decimal string.
         public let id: ImportBatchID
         public let adapterName: String
         public let sourceFilename: String?
-        /// PostgreSQL BIGINT serialized by node-postgres as a string.
+        /// BIGINT id serialized as a decimal string.
         public let sourceSizeBytes: String?
         /// Present on batch-detail responses; omitted from batch-list rows.
         public let customConfig: JSONValue?
@@ -10253,6 +10248,8 @@ extension OpenAPI {
         public let adapterName: String
         public let sourceFilename: String?
         public let sourceSizeBytes: Int?
+        /// Brokerage account the batch imports into (ADR-095); null when unassigned.
+        public let accountId: AccountID?
         public let status: Status
         public let rowsTotal: Int
         public let rowsImported: Int
@@ -10262,11 +10259,12 @@ extension OpenAPI {
         public let startedAt: Instant
         public let completedAt: Instant?
 
-        public init(id: PortfolioImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: Instant, completedAt: Instant? = nil) {
+        public init(id: PortfolioImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, accountId: AccountID? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: Instant, completedAt: Instant? = nil) {
             self.id = id
             self.adapterName = adapterName
             self.sourceFilename = sourceFilename
             self.sourceSizeBytes = sourceSizeBytes
+            self.accountId = accountId
             self.status = status
             self.rowsTotal = rowsTotal
             self.rowsImported = rowsImported
@@ -10282,6 +10280,7 @@ extension OpenAPI {
             case adapterName = "adapter_name"
             case sourceFilename = "source_filename"
             case sourceSizeBytes = "source_size_bytes"
+            case accountId = "account_id"
             case status = "status"
             case rowsTotal = "rows_total"
             case rowsImported = "rows_imported"
@@ -11623,9 +11622,8 @@ extension OpenAPI {
         public let fxRateToEur: Decimal?
         /// Owning account for the lot (ADR-091); null = unassigned/global
         public let accountId: AccountID?
-        /// Portfolio-import batch that created the row. PostgreSQL BIGINT is serialized by
-        /// node-postgres as a string; null means the transaction was created manually or predates batch
-        /// attribution.
+        /// Portfolio-import batch that created the row. The BIGINT id is serialized as a decimal
+        /// string; null means the transaction was created manually or predates batch attribution.
         public let importBatchId: PortfolioImportBatchID?
         public let note: String?
         public let isRecurring: Bool

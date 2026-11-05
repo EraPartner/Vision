@@ -168,9 +168,6 @@ public enum TableEditorRoute {
 public struct DatabaseTableRow: Equatable, Sendable, Identifiable {
     public let table: String
     public let liveRows: String
-    public let deadRows: String
-    /// `text-warning` above 1000 dead rows.
-    public let hasManyDeadRows: Bool
     public let lastVacuum: String
     public let lastAnalyze: String
     public let size: String
@@ -183,15 +180,13 @@ public struct DatabaseTableRow: Equatable, Sendable, Identifiable {
         let locale = settings.numberFormat.locale
         table = stat.tableName
         liveRows = Self.count(stat.liveRows, locale: locale)
-        deadRows = Self.count(stat.deadRows, locale: locale)
-        hasManyDeadRows = (Decimal(string: stat.deadRows.trimmingCharacters(in: .whitespaces)) ?? 0) > 1000
-        lastVacuum = PostgresTimestamp.appDateTime(stat.lastAutovacuum, settings: settings, timeZone: timeZone)
-        lastAnalyze = PostgresTimestamp.appDateTime(stat.lastAutoanalyze, settings: settings, timeZone: timeZone)
+        lastVacuum = PostgresTimestamp.appDateTime(stat.lastVacuum, settings: settings, timeZone: timeZone)
+        lastAnalyze = PostgresTimestamp.appDateTime(stat.lastAnalyze, settings: settings, timeZone: timeZone)
         size = stat.size
         editorRoute = TableEditorRoute.path(for: stat.tableName)
     }
 
-    /// `Number(text).toLocaleString(locale)` for a BIGINT estimate.
+    /// `Number(text).toLocaleString(locale)` for a row count.
     static func count(_ text: String, locale: Locale) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { return "0" }

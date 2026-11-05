@@ -91,11 +91,10 @@ enum AdminFixture {
     static let stats = OpenAPI.DbStats(
         tables: [
             OpenAPI.DbTableStat(
-                schemaname: "public", tableName: "transactions", liveRows: "2453", deadRows: "127",
-                lastAutovacuum: nil, lastAutoanalyze: nil, size: "3200 kB", sizeBytes: "3276800"),
+                tableName: "transactions", liveRows: "2453", lastVacuum: nil, lastAnalyze: nil, size: "3200 kB", sizeBytes: "3276800"),
             OpenAPI.DbTableStat(
-                schemaname: "public", tableName: "categories", liveRows: "45", deadRows: "2", lastAutovacuum: nil,
-                lastAutoanalyze: nil, size: "64 kB", sizeBytes: "65536"),
+                tableName: "categories", liveRows: "45", lastVacuum: nil,
+                lastAnalyze: nil, size: "64 kB", sizeBytes: "65536"),
         ],
         dbSize: "12 MB")
 

@@ -353,7 +353,7 @@ public enum DesignTokens {
                 ShadowLayer(color: .shadow, alpha: 0.3, x: 0, y: 1, blur: 2, spread: 0, inset: false),
                 ShadowLayer(color: .shadow, alpha: 0.3, x: 0, y: 1, blur: 24, spread: 0, inset: false),
             ])
-        /// `--elevation-2`
+        /// `--elevation-2` = `--elevation-2-inset`, `--elevation-2-outer`
         public static let level2: AppearanceValue<[ShadowLayer]> = AppearanceValue(
             light: [
                 ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
@@ -377,7 +377,7 @@ public enum DesignTokens {
                 ShadowLayer(color: .shadow, alpha: 0.35, x: 0, y: 4, blur: 8, spread: 0, inset: false),
                 ShadowLayer(color: .shadow, alpha: 0.7, x: 0, y: 22, blur: 56, spread: -18, inset: false),
             ])
-        /// `--elevation-4`
+        /// `--elevation-4` = `--elevation-4-inset`, `--elevation-4-outer`
         public static let level4: AppearanceValue<[ShadowLayer]> = AppearanceValue(
             light: [
                 ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
@@ -426,7 +426,7 @@ public enum DesignTokens {
         /// `--glass-saturate`, as a multiplier (180% is 1.8).
         public static let saturate: AppearanceValue<Double> = AppearanceValue(light: 1.8, dark: 1.5)
         /// Opacity of `--card` that replaces every glass material under Reduce Transparency (`prefers-reduced-transparency: reduce`, index.css @media (prefers-reduced-transparency: reduce)).
-        public static let reducedTransparencyOpacity: Double = 0.97
+        public static let reducedTransparencyOpacity: Double = 1
         /// Alpha of the `--foreground` border of glass materials and cards under Increase Contrast (`prefers-contrast: more`, index.css @media (prefers-contrast: more)).
         public static let highContrastBorderAlpha: Double = 0.45
     }
@@ -517,10 +517,12 @@ public enum DesignTokens {
     public enum Halo {
         /// The single halo of page header titles and subtitles (`.dark .page-header-title`, index.css .dark .page-header-subtitle).
         public static let single = ShadowLayer(color: .background, alpha: 0.55, x: 0, y: 2, blur: 8, spread: 0, inset: false)
-        /// The inner layer of the double halo under Full effects (`.dark.fx-full h1`, index.css .dark.fx-full .canvas-text).
+        /// The inner layer of the double halo on headings under Full effects (`.dark.fx-full h1`, index.css .dark.fx-full .canvas-text :is(h1, h2, h3)).
         public static let fullInner = ShadowLayer(color: .background, alpha: 0.6, x: 0, y: 1, blur: 2, spread: 0, inset: false)
         /// The outer layer of the double halo under Full effects (same rule).
         public static let fullOuter = ShadowLayer(color: .background, alpha: 0.45, x: 0, y: 2, blur: 14, spread: 0, inset: false)
+        /// The single halo of body and secondary canvas text under Full effects (`.dark.fx-full .canvas-text`, index.css .dark.fx-full .canvas-text :is(p, span, div)).
+        public static let fullBody = ShadowLayer(color: .background, alpha: 0.55, x: 0, y: 2, blur: 8, spread: 0, inset: false)
     }
 
     /// The type ramp of `@utility type-*`: sizes and line heights in points, tracking in em.

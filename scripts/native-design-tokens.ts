@@ -113,6 +113,30 @@ function resolve(
   return resolve(reference[1] ?? "", lookup, label, depth + 1);
 }
 
+/**
+ * Replaces each top-level layer that is only `var(--x)` with that token's own value, so a list
+ * such as `var(--elevation-2-inset), var(--elevation-2-outer)` becomes its shadows.
+ */
+function expandLayers(
+  value: string,
+  lookup: (name: string) => string | undefined,
+  label: string,
+  depth = 0,
+): string {
+  if (depth > 8) throw new Error(`${label}: layers do not resolve.`);
+  return splitTopLevel(value.replace(/\s+/g, " "))
+    .map((layer) => {
+      const reference = /^var\(--([a-z0-9-]+)\)$/.exec(layer);
+      if (!reference) return layer;
+      const name = reference[1] ?? "";
+      const inner = lookup(name);
+      if (inner === undefined)
+        throw new Error(`${label}: --${name} is not defined.`);
+      return expandLayers(inner, lookup, label, depth + 1);
+    })
+    .join(", ");
+}
+
 function number(value: number): string {
   return `${value}`;
 }
@@ -902,11 +926,26 @@ function designSection(
     .sort();
   for (const key of levels) {
     lines.push(
-      `        /// \`--${key}\``,
+      `        /// \`--${key}\`${["inset", "outer"]
+        .filter((part) => `${key}-${part}` in root)
+        .map(
+          (part, index) => `${index === 0 ? " = " : ", "}\`--${key}-${part}\``,
+        )
+        .join("")}`,
       ...shadowMember(
         `level${key.replace(/^elevation-/, "")}`,
-        parseShadows(rootValue(key), `:root --${key}`),
-        parseShadows(darkValue(key), `.dark --${key}`),
+        parseShadows(
+          expandLayers(rootValue(key), (name) => root[name], `:root --${key}`),
+          `:root --${key}`,
+        ),
+        parseShadows(
+          expandLayers(
+            darkValue(key),
+            (name) => dark[name] ?? root[name],
+            `.dark --${key}`,
+          ),
+          `.dark --${key}`,
+        ),
         "        ",
       ),
     );
@@ -951,17 +990,17 @@ function designSection(
   );
   const reduced = locate(
     index,
-    /@media \(prefers-reduced-transparency: reduce\) \{\s*\.glass,[\s\S]*?background: hsl\(var\(--card\) \/ ([0-9.]+)\)/,
+    /@media \(prefers-reduced-transparency: reduce\) \{\s*\.glass,[\s\S]*?background: hsl\(var\(--card\)(?: \/ ([0-9.]+))?\)/,
     "@media (prefers-reduced-transparency: reduce)",
   );
   const reducedLine = locate(
     index,
-    /background: hsl\(var\(--card\) \/ [0-9.]+\);\s*\}\s*\.liquid-canvas/,
+    /background: hsl\(var\(--card\)(?: \/ [0-9.]+)?\);\s*\}\s*\.liquid-canvas/,
     "@media (prefers-reduced-transparency: reduce)",
   );
   lines.push(
     `        /// Opacity of \`--card\` that replaces every glass material under Reduce Transparency (\`prefers-reduced-transparency: reduce\`, ${reducedLine.cite}).`,
-    `        public static let reducedTransparencyOpacity: Double = ${number(finite(group(reduced.match, 1, "reduced"), "reduced"))}`,
+    `        public static let reducedTransparencyOpacity: Double = ${number(reduced.match[1] === undefined ? 1 : finite(reduced.match[1], "reduced"))}`,
   );
   const contrast = locate(
     index,
@@ -1198,28 +1237,39 @@ function designSection(
   );
   const full = locate(
     index,
-    /\.dark\.fx-full \.canvas-text :is\(h1, h2, h3, p, span, div\) \{\s*text-shadow:\s*([^;]+);/,
-    ".dark.fx-full .canvas-text",
+    /\.dark\.fx-full \.canvas-text :is\(h1, h2, h3\) \{\s*text-shadow:\s*([^;]+);/,
+    ".dark.fx-full .canvas-text :is(h1, h2, h3)",
   );
   const [fullInner, fullOuter] = parseShadows(
     group(full.match, 1, "halo"),
-    ".dark.fx-full .canvas-text",
+    ".dark.fx-full .canvas-text :is(h1, h2, h3)",
+  );
+  const body = locate(
+    index,
+    /\.dark\.fx-full \.canvas-text :is\(p, span, div\) \{\s*text-shadow:\s*([^;]+);/,
+    ".dark.fx-full .canvas-text :is(p, span, div)",
+  );
+  const [fullBody] = parseShadows(
+    group(body.match, 1, "halo"),
+    ".dark.fx-full .canvas-text :is(p, span, div)",
   );
   const [singleLayer] = parseShadows(
     group(single.match, 1, "halo"),
     ".dark .page-header-subtitle",
   );
-  if (!singleLayer || !fullInner || !fullOuter)
+  if (!singleLayer || !fullInner || !fullOuter || !fullBody)
     throw new Error("The text halos do not have the expected layers.");
   lines.push(
     "    /// Dark-mode text halos (`text-shadow` in `--background`) that keep text legible over the aurora.",
     "    public enum Halo {",
     `        /// The single halo of page header titles and subtitles (\`.dark .page-header-title\`, ${single.cite}).`,
     textShadowMember("single", singleLayer),
-    `        /// The inner layer of the double halo under Full effects (\`.dark.fx-full h1\`, ${full.cite}).`,
+    `        /// The inner layer of the double halo on headings under Full effects (\`.dark.fx-full h1\`, ${full.cite}).`,
     textShadowMember("fullInner", fullInner),
     "        /// The outer layer of the double halo under Full effects (same rule).",
     textShadowMember("fullOuter", fullOuter),
+    `        /// The single halo of body and secondary canvas text under Full effects (\`.dark.fx-full .canvas-text\`, ${body.cite}).`,
+    textShadowMember("fullBody", fullBody),
     "    }",
   );
   space();

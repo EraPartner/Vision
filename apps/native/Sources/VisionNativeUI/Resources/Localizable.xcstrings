@@ -15596,13 +15596,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "PostgreSQL SELECT query"
+            "value": "SQLite SELECT query"
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "PostgreSQL SELECT-query"
+            "value": "SQLite SELECT-query"
           }
         }
       }
@@ -22562,13 +22562,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Browse, filter and edit rows. Changes commit straight to PostgreSQL."
+            "value": "Browse, filter and edit rows. Changes are written straight to the database."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rijen bekijken, filteren en bewerken. Wijzigingen gaan rechtstreeks naar PostgreSQL."
+            "value": "Rijen bekijken, filteren en bewerken. Wijzigingen worden rechtstreeks in de database geschreven."
           }
         }
       }
@@ -22598,13 +22598,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Direct edits bypass the app's validation and business logic; Postgres still enforces foreign keys, checks and uniqueness."
+            "value": "Direct edits bypass the app's validation and business logic; the database still enforces foreign keys, checks and uniqueness."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Directe bewerkingen omzeilen de validatie en bedrijfslogica van de app; Postgres blijft foreign keys, checks en uniciteit afdwingen."
+            "value": "Directe bewerkingen omzeilen de validatie en bedrijfslogica van de app; de database blijft foreign keys, checks en uniciteit afdwingen."
           }
         }
       }
@@ -22659,24 +22659,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acties"
-          }
-        }
-      }
-    },
-    "dbMaintenance.col.deadRows": {
-      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dead rows"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dode rijen"
           }
         }
       }
@@ -22868,13 +22850,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Row counts are PostgreSQL planner estimates and may differ slightly from exact totals. Run VACUUM to refresh statistics and reclaim space from dead rows."
+            "value": "Row counts are exact. VACUUM rebuilds the database file to reclaim free space and refreshes the statistics SQLite uses to plan queries."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rijaantallen zijn schattingen van de PostgreSQL-planner en kunnen licht afwijken van de exacte totalen. Voer VACUUM uit om de statistieken te verversen en ruimte van dode rijen vrij te maken."
+            "value": "Rijaantallen zijn exact. VACUUM bouwt het databasebestand opnieuw op om vrije ruimte terug te winnen en vernieuwt de statistieken die SQLite gebruikt om query's te plannen."
           }
         }
       }
@@ -27404,13 +27386,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choosing your bank lets Vision read dates, amounts and columns correctly."
+            "value": "Vision recognises supported banks and your saved formats from the file. Choose one yourself to override it."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Door je bank te kiezen leest Vision datums, bedragen en kolommen correct."
+            "value": "Vision herkent ondersteunde banken en je opgeslagen formaten aan het bestand. Kies er zelf een om dat te overschrijven."
           }
         }
       }
@@ -60704,13 +60686,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Brings back effects that were turned down to save power: smooth aurora drift, frosted dialog backdrops, glass chart tooltips and cards, animated card shadows and longer chart entrances. Uses more GPU and battery."
+            "value": "Brings back effects that were turned down to save power: smooth aurora drift, frosted dialog backdrops, glass chart tooltips and cards, animated card shadows and longer chart entrances. Uses more GPU and battery. On by default with Standard."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Brengt effecten terug die zijn afgezwakt om energie te besparen: vloeiend bewegende aurora, matglazen achtergrond achter dialogen, glazen grafiektooltips en kaarten, geanimeerde kaartschaduwen en langere grafiekanimaties. Gebruikt meer GPU en batterij."
+            "value": "Brengt effecten terug die zijn afgezwakt om energie te besparen: vloeiend bewegende aurora, matglazen achtergrond achter dialogen, glazen grafiektooltips en kaarten, geanimeerde kaartschaduwen en langere grafiekanimaties. Gebruikt meer GPU en batterij. Staat bij Standaard vanzelf aan."
           }
         }
       }
@@ -64070,13 +64052,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tip: drag across a chart to compare a date range, or focus a chart and step through points with ←/→ (Shift+←/→ to compare)."
+            "value": "Tip: drag across a chart, or click a point and move, to compare a date range; it stays until you click or press Esc. Or focus a chart and step through points with ←/→ (Shift+←/→ to compare)."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tip: sleep over een grafiek om een periode te vergelijken, of focus een grafiek en stap door punten met ←/→ (Shift+←/→ om te vergelijken)."
+            "value": "Tip: sleep over een grafiek, of klik op een punt en beweeg, om een periode te vergelijken; dat blijft staan tot je klikt of op Esc drukt. Of focus een grafiek en stap door punten met ←/→ (Shift+←/→ om te vergelijken)."
           }
         }
       }

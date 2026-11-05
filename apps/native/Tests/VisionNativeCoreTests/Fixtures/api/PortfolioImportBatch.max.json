@@ -3,6 +3,7 @@
   "adapter_name": "string",
   "source_filename": "string",
   "source_size_bytes": 1,
+  "account_id": 1,
   "status": "pending",
   "rows_total": 1,
   "rows_imported": 1,

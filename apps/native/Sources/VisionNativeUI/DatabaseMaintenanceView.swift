@@ -121,7 +121,6 @@ public struct DatabaseMaintenanceView: View {
         [
             Header(key: "dbMaintenance.col.table", trailing: false),
             Header(key: "dbMaintenance.col.liveRows", trailing: true),
-            Header(key: "dbMaintenance.col.deadRows", trailing: true),
             Header(key: "dbMaintenance.col.lastVacuum", trailing: false),
             Header(key: "dbMaintenance.col.lastAnalyze", trailing: false),
             Header(key: "dbMaintenance.col.size", trailing: true),
@@ -188,9 +187,6 @@ public struct DatabaseMaintenanceView: View {
             .accessibilityAddTraits(.isLink)
             .padding(.vertical, 8)
             Text(row.liveRows).monospacedDigit()
-            Text(row.deadRows)
-                .monospacedDigit()
-                .foregroundStyle(row.hasManyDeadRows ? theme.warning : theme.foreground)
             Text(row.lastVacuum)
                 .font(.footnote)
                 .monospacedDigit()

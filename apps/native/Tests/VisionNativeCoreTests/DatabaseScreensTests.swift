@@ -109,12 +109,11 @@ enum DatabaseFixture {
     static let stats = OpenAPI.DbStats(
         tables: [
             OpenAPI.DbTableStat(
-                schemaname: "public", tableName: "transactions", liveRows: "2453", deadRows: "1500",
-                lastAutovacuum: "2026-04-24 10:15:32.123456+00", lastAutoanalyze: nil, size: "3200 kB",
+                tableName: "transactions", liveRows: "2453", lastVacuum: "2026-04-24T10:15:32.123Z", lastAnalyze: nil, size: "3200 kB",
                 sizeBytes: "3276800"),
             OpenAPI.DbTableStat(
-                schemaname: "public", tableName: "categories", liveRows: "45", deadRows: "1000", lastAutovacuum: nil,
-                lastAutoanalyze: "2026-04-23T03:21:15Z", size: "64 kB", sizeBytes: "65536"),
+                tableName: "categories", liveRows: "45", lastVacuum: nil,
+                lastAnalyze: "2026-04-23T03:21:15Z", size: "64 kB", sizeBytes: "65536"),
         ],
         dbSize: "12 MB")
 
@@ -187,14 +186,10 @@ enum DatabaseFixture {
         #expect(rows.count == 2)
         #expect(rows[0].table == "transactions")
         #expect(rows[0].liveRows == "2.453")
-        #expect(rows[0].deadRows == "1.500")
-        #expect(rows[0].hasManyDeadRows)
         #expect(rows[0].lastVacuum == "2026-04-24 10:15")
         #expect(rows[0].lastAnalyze == "—")
         #expect(rows[0].size == "3200 kB")
         #expect(rows[0].editorRoute == "/admin/db/transactions")
-        // The warning tint starts above 1000 dead rows.
-        #expect(!rows[1].hasManyDeadRows)
         #expect(rows[1].lastAnalyze == "2026-04-23 03:21")
         let us = model.rows(settings: NativeAppSettings(numberFormat: .us), timeZone: utc)
         #expect(us[0].liveRows == "2,453")

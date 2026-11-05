@@ -136,7 +136,6 @@ apiError.validation
 # Admin > Database maintenance (dbMaintenance.col.actions is listed above)
 admin.moreActions
 dbMaintenance.allTables
-dbMaintenance.col.deadRows
 dbMaintenance.col.lastAnalyze
 dbMaintenance.col.lastVacuum
 dbMaintenance.col.liveRows

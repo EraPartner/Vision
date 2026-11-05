@@ -233,12 +233,11 @@ actor StaticDatabaseService: DatabaseAdminService {
         return OpenAPI.DbStats(
             tables: [
                 OpenAPI.DbTableStat(
-                    schemaname: "public", tableName: "transactions", liveRows: "2453", deadRows: "1500",
-                    lastAutovacuum: "2026-04-24 10:15:32.123456+00", lastAutoanalyze: nil, size: "3200 kB",
+                    tableName: "transactions", liveRows: "2453", lastVacuum: "2026-04-24T10:15:32.123Z", lastAnalyze: nil, size: "3200 kB",
                     sizeBytes: "3276800"),
                 OpenAPI.DbTableStat(
-                    schemaname: "public", tableName: "categories", liveRows: "45", deadRows: "2", lastAutovacuum: nil,
-                    lastAutoanalyze: nil, size: "64 kB", sizeBytes: "65536"),
+                    tableName: "categories", liveRows: "45", lastVacuum: nil,
+                    lastAnalyze: nil, size: "64 kB", sizeBytes: "65536"),
             ],
             dbSize: "12 MB")
     }
