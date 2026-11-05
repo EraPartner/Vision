@@ -2,6 +2,7 @@
  * Revolut CSV adapter — english headers, comma-separated, COMPLETED-only rows.
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import {
   cleanRecipientName,
   normalizeToUppercase,
@@ -120,14 +121,7 @@ function parseRow(parts: string[]): ParsedBankTransaction | null {
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const firstLine = csvSample.split("\n")[0] || "";
-  const lower = firstLine.toLowerCase();
-  return (
-    lower.startsWith("type,") &&
-    lower.includes("completed date") &&
-    lower.includes("state")
-  );
+  return matchesBankImportFormat("revolut", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {

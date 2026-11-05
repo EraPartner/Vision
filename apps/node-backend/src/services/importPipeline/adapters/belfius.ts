@@ -3,6 +3,7 @@
  * Statement-export format: 13 header lines, then ';'-delimited transactions.
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import {
   cleanRecipientName,
   normalizeToUppercase,
@@ -182,15 +183,7 @@ function parseTransactionLine(
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const lines = splitCsvLines(csvSample).slice(0, 15);
-  return (
-    lines.some((line) => line.includes("Laatste saldo;")) ||
-    lines.some(
-      (line) =>
-        /^BE\d{2}/.test(line.trim()) && line.split(";").length >= MIN_FIELDS,
-    )
-  );
+  return matchesBankImportFormat("belfius", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {

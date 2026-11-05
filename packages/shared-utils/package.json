@@ -14,6 +14,7 @@
     "./slugify": "./src/slugify.ts",
     "./belgian-tax/*": "./src/belgianTax/*.ts",
     "./portfolio-import-detection": "./src/portfolioImportDetection.ts",
+    "./bank-import-detection": "./src/bankImportDetection.ts",
     "./csv-preview": "./src/csvPreview.ts",
     "./csv-separator": "./src/csvSeparator.ts",
     "./analysis/*": "./src/analysis/*.ts",

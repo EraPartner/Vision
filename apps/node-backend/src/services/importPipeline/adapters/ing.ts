@@ -16,13 +16,13 @@
  *  10  Bericht              free-text message from sender
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import { normalizeToUppercase } from "../../../lib/textNormalization.ts";
 import { logger } from "../../../config/logger.ts";
 import {
   parseDayMonthYear,
   parseCommaDecimal,
   buildOptionalComment,
-  splitCsvLines,
   parseCsvText,
   rawDataForCsvRecord,
   canonicalIban,
@@ -96,12 +96,7 @@ function parseLine(parts: string[]): ParsedBankTransaction | null {
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const lines = splitCsvLines(csvSample).slice(0, 3);
-  return lines.some(
-    (line) =>
-      line.includes("Omzetnummer") && line.includes("Detail van de omzet"),
-  );
+  return matchesBankImportFormat("ing", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {

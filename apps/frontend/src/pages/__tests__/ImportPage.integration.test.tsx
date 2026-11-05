@@ -193,10 +193,11 @@ describe("ImportPage (integration)", () => {
         expect(await screen.findByText(/bank source/i)).toBeInTheDocument();
     });
 
-    it("renders the bank source select trigger", async () => {
+    it("starts the bank source on automatic detection", async () => {
         renderWithApp(<ImportPage />);
-        // The select trigger shows the placeholder "Select a bank..."
-        expect(await screen.findByText(/select a bank/i)).toBeInTheDocument();
+        expect(
+            await screen.findByRole("combobox", { name: /bank source/i }),
+        ).toHaveTextContent("Detect automatically");
     });
 
     it("renders the Import Transactions button", async () => {
@@ -340,6 +341,10 @@ describe("ImportPage (integration)", () => {
         );
 
         expect(await screen.findByText("statement.csv")).toBeInTheDocument();
+        // Unrecognised under "Detect automatically": the user is asked instead.
+        expect(
+            await screen.findByText(/did not recognise this file/i),
+        ).toBeInTheDocument();
         expect(screen.getByText("Choose your bank.")).toBeInTheDocument();
         expect(btn).toBeDisabled();
 

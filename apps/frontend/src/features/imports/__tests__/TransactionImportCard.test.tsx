@@ -291,3 +291,119 @@ describe("TransactionImportCard — custom-mapping import", () => {
         ).not.toBeInTheDocument();
     });
 });
+
+describe("TransactionImportCard — automatic format detection", () => {
+    const upload = async (
+        user: ReturnType<typeof userEvent.setup>,
+        content: string,
+    ) => {
+        const input =
+            document.querySelector<HTMLInputElement>('input[type="file"]');
+        await user.upload(
+            must(input),
+            new File([content], "statement.csv", { type: "text/csv" }),
+        );
+    };
+    const importButton = () =>
+        screen.getByRole("button", { name: /Import Transactions/i });
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        server.use(
+            http.get(`${API_BASE}/api/info/supported-adapters`, () =>
+                ok({
+                    items: [
+                        { key: "ing", name: "ING" },
+                        { key: "kbc", name: "KBC" },
+                        { key: "vision", name: "Vision export" },
+                    ],
+                    total: 3,
+                }),
+            ),
+            http.get(`${API_BASE}/api/import/parsers`, () =>
+                ok({ items: [SAVED_PARSER], total: 1 }),
+            ),
+        );
+    });
+
+    it("recognises a built-in bank without a manual choice", async () => {
+        const user = userEvent.setup();
+        renderCard();
+        // An ING header also starts with KBC's "Rekeningnummer"; registry
+        // order resolves it to ING, as the backend does.
+        await upload(
+            user,
+            "Rekeningnummer;Naam van de rekening;Rekening tegenpartij;Omzetnummer;Boekingsdatum;Valutadatum;Bedrag;Munteenheid;Omschrijving;Detail van de omzet;Bericht\n",
+        );
+
+        expect(
+            await screen.findByText("Recognised as ING."),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("combobox", { name: /bank/i }),
+        ).toHaveTextContent("Detect automatically");
+        expect(importButton()).toBeEnabled();
+    });
+
+    it("imports with the one saved parser that fits the file", async () => {
+        let submittedBank: string | undefined;
+        server.use(
+            http.post(
+                `${API_BASE}/api/import/csv/custom`,
+                async ({ request }) => {
+                    submittedBank = (await request.text()).match(
+                        /name="bank_name"\r\n\r\n([^\r\n]+)/,
+                    )?.[1];
+                    return ok({ ...IMPORT_CSV_RESULT_STUB, batch_id: 1 });
+                },
+            ),
+        );
+        const user = userEvent.setup();
+        renderCard();
+        await upload(user, "Date,Description,Amount\n2026-01-01,Shop,-1\n");
+
+        expect(
+            await screen.findByText("Recognised as My Bank."),
+        ).toBeInTheDocument();
+        await user.click(importButton());
+        await waitFor(() => expect(submittedBank).toBe("My Bank"));
+    });
+
+    it("leaves a file that fits several formats to the user", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/import/parsers`, () =>
+                ok({
+                    items: [
+                        {
+                            ...SAVED_PARSER,
+                            config: {
+                                ...SAVED_PARSER.config,
+                                recipientColumn: "Recipient",
+                            },
+                        },
+                    ],
+                    total: 1,
+                }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderCard();
+        await upload(
+            user,
+            "Date,Bank Account,Recipient,Memo,Amount,Currency\n2026-01-01,BE1,Shop,,-1,EUR\n",
+        );
+
+        expect(
+            await screen.findByText(
+                "This file fits more than one format (Vision export, My Bank). Choose the right one above.",
+            ),
+        ).toBeInTheDocument();
+        expect(importButton()).toBeDisabled();
+
+        await user.click(screen.getByRole("combobox", { name: /bank/i }));
+        await user.click(
+            await screen.findByRole("option", { name: /Vision export/ }),
+        );
+        expect(importButton()).toBeEnabled();
+    });
+});

@@ -44,6 +44,10 @@ import {
 } from "lucide-react";
 import { useAdapters } from "./useAdapters";
 import {
+    detectBankImportFile,
+    type BankImportDetection,
+} from "./bankImportDetection";
+import {
     useCustomParserConfigs,
     useCreateCustomParserConfig,
     useUpdateCustomParserConfig,
@@ -56,6 +60,7 @@ import {
     isReviewRequired,
     type ImportCsvResult,
     type CsvNumberFormat,
+    type SavedParserConfig,
 } from "@/lib/api/imports";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 
@@ -83,15 +88,32 @@ const DEFAULT_CUSTOM_CONFIG: CustomConfig = {
     number_format: "auto",
 };
 
+/** The custom setup a saved-parser source loads, or null for any other source. */
+function savedSetup(
+    source: string,
+    parsers: readonly SavedParserConfig[] | undefined,
+): { name: string; config: CustomConfig } | null {
+    if (!source.startsWith("saved:")) return null;
+    const parser = parsers?.find((p) => p.id === Number(source.slice(6)));
+    if (!parser) return null;
+    return {
+        name: parser.name,
+        config: { ...DEFAULT_CUSTOM_CONFIG, ...parser.config },
+    };
+}
+
 interface TransactionImportCardProps {
     onImportSuccess: () => void;
 }
 
 /**
  * Import from your bank: file first, then the bank, then (only for a custom or
- * saved setup) the column mapping. The Import button unlocks once a file and a
- * bank are chosen and, for a custom setup, the three required columns are
- * mapped; the footer names whichever piece is still missing.
+ * saved setup) the column mapping. The bank starts on "Detect automatically":
+ * a recognised built-in format or a single fitting saved parser is used, and
+ * anything unrecognised or ambiguous waits for a manual choice (ADR-268). The
+ * Import button unlocks once a file and a bank are known and, for a custom
+ * setup, the three required columns are mapped; the footer names whichever
+ * piece is still missing.
  */
 export function TransactionImportCard({
     onImportSuccess,
@@ -100,7 +122,12 @@ export function TransactionImportCard({
     const navigate = useAppNavigate();
     const { adapters, loading: adaptersLoading } = useAdapters();
     const [file, setFile] = useState<File | null>(null);
-    const [bankSource, setBankSource] = useState("");
+    const [bankSource, setBankSource] = useState("auto");
+    const [detection, setDetection] = useState<
+        { file: File; result: BankImportDetection } | undefined
+    >(undefined);
+    const [detecting, setDetecting] = useState(false);
+    const [detectionFailed, setDetectionFailed] = useState(false);
     const [customBank, setCustomBank] = useState("");
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -119,14 +146,23 @@ export function TransactionImportCard({
     const deleteParser = useDeleteCustomParserConfig();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const isSaved = bankSource.startsWith("saved:");
+    const autoDetect = bankSource === "auto";
+    const detected =
+        autoDetect && detection?.file === file ? detection.result : undefined;
+    // The source the import runs with: the user's pick, or what was detected.
+    const source = autoDetect
+        ? detected?.kind === "detected"
+            ? detected.source
+            : ""
+        : bankSource;
+    const isSaved = source.startsWith("saved:");
     const selectedParser = isSaved
-        ? savedParsers?.find((p) => p.id === Number(bankSource.slice(6)))
+        ? savedParsers?.find((p) => p.id === Number(source.slice(6)))
         : undefined;
-    const isCustomLike = isSaved || bankSource === "custom";
+    const isCustomLike = isSaved || source === "custom";
     // Editable config form shows for new custom imports, or when editing a saved parser.
     const showConfigEditor =
-        bankSource === "custom" || (isSaved && editingSaved);
+        source === "custom" || (isSaved && editingSaved);
     const parserDirty =
         isCustomLike &&
         JSON.stringify({ name: customBank, config: customConfig }) !==
@@ -135,25 +171,57 @@ export function TransactionImportCard({
         file !== null || parserDirty,
     );
 
+    const loadSavedSetup = (setup: ReturnType<typeof savedSetup>) => {
+        if (!setup) return;
+        setCustomConfig(setup.config);
+        setCustomBank(setup.name);
+        setParserBaseline(JSON.stringify(setup));
+    };
+
+    // Recognise the file while the bank is on "Detect automatically". Re-runs
+    // when the saved parsers arrive or change, since they are candidates too.
+    useEffect(() => {
+        if (!autoDetect || !file) {
+            setDetecting(false);
+            setDetectionFailed(false);
+            return;
+        }
+        let cancelled = false;
+        setDetecting(true);
+        setDetectionFailed(false);
+        const parsers = savedParsers ?? [];
+        void detectBankImportFile(file, parsers)
+            .then((result) => {
+                if (cancelled) return;
+                setDetection({ file, result });
+                if (result.kind === "detected")
+                    loadSavedSetup(savedSetup(result.source, parsers));
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setDetection(undefined);
+                setDetectionFailed(true);
+            })
+            .finally(() => {
+                if (!cancelled) setDetecting(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [autoDetect, file, savedParsers]);
+
+    const sourceLabel = (key: string) =>
+        key.startsWith("saved:")
+            ? (savedParsers?.find((p) => p.id === Number(key.slice(6)))
+                  ?.name ?? key)
+            : (adapters.find((adapter) => adapter.key === key)?.name ?? key);
+
     const handleBankChange = (val: string) => {
         setBankSource(val);
         setProgress(null);
         setEditingSaved(false);
         if (val.startsWith("saved:")) {
-            const parser = savedParsers?.find(
-                (p) => p.id === Number(val.slice(6)),
-            );
-            if (parser) {
-                const nextConfig = {
-                    ...DEFAULT_CUSTOM_CONFIG,
-                    ...parser.config,
-                };
-                setCustomConfig(nextConfig);
-                setCustomBank(parser.name);
-                setParserBaseline(
-                    JSON.stringify({ name: parser.name, config: nextConfig }),
-                );
-            }
+            loadSavedSetup(savedSetup(val, savedParsers));
         } else if (val === "custom") {
             setCustomConfig(DEFAULT_CUSTOM_CONFIG);
             setCustomBank("");
@@ -190,6 +258,7 @@ export function TransactionImportCard({
         } else {
             const created = await createParser.mutateAsync({ name, config });
             setBankSource(`saved:${created.id}`);
+            setEditingSaved(false);
         }
         setParserBaseline(JSON.stringify({ name, config }));
     };
@@ -206,7 +275,9 @@ export function TransactionImportCard({
         });
         if (!ok) return;
         await deleteParser.mutateAsync(selectedParser.id);
-        setBankSource("");
+        setBankSource("auto");
+        setDetection(undefined);
+        setEditingSaved(false);
         setCustomBank("");
         setCustomConfig(DEFAULT_CUSTOM_CONFIG);
         setParserBaseline(
@@ -223,14 +294,15 @@ export function TransactionImportCard({
 
     const resolvedBank = () => {
         if (isSaved) return selectedParser?.name || "generic";
-        if (bankSource === "custom") return customBank || "generic";
-        return bankSource;
+        if (source === "custom") return customBank || "generic";
+        return source;
     };
 
     // What still blocks the import, in the order the card asks for it.
     const hint = (() => {
         if (!file) return t("importPage.hint.file");
-        if (!bankSource) return t("importPage.hint.bank");
+        if (autoDetect && detecting) return t("importPage.hint.detecting");
+        if (!source) return t("importPage.hint.bank");
         if (isCustomLike && !hasRequiredMapping)
             return t("importPage.hint.mapping");
         return "";
@@ -344,7 +416,8 @@ export function TransactionImportCard({
             );
             onImportSuccess();
             setFile(null);
-            setBankSource("");
+            setBankSource("auto");
+            setDetection(undefined);
             setCustomBank("");
             setCustomConfig(DEFAULT_CUSTOM_CONFIG);
             setParserBaseline(
@@ -413,6 +486,9 @@ export function TransactionImportCard({
                             />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="auto">
+                                {t("importPage.autoDetect")}
+                            </SelectItem>
                             {adaptersLoading ? (
                                 <SelectItem value="loading" disabled>
                                     <Loader2 className="mr-2 inline h-4 w-4" />{" "}
@@ -465,6 +541,26 @@ export function TransactionImportCard({
                             </SelectItem>
                         </SelectContent>
                     </Select>
+                    {autoDetect && file && !detecting && (
+                        <p
+                            role="status"
+                            className="type-footnote text-label-secondary"
+                        >
+                            {detectionFailed || !detected
+                                ? t("importPage.detect.failed")
+                                : detected.kind === "detected"
+                                  ? t("importPage.detect.found", {
+                                        name: sourceLabel(detected.source),
+                                    })
+                                  : detected.kind === "ambiguous"
+                                    ? t("importPage.detect.ambiguous", {
+                                          names: detected.candidates
+                                              .map(sourceLabel)
+                                              .join(", "),
+                                      })
+                                    : t("importPage.detect.none")}
+                        </p>
+                    )}
                     <p className="type-footnote text-label-secondary">
                         {t("importPage.bankHint")}
                     </p>
@@ -488,7 +584,12 @@ export function TransactionImportCard({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setEditingSaved(true)}
+                                        onClick={() => {
+                                            // Pin the detected parser so a new
+                                            // file cannot swap it mid-edit.
+                                            setBankSource(source);
+                                            setEditingSaved(true);
+                                        }}
                                     >
                                         {t("importPage.customParser.edit")}
                                     </Button>
