@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "meta": {
+    "provider": "string",
+    "source": "cache",
+    "requestId": "id-1"
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  },
+  "data": {
+    "symbol": "string",
+    "consensus": {
+      "strongBuy": 1.5,
+      "buy": 1.5,
+      "hold": 1.5,
+      "sell": 1.5,
+      "strongSell": 1.5
+    },
+    "targetMean": 1.5,
+    "targetHigh": 1.5,
+    "targetLow": 1.5,
+    "numberOfAnalysts": 1.5,
+    "recentActions": [
+      {
+        "date": "string",
+        "firm": "string",
+        "toGrade": "string",
+        "fromGrade": "string",
+        "action": "string"
+      }
+    ]
+  }
+}

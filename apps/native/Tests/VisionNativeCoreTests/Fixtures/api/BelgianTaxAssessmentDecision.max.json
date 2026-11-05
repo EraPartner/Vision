@@ -1,0 +1,9 @@
+{
+  "mode": "single",
+  "reason": "one_partner",
+  "legalBasis": "string",
+  "electable": true,
+  "partnerIds": [
+    "A"
+  ]
+}

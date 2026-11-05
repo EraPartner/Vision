@@ -1,0 +1,11 @@
+{
+  "metric": "string",
+  "category": "liquidity",
+  "better": "higher",
+  "value": 1.5,
+  "severity": "ok",
+  "code": "string",
+  "reasonKey": "string",
+  "reason": "string",
+  "benchmark": "string"
+}

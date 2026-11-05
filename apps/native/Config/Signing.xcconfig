@@ -1,0 +1,7 @@
+// Signing for Vision Native (ADR-204). Automatic signing uses Xcode's free personal
+// team. Set the team id in the VISION_NATIVE_TEAM_ID environment variable, or in a
+// gitignored Config/Local.xcconfig next to this file:
+//   VISION_NATIVE_TEAM_ID = ABCDE12345
+DEVELOPMENT_TEAM = $(VISION_NATIVE_TEAM_ID)
+
+#include? "Local.xcconfig"

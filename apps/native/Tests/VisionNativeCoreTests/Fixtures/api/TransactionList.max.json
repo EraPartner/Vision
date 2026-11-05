@@ -1,0 +1,59 @@
+{
+  "total": 1,
+  "limit": 1,
+  "offset": 1,
+  "items": [
+    {
+      "id": 1,
+      "transaction_date": "2024-01-15",
+      "account_id": 1,
+      "is_transfer": true,
+      "transfer_peer_id": 1,
+      "transfer_source": "string",
+      "bank_account": "string",
+      "recipient_id": 1,
+      "recipient_name": "string",
+      "memo": "string",
+      "amount": 1.5,
+      "amount_eur": 1.5,
+      "amount_eur_unconverted": true,
+      "currency": "EUR",
+      "balance": 1.5,
+      "running_balance": 1.5,
+      "category_id": 1,
+      "category_name": "string",
+      "comment": "string",
+      "is_active": true,
+      "tags": [
+        {
+          "id": 1,
+          "slug": "string",
+          "color": "string",
+          "is_active": true
+        }
+      ],
+      "created_at": "2024-01-15T10:30:00.000Z",
+      "updated_at": "2024-01-15T10:30:00.000Z",
+      "links": [
+        {
+          "rel": "string",
+          "href": "string",
+          "method": "string",
+          "title": "string"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "rel": "string",
+      "href": "string",
+      "method": "string",
+      "title": "string"
+    }
+  ],
+  "unconverted_count": 1,
+  "unconverted_currencies": [
+    "EUR"
+  ]
+}

@@ -1,8 +1,8 @@
 ---
 title: "ADR-254: Stop the Swift port and remove it from main"
 type: adr
-status: accepted
-date: 2026-10-26
+status: superseded
+date: 2026-11-05
 tags:
   [
     adr,
@@ -29,7 +29,8 @@ related_code:
 
 ## Status
 
-Accepted on 2026-10-26 by Tor. It supersedes
+Superseded on 2026-11-05 by [[docs/adr/269-restart-swift-port|ADR-269]], which restarts the
+Swift port. Accepted on 2026-10-26 by Tor. It supersedes
 [[docs/adr/249-revive-swift-app|ADR-249]],
 [[docs/adr/250-swift-design-system-parity|ADR-250]] and
 [[docs/adr/252-swift-type-strictness|ADR-252]]. The retirement in

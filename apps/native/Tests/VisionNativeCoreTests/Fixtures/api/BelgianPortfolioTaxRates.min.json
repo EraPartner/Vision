@@ -1,0 +1,13 @@
+{
+  "securitiesAccountTaxRate": 1.5,
+  "capitalGainsTaxRate": 1.5,
+  "reyndersTaxRate": 1.5,
+  "dividendWHTRate": 1.5,
+  "securitiesAccountTaxThreshold": 1.5,
+  "badgePercent": {
+    "securitiesAccountTaxRate": 1.5,
+    "capitalGainsTaxRate": 1.5,
+    "reyndersTaxRate": 1.5,
+    "dividendWHTRate": 1.5
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "string",
+  "dataType": "string",
+  "udtName": "string",
+  "nullable": true,
+  "hasDefault": true,
+  "generated": true,
+  "writable": true
+}

@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "route": "string",
+      "method": "string",
+      "path": "string",
+      "count": 1,
+      "errors": 1,
+      "error_rate": 1.5,
+      "p50_ms": 1.5,
+      "p95_ms": 1.5,
+      "window_minutes": 1.5
+    }
+  ],
+  "total": 1
+}

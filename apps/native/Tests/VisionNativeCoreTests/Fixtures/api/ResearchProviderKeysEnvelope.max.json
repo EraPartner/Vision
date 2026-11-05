@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "provider": "string",
+        "label": "string",
+        "envVar": "string",
+        "configured": true,
+        "source": "settings",
+        "masked": "string"
+      }
+    ],
+    "total": 1
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  }
+}

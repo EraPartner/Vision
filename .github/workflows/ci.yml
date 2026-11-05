@@ -58,6 +58,7 @@ jobs:
       contents: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      swift: ${{ steps.classify.outputs.swift }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
@@ -468,6 +469,86 @@ jobs:
           json-final-path: apps/node-backend/coverage/coverage-final.json
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Swift — compiles and tests the SwiftUI app (ADR-269). Runs only when the diff
+  # touches apps/native/ or the Swift generators (`changes.outputs.swift`), in
+  # parallel with the TypeScript tiers, so other diffs pay nothing for it.
+  # ─────────────────────────────────────────────────────────────────────────────
+  swift:
+    name: Swift app (macOS)
+    needs: [changes]
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      # Pinned XcodeGen release, verified by SHA-256 before use (same pin as the retired
+      # Native (macOS) job, hash of the 2.46.0 release zip downloaded on 2026-10-12).
+      - name: Install XcodeGen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate the Xcode project
+        run: xcodegen generate --spec apps/native/project.yml
+
+      # On failure print only the unique compiler errors; the full log holds huge command lines.
+      - name: Build the app (Debug, unsigned)
+        run: |
+          xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO -IDEBuildingContinueBuildingAfterErrors=YES \
+            build > "$RUNNER_TEMP/build.log" 2>&1 || {
+            grep -E ': (error|fatal error): ' "$RUNNER_TEMP/build.log" | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
+            exit 1
+          }
+
+      - name: Test the Swift package
+        run: |
+          # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
+          # Print only errors and failed tests; the full log is mostly deprecation warnings.
+          summarize() {
+            # Issue comments follow their "recorded an issue" line, so keep a few lines after it.
+            grep -E -A40 '(error|fatal error): |✘|Fatal error' "$1" | grep -v -E 'warning: |^--$' \
+              | sed "s#^$GITHUB_WORKSPACE/##" | awk '!seen[$0]++' | head -800
+          }
+          # Both suites run even when the first fails, so one round reports every failure.
+          status=0
+          swift test --package-path apps/native --skip VisionNativeUITests > "$RUNNER_TEMP/test.log" 2>&1 || {
+            summarize "$RUNNER_TEMP/test.log"; status=1
+          }
+          tail -3 "$RUNNER_TEMP/test.log"
+          # AppKit activation, key windows and display transactions are process-global.
+          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests \
+            > "$RUNNER_TEMP/ui-test.log" 2>&1 || {
+            summarize "$RUNNER_TEMP/ui-test.log"; status=1
+          }
+          tail -3 "$RUNNER_TEMP/ui-test.log"
+          exit $status
+
+      # After the Swift steps, so a generator failure never hides compiler errors.
+      - name: Setup toolchain
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/setup
+
+      - name: Test the Swift generators
+        if: ${{ !cancelled() }}
+        run: bun test scripts/native-tests
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # CI Complete — aggregates the full pipeline so branch protection has one
   # required status check. Release (release.yml) also requires this check to
   # have passed on the tagged commit instead of re-running the suite.
@@ -479,7 +560,16 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    needs: [changes, repo-checks, lint, typecheck, test-frontend, test-backend]
+    needs:
+      [
+        changes,
+        repo-checks,
+        lint,
+        typecheck,
+        test-frontend,
+        test-backend,
+        swift,
+      ]
     if: always()
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
@@ -497,6 +587,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
+          SWIFT_CHANGED: ${{ needs.changes.outputs.swift }}
           RESULTS: ${{ toJson(needs.*.result) }}
           EVENT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -508,6 +599,7 @@ jobs:
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           TEST_FRONTEND_RESULT: ${{ needs.test-frontend.result }}
           TEST_BACKEND_RESULT: ${{ needs.test-backend.result }}
+          SWIFT_RESULT: ${{ needs.swift.result }}
         run: |
           set -euo pipefail
 
@@ -552,6 +644,13 @@ jobs:
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "Superseded run: 'changes' did not complete, so the diff was never classified — no verdict to give."
             exit 0
+          fi
+
+          # The Swift job runs whenever the Swift app or its generators changed
+          # (ADR-269), on Swift-only diffs too, and must then succeed.
+          if [ "$SWIFT_CHANGED" = "true" ]; then
+            echo "swift:          $SWIFT_RESULT"
+            require swift "$SWIFT_RESULT"
           fi
 
           # Documentation-only diff: the code tiers are intentionally skipped,
