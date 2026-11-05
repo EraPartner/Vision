@@ -17,6 +17,8 @@ export type AccountType = "brokerage" | "checking" | "crypto_exchange" | "liabil
 
 export type AssetClass = "bond" | "crypto" | "etf" | "metals" | "real_estate" | "savings" | "stock";
 
+export type ExposureClassificationOrigin = "import" | "manual";
+
 export type PortfolioTxnType = "appreciation" | "buy" | "dividend" | "fee" | "gift" | "interest" | "merger" | "rent_income" | "return_of_capital" | "sell" | "spinoff" | "split" | "tax";
 
 export type PriceProvider = "binance" | "custom" | "kinesis" | "manual" | "yahoo";
@@ -631,6 +633,7 @@ export interface PortfolioExposureClassifications {
   issuer_country_code: string | null;
   issuer_id: string;
   issuer_name: string;
+  origin: Generated<ExposureClassificationOrigin>;
   sector: string | null;
   source_label: string;
   updated_at: Generated<Timestamp>;

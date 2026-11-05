@@ -30,6 +30,9 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
 
 vi.mock("@/hooks/portfolio/usePortfolioExposure", () => ({
     portfolioExposureQueryKey: () => ["portfolio-exposure"],
+    exposureClassificationsQueryKey: ["portfolio-exposure-classifications"],
+    useExposureClassificationsQuery: () => ({ isLoading: false }),
+    useSaveExposureClassifications: () => ({ mutate: vi.fn() }),
     usePortfolioExposureQuery: () => ({
         isLoading: false,
         isError: false,

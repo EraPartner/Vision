@@ -5888,6 +5888,86 @@ components:
                 { $ref: "#/components/schemas/PortfolioSecurityIdentifier" }
               document: { $ref: "#/components/schemas/FundHoldingsDocument" }
 
+    PortfolioManualClassificationChanges:
+      type: object
+      additionalProperties: false
+      description: >-
+        Investments may appear once across set and clear. Set rows become manual and imports skip
+        them; cleared rows are deleted.
+      properties:
+        set:
+          type: array
+          maxItems: 5000
+          items:
+            type: object
+            additionalProperties: false
+            required: [investmentId, issuerName]
+            properties:
+              investmentId: { type: integer, minimum: 1 }
+              issuerName: { type: string, minLength: 1, maxLength: 256 }
+              sector: { type: string, minLength: 1, maxLength: 128 }
+              issuerCountryCode: { type: string, pattern: "^[A-Z]{2}$" }
+        clear:
+          type: array
+          maxItems: 5000
+          items: { type: integer, minimum: 1 }
+
+    PortfolioExposureClassifications:
+      type: object
+      required: [items, issuers, sectors]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                investmentId,
+                name,
+                symbol,
+                assetClass,
+                hasFundDocument,
+                classification,
+              ]
+            properties:
+              investmentId: { type: integer }
+              name: { type: string }
+              symbol: { type: string, nullable: true }
+              assetClass: { type: string }
+              hasFundDocument: { type: boolean }
+              classification:
+                type: object
+                nullable: true
+                required:
+                  [
+                    issuerId,
+                    issuerName,
+                    sector,
+                    issuerCountryCode,
+                    origin,
+                    sourceLabel,
+                    updatedAt,
+                  ]
+                properties:
+                  issuerId: { type: string }
+                  issuerName: { type: string }
+                  sector: { type: string, nullable: true }
+                  issuerCountryCode: { type: string, nullable: true }
+                  origin: { type: string, enum: [import, manual] }
+                  sourceLabel: { type: string }
+                  updatedAt: { type: string, format: date-time }
+        issuers:
+          type: array
+          items:
+            type: object
+            required: [issuerId, issuerName]
+            properties:
+              issuerId: { type: string }
+              issuerName: { type: string }
+        sectors:
+          type: array
+          items: { type: string }
+
     PortfolioExposureContribution:
       type: object
       required:
@@ -13214,7 +13294,9 @@ paths:
             schema: { $ref: "#/components/schemas/PortfolioExposureBundle" }
       responses:
         "200":
-          description: Persisted exposure sources
+          description: >-
+            Persisted exposure sources. keptManualInvestmentIds lists supplied investment targets whose
+            classification was set by hand and so was left unchanged.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
@@ -13225,6 +13307,51 @@ paths:
             fund document,
             or duplicate target,
           }
+
+  /api/investments/exposure/classifications:
+    get:
+      summary: List holdings with their direct classification for editing by hand
+      operationId: getPortfolioExposureClassifications
+      tags: [Portfolio]
+      responses:
+        "200":
+          description: Active holdings, their classification, and the issuers and sectors in use
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        { $ref: "#/components/schemas/PortfolioExposureClassifications" }
+    put:
+      summary: Set or clear holding classifications by hand
+      operationId: savePortfolioExposureClassifications
+      tags: [Portfolio]
+      description: >-
+        Set rows are stored as manual classifications that later source imports skip. Cleared rows
+        are deleted so a later import may classify the holding again. The issuer id is reused from
+        an existing classification with the same issuer name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/PortfolioManualClassificationChanges" }
+      responses:
+        "200":
+          description: The updated classification list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        { $ref: "#/components/schemas/PortfolioExposureClassifications" }
+        "400": { description: Invalid change, unknown investment, or duplicate target }
 
   /api/investments/providers:
     get:

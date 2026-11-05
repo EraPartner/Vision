@@ -5,11 +5,14 @@ import { asInvestmentId } from "@vision/types/brands";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRows, db } from "../database/db.ts";
 import {
+  classifiableInvestmentRowSchema,
   exposureClassificationRowSchema,
+  exposureTargetIdRowSchema,
   exposureTargetRowSchema,
   fundHoldingsDocumentRowSchema,
 } from "../database/rows/portfolio.ts";
 import type {
+  ClassifiableInvestmentDbRow,
   ExposureClassificationDbRow,
   FundHoldingsDocumentDbRow,
 } from "../database/rows/portfolio.ts";
@@ -29,6 +32,17 @@ export type ExposureClassificationInput = {
   issuerCountryCode?: string | undefined;
   sourceLabel: string;
 };
+
+export type ManualClassificationInput = {
+  investmentId: number;
+  issuerId: string;
+  issuerName: string;
+  sector?: string | undefined;
+  issuerCountryCode?: string | undefined;
+};
+
+/** Source label stored on classifications set in the app. */
+export const MANUAL_SOURCE_LABEL = "Set in Vision";
 
 export type FundDocumentInput = {
   investmentId: number;
@@ -54,6 +68,7 @@ const classificationColumns = [
   "sector",
   "issuer_country_code as issuerCountryCode",
   "source_label as sourceLabel",
+  "origin",
   "created_at as createdAt",
   "updated_at as updatedAt",
 ] as const;
@@ -107,6 +122,27 @@ export async function listExposureTargets(
   );
 }
 
+/** Investment ids among `investmentIds` whose classification was set by hand. */
+export async function listManualClassificationIds(
+  investmentIds: readonly number[],
+): Promise<number[]> {
+  if (investmentIds.length === 0) return [];
+  const rows = await checkedRows(
+    exposureTargetIdRowSchema,
+    db
+      .selectFrom("portfolio_exposure_classifications")
+      .select("investment_id as id")
+      .where("origin", "=", "manual")
+      .where(
+        "investment_id",
+        "in",
+        sql<InvestmentId>`(SELECT value FROM json_each(${JSON.stringify(investmentIds)}))`,
+      )
+      .orderBy("investment_id"),
+  );
+  return rows.map((row) => row.id);
+}
+
 export async function upsertExposureBundle({
   classifications,
   fundDocuments,
@@ -140,14 +176,17 @@ export async function upsertExposureBundle({
                   sql`identifier_type,identifier_value,COALESCE(identifier_exchange,'')`,
                 )
                 .where("investment_id", "is", null)
-          ).doUpdateSet((eb) => ({
-            issuer_id: eb.ref("excluded.issuer_id"),
-            issuer_name: eb.ref("excluded.issuer_name"),
-            sector: eb.ref("excluded.sector"),
-            issuer_country_code: eb.ref("excluded.issuer_country_code"),
-            source_label: eb.ref("excluded.source_label"),
-            updated_at: sql<Date>`now()`,
-          })),
+          )
+            .doUpdateSet((eb) => ({
+              issuer_id: eb.ref("excluded.issuer_id"),
+              issuer_name: eb.ref("excluded.issuer_name"),
+              sector: eb.ref("excluded.sector"),
+              issuer_country_code: eb.ref("excluded.issuer_country_code"),
+              source_label: eb.ref("excluded.source_label"),
+              updated_at: sql<Date>`now()`,
+            }))
+            // A classification set by hand in the app wins over imports (ADR-267).
+            .where("portfolio_exposure_classifications.origin", "=", "import"),
         )
         .execute();
     }
@@ -176,4 +215,71 @@ export async function upsertExposureBundle({
     }
   });
   return listExposureSources();
+}
+
+/** Active holdings, by name, that a user may classify by hand (ADR-267). */
+export async function listClassifiableInvestments(): Promise<
+  ClassifiableInvestmentDbRow[]
+> {
+  return checkedRows(
+    classifiableInvestmentRowSchema,
+    db
+      .selectFrom("investments")
+      .select(["id", "name", "symbol", "asset_class as assetClass"])
+      .where("is_active", "=", true)
+      .orderBy("name")
+      .orderBy("id"),
+  );
+}
+
+/**
+ * Write classifications set by hand and remove cleared ones in one
+ * transaction. Written rows take origin 'manual', so imports skip them.
+ */
+export async function saveManualClassifications({
+  set,
+  clear,
+}: {
+  set: readonly ManualClassificationInput[];
+  clear: readonly number[];
+}): Promise<void> {
+  await withTransaction(async () => {
+    for (const item of set) {
+      await db
+        .insertInto("portfolio_exposure_classifications")
+        .values({
+          investment_id: asInvestmentId(item.investmentId),
+          issuer_id: item.issuerId,
+          issuer_name: item.issuerName,
+          sector: item.sector ?? null,
+          issuer_country_code: item.issuerCountryCode ?? null,
+          source_label: MANUAL_SOURCE_LABEL,
+          origin: "manual",
+        })
+        .onConflict((oc) =>
+          oc
+            .column("investment_id")
+            .where("investment_id", "is not", null)
+            .doUpdateSet((eb) => ({
+              issuer_id: eb.ref("excluded.issuer_id"),
+              issuer_name: eb.ref("excluded.issuer_name"),
+              sector: eb.ref("excluded.sector"),
+              issuer_country_code: eb.ref("excluded.issuer_country_code"),
+              source_label: eb.ref("excluded.source_label"),
+              origin: eb.ref("excluded.origin"),
+              updated_at: sql<Date>`now()`,
+            })),
+        )
+        .execute();
+    }
+    if (clear.length > 0)
+      await db
+        .deleteFrom("portfolio_exposure_classifications")
+        .where(
+          "investment_id",
+          "in",
+          sql<InvestmentId>`(SELECT value FROM json_each(${JSON.stringify(clear)}))`,
+        )
+        .execute();
+  });
 }

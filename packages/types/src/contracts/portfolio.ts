@@ -228,6 +228,34 @@ export const PortfolioExposureSchema = z.looseObject({
   scopeNotes: z.array(z.string()),
 });
 
+/** `GET|PUT /api/investments/exposure/classifications` — portfolioExposureService.getExposureClassifications. */
+export const PortfolioExposureClassificationsSchema = z.looseObject({
+  items: z.array(
+    z.looseObject({
+      investmentId: InvestmentIdSchema,
+      name: z.string(),
+      symbol: z.string().nullable(),
+      assetClass: z.string(),
+      hasFundDocument: z.boolean(),
+      classification: z
+        .looseObject({
+          issuerId: z.string(),
+          issuerName: z.string(),
+          sector: z.string().nullable(),
+          issuerCountryCode: z.string().nullable(),
+          origin: z.enum(["import", "manual"]),
+          sourceLabel: z.string(),
+          updatedAt: z.string(),
+        })
+        .nullable(),
+    }),
+  ),
+  issuers: z.array(
+    z.looseObject({ issuerId: z.string(), issuerName: z.string() }),
+  ),
+  sectors: z.array(z.string()),
+});
+
 // ── /api/info/portfolio-summary ─────────────────────────────────────────────
 
 /** portfolioSummaryService.aggregateTotals. */

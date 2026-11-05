@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const repository = vi.hoisted(() => ({
   listExposureTargets: vi.fn(),
+  listManualClassificationIds: vi.fn(),
   upsertExposureBundle: vi.fn(),
 }));
 
@@ -74,6 +75,7 @@ beforeEach(() => {
   repository.listExposureTargets.mockResolvedValue([
     { id: 7, assetClass: "etf" },
   ]);
+  repository.listManualClassificationIds.mockResolvedValue([]);
   repository.upsertExposureBundle.mockResolvedValue({
     classifications: [],
     documents: [],

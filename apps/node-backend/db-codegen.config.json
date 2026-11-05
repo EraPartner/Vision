@@ -64,6 +64,10 @@
       "spinoff",
       "return_of_capital"
     ],
+    "ExposureClassificationOrigin": [
+      "import",
+      "manual"
+    ],
     "PriceProvider": [
       "manual",
       "binance",
@@ -85,6 +89,7 @@
     "vision_analysis_holding_events_v1.event_type": "PortfolioTxnType",
     "investments.asset_class": "AssetClass",
     "investments.price_provider": "PriceProvider",
+    "portfolio_exposure_classifications.origin": "ExposureClassificationOrigin",
     "portfolio_import_batches.default_asset_class": "AssetClass",
     "portfolio_import_batches.default_type": "PortfolioTxnType",
     "portfolio_import_staging_rows.type": "PortfolioTxnType",

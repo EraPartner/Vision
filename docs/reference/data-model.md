@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-11-03
-updated: 2026-11-03
-last_modified: 2026-11-03
+date: 2026-11-05
+updated: 2026-11-05
+last_modified: 2026-11-05
 tags:
   [
     reference,
@@ -424,7 +424,9 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 
 Stores a user-supplied issuer, sector, and issuer-country classification. Each row targets exactly
 one `investment_id` or one typed identifier tuple. Partial unique indexes prevent duplicate targets.
-Vision does not infer ticker, name, country, sector, or foreign-exchange exposure.
+Vision does not infer ticker, name, country, sector, or foreign-exchange exposure. `origin`
+(`import` | `manual`, migration `0003`, ADR-267) marks rows set in the Classify holdings sheet;
+source imports skip `manual` rows.
 
 ### PortfolioFundHoldingsDocument
 

@@ -145,6 +145,10 @@ export const apiClient = {
     getPortfolioExposure: portfolioExposure.getPortfolioExposure,
     upsertPortfolioExposureSources:
         portfolioExposure.upsertPortfolioExposureSources,
+    getPortfolioExposureClassifications:
+        portfolioExposure.getPortfolioExposureClassifications,
+    savePortfolioExposureClassifications:
+        portfolioExposure.savePortfolioExposureClassifications,
 
     // Portfolio imports
     importPortfolioCSVCustom: portImp.importPortfolioCSVCustom,

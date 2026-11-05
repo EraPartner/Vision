@@ -126,6 +126,39 @@ describe("portfolio exposure aggregation", () => {
     expect(result.issuer.unclassifiedValue).toBe(20);
   });
 
+  it("classifies a whole ETF without a holdings document when the user classified it (ADR-267)", () => {
+    const result = aggregatePortfolioExposure(
+      partial<Summary>({
+        currency: "EUR",
+        computed_at: "2026-09-14T10:00:00Z",
+        totals: { totalPortfolioValue: 150 },
+        summaries: [
+          { id: 1, name: "Tech ETF", asset_class: "etf", currentValue: 100 },
+          { id: 2, name: "Other ETF", asset_class: "etf", currentValue: 50 },
+        ],
+      }),
+      partial<Sources>({
+        classifications: [
+          {
+            investmentId: 1,
+            issuerId: "name:tech etf",
+            issuerName: "Tech ETF",
+            sector: "Information Technology",
+            issuerCountryCode: "US",
+            sourceLabel: "Set in Vision",
+            origin: "manual",
+          },
+        ],
+        documents: [],
+      }),
+    );
+    expect(result.uncoveredValue).toBe(50);
+    expect(result.sector.rows).toMatchObject([
+      { id: "Information Technology", amount: 100, weightPercent: 66.67 },
+    ]);
+    expect(result.issuerCountry.classifiedValue).toBe(100);
+  });
+
   it("re-evaluates fund staleness at read time", () => {
     const document = fundDocument("4");
     const result = aggregatePortfolioExposure(
