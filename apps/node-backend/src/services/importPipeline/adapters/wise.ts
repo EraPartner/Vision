@@ -2,6 +2,7 @@
  * Wise CSV adapter — multi-currency transfer history.
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import {
   cleanRecipientName,
   normalizeToUppercase,
@@ -157,13 +158,7 @@ function rowToTransaction(
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const firstLine = (csvSample.split("\n")[0] || "").toLowerCase();
-  return (
-    firstLine.includes("direction") &&
-    firstLine.includes("target amount") &&
-    firstLine.includes("source amount")
-  );
+  return matchesBankImportFormat("wise", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {

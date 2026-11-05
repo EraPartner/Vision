@@ -20,6 +20,7 @@
  *  12  Reden van weigering     rejection reason
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import {
   cleanRecipientName,
   normalizeToUppercase,
@@ -29,7 +30,6 @@ import {
   parseDayMonthYear,
   parseAmountField,
   buildOptionalComment,
-  splitCsvLines,
   parseCsvText,
   rawDataForCsvRecord,
   canonicalIban,
@@ -129,14 +129,7 @@ function parseLine(parts: string[]): ParsedBankTransaction | null {
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const lines = splitCsvLines(csvSample).slice(0, 3);
-  return lines.some(
-    (line) =>
-      line.includes("Volgnummer") &&
-      line.includes("Uitvoeringsdatum") &&
-      line.includes("Valuta rekening"),
-  );
+  return matchesBankImportFormat("bnp", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {

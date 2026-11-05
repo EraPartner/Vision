@@ -2,6 +2,7 @@
  * SABB (Saudi British Bank) CSV adapter.
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import {
   cleanRecipientName,
   normalizeToUppercase,
@@ -101,11 +102,7 @@ function rowToTransaction(
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const firstLine = (csvSample.split("\n")[0] || "").toLowerCase();
-  return (
-    firstLine.includes("transaction date") && firstLine.includes("amount(sar)")
-  );
+  return matchesBankImportFormat("sabb", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {

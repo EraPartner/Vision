@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-11-03
-updated: 2026-11-03
-last_modified: 2026-11-03
+date: 2026-11-05
+updated: 2026-11-05
+last_modified: 2026-11-05
 tags:
   [
     feature,
@@ -54,6 +54,8 @@ tags:
     account-disclosure,
     wp-b6,
     july-2026,
+    adr-268,
+    format-detection,
   ]
 aliases:
   [
@@ -168,6 +170,7 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 
 - The page is titled "Import" (the navigation label is unchanged) and keeps the `PageShell`/`PageHeader` shell.
 - `TransactionImportCard` asks for the file first: dropzone → bank source `Select` → the custom-parser setup (saved-parser summary with Edit/Delete, or the column-mapping editor) only when the chosen source needs it. The Import button is enabled only once a file and a bank are chosen (and, for a custom source, the date, payee and amount columns are mapped); a `aria-live` footer hint names the missing piece (`importPage.hint.*`) and reads "Ready to import." once everything is in place. Cancel is a ghost button that only appears while an import runs.
+- The bank source starts on "Detect automatically" ([[docs/adr/268-budget-import-format-detection|ADR-268]]). Once a file is chosen, [[apps/frontend/src/features/imports/bankImportDetection.ts]] reads its first 64 KiB and the card shows "Recognised as {name}.", lists the candidates when the file fits a built-in format and a saved parser (or several saved parsers), or says it did not recognise the file. Only a single result is used; otherwise the footer asks for the bank. Picking any source by hand turns detection off for that import.
 - The post-commit receipt card gains a "Show {n} imported transactions" link (`importPage.showImported`, `tc` plural) that opens `/transactions` narrowed to the imported rows' date span via `start_date`/`end_date` and a `filter_label` of "Imported from CSV". There is no per-batch filter on the Transactions page, so the date span is the closest available narrowing; `ImportReviewPage` computes the span from the staged rows and passes it to `commit(range)` in `useImportReviewData`, which stores it on the transient history receipt.
 - `ImportReviewPage` opens with a legend card (`importReview.legend.*`) that explains the five match badges — exact, fuzzy with its similarity, pattern, new payee, unresolved — next to this file's counts, then the accounts disclosure and the payee groups as cards; group rows use the `Accordion` with the recipient combobox as `trailing` and signed `Money`. The footer offers "Discard" (outline, confirmed through `useConfirmDialog` with a destructive "Discard import" action) beside the primary "Import {n} rows". Discard calls the existing `DELETE /api/import/batches/:id` rollback (`apiClient.rollbackImportBatch`), invalidates the batch list and returns to `/import`; no new backend route was added.
 
@@ -309,15 +312,20 @@ Analyzes active primary recipients and identifies clusters with:
 
 | Bank               | Format                                     | Columns                                                  | Detection                                             |
 | ------------------ | ------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------- |
-| Belfius            | Belgian format, semicolon-delimited        | Date, amount, recipient, balance                         | `Rekeningnummer` + `Boekingsdatum`                    |
-| Revolut            | Multi-currency, ISO 8601 dates             | Completed date, amount, fee, currency                    | `Completed Date` + `Currency`                         |
+| Belfius            | Belgian format, semicolon-delimited        | Date, amount, recipient, balance                         | `Laatste saldo;` or a `BE..` row with 12+ fields in the first 15 lines |
+| Revolut            | Multi-currency, ISO 8601 dates             | Completed date, amount, fee, currency                    | First line starts `Type,` and has `Completed Date` + `State` |
 | ING                | Dutch-language export, semicolon-delimited | Booking date, counterparty IBAN, description             | `Omzetnummer` + `Detail van de omzet`                 |
-| KBC                | Belgian corporate, semicolon-delimited     | Counterparty, structured communication                   | `Rekeningnummer` + `Datum`                            |
 | BNP Paribas Fortis | Dutch-language export, semicolon-delimited | Sequence, execution date, transaction type, counterparty | `Volgnummer` + `Uitvoeringsdatum` + `Valuta rekening` |
-| SABB               | Belgian bank format, semicolon-delimited   | Posting date, description, amount                        | `Rekeningnummer` + `Datum`                            |
-| Wise               | Multi-currency transfers, ISO 8601         | Finished date, exchange rate, fee                        | `Finished On` + `Currency`                            |
-| Vision             | Internal format                            | Standard transaction fields                              | Explicit selection                                    |
-| Custom             | User-defined via mapper                    | Configurable column mapping                              | Manual column picker                                  |
+| KBC                | Belgian corporate, semicolon-delimited     | Counterparty, structured communication                   | A line starting `Rekeningnummer`, or `Vrije Mededeling` |
+| Vision             | Internal format                            | Standard transaction fields                              | Exact `Date,Bank Account,Recipient,Memo,Amount,Currency` prefix |
+| SABB               | Saudi bank export                          | Transaction date, description, amount                    | `Transaction Date` + `Amount(SAR)`                    |
+| Wise               | Multi-currency transfers, ISO 8601         | Finished date, exchange rate, fee                        | `Direction` + `Target amount` + `Source amount`       |
+| Custom             | User-defined via mapper                    | Configurable column mapping                              | A saved parser fits when all its mapped columns are in the header |
+
+Rows are in registry order, which is also the detection precedence: an ING header also satisfies
+KBC's signature and resolves to ING. Signatures live in
+[[packages/shared-utils/src/bankImportDetection.ts]] and every adapter's `detect` delegates to them
+([[docs/adr/268-budget-import-format-detection|ADR-268]]).
 
 ## Import Service Architecture (Phase C Refactor)
 
@@ -670,7 +678,7 @@ The name the user assigns (e.g. `"My Savings Bank"`) is used as `adapterName` in
 
 ### Frontend UX
 
-- **Dropdown**: Saved parsers appear in the bank-source dropdown with a Bookmark icon; selecting one loads its config automatically.
+- **Dropdown**: Saved parsers appear in the bank-source dropdown with a Bookmark icon; selecting one loads its config automatically. Under "Detect automatically" a saved parser whose mapped columns are all in the file's header is chosen when it is the only fit (ADR-268).
 - **Read-only summary**: Shows the loaded parser's name and config with Edit and "Delete this parser" (confirmation dialog) buttons.
 - **Create**: In custom-config mode a name field and "Save parser" button create a new saved parser.
 - **Edit**: Editing a saved parser shows "Save changes" / "Cancel".

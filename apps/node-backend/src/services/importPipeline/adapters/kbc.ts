@@ -2,6 +2,7 @@
  * KBC CSV adapter — Belgian bank, ';'-separated with 15+ columns.
  */
 
+import { matchesBankImportFormat } from "@vision/shared-utils/bank-import-detection";
 import {
   cleanKbcRecipientName,
   normalizeToUppercase,
@@ -11,7 +12,6 @@ import {
   parseDayMonthYear,
   parseCommaDecimal,
   buildOptionalComment,
-  splitCsvLines,
   parseCsvText,
   rawDataForCsvRecord,
   canonicalIban,
@@ -121,12 +121,7 @@ function isNonDataLine(line: string): boolean {
  * @param csvSample raw head of the uploaded file
  */
 export function detect(csvSample: string | null | undefined): boolean {
-  if (!csvSample) return false;
-  const lines = splitCsvLines(csvSample).slice(0, 5);
-  return (
-    lines.some((line) => line.startsWith("Rekeningnummer")) ||
-    lines.some((line) => line.includes("Vrije Mededeling"))
-  );
+  return matchesBankImportFormat("kbc", csvSample);
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {
