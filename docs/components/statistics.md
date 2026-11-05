@@ -2,8 +2,8 @@
 title: Statistics Components
 type: component
 status: active
-date: 2026-10-22
-updated: 2026-10-06
+date: 2026-11-05
+updated: 2026-11-05
 tags:
   [
     components,
@@ -36,8 +36,8 @@ Vision's Statistics page is composed of 11 specialized sub-components plus share
 
 The page acts as a thin orchestrator with lazy-loading and memoization:
 
-The Statistics page (titled **Insights** in the UI) defaults to a rolling 24-month range;
-`?window=all` exposes full history. The window is picked with a two-segment `SegmentedControl` in
+The Statistics page (titled **Insights** in the UI) defaults to full history (ADR-266);
+`?window=24m` selects the rolling 24-month range. The window is picked with a two-segment `SegmentedControl` in
 the page header; a ••• menu beside it opens the controlled `ExportDialog` (**Export PDF…**) and
 `WidgetVisibilityDialog` (**Customize…**). CategoryPivotTable mounts at most 12 period columns at once. It
 starts on the newest window and renders periods chronologically within that

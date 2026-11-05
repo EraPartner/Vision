@@ -133,8 +133,10 @@ function InsightsWindowControl({
 
 export default function StatisticsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
+    // All time is the default (ADR-266); `?window=24m` picks the rolling window.
+    // Older `?window=all` links still resolve to All time.
     const statisticsWindow: StatisticsWindow =
-        searchParams.get("window") === "all" ? "all" : "24m";
+        searchParams.get("window") === "24m" ? "24m" : "all";
     const {
         data,
         isLoading,
@@ -154,7 +156,7 @@ export default function StatisticsPage() {
     const setStatisticsWindow = useCallback(
         (value: StatisticsWindow) => {
             const next = new URLSearchParams(searchParams);
-            if (value === "all") next.set("window", "all");
+            if (value === "24m") next.set("window", "24m");
             else next.delete("window");
             setSearchParams(next, { replace: true });
         },

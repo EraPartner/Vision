@@ -3,6 +3,7 @@ title: ADR-131 Bounded default statistics window
 type: adr
 status: accepted
 date: 2026-09-07
+updated: 2026-11-05
 tags: [adr, statistics, performance, api, rolling-window]
 description: Uses a rolling 24-calendar-month default for Statistics while retaining an explicit all-time mode and exact historical foreign-exchange conversion.
 aliases: [statistics date window, rolling statistics window]
@@ -12,7 +13,9 @@ aliases: [statistics date window, rolling statistics window]
 
 ## Status
 
-Accepted
+Accepted. The default-window decision is superseded by
+[[docs/adr/266-insights-default-all-time|ADR-266]] (2026-11-05): Insights now opens on All time
+and Last 24 months is `?window=24m`.
 
 ## Date
 
