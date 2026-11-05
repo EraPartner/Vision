@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "instrument_key": "string",
+        "key_type": "isin",
+        "provider": "string",
+        "provider_symbol": "string",
+        "resolved_name": "string",
+        "exchange": "string",
+        "currency": "EUR",
+        "status": "string",
+        "verified_at": "string",
+        "created_at": "string",
+        "updated_at": "string"
+      }
+    ],
+    "total": 1
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  }
+}

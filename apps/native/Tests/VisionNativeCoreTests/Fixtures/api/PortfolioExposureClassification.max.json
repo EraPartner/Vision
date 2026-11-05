@@ -1,0 +1,13 @@
+{
+  "investmentId": 1,
+  "identifier": {
+    "type": "isin",
+    "value": "string",
+    "exchange": "string"
+  },
+  "issuerId": "id-1",
+  "issuerName": "string",
+  "sector": "string",
+  "issuerCountryCode": "BE",
+  "sourceLabel": "string"
+}

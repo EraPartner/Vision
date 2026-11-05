@@ -19,6 +19,8 @@ export function classify(
       (!path.includes("/") && path.endsWith(".md"))
     )
       continue;
+    // The Swift app is compiled by the `swift` CI job, not the TypeScript tiers (ADR-269).
+    if (path.startsWith("apps/native/")) continue;
     // Configuration, executables and unknown formats still run the full suite.
     if (
       (path.startsWith(".agents/") || path.startsWith(".codex/")) &&
@@ -28,6 +30,15 @@ export function classify(
     return true;
   }
   return false;
+}
+
+/** Paths whose change needs the macOS Swift build and tests (ADR-269). */
+export function isSwiftPath(path: string): boolean {
+  return (
+    path.startsWith("apps/native/") ||
+    path.startsWith("scripts/native-") ||
+    path === "scripts/lib/nativeCodegen.ts"
+  );
 }
 
 const defaultGit: Git = (...args) =>
@@ -55,12 +66,17 @@ export function changedPaths(
   );
 }
 
-/** Classifies a commit range; any failure selects the full pipeline. */
+export interface Classification {
+  readonly code: boolean;
+  readonly swift: boolean;
+}
+
+/** Classifies a commit range; any failure selects the full pipeline and the Swift build. */
 export function classifyRange(
   base: string,
   head: string,
   git: Git = defaultGit,
-): boolean {
+): Classification {
   try {
     const paths = changedPaths(base, head, git);
     const special = new Set<string>();
@@ -73,9 +89,12 @@ export function classifyRange(
           special.add(entry.slice(tab + 1));
       }
     }
-    return classify(paths, special);
+    return {
+      code: classify(paths, special),
+      swift: paths.some(isSwiftPath),
+    };
   } catch {
-    return true;
+    return { code: true, swift: true };
   }
 }
 
@@ -83,7 +102,7 @@ if (isEntrypoint(import.meta)) {
   const isPr = process.env.EVENT_NAME === "pull_request";
   const base = process.env[isPr ? "PR_BASE_SHA" : "PUSH_BEFORE"] ?? "";
   const head = process.env[isPr ? "PR_HEAD_SHA" : "PUSH_SHA"] ?? "";
-  const code = classifyRange(base, head);
+  const { code, swift } = classifyRange(base, head);
   console.log(
     code
       ? "Full application pipeline."
@@ -91,5 +110,10 @@ if (isEntrypoint(import.meta)) {
   );
   const output = process.env.GITHUB_OUTPUT;
   if (!output) throw new Error("GITHUB_OUTPUT is not set");
-  fs.appendFileSync(output, `code=${String(code)}\n`, "utf8");
+  if (swift) console.log("Swift app changed: the macOS Swift job runs.");
+  fs.appendFileSync(
+    output,
+    `code=${String(code)}\nswift=${String(swift)}\n`,
+    "utf8",
+  );
 }

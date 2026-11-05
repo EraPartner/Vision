@@ -1,0 +1,36 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "conversationId": "00000000-0000-4000-8000-000000000001",
+  "role": "user",
+  "content": "string",
+  "toolName": "string",
+  "toolArgs": "value",
+  "toolResult": "value",
+  "toolPresentation": {
+    "renderAs": "string",
+    "rows": [
+      "value"
+    ],
+    "columns": [
+      "string"
+    ],
+    "xKey": "string",
+    "yKeys": [
+      "string"
+    ],
+    "rowCount": 1,
+    "pieRenderable": true,
+    "pieRows": [
+      {
+        "name": "string",
+        "value": 1.5,
+        "percent": 1.5,
+        "labelPercent": 1.5,
+        "startAngle": 1.5,
+        "endAngle": 1.5
+      }
+    ]
+  },
+  "status": "complete",
+  "createdAt": "2024-01-15T10:30:00.000Z"
+}

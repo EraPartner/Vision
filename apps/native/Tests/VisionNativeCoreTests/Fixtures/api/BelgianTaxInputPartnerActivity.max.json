@@ -1,0 +1,17 @@
+{
+  "id": "act_1",
+  "kind": "employee",
+  "label": "string",
+  "grossIncome": 1.5,
+  "netProfessionalIncome": 1.5,
+  "pensionKind": "statutory_from_legal_age",
+  "startDate": "2024-01-15",
+  "endDate": "2024-01-15",
+  "selfEmployedOccupation": "main",
+  "socialContributionsPaid": 1.5,
+  "withholdingTax": 1.5,
+  "prepayments": 1.5,
+  "sourceRefs": [
+    "string"
+  ]
+}

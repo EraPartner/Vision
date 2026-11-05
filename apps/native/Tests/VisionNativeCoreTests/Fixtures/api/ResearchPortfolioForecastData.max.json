@@ -1,0 +1,54 @@
+{
+  "available": true,
+  "reason": "no_holdings",
+  "currency": "EUR",
+  "method": "parametric",
+  "horizonMonths": 1,
+  "paths": 1,
+  "seed": "string",
+  "historyDays": 1,
+  "flowArtifactDays": 1,
+  "lowConfidence": true,
+  "startValue": 1.5,
+  "startInvested": 1.5,
+  "monthlyContribution": 1.5,
+  "goalMonth": 1,
+  "totalContributions": 1.5,
+  "netInvested": 1.5,
+  "expectedAnnualReturn": 1.5,
+  "historicalAnnualReturn": 1.5,
+  "annualVolatility": 1.5,
+  "forwardBlend": 1.5,
+  "usedForward": true,
+  "forwardHoldings": [
+    {
+      "symbol": "string",
+      "expectedAnnual": 1.5,
+      "growth": 1.5,
+      "dividendYield": 1.5
+    }
+  ],
+  "projected": {
+    "mean": 1.5,
+    "p10": 1.5,
+    "p25": 1.5,
+    "p50": 1.5,
+    "p75": 1.5,
+    "p90": 1.5
+  },
+  "probBelowInvested": 1.5,
+  "targetValue": 1.5,
+  "probTarget": 1.5,
+  "points": [
+    {
+      "monthIndex": 1,
+      "date": "string",
+      "netInvested": 1.5,
+      "p10": 1.5,
+      "p25": 1.5,
+      "p50": 1.5,
+      "p75": 1.5,
+      "p90": 1.5
+    }
+  ]
+}

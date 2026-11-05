@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "provider": "string",
+      "label": "string",
+      "envVar": "string",
+      "configured": true,
+      "source": "settings",
+      "masked": "string"
+    }
+  ],
+  "total": 1
+}

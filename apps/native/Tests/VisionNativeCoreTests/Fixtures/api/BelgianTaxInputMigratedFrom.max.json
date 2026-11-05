@@ -1,0 +1,10 @@
+{
+  "fromVersion": 1.5,
+  "unmappedFields": [
+    {
+      "field": "string",
+      "note": "string",
+      "value": "value"
+    }
+  ]
+}

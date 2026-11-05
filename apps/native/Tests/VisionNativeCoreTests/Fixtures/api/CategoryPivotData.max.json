@@ -1,0 +1,28 @@
+{
+  "unconverted_count": 1,
+  "unconverted_currencies": [
+    "EUR"
+  ],
+  "categoryPivot": {
+    "key": [
+      {
+        "categoryId": 1,
+        "categoryName": "string",
+        "categoryPathIds": [
+          1
+        ],
+        "categoryPathSegments": [
+          "string"
+        ],
+        "total": 1.5,
+        "income": 1.5,
+        "expense": 1.5,
+        "transactionCount": 1,
+        "incomeByOwner": {
+          "partner": 1.5,
+          "joint": 1.5
+        }
+      }
+    ]
+  }
+}

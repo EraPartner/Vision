@@ -1,0 +1,21 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "monitorId": "00000000-0000-4000-8000-000000000001",
+  "status": "baseline",
+  "previousValue": "string",
+  "currentValue": "string",
+  "previousEvidenceVersion": 1,
+  "currentEvidenceVersion": 1,
+  "analysisDefinitionVersion": 1,
+  "analysisRunId": "id-1",
+  "historicalAnalysisRunId": "id-1",
+  "analysisRunStatus": "string",
+  "analysisWindow": "value",
+  "coverage": {
+    "status": "unknown",
+    "reason": "string"
+  },
+  "reasonCode": "string",
+  "reason": "string",
+  "checkedAt": "2024-01-15T10:30:00.000Z"
+}

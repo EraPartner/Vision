@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { classify, classifyRange, type Git } from "../ci-classify.ts";
+import {
+  classify,
+  classifyRange,
+  isSwiftPath,
+  type Git,
+} from "../ci-classify.ts";
 
 function scriptedGit(outputs: string[]): { git: Git; calls: string[][] } {
   const calls: string[][] = [];
@@ -43,17 +48,39 @@ void test("executable, configuration and nested Markdown changes run the full pi
   }
 });
 
+void test("Swift app changes skip the TypeScript tiers and select the Swift job", () => {
+  assert.equal(
+    classify([
+      "apps/native/Sources/VisionNativeUI/RootView.swift",
+      "apps/native/project.yml",
+    ]),
+    false,
+  );
+  assert.equal(
+    classify(["apps/native/project.yml", "scripts/native-openapi.ts"]),
+    true,
+  );
+  assert.ok(isSwiftPath("apps/native/Package.swift"));
+  assert.ok(isSwiftPath("scripts/native-openapi.ts"));
+  assert.ok(isSwiftPath("scripts/lib/nativeCodegen.ts"));
+  assert.ok(!isSwiftPath("apps/frontend/src/App.tsx"));
+  assert.ok(!isSwiftPath("packaging/electron/apple-ai/main.swift"));
+});
+
 void test("empty, unresolvable and special-mode diffs fail closed", () => {
   assert.equal(classify([]), true);
   assert.equal(
     classify([".agents/role.md"], new Set([".agents/role.md"])),
     true,
   );
-  assert.equal(classifyRange("", "head"), true);
+  assert.deepEqual(classifyRange("", "head"), { code: true, swift: true });
   const failing: Git = () => {
     throw new Error("git failed");
   };
-  assert.equal(classifyRange("base", "head", failing), true);
+  assert.deepEqual(classifyRange("base", "head", failing), {
+    code: true,
+    swift: true,
+  });
 });
 
 void test("the agent check cannot be silently skipped", () => {
@@ -85,7 +112,10 @@ void test("NUL delimiters, file modes and disabled rename detection are honoured
     "100755 blob abc\told.sh\0",
     "100644 blob def\t.agents/new.md\0",
   ]);
-  assert.equal(classifyRange("base", "head", renamed.git), true);
+  assert.deepEqual(classifyRange("base", "head", renamed.git), {
+    code: true,
+    swift: false,
+  });
   assert.deepEqual(renamed.calls[2], [
     "diff",
     "--name-only",
@@ -101,5 +131,8 @@ void test("NUL delimiters, file modes and disabled rename detection are honoured
     "",
     "100644 blob abc\t.agents/name\nwith newline.md\0",
   ]);
-  assert.equal(classifyRange("base", "head", newline.git), false);
+  assert.deepEqual(classifyRange("base", "head", newline.git), {
+    code: false,
+    swift: false,
+  });
 });

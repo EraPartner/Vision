@@ -1,0 +1,68 @@
+{
+  "ok": true,
+  "meta": {
+    "provider": "string",
+    "source": "cache",
+    "requestId": "id-1"
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  },
+  "data": {
+    "symbol": "string",
+    "fundamentals": {
+      "symbol": "string",
+      "name": "string",
+      "currency": "EUR",
+      "marketCap": 1.5,
+      "pe": 1.5,
+      "forwardPE": 1.5,
+      "dividendYield": 1.5,
+      "eps": 1.5,
+      "beta": 1.5,
+      "priceToBook": 1.5,
+      "profitMargin": 1.5,
+      "revenue": 1.5,
+      "returnOnEquity": 1.5,
+      "sector": "string",
+      "pegRatio": 1.5,
+      "payoutRatio": 1.5,
+      "grossMargin": 1.5,
+      "operatingMargin": 1.5,
+      "revenueGrowth": 1.5,
+      "earningsGrowth": 1.5,
+      "debtToEquity": 1.5,
+      "currentRatio": 1.5,
+      "quickRatio": 1.5,
+      "interestCoverage": 1.5,
+      "freeCashFlow": 1.5,
+      "fcfYield": 1.5
+    },
+    "scorecard": {
+      "score": 1.5,
+      "grade": "strong",
+      "evaluated": 1,
+      "counts": {
+        "ok": 1,
+        "caution": 1,
+        "warn": 1,
+        "risk": 1
+      },
+      "flags": [
+        {
+          "metric": "string",
+          "category": "liquidity",
+          "better": "higher",
+          "value": 1.5,
+          "severity": "ok",
+          "code": "string",
+          "reasonKey": "string",
+          "reason": "string",
+          "benchmark": "string"
+        }
+      ]
+    }
+  }
+}
