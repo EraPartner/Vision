@@ -1684,6 +1684,10 @@ counterpart:
   (fed by `UserPresenceMonitor`: input idle time every minute, screen lock and unlock, wake) marks
   the user away after 5 minutes without input or while the screen is locked, and the interval polls
   pause until they are back.
+- **Memory.** The transactions ledger lets its loaded rows go 2 minutes after the page is left
+  (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state.
+- **Halos.** Under Full effects the wide dark-mode halo stays on headings, and the page subtitle
+  keeps the single 8 pt halo.
 
 Chromium-only items have no Swift counterpart: squircle clips, React memoisation, virtualizer
 estimates, chart entrance layers, `material-host` pseudo-elements and `backdrop-filter`

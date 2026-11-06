@@ -388,6 +388,7 @@ public final class NativeShellModel {
         if pathChanged {
             nativeIntentConsumer = nil
             reports?.didLeavePage()
+            if route.path == TransactionsRoutes.path { transactions.didLeavePage() }
             if route.path == "/analysis" { analysis?.didDisappear() }
             research?.didDisappear(route: route)
             if route.path == "/research/forecast" { researchForecast?.didDisappear() }

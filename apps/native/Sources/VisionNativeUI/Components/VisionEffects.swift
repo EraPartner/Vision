@@ -33,6 +33,10 @@ public enum CanvasTextHaloScope: Sendable {
     /// `PageHeader`'s title and subtitle: the single halo in dark mode always
     /// (`.dark .page-header-title`, index.css), the double halo under Full effects.
     case pageHeader
+    /// `PageHeader`'s subtitle and other body text on the canvas: the single 8 pt halo in dark
+    /// mode (`.dark .page-header-subtitle`, and `.dark.fx-full .canvas-text :is(p, span, div)`
+    /// under Full effects, where the wide pass is kept for headings only; ADR-255).
+    case pageSubtitle
     /// Other headings and `.canvas-text`: the double halo, only under Full effects
     /// (`.dark.fx-full h1, h2, h3, .font-display, .canvas-text`, index.css).
     case canvasText
@@ -56,6 +60,9 @@ public struct VisionCanvasTextHalo: ViewModifier {
         let single = DesignTokens.Halo.single
         if !theme.isDark {
             content
+        } else if scope == .pageSubtitle {
+            let body = fullEffects ? DesignTokens.Halo.fullBody : single
+            content.shadow(color: color(body), radius: body.blur / 2, x: body.x, y: body.y)
         } else if fullEffects {
             content
                 .shadow(color: color(inner), radius: inner.blur / 2, x: inner.x, y: inner.y)
