@@ -122,6 +122,10 @@ struct PortfolioSeriesChart: View {
             }
             .frame(height: height).focusable().focused($focused).focusEffectDisabled()
             .accessibilityLabel(title)
+            // Every portfolio chart is a web `AreaChart`, lines-only ones included.
+            .accessibilityValue(
+                ChartAccessibility.series(
+                    shell.strings, kind: .area, categoryCount: keys.count, seriesLabels: series.map(\.label)))
             .onKeyPress(phases: .down, action: moveSelection)
             .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
             .onChange(of: series) { _, _ in selected = nil }

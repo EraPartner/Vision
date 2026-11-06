@@ -4690,3 +4690,22 @@ common.fxUnavailableTransactions.one
 common.fxUnavailableTransactions.other
 owesPage.fxUnavailable.one
 owesPage.fxUnavailable.other
+
+# Chart VoiceOver summaries (chartAria.ts)
+chart.aria.andMore
+chart.aria.kind.area
+chart.aria.kind.bar
+chart.aria.kind.composed
+chart.aria.kind.donut
+chart.aria.kind.line
+chart.aria.kind.pie
+chart.aria.kind.stackedBar
+chart.aria.segmentNames
+chart.aria.segmentOne
+chart.aria.segmentOther
+chart.aria.series
+chart.aria.seriesOne
+chart.aria.seriesOther
+chart.aria.sparklineEmpty
+chart.aria.sparklineOne
+chart.aria.sparklineOther

@@ -96,6 +96,11 @@ struct ResearchMarketChartView: View {
                 }
             }
             .accessibilityLabel(shell.strings.t("market.priceChart"))
+            .chartAccessibilitySummary { strings in
+                ChartAccessibility.series(
+                    strings, kind: .area, categoryCount: plot.times.count,
+                    seriesLabels: [strings.t("market.priceChart")])
+            }
             if showsVolume {
                 // Its bars do not depend on the selection, so a hover leaves them alone.
                 MarketVolumeBars(
@@ -207,6 +212,9 @@ private struct MarketVolumeBars: View, Equatable {
             }
         }
         .frame(height: 60).accessibilityLabel(label)
+        .chartAccessibilitySummary { strings in
+            ChartAccessibility.series(strings, kind: .bar, categoryCount: count, seriesLabels: [label])
+        }
     }
 
     /// The x axis counts points, so a position maps straight to a point index.

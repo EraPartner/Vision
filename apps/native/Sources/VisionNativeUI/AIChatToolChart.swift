@@ -88,6 +88,11 @@ struct AIChatToolChart: View {
                 }
             }.frame(height: 224).focusable().focused($focused).onKeyPress(phases: .down, action: move)
             .accessibilityLabel(strings.t("aiChat.toolResult"))
+            .chartAccessibilitySummary { strings in
+                ChartAccessibility.series(
+                    strings, kind: presentation.renderAs == .bar ? .bar : .line,
+                    categoryCount: presentation.rows.count, seriesLabels: presentation.yKeys)
+            }
     }
     @ChartContentBuilder private func cartesianMark(index: Int, key: String, series: Int) -> some ChartContent {
         if let value = coordinate(AIChatToolPresentation.value(presentation.rows[index], key: key)) {
@@ -147,6 +152,11 @@ struct AIChatToolChart: View {
             }
         }.frame(height: 224).focusable().focused($focused).onKeyPress(phases: .down, action: move)
             .accessibilityLabel(strings.t("aiChat.toolResult"))
+            // The web draws only the positive slices (`data.filter((d) => d.value > 0)`).
+            .chartAccessibilitySummary { strings in
+                ChartAccessibility.proportion(
+                    strings, kind: .donut, names: presentation.pieRows.filter { $0.value > 0 }.map(\.name))
+            }
     }
     @ViewBuilder private func readout(_ index: Int) -> some View {
         VStack(alignment: .leading, spacing: 4) {
