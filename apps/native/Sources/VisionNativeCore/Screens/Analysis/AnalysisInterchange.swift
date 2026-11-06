@@ -22,12 +22,12 @@ public enum AnalysisInterchange {
 
     /// Import a scenario CSV or a Vision-generated workbook as an opaque scalar attachment.
     public static func importAttachment(
-        file: AnalysisInterchangeFile, format: String, now: Date = Date(),
+        file: AnalysisInterchangeFile, format: AnalysisInterchangeFormat, now: Date = Date(),
         makeWorkbookID: () -> String = { "workbook_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased() }
     ) throws -> AnalysisAttachment {
         let importedAt = isoTimestamp(now)
         switch format {
-        case "csv":
+        case .csv:
             guard file.data.count <= scenarioCSVMaxBytes else {
                 throw AnalysisInterchangeError("Scenario CSV exceeds the 1 MB limit")
             }
@@ -35,7 +35,7 @@ public enum AnalysisInterchange {
                 text: interchangeDecodeUTF8(file.data), fileName: file.name, size: file.data.count,
                 importedAt: importedAt)
             return try AnalysisAttachment(raw: attachment)
-        case "xlsx":
+        case .xlsx:
             guard file.data.count <= workbookMaxBytes else { throw AnalysisInterchangeError("Workbook exceeds 10 MB") }
             let workbook = try AnalysisWorkbook.importWorkbook(Array(file.data))
             guard workbook.rows.count <= 1000, workbook.columns.count <= 32 else {
@@ -45,21 +45,18 @@ public enum AnalysisInterchange {
             return try AnalysisAttachment(
                 raw: workbookScenarioAttachment(
                     workbook, id: makeWorkbookID(), fileName: file.name, importedAt: importedAt, sha256: digest))
-        default:
-            throw AnalysisInterchangeError("Invalid analysis import format")
         }
     }
 
     /// Export the captured result snapshot. Nothing reruns a query or repairs missing values.
-    public static func exportFile(result: AnalysisResult, context: TaxValue, format: String) throws
+    public static func exportFile(result: AnalysisResult, context: TaxValue, format: AnalysisInterchangeFormat) throws
         -> AnalysisExportFile
     {
-        guard format == "csv" || format == "xlsx" else { throw AnalysisInterchangeError("Invalid analysis export format") }
         let snapshot = InterchangeJSON(tax: result.raw)
         let contextJSON = InterchangeJSON(tax: context)
         try validateExport(result: snapshot, context: contextJSON)
         let name = context["name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? "analysis"
-        if format == "csv" {
+        if format == .csv {
             let metadata = CSVMetadata(
                 name: contextJSON["name"]?.stringValue ?? "", timezone: contextJSON["timezone"]?.stringValue ?? "",
                 workspace: contextJSON["workspace"]?.stringValue ?? "",

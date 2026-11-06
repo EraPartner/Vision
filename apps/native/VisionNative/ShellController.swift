@@ -1689,7 +1689,7 @@ final class ShellController: NSObject, NSWindowDelegate {
             // Native owners take every menu action; navigation goes through the shell, so a
             // native screen's unsaved-changes guard can hold it.
             if !shellModel.acceptNativeMenuAction(action) {
-                logger.warning("[shell] menu action \(action.action, privacy: .public) has no native owner")
+                logger.warning("[shell] menu action \(action.action.rawValue, privacy: .public) has no native owner")
             }
         case .openExternal(let link):
             if let url = ShellLinks.trustedExternalURL(URL(string: link)) { NSWorkspace.shared.open(url) }
