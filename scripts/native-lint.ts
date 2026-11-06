@@ -103,7 +103,7 @@ export const RULES: Rule[] = [
   },
   {
     id: "force-unwrap",
-    kind: "ratchet",
+    kind: "strict",
     description: "postfix force unwrap",
     find: (c) => {
       // Mask try! / as! (own rules) and IUO declarations (own rule).
@@ -119,7 +119,7 @@ export const RULES: Rule[] = [
   },
   {
     id: "double-money",
-    kind: "ratchet",
+    kind: "strict",
     description: "Double in money-named files",
     find: (c, file) =>
       MONEY_FILE.test(path.basename(file)) ? matches(/\bDouble\b/g, c) : [],
@@ -135,7 +135,7 @@ export const RULES: Rule[] = [
   },
   {
     id: "raw-currency",
-    kind: "ratchet",
+    kind: "strict",
     description: "raw Int/String for *currency names outside the API layer",
     find: (c, file) =>
       file.includes(API_LAYER)

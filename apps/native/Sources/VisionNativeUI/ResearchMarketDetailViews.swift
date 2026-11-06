@@ -273,8 +273,7 @@ struct ResearchMarketAnalystView: View {
                             Spacer()
                             Text(
                                 (action.toGrade ?? "—")
-                                    + (action.fromGrade != nil && action.fromGrade != action.toGrade
-                                        ? " ← " + action.fromGrade! : "")
+                                    + (action.fromGrade.flatMap { $0 != action.toGrade ? " ← " + $0 : nil } ?? "")
                             ).foregroundStyle(gradeTone(action.toGrade ?? ""))
                         }.padding(.vertical, 5)
                     }

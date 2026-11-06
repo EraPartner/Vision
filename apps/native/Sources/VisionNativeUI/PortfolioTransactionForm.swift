@@ -162,8 +162,8 @@ struct PortfolioTransactionForm: View {
             TextField("", text: lockGift ? .constant("0") : text(path)).textFieldStyle(.vision)
                 .disabled(lockGift).focused($focused, equals: id).onSubmit(save).accessibilityLabel(
                     strings.t(key, variables))
-            if model.issue?.field == id {
-                Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)
+            if let issue = model.issue, issue.field == id {
+                Text(strings.t(issue.key)).font(.footnote).foregroundStyle(theme.destructive)
             }
         }.id(id)
     }
@@ -180,8 +180,8 @@ struct PortfolioTransactionForm: View {
                     model.tradeDraft?[keyPath: path] = $0?.ymd ?? ""
                     model.clearIssue()
                 })
-            if model.issue?.field == id {
-                Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)
+            if let issue = model.issue, issue.field == id {
+                Text(strings.t(issue.key)).font(.footnote).foregroundStyle(theme.destructive)
             }
         }.id(id)
     }

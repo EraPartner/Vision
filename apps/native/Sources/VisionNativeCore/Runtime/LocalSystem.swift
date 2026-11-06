@@ -484,12 +484,12 @@ public struct LocalFileSystem: RuntimeFileSystem {
         let separator = base.hasSuffix("/") ? "" : "/"
         var template = Array("\(base)\(separator)\(prefix)XXXXXX".utf8CString)
         let created = template.withUnsafeMutableBufferPointer { buffer -> Bool in
-            Darwin.mkdtemp(buffer.baseAddress!) != nil
+            buffer.baseAddress.map { Darwin.mkdtemp($0) != nil } ?? false
         }
         guard created else {
             throw FileSystemError.failed(base, String(cString: strerror(errno)))
         }
-        return template.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+        return String(decoding: template.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
     public func sha256(_ path: String) throws -> (bytes: Int, hex: String) {

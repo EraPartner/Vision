@@ -31,7 +31,7 @@ public final class NetWorthModel {
     public var hasMore: Bool { tableOffset < tableTotal }
     public var tableKeys: [String] {
         ["date", "liquid"]
-            + (tableSnapshots.contains { abs($0.liabilities) > Decimal(string: "0.005")! } ? ["liabilities"] : [])
+            + (tableSnapshots.contains { abs($0.liabilities) > Decimal.literal("0.005") } ? ["liabilities"] : [])
             + ["investments", "netWorth", "change"]
     }
     /// The table rows before search and filters; rebuilt only when the snapshots change.

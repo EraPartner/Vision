@@ -11,7 +11,7 @@ struct AnalysisResultCharts: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var columns: [AnalysisColumn] {
-        result.declaredColumns?.isEmpty == false ? result.declaredColumns! : result.columns
+        result.effectiveColumns
     }
     private var kind: String {
         let value = spec["kind"]?.stringValue ?? ""

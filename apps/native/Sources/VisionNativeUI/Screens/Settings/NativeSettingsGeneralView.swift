@@ -70,7 +70,7 @@ struct NativeSettingsGeneralView: View {
             .init(
                 value: String(digits),
                 label: String(digits) + " ("
-                    + VisionFormat.decimal(Decimal(string: "1234.567")!, fractionDigits: digits, locale: locale) + ")")
+                    + VisionFormat.decimal(Decimal.literal("1234.567"), fractionDigits: digits, locale: locale) + ")")
         }
     }
     private func string(_ key: String, fallback: String) -> Binding<String> {

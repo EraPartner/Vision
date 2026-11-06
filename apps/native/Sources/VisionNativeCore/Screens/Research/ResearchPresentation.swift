@@ -278,7 +278,7 @@ public enum ResearchPresentation {
                 return nil
             }.first
             // `input.rebase && firstClose ? 100 / firstClose : 1`
-            factor[entry.id] = rebase && firstClose != nil && firstClose != 0 ? 100 / firstClose! : 1
+            factor[entry.id] = rebase ? firstClose.flatMap { $0 != 0 ? 100 / $0 : nil } ?? 1 : 1
         }
         let times = Array(Set(series.flatMap { $0.points.map(\.time) })).sorted()
         var byTime: [String: [Double: PresentationPoint]] = [:]
@@ -352,7 +352,7 @@ public enum ResearchPresentation {
     {
         let sourceID = oscillatorSeriesId ?? series.first?.id
         let source = series.first { $0.id == sourceID }
-        let pts = oscillator == "none" || source == nil ? [] : source!.points
+        let pts = oscillator == "none" ? [] : source?.points ?? []
         // The source keeps raw-close coercion here, separate from the rebased indicator inputs.
         let closes = pts.map { $0.close.coerced }
         var rows: [[String: RowCell]] = pts.map { _ in [:] }
@@ -400,7 +400,7 @@ public enum ResearchPresentation {
         }
         if let validTarget { prices.append(validTarget) }
         let domain: [Double] =
-            prices.isEmpty ? [0, 1] : [prices.min()! * 0.98, prices.max()! * 1.02]
+            if let low = prices.min(), let high = prices.max() { [low * 0.98, high * 1.02] } else { [0, 1] }
         var preview: TaxValue = .null
         if let current, current.isFinite, current > 0, let validTarget {
             let below = validTarget < current
@@ -623,7 +623,7 @@ enum ResearchMath {
         var out = OrderedSeries()
         var previous: Double?
         for point in valid {
-            let close = point.close.finite!
+            guard let close = point.close.finite else { continue }  // `valid` holds finite closes only
             if let previous { out.set(point.time, log(close / previous)) }
             previous = close
         }
@@ -786,12 +786,12 @@ enum ResearchMath {
         if let firstValid = line.firstIndex(where: { $0 != nil }), values.count - firstValid >= signalPeriod {
             let k = 2 / Double(signalPeriod + 1)
             var seed = 0.0
-            for index in firstValid..<(firstValid + signalPeriod) { seed += line[index]! }
+            for index in firstValid..<(firstValid + signalPeriod) { seed += line[index] ?? 0 }  // EMAs are contiguous after firstValid
             var previous = seed / Double(signalPeriod)
             signal[firstValid + signalPeriod - 1] = previous
             if values.count > firstValid + signalPeriod {
                 for index in (firstValid + signalPeriod)..<values.count {
-                    previous = line[index]! * k + previous * (1 - k)
+                    previous = (line[index] ?? 0) * k + previous * (1 - k)
                     signal[index] = previous
                 }
             }

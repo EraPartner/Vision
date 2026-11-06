@@ -22,7 +22,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
         }!
     }
     public var tab: String {
-        ["fundamentals", "analyst", "news"].contains(route.value("tab") ?? "") ? route.value("tab")! : "fundamentals"
+        route.value("tab").flatMap { ["fundamentals", "analyst", "news"].contains($0) ? $0 : nil } ?? "fundamentals"
     }
     public init(route: NativeRoute) { self.route = route }
     public func selecting(_ symbol: String) -> NativeRoute {

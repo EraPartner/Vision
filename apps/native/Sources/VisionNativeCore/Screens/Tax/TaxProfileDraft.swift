@@ -2,7 +2,7 @@ import Foundation
 
 public enum TaxProfileStep: String, CaseIterable, Sendable {
     case household, income, home, incomeSources, exemptions, region
-    public var index: Int { Self.allCases.firstIndex(of: self)! }
+    public var index: Int { Self.allCases.firstIndex(of: self) ?? 0 }  // every case is in allCases
     public var titleKey: String { "tax.profile.step.\(rawValue)" }
 }
 

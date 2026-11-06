@@ -164,9 +164,10 @@ public final class NativeSettingsModel {
         guard !retired, !isSuspendedForRestore else { return }
         var next = object(appRaw)
         next[key] = value.flatMap { NativeSettingsDefaults.appValue(key, raw: .object([key: $0])) }
-        appRaw = .object(next)
-        changed(.appSettings, appRaw!)
-        didChangeApp?(appRaw!)
+        let app: TaxValue = .object(next)
+        appRaw = app
+        changed(.appSettings, app)
+        didChangeApp?(app)
     }
     public func updateApp(_ fields: [String: TaxValue]) {
         guard !retired, !isSuspendedForRestore else { return }
@@ -174,17 +175,19 @@ public final class NativeSettingsModel {
         for (key, value) in fields {
             next[key] = value == .null ? nil : NativeSettingsDefaults.appValue(key, raw: .object([key: value]))
         }
-        appRaw = .object(next)
-        changed(.appSettings, appRaw!)
-        didChangeApp?(appRaw!)
+        let app: TaxValue = .object(next)
+        appRaw = app
+        changed(.appSettings, app)
+        didChangeApp?(app)
     }
     public func updateDashboard(_ fields: [String: TaxValue]) {
         guard !retired, !isSuspendedForRestore else { return }
         var next = object(dashboardRaw)
         next.merge(fields) { _, new in new }
-        dashboardRaw = .object(next)
-        changed(.dashboardSettings, dashboardRaw!)
-        didChangeDashboard?(dashboardRaw!)
+        let dashboard: TaxValue = .object(next)
+        dashboardRaw = dashboard
+        changed(.dashboardSettings, dashboard)
+        didChangeDashboard?(dashboard)
     }
     public func setExcludedCategoryIds(_ ids: [CategoryID]) {
         updateDashboard(["excludedCategoryIds": .array(ids.map { .number(Decimal($0.rawValue)) })])
@@ -200,7 +203,7 @@ public final class NativeSettingsModel {
         themeRaw = .object(next)
         let known: TaxValue = .object([
             "mode": .string(themeString("mode", fallback: "dark")),
-            "schedule": next["schedule"] ?? NativeSettingsDefaults.theme["schedule"]!,
+            "schedule": next["schedule"] ?? NativeSettingsDefaults.theme["schedule"] ?? .null,
             "variant": .string(themeString("variant", fallback: "default")),
             "systemAccent": .bool(themeBool("systemAccent", fallback: false)),
         ])
@@ -307,12 +310,13 @@ public final class NativeSettingsModel {
         var next = object(cashRaw)
         for key in ["dividend", "interest", "fee", "tax"] where next[key] == nil { next[key] = .null }
         next[kind] = id.map { .number(Decimal($0.rawValue)) } ?? .null
-        cashRaw = .object(next)
+        let cash: TaxValue = .object(next)
+        cashRaw = cash
         editRevision[.brokerageCashCategoryIds, default: 0] += 1
         cashSaving = true
         defer { cashSaving = false }
         do {
-            let result = try await saveNow(.brokerageCashCategoryIds, value: cashRaw!)
+            let result = try await saveNow(.brokerageCashCategoryIds, value: cash)
             cashRaw = result.value
             cashAcknowledged = result.value
         } catch {
@@ -342,10 +346,10 @@ public final class NativeSettingsModel {
         appRaw = NativeSettingsDefaults.app
         dashboardRaw = NativeSettingsDefaults.dashboard
         sessionTierOverride = nil
-        changed(.appSettings, appRaw!)
-        changed(.dashboardSettings, dashboardRaw!)
-        didChangeApp?(appRaw!)
-        didChangeDashboard?(dashboardRaw!)
+        changed(.appSettings, NativeSettingsDefaults.app)
+        changed(.dashboardSettings, NativeSettingsDefaults.dashboard)
+        didChangeApp?(NativeSettingsDefaults.app)
+        didChangeDashboard?(NativeSettingsDefaults.dashboard)
         includeTransfers = false
         editRevision[.includeTransfers, default: 0] += 1
         show(.info, "settings.resetToDefaults")
@@ -518,7 +522,8 @@ public final class NativeSettingsModel {
     private func show(_ kind: ScreenNotice.Kind, _ key: String) {
         guard !retired else { return }
         noticeRevision += 1
-        notice = .init(id: noticeRevision, kind: kind, key: key)
-        didNotice?(notice!)
+        let next = ScreenNotice(id: noticeRevision, kind: kind, key: key)
+        notice = next
+        didNotice?(next)
     }
 }

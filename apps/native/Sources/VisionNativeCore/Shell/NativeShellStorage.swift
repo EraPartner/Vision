@@ -122,7 +122,7 @@ public struct NativeShellStorage: Sendable {
                 if value != nil { try await store.setValue(encoded, for: localKey) }
                 raw = await store.value(for: localKey)
             }
-            let text = (raw?.isEmpty ?? true) ? "null" : raw!
+            let text = raw.flatMap { $0.isEmpty ? nil : $0 } ?? "null"
             return try? JSONValue.parse(Data(text.utf8))
         } catch {
             return (try? JSONValue.parse(Data("null".utf8)))
@@ -184,6 +184,6 @@ public struct NativeShellStorage: Sendable {
         let power = n - 1
         let exponentText = (power >= 0 ? "+" : "-") + String(abs(power))
         if k == 1 { return sign + digits + "e" + exponentText }
-        return sign + String(digits.first!) + "." + digits.dropFirst() + "e" + exponentText
+        return sign + digits.prefix(1) + "." + digits.dropFirst() + "e" + exponentText
     }
 }

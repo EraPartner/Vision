@@ -86,7 +86,7 @@ extension TaxProfileSheet {
                             $0.set(["region"], .string(region))
                             $0.set(
                                 ["communalSurchargePercent"],
-                                .number(region == "wallonia" ? Decimal(string: "7.5")! : 7))
+                                .number(region == "wallonia" ? Decimal.literal("7.5") : 7))
                         }
                     } label: {
                         HStack(alignment: .top, spacing: 10) {

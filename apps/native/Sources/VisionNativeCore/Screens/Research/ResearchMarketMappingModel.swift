@@ -104,7 +104,7 @@ import Observation
         body["mappings"] = .array(
             proposals.filter { $0.isConfirmable && selected[$0.provider] == true }.map { proposal in
                 var item: [String: TaxValue] = [
-                    "provider": .string(proposal.provider), "providerSymbol": .string(proposal.providerSymbol!),
+                    "provider": .string(proposal.provider), "providerSymbol": .string(proposal.providerSymbol ?? "")  /* isConfirmable requires a symbol */,
                 ]
                 for key in ["resolvedName", "exchange", "currency"] {
                     if let value = proposal.raw[key] { item[key] = value }

@@ -71,7 +71,7 @@ public enum LaunchAppearance {
     /// base carrying the primary's hue, with light text.
     public static func palette(theme: SplashTheme?) -> LaunchPalette {
         let primaryText = theme?.background ?? defaultBrandPrimary
-        let primary = HSLColor.parse(primaryText) ?? HSLColor.parse(defaultBrandPrimary)!
+        let primary = HSLColor.parse(primaryText) ?? HSLColor.parse(defaultBrandPrimary)!  // lint:allow force-unwrap defaultBrandPrimary is a fixed valid HSL constant
         if theme?.mode == .light, let surface = theme?.surface.flatMap(HSLColor.parse),
             let text = theme?.text.flatMap(HSLColor.parse)
         {

@@ -169,7 +169,7 @@ enum AnalysisWorkbook {
             let unit = definition["unit"]
             rows.append([
                 definition["id"], definition["label"], definition["scope"], definition["expression"],
-                isTruthy(unit) ? .string(unit!.stringified()) : .string(""),
+                .string(isTruthy(unit) ? unit?.stringified() ?? "" : ""),
             ])
         }
         return rows

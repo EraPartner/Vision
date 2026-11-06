@@ -11,7 +11,7 @@ struct AnalysisResultTable: View {
     @State private var page = 0
     @Environment(\.visionTheme) private var theme
     private var columns: [AnalysisColumn] {
-        result.declaredColumns?.isEmpty == false ? result.declaredColumns! : result.columns
+        result.effectiveColumns
     }
     private var pageSize: Int { max(1, shell.settings.defaultPageSize) }
     private var pages: Int { max(1, (result.rows.count + pageSize - 1) / pageSize) }

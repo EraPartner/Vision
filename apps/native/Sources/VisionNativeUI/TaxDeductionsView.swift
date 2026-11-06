@@ -49,7 +49,7 @@ struct SuggestedDeductionsView: View {
                 Text(strings.t("tax.suggestions.multipleResidencesNote")).font(.footnote).foregroundStyle(
                     theme.secondaryLabel)
             }
-            Link(destination: URL(string: "https://taxsummaries.pwc.com/belgium/individual/deductions")!) {
+            Link(destination: URL.literal("https://taxsummaries.pwc.com/belgium/individual/deductions")) {
                 Label(strings.t("tax.suggestions.pwcLink"), systemImage: "arrow.up.right.square")
             }
         }

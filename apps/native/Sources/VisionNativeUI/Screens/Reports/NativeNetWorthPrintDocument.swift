@@ -194,7 +194,7 @@ private struct NativeNetWorthPrintTablePartView: View {
                     } else if let type = row.type {
                         Text(strings.t("accounts.type." + type)).font(.caption).foregroundStyle(theme.secondaryLabel)
                     }
-                    if abs(row.cash) > Decimal(string: "0.005")!, abs(row.holdings) > Decimal(string: "0.005")! {
+                    if abs(row.cash) > Decimal.literal("0.005"), abs(row.holdings) > Decimal.literal("0.005") {
                         Text(
                             strings.t("networth.byAccount.cash") + " " + presentation.money(row.cash)
                                 + " · " + strings.t("networth.byAccount.holdings") + " "
@@ -216,20 +216,20 @@ private struct NativeNetWorthPrintTablePartView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(strings.t("networth.byAccount.displayedTotal")).font(.headline)
                             Text(
-                                abs(difference) < Decimal(string: "0.005")!
+                                abs(difference) < Decimal.literal("0.005")
                                     ? strings.t("networth.byAccount.matches")
                                     : strings.t(
                                         difference > 0 ? "networth.byAccount.above" : "networth.byAccount.below")
                                         + " " + presentation.money(abs(difference))
                             ).font(.caption).foregroundStyle(
-                                abs(difference) < Decimal(string: "0.005")! ? theme.secondaryLabel : theme.warning)
+                                abs(difference) < Decimal.literal("0.005") ? theme.secondaryLabel : theme.warning)
                         }.frame(width: columns[0], alignment: .leading)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(presentation.money(total)).font(.callout).monospacedDigit()
                             .frame(width: columns[1], alignment: .trailing)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if abs(difference) >= Decimal(string: "0.005")! {
+                    if abs(difference) >= Decimal.literal("0.005") {
                         Text(strings.t("networth.byAccount.differenceHint")).font(.caption).foregroundStyle(
                             theme.secondaryLabel)
                     }
@@ -393,7 +393,7 @@ public struct NativeNetWorthPrintSectionView: View {
     private var assetBars: some View {
         VStack(alignment: .leading, spacing: 20) {
             valueBar("networth.assets", value: snapshot.assets ?? 0, gain: true)
-            if (snapshot.assets ?? 0) > Decimal(string: "0.005")! {
+            if (snapshot.assets ?? 0) > Decimal.literal("0.005") {
                 Text(
                     strings.t("networth.liquid") + " " + presentation.money(snapshot.data.current.liquid)
                         + " · " + strings.t("networth.investments") + " "
@@ -409,10 +409,10 @@ public struct NativeNetWorthPrintSectionView: View {
             HStack {
                 Text(strings.t(key))
                 Spacer()
-                Text(value <= Decimal(string: "0.005")! ? "—" : presentation.money(value)).monospacedDigit()
+                Text(value <= Decimal.literal("0.005") ? "—" : presentation.money(value)).monospacedDigit()
             }
             .font(.callout)
-            if value > Decimal(string: "0.005")! {
+            if value > Decimal.literal("0.005") {
                 let scale = max(snapshot.assets ?? 0, snapshot.debt ?? 0, 1)
                 GeometryReader { geometry in
                     Capsule().fill(theme.foreground.opacity(0.06))
@@ -441,7 +441,7 @@ public struct NativeNetWorthPrintSectionView: View {
                                 Text(strings.t("accounts.type." + type)).font(.caption).foregroundStyle(
                                     theme.secondaryLabel)
                             }
-                            if abs(row.cash) > Decimal(string: "0.005")!, abs(row.holdings) > Decimal(string: "0.005")!
+                            if abs(row.cash) > Decimal.literal("0.005"), abs(row.holdings) > Decimal.literal("0.005")
                             {
                                 Text(
                                     strings.t("networth.byAccount.cash") + " " + presentation.money(row.cash)
@@ -461,19 +461,19 @@ public struct NativeNetWorthPrintSectionView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(strings.t("networth.byAccount.displayedTotal")).font(.headline)
                             Text(
-                                abs(difference) < Decimal(string: "0.005")!
+                                abs(difference) < Decimal.literal("0.005")
                                     ? strings.t("networth.byAccount.matches")
                                     : strings.t(
                                         difference > 0 ? "networth.byAccount.above" : "networth.byAccount.below") + " "
                                         + presentation.money(abs(difference))
                             )
                             .font(.caption).foregroundStyle(
-                                abs(difference) < Decimal(string: "0.005")! ? theme.secondaryLabel : theme.warning)
+                                abs(difference) < Decimal.literal("0.005") ? theme.secondaryLabel : theme.warning)
                         }
                         Spacer()
                         Text(presentation.money(total)).monospacedDigit()
                     }
-                    if abs(difference) >= Decimal(string: "0.005")! {
+                    if abs(difference) >= Decimal.literal("0.005") {
                         Text(strings.t("networth.byAccount.differenceHint")).font(.caption).foregroundStyle(
                             theme.secondaryLabel)
                     }
@@ -640,6 +640,6 @@ public struct NativeNetWorthPrintSectionView: View {
     }
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
     private func tone(_ value: Decimal) -> Color {
-        abs(value) <= Decimal(string: "0.005")! ? theme.secondaryLabel : value > 0 ? theme.gain : theme.loss
+        abs(value) <= Decimal.literal("0.005") ? theme.secondaryLabel : value > 0 ? theme.gain : theme.loss
     }
 }

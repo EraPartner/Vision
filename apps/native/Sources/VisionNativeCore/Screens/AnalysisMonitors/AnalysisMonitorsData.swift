@@ -161,7 +161,7 @@ public struct AnalysisMonitorPage<Item: Codable & Equatable & Sendable>: Codable
     public func validate(offset: Int, limit: Int, notifications: Bool = false) throws {
         guard self.offset == offset, self.limit == limit, total >= 0, items.count <= limit,
             items.isEmpty || total >= offset + items.count,
-            unreadCount == nil || unreadCount! >= 0,
+            (unreadCount ?? 0) >= 0,
             !notifications || unreadCount != nil
         else { throw MonitorWire.invalid("pagination/unreadCount") }
     }

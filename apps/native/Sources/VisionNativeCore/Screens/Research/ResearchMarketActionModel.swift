@@ -277,9 +277,10 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
             try await operation()
             await didMutate?()
             guard stamp == context else { return }
-            noticeKey = step == "new" ? "addInv.toast.added" : "addPortTxn.toast.recorded"
+            let key = step == "new" ? "addInv.toast.added" : "addPortTxn.toast.recorded"
+            noticeKey = key
             notice = notices.make(
-                .success, noticeKey!, ["name": quote?.symbol ?? "", "assetClass": assetClass, "type": trade.type])
+                .success, key, ["name": quote?.symbol ?? "", "assetClass": assetClass, "type": trade.type])
             discardDrafts()
         } catch {
             if case APIError.client(let client) = error, (400..<500).contains(client.status) {

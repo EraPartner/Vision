@@ -41,7 +41,8 @@ public enum BackupFiles {
     public static func randomBytes(_ count: Int) throws -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: count)
         let status = bytes.withUnsafeMutableBytes { buffer in
-            SecRandomCopyBytes(kSecRandomDefault, count, buffer.baseAddress!)
+            guard let base = buffer.baseAddress else { return errSecSuccess }  // count == 0: nothing to fill
+            return SecRandomCopyBytes(kSecRandomDefault, count, base)
         }
         guard status == errSecSuccess else { throw BackupFailure("Secure random bytes are unavailable") }
         return bytes
@@ -52,10 +53,10 @@ public enum BackupFiles {
         let base = parent ?? NSTemporaryDirectory()
         var template = Array(PathUtilities.join(base, "\(prefix)XXXXXX").utf8CString)
         let created = template.withUnsafeMutableBufferPointer { buffer -> Bool in
-            mkdtemp(buffer.baseAddress!) != nil
+            buffer.baseAddress.map { mkdtemp($0) != nil } ?? false
         }
         guard created else { throw BackupFailure("Could not create a temporary directory: \(String(cString: strerror(errno)))") }
-        return template.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+        return String(decoding: template.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
     public static func exists(_ path: String) -> Bool {

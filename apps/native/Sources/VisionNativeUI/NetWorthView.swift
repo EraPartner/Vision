@@ -179,7 +179,7 @@ public struct NetWorthView: View {
         let scale = max(assets, debt, 1)
         return VStack(alignment: .leading, spacing: 16) {
             valueBar("networth.assets", value: assets, scale: scale, color: theme.gain)
-            if assets > Decimal(string: "0.005")! {
+            if assets > Decimal.literal("0.005") {
                 Text(
                     strings.t("networth.liquid") + " " + money(data.current.liquid) + " · "
                         + strings.t("networth.investments") + " " + money(data.current.investments)
@@ -194,14 +194,14 @@ public struct NetWorthView: View {
             HStack {
                 Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
                 Spacer()
-                if value <= Decimal(string: "0.005")! {
+                if value <= Decimal.literal("0.005") {
                     Text("—")
                 } else {
                     MoneyText(amount: value, currency: currency, settings: settings, signed: false, colored: false)
                 }
             }
             .font(.footnote)
-            if value > Decimal(string: "0.005")! {
+            if value > Decimal.literal("0.005") {
                 GeometryReader { geometry in
                     Capsule().fill(theme.foreground.opacity(0.06))
                     Capsule().fill(color).frame(
@@ -212,7 +212,7 @@ public struct NetWorthView: View {
         }
     }
     private func accountRow(_ row: NetWorthAccountRow) -> some View {
-        let threshold = Decimal(string: "0.005")!
+        let threshold = Decimal.literal("0.005")
         var details: [String] = []
         if row.accountId == nil {
             details.append(strings.t("networth.byAccount.unassignedHint"))
@@ -272,13 +272,13 @@ public struct NetWorthView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(strings.t("networth.byAccount.displayedTotal")).fontWeight(.medium)
                         Text(
-                            abs(difference) < Decimal(string: "0.005")!
+                            abs(difference) < Decimal.literal("0.005")
                                 ? strings.t("networth.byAccount.matches")
                                 : strings.t(difference > 0 ? "networth.byAccount.above" : "networth.byAccount.below")
                                     + " " + money(abs(difference))
                         )
                         .font(.footnote).foregroundStyle(
-                            abs(difference) < Decimal(string: "0.005")! ? theme.secondaryLabel : theme.warning)
+                            abs(difference) < Decimal.literal("0.005") ? theme.secondaryLabel : theme.warning)
                     }
                     Spacer()
                     MoneyText(amount: total, currency: currency, settings: settings, signed: false, colored: false)
@@ -287,7 +287,7 @@ public struct NetWorthView: View {
                 .padding(.vertical, 6).padding(.horizontal, 8)
                 .background(
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.control).fill(theme.foreground.opacity(0.02)))
-                if abs(difference) >= Decimal(string: "0.005")! {
+                if abs(difference) >= Decimal.literal("0.005") {
                     Text(strings.t("networth.byAccount.differenceHint")).font(.footnote).foregroundStyle(
                         theme.secondaryLabel)
                 }
@@ -344,7 +344,7 @@ public struct NetWorthView: View {
     private func makeSeries(_ display: [OpenAPI.NetWorthSnapshot]) -> [InsightChartSeries] {
         let keys =
             ["liquid", "investments"]
-            + (display.contains { abs($0.liabilities) > Decimal(string: "0.005")! }
+            + (display.contains { abs($0.liabilities) > Decimal.literal("0.005") }
                 ? ["liabilities"] : []) + ["netWorth"]
         return keys.map { key in
             InsightChartSeries(
@@ -451,7 +451,7 @@ public struct NetWorthView: View {
         MoneyText.text(amount, currency: currency, settings: settings, signed: false)
     }
     private func tone(_ value: Decimal) -> Color {
-        abs(value) <= Decimal(string: "0.005")! ? theme.secondaryLabel : value > 0 ? theme.gain : theme.loss
+        abs(value) <= Decimal.literal("0.005") ? theme.secondaryLabel : value > 0 ? theme.gain : theme.loss
     }
     private func reload(force: Bool = false) async {
         await model.load(currency: currency, pageSize: settings.defaultPageSize, route: shell.route, force: force)

@@ -97,7 +97,7 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
         let total = model.accountRows == nil ? nil : model.accountsTotal
         let keys =
             ["liquid", "investments"]
-            + (display.contains { abs($0.liabilities) > Decimal(string: "0.005")! } ? ["liabilities"] : [])
+            + (display.contains { abs($0.liabilities) > Decimal.literal("0.005") } ? ["liabilities"] : [])
             + ["netWorth"]
         let series = keys.map { key in
             InsightChartSeries(

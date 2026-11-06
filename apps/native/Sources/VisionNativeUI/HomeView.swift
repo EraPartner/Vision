@@ -214,7 +214,7 @@ public struct HomeView: View {
         }
         let difference = projected - typical
         let key =
-            abs(difference) < max(typical * Decimal(string: "0.03")!, 1)
+            abs(difference) < max(typical * Decimal.literal("0.03"), 1)
             ? "even" : difference > 0 ? "over" : "under"
         return strings.t("home.pace.\(key)", variables)
     }
@@ -523,7 +523,7 @@ public struct HomeView: View {
                 ForEach(
                     model.accounts.filter {
                         $0.isActive && !AccountKinds.isHoldingsOnly($0)
-                            && $0.computedBalance.map { abs($0) > Decimal(string: "0.000001")! } == true
+                            && $0.computedBalance.map { abs($0) > Decimal.literal("0.000001") } == true
                     }, id: \.id
                 ) { account in
                     routeRow(
@@ -539,7 +539,7 @@ public struct HomeView: View {
                 }
                 InsightTimelineChart(
                     series: balances.history.keys.sorted().filter { key in
-                        balances.history[key]?.contains { abs($0.balance) > Decimal(string: "0.000001")! }
+                        balances.history[key]?.contains { abs($0.balance) > Decimal.literal("0.000001") }
                             == true
                     }.map { key in
                         let values = Dictionary(

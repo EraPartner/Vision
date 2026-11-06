@@ -929,11 +929,11 @@ public enum PortfolioPriceFreshness: Equatable, Sendable {
         var oldest: Date?
         for holding in live {
             guard let text = holding.priceUpdatedAt, let date = timestamp(text) else { return .notFetched }
-            if oldest == nil || date < oldest! { oldest = date }
+            if oldest.map({ date < $0 }) ?? true { oldest = date }
         }
         let format = ISO8601DateFormatter()
         format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return .asOf(format.string(from: oldest!))
+        return oldest.map { .asOf(format.string(from: $0)) } ?? .none
     }
     public static func isStale(_ holding: PortfolioHolding, now: Date = Date()) -> Bool {
         guard holding.hasLiveProvider else { return false }

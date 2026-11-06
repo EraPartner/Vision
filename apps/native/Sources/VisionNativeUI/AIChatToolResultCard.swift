@@ -95,9 +95,11 @@ struct AIChatToolResultCard: View {
         let total = result["meta"]?["total"]?.decimalValue
         if total != nil || count != 0 {
             Text(
-                total != nil && total != Decimal(count)
-                    ? strings.t("aiChat.rowsShown", ["shown": String(count), "total": VisionFormat.plain(total!)])
-                    : strings.tc("aiChat.rowCount", count)
+                total.flatMap { total in
+                    total != Decimal(count)
+                        ? strings.t("aiChat.rowsShown", ["shown": String(count), "total": VisionFormat.plain(total)])
+                        : nil
+                } ?? strings.tc("aiChat.rowCount", count)
             )
             .font(.caption).foregroundStyle(theme.tertiaryLabel)
         }
