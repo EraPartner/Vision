@@ -7,7 +7,7 @@ import Testing
 struct TaxRouteLoadTests {
     @Test func malformedYearCanonicalizesTheLiveYearPreservingOtherQueryItems() async throws {
         let transport = try TaxRouteTransport()
-        let screens = TaxScreens(client: routeClient(transport))
+        let screens = TaxScreens(client: routeClient(transport), now: { routeFixtureNow })
         let requested = try #require(NativeRoute("/portfolio/tax?year=2024oops&keep=a%2Bb&keep=c"))
         let canonical = try #require(await screens.loadRoute(route: requested, currency: .eur))
         #expect(canonical.string == "/portfolio/tax?year=2025&keep=a%2Bb&keep=c")
@@ -17,7 +17,7 @@ struct TaxRouteLoadTests {
     }
     @Test func storedOldSnapshotIsAcceptedOutsideTheLiveYearWindow() async throws {
         let transport = try TaxRouteTransport()
-        let screens = TaxScreens(client: routeClient(transport))
+        let screens = TaxScreens(client: routeClient(transport), now: { routeFixtureNow })
         let requested = try #require(NativeRoute("/tax?year=1980&keep=x"))
         #expect(await screens.loadRoute(route: requested, currency: .eur) == requested)
         #expect(screens.overview.overview?.year == 1980 && screens.overview.overview?.hasSnapshot == true)
@@ -25,7 +25,7 @@ struct TaxRouteLoadTests {
     }
     @Test func lateLiveProbeCannotReturnAnOlderCanonicalRouteOrReplaceNewData() async throws {
         let transport = try TaxRouteTransport()
-        let screens = TaxScreens(client: routeClient(transport))
+        let screens = TaxScreens(client: routeClient(transport), now: { routeFixtureNow })
         await transport.pauseOverview(year: nil)
         let oldRoute = try #require(NativeRoute("/tax?year=2024&old=1"))
         let old = Task { await screens.loadRoute(route: oldRoute, currency: .eur) }
@@ -40,7 +40,7 @@ struct TaxRouteLoadTests {
     }
     @Test func newProbeFailureInvalidatesAnAlreadyRunningOldSelectedYearRead() async throws {
         let transport = try TaxRouteTransport()
-        let screens = TaxScreens(client: routeClient(transport))
+        let screens = TaxScreens(client: routeClient(transport), now: { routeFixtureNow })
         await transport.pauseOverview(year: 2024)
         let oldRoute = try #require(NativeRoute("/tax?year=2024"))
         let old = Task { await screens.loadRoute(route: oldRoute, currency: .eur) }
@@ -56,6 +56,9 @@ struct TaxRouteLoadTests {
         #expect(screens.dashboard.data?.year != 2024)
     }
 }
+
+/// A day in the fixture's live year 2025, so loading a route does not advance it.
+private let routeFixtureNow = Date(timeIntervalSince1970: 1_750_000_000)
 
 private func routeClient(_ transport: TaxRouteTransport) -> APIClient {
     APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)

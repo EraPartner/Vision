@@ -1117,7 +1117,9 @@ Home, Insights, transaction or account view after cash/ledger writes, including 
 from 30 years back through one year ahead. `TaxScreens.loadRoute` reads the authoritative live
 profile before adopting or replacing the URL, preserving unrelated parameters and an already
 viewed fallback year. It retires prior year reads before awaiting that probe, including when the
-new probe fails.
+new probe fails. Before that probe, and once after the first settings load, the live household
+advances to the current calendar year like the web `_advanceLiveYear`: the old live year is
+archived as its snapshot when none exists, and a saved profile of the new year becomes live.
 
 `PortfolioTaxView` reuses `TaxScreens` for the shared profile, historical year/status actions and
 native CSV, with the seven configurable Portfolio Tax widgets, recorded/manual costs and PIT budget.

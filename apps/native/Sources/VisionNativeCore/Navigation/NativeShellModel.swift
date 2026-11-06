@@ -904,6 +904,9 @@ public final class NativeShellModel {
         nativeNavigation = history
         applyNativeNavigation(outcome)
         if firstSettingsLoad, outcome == .unchanged { applyRouteChange(history.location.route) }
+        // BelgianTaxProfileProvider wraps the whole web app, so the live tax year advances
+        // after startup whichever page opens first.
+        if firstSettingsLoad, let tax { Task { await tax.advanceLiveYearIfNeeded() } }
     }
 
     /// Reads `app_settings` again; another page may have changed them. A newer request
