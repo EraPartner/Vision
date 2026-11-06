@@ -120,6 +120,22 @@ public final class SQLiteConnection {
     /// Runs one statement and returns every row.
     @discardableResult
     public func query(_ sql: String, _ arguments: [SQLValue] = []) throws -> [[SQLValue]] {
+        var rows: [[SQLValue]] = []
+        try run(sql, arguments) { _, row in rows.append(row) }
+        return rows
+    }
+
+    /// Runs one statement and returns every row with its column names.
+    public func rows(_ sql: String, _ arguments: [SQLValue] = []) throws -> [SQLRow] {
+        var rows: [SQLRow] = []
+        try run(sql, arguments) { columns, values in rows.append(SQLRow(columns: columns, values: values)) }
+        return rows
+    }
+
+    /// Prepares, binds and steps one statement, handing each row to `body`.
+    private func run(
+        _ sql: String, _ arguments: [SQLValue], _ body: (_ columns: SQLColumns, _ values: [SQLValue]) -> Void
+    ) throws {
         var statement: OpaquePointer?
         let prepared = sqlite3_prepare_v2(handle, sql, -1, &statement, nil)
         guard prepared == SQLITE_OK, let statement else {
@@ -133,8 +149,8 @@ public final class SQLiteConnection {
                 throw DatabaseError.translate(sqliteCode: status, message: String(cString: sqlite3_errmsg(handle)))
             }
         }
-        var rows: [[SQLValue]] = []
-        let columns = sqlite3_column_count(statement)
+        let count = sqlite3_column_count(statement)
+        let columns = SQLColumns((0..<count).map { String(cString: sqlite3_column_name(statement, $0)) })
         while true {
             let status = sqlite3_step(statement)
             if status == SQLITE_DONE { break }
@@ -143,11 +159,10 @@ public final class SQLiteConnection {
                     sqliteCode: sqlite3_extended_errcode(handle), message: String(cString: sqlite3_errmsg(handle)))
             }
             var row: [SQLValue] = []
-            row.reserveCapacity(Int(columns))
-            for column in 0..<columns { row.append(Self.columnValue(statement, column)) }
-            rows.append(row)
+            row.reserveCapacity(Int(count))
+            for column in 0..<count { row.append(Self.columnValue(statement, column)) }
+            body(columns, row)
         }
-        return rows
     }
 
     /// The first column of the first row, or `nil` without a row.

@@ -32,7 +32,8 @@ let package = Package(
             resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc"), .copy("Fixtures/api")]
         ),
         // The in-process Swift backend (ADR-270): the system SQLite and no other dependency.
-        .target(name: "VisionBackend"),
+        // It answers the generated client's requests, so it shares VisionNativeCore's types.
+        .target(name: "VisionBackend", dependencies: ["VisionNativeCore"]),
         .testTarget(name: "VisionBackendTests", dependencies: ["VisionBackend"]),
         .testTarget(
             name: "VisionNativeUITests",
