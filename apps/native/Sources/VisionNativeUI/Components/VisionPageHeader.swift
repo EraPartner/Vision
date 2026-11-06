@@ -36,7 +36,7 @@ struct VisionPageHeader<Actions: View>: View {
                     Text(subtitle)
                         .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
-                        .visionCanvasTextHalo(.pageHeader)
+                        .visionCanvasTextHalo(.pageSubtitle)
                 }
             }
         }

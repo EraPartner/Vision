@@ -588,6 +588,29 @@ extension TransactionPatch {
         #expect(!model.isFetchingMore)
     }
 
+    @Test func leftRowsAreReleasedAfterTheDelayAndReloadOnReturn() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(3))
+        let (model, shell) = try await TxFixture.opened(service)
+        model.releaseDelay = .milliseconds(10)
+        shell.show(try #require(NativeRoute("/accounts")))
+        await shell.settingsSettled()
+        for _ in 0..<200 where model.rows != nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(model.rows == nil)
+        shell.show(try #require(NativeRoute("/transactions")))
+        await shell.settingsSettled()
+        await model.sync()
+        #expect(model.rows?.count == 3)
+        #expect(await service.queries.count == 2)
+        // Returning before the delay keeps them.
+        model.releaseDelay = .seconds(60)
+        shell.show(try #require(NativeRoute("/accounts")))
+        await shell.settingsSettled()
+        shell.show(try #require(NativeRoute("/transactions")))
+        await shell.settingsSettled()
+        await model.sync()
+        #expect(model.rows?.count == 3)
+    }
+
     @Test func loadingMoreAppendsTheNextPageInOrder() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(120))
         let (model, shell) = try await TxFixture.opened(service)

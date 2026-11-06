@@ -200,6 +200,11 @@ public final class TransactionsModel {
     @ObservationIgnored private var accountsInFlight: Task<Void, Never>?
     @ObservationIgnored private var countInFlight: Task<Void, Never>?
     @ObservationIgnored private var bannerRecipientId: RecipientID?
+    /// `QUERY_GC_TIME_MS.LARGE_LIST` (ADR-256 E3): the loaded rows are let go this long after
+    /// the page is left, so a long session does not keep every visited ledger resident.
+    static let releaseAfter: Duration = .seconds(120)
+    @ObservationIgnored var releaseDelay = TransactionsModel.releaseAfter
+    @ObservationIgnored private var releaseTask: Task<Void, Never>?
 
     public init(
         service: any TransactionsService, attachments: any TransactionAttachmentsService,
@@ -249,6 +254,8 @@ public final class TransactionsModel {
     /// filters, search, sort, Show excluded and page size.
     public func sync() async {
         guard let shell, shell.route.path == TransactionsRoutes.path else { return }
+        releaseTask?.cancel()
+        releaseTask = nil
         let param = shell.route.value(TransactionsRoutes.searchParameter)
         if param != lastSearchParam {
             lastSearchParam = param
@@ -482,6 +489,31 @@ public final class TransactionsModel {
         fetchedAt = nil
         allAccounts = []
         pickers.reset()
+    }
+
+    /// The page was left: the rows go after `releaseDelay` unless it is shown again first.
+    /// Coming back later shows the loading state, as the rows would refetch anyway once stale.
+    public func didLeavePage() {
+        releaseTask?.cancel()
+        let delay = releaseDelay
+        releaseTask = Task { [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            self?.releaseRows()
+        }
+    }
+
+    private func releaseRows() {
+        releaseTask = nil
+        guard shell?.route.path != TransactionsRoutes.path, rows != nil, inFlight == nil, !isFetchingMore,
+            updatesInFlight == 0, !deletePending
+        else { return }
+        listVersion += 1
+        rows = nil
+        total = 0
+        loadedOffset = 0
+        fetchedAt = nil
+        visibleCache = nil
+        MemoryRelief.shared.request(force: true)
     }
 
     /// The error state's Retry, and the reload after a create.
