@@ -209,7 +209,8 @@ final class ShellController: NSObject, NSWindowDelegate {
                 }))
         let settingsAbout = NativeSettingsAboutModel(
             service: makeNativeSettingsDesktopCallbacks(generation: settingsGeneration, restoreReload: false),
-            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            version: AppRuntime.visionVersion
+                ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
             appName: Self.appName)
         nativeSettings.loadKeepServices = { [weak self] in
             guard let self else { throw APIError.backendUnavailable }
@@ -475,6 +476,7 @@ final class ShellController: NSObject, NSWindowDelegate {
         if UserDefaults.standard.bool(forKey: Self.sidebarCollapsedKey) { model.setSidebarVisible(false) }
         model.reloadPage = { [weak self] in self?.run(.reload) }
         model.sidebarBadges = NativeSidebarBadgesModel(service: client)
+        model.updates = makeUpdateModel(notices: model.notices)
         model.apiInspector = apiInspector
         // The document start publishes readiness only after verifying this graph's generation.
         model.setPageZoom(currentPageZoom)
@@ -1058,7 +1060,8 @@ final class ShellController: NSObject, NSWindowDelegate {
         backupService = BackupService(
             context: BackupContext(
                 environment: ProcessInfo.processInfo.environment,
-                appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                appVersion: AppRuntime.visionVersion
+                    ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
                     ?? "unknown",
                 userDataDirectory: AppRuntime.variant.userDataDirectory(homeDirectory: home),
                 homeDirectory: home,
@@ -2190,4 +2193,36 @@ private struct RestoreConfirmation {
     var detail: String?
     var confirmLabel: String
     var cancelLabel: String
+}
+
+extension ShellController {
+    /// The in-app updater (`packaging/electron/updater.ts`): the GitHub latest-release check,
+    /// the pre-update backup into `<userData>/pre-update-backups` (`update:pre-update-backup`),
+    /// and the release page for the install, since the Swift app runs as a `source` build.
+    fileprivate func makeUpdateModel(notices: NativeNoticeCenter) -> NativeUpdateModel {
+        let updates = NativeUpdateModel(
+            checker: .live(
+                currentVersion: AppRuntime.visionVersion, isDemo: AppRuntime.variant == .demo, appName: Self.appName))
+        let source = UUID()
+        updates.didNotice = { notice in _ = notices.publish(notice, source: source) }
+        updates.openURL = { url in NSWorkspace.shared.open(url) }
+        updates.preUpdateBackup = { [weak self] in
+            guard let self else { return NativePreUpdateBackupResult(success: false, error: "Vision is closing") }
+            return await self.runPreUpdateBackup()
+        }
+        return updates
+    }
+
+    private func runPreUpdateBackup() async -> NativePreUpdateBackupResult {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let directory = PathUtilities.join(
+            AppRuntime.variant.userDataDirectory(homeDirectory: home), "pre-update-backups")
+        do {
+            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            _ = try await backupService.runBundleBackup(destination: directory, frontendStateJson: nil)
+            return NativePreUpdateBackupResult(success: true)
+        } catch {
+            return NativePreUpdateBackupResult(success: false, error: error.localizedDescription)
+        }
+    }
 }

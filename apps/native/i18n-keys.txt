@@ -4716,3 +4716,13 @@ common.optional
 portfolioImport.session.choice.keepBoth
 portfolioImport.session.choice.sameTransaction
 validation.currencyCode
+
+# In-app updater (About section, sidebar dot)
+aria.openReleaseNotes
+update.releaseNotes
+update.backingUp
+update.downloading
+update.installing
+update.backupFailed
+update.manualDownload
+layout.updateReady

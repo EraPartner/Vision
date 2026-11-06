@@ -18,6 +18,18 @@ enum AppRuntime {
     /// Starts and stops Vision Native's backend, which opens the SQLite database in-process.
     static let supervisor = RuntimeSupervisor.live(
         allowPayloadOverride: AppRuntime.isDebugBuild, variant: AppRuntime.variant)
+    /// The Vision version the bundled runtime payload was prepared from (`appVersion` in its
+    /// manifest), which Electron reports as `app.getVersion()`: the About section, the update
+    /// check and backups use it rather than the app bundle's own version. `nil` without a payload.
+    static let visionVersion: String? = {
+        let fileSystem = LocalFileSystem()
+        guard
+            let payload = try? RuntimePayload.locate(
+                environment: ProcessInfo.processInfo.environment, resourcesDirectory: Bundle.main.resourcePath,
+                allowOverride: isDebugBuild, fileSystem: fileSystem)
+        else { return nil }
+        return RuntimePayload.appVersion(runtimeRoot: payload.runtimeDirectory, fileSystem: fileSystem)
+    }()
     static let logger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "runtime")
     static let shellLogger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "shell")
     /// The `will-quit` hard timeout in `packaging/electron/main.ts`.

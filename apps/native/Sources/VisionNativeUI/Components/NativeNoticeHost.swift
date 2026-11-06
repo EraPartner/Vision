@@ -35,7 +35,7 @@ struct NativeNoticeHost: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Label(
-                            strings.t(entry.notice.key, displayVariables(entry.notice)),
+                            title(entry.notice),
                             systemImage: ActionToast.symbol(entry.notice.kind))
                         if let detail = entry.notice.detail, !detail.isEmpty {
                             Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel).lineLimit(3)
@@ -56,7 +56,7 @@ struct NativeNoticeHost: View {
                 .accessibilityElement(children: .contain)
                 .task(id: entry.revision) {
                     guard announcementsEnabled else { return }
-                    AccessibilityNotification.Announcement(strings.t(entry.notice.key, displayVariables(entry.notice)))
+                    AccessibilityNotification.Announcement(title(entry.notice))
                         .post()
                 }
             }
@@ -84,6 +84,13 @@ struct NativeNoticeHost: View {
             return
         }
         Task { await center.consumeUndo() }
+    }
+
+    /// The localized title, then the `titleSuffixVariable` value when there is one.
+    private func title(_ notice: ScreenNotice) -> String {
+        let text = strings.t(notice.key, displayVariables(notice))
+        guard let suffix = notice.variables[ScreenNotice.titleSuffixVariable], !suffix.isEmpty else { return text }
+        return text + " " + suffix
     }
 
     private func displayVariables(_ notice: ScreenNotice) -> [String: String] {
