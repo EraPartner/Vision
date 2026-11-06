@@ -60,7 +60,7 @@ public struct PortfolioClassificationChanges: Equatable, Sendable {
     }
     public var set: [Row] = []
     public var clear: [InvestmentID] = []
-    public var count: Int { set.count + clear.count }
+    public var count: Int { self.set.count + clear.count }
 
     /// `classificationChanges`: a row with values is set (the issuer falls back to the holding
     /// name), an emptied row that had a classification is cleared, an untouched row is left out.
@@ -74,7 +74,7 @@ public struct PortfolioClassificationChanges: Equatable, Sendable {
             }
             let issuer = PortfolioClassificationDraft.trim(draft.issuerName)
             let sector = PortfolioClassificationDraft.trim(draft.sector)
-            set.append(
+            self.set.append(
                 Row(
                     investmentId: holding.investmentId, issuerName: issuer.isEmpty ? holding.name : issuer,
                     sector: sector.isEmpty ? nil : sector,
@@ -84,7 +84,7 @@ public struct PortfolioClassificationChanges: Equatable, Sendable {
 
     var body: OpenAPI.PortfolioManualClassificationChanges {
         OpenAPI.PortfolioManualClassificationChanges(
-            set: set.map {
+            set: self.set.map {
                 .init(
                     investmentId: $0.investmentId, issuerName: $0.issuerName, sector: $0.sector,
                     issuerCountryCode: $0.issuerCountryCode)
