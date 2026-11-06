@@ -492,7 +492,7 @@ public struct HomeView: View {
                 ],
                 currency: currency, settings: settings,
                 title: strings.t("dashboard.stat.netTrend", ["n": String(months.count)]),
-                areas: true, stackedAreas: false, rangeComparison: false, height: 80,
+                areas: true, stackedAreas: false, height: 80,
                 customColors: ["net": net >= 0 ? theme.gain : theme.loss], sparkline: true,
                 selection: $netSelection, rangeStart: $netRange)
             routeRow(
@@ -552,7 +552,7 @@ public struct HomeView: View {
                                 InsightChartPoint(key: $0.date, value: values[$0.date] ?? 0)
                             })
                     }, currency: currency, settings: settings, title: strings.t("bankWidget.balanceHistory"),
-                    areas: true, legend: .bottomCenter, yAxis: .full,
+                    areas: true, rangeComparison: true, legend: .bottomCenter, yAxis: .full,
                     selection: Binding(get: { model.chartSelection }, set: { model.chartSelection = $0 }),
                     rangeStart: Binding(get: { model.chartRangeStart }, set: { model.chartRangeStart = $0 }))
             } else {
@@ -679,7 +679,7 @@ public struct HomeView: View {
                         cumulative: model.cumulativeForecast, visible: model.visibleMethods,
                         actualLabel: strings.t("cashflow.actualThisMonth")),
                     currency: forecast.currency, settings: settings,
-                    title: strings.t("dashboard.cashFlowComparison"),
+                    title: strings.t("dashboard.cashFlowComparison"), rangeComparison: true,
                     legend: .hidden, yAxis: .full,
                     xLabels: model.forecastOptions.mode == .rolling ? .dayMonth : .dayOfMonth, zeroLine: true,
                     selection: Binding(get: { model.chartSelection }, set: { model.chartSelection = $0 }),

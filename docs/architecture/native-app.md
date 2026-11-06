@@ -887,7 +887,12 @@ are reflected. A replaced currency request cannot publish an older answer.
 
 `InsightTimelineChart` uses Swift Charts for line, grouped-bar, and stacked-area layouts. Negative
 bank balances use lines instead of a misleading positive stack, as on the web. Hover, arrow keys,
-Home/End, Escape, and drag/Shift-arrow range comparisons display the original decimal values.
+Home/End and Escape display the original decimal values. Range compare (`scrub.ts`) runs on the
+charts the web makes scrubbable: bank history, the cash-flow forecast, net worth, the portfolio
+value charts and the research price, compare, forecast, chart-builder and watchlist charts.
+`ChartScrub` ports the gesture (drag, or click, move, click; a pinned range until the next click,
+Escape or focus loss; Shift+arrow from the keyboard; dropped on a new timeline), `ChartScrubView`
+the per-series rows, and `ChartRangeCompareLayer` the tinted band, value dots and Δ readout.
 The bank history and forecast share the selected date and range. The net sparkline scrubs the
 summary amount and returns to the latest month after release. Category slices navigate with
 `category_id`, `uncategorised`, or the remaining `category_ids`; recent rows use the native `id`

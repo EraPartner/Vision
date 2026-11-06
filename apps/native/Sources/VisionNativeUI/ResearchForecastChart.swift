@@ -10,6 +10,8 @@ struct ResearchForecastChart: View {
     let shell: NativeShellModel
     let isLoading: Bool
     @State private var selected: Int?
+    /// Range compare (`scrubbable`), led by the median.
+    @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     init(points: [ResearchForecastPoint], currency: CurrencyCode, shell: NativeShellModel, isLoading: Bool) {
@@ -84,7 +86,9 @@ struct ResearchForecastChart: View {
                             }
                         }
                     }
-                    if let index = selected, points.indices.contains(index), let date = date(points[index].date) {
+                    if scrub.range == nil, let index = selected, points.indices.contains(index),
+                        let date = date(points[index].date)
+                    {
                         RuleMark(x: .value("date", date)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3])).accessibilityHidden(true)
                     }
@@ -108,23 +112,39 @@ struct ResearchForecastChart: View {
                 .visionChartYAxis(domain: yDomain) { money(Decimal($0)) }
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
-                        Rectangle().fill(.clear).contentShape(Rectangle())
-                            .onContinuousHover { phase in
-                                switch phase {
-                                case .active(let location): select(location.x, proxy: proxy, geometry: geometry)
-                                case .ended: if !focused { selected = nil }
-                                }
-                            }
-                            .gesture(
-                                DragGesture(minimumDistance: 0).onChanged {
-                                    select($0.location.x, proxy: proxy, geometry: geometry)
-                                })
+                        let lines = series
+                        ChartRangeCompareLayer(
+                            scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
+                            view: ChartScrubView(scrub, count: points.count, series: scrubSeries),
+                            indexAt: { x in proxy.value(atX: x, as: Date.self).flatMap(nearest) },
+                            xOf: { index in
+                                points.indices.contains(index) ? date(points[index].date).flatMap { proxy.position(forX: $0) } : nil
+                            },
+                            yOf: { _, value in proxy.position(forY: value) },
+                            colorOf: { key in lines.first { $0.id == key }?.color ?? theme.primary },
+                            titleOf: { points.indices.contains($0) ? fullDate(points[$0].date) : "" },
+                            deltaOf: { row in
+                                ChartScrubDelta.text(
+                                    start: row.start, end: row.end, formatValue: { money(Decimal($0)) },
+                                    formatPercent: {
+                                        VisionFormat.percent(
+                                            Decimal($0), digits: 1, locale: shell.settings.numberFormat.locale)
+                                    })
+                            },
+                            onHover: { index in
+                                if index == nil, focused { return }
+                                if selected != index { selected = index }
+                            },
+                            onPress: { focused = true })
                     }
                 }
                 .frame(height: 360).focusable().focused($focused)
-                .onKeyPress(phases: .down, action: move)
+                .onKeyPress(phases: .down) { press in
+                    ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: points.count)
+                }
+                .onChange(of: focused) { _, focused in if !focused { scrub.clear() } }
                 .accessibilityLabel(shell.strings.t("research.forecast.chartTitle"))
-                if let index = selected, points.indices.contains(index) {
+                if scrub.range == nil, let index = selected, points.indices.contains(index) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(fullDate(points[index].date)).font(.caption.weight(.semibold))
                         ForEach(series) { line in
@@ -138,7 +158,9 @@ struct ResearchForecastChart: View {
                         .accessibilityElement(children: .combine)
                 }
             }
-        }.onChange(of: points) { _, _ in selected = nil }
+        }
+        .onChange(of: points) { _, _ in selected = nil }
+        .onChange(of: scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
     }
     private func label(_ line: Series) -> String { shell.strings.t("research.forecast." + line.id) }
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
@@ -153,31 +175,23 @@ struct ResearchForecastChart: View {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
     private func fullDate(_ day: String) -> String { VisionFormat.appDate(day, format: shell.settings.dateFormat) }
-    private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) {
-        guard let anchor = proxy.plotFrame else { return }
-        let frame = geometry[anchor]
-        guard let hovered = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Date.self) else { return }
-        selected = points.indices.min {
+    /// The point nearest a date.
+    private func nearest(_ hovered: Date) -> Int? {
+        points.indices.min {
             abs((date(points[$0].date) ?? .distantPast).timeIntervalSince(hovered))
                 < abs((date(points[$1].date) ?? .distantPast).timeIntervalSince(hovered))
         }
     }
-    private func move(_ press: KeyPress) -> KeyPress.Result {
-        guard !points.isEmpty else { return .ignored }
-        let index = selected ?? 0
-        if press.key == .leftArrow {
-            selected = max(0, index - 1)
-        } else if press.key == .rightArrow {
-            selected = min(points.count - 1, index + 1)
-        } else if press.key == .home {
-            selected = 0
-        } else if press.key == .end {
-            selected = points.count - 1
-        } else if press.key == .escape {
-            selected = nil
-        } else {
-            return .ignored
+    /// Every line as a range-compare series; the median leads.
+    private var scrubSeries: [ChartScrubSeries] {
+        series.map { line in
+            let values = points.map { coordinate($0[keyPath: line.value]) }
+            return ChartScrubSeries(key: line.id, label: label(line), primary: line.id == "p50") { index in
+                values.indices.contains(index) ? values[index] : nil
+            }
         }
-        return .handled
+    }
+    private var scrubTimeline: String {
+        "\(points.count):\(points.first?.date ?? ""):\(points.last?.date ?? "")"
     }
 }

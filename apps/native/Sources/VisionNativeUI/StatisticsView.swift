@@ -178,7 +178,7 @@ public struct StatisticsView: View {
     }
     private func chart(
         _ series: [InsightChartSeries], key: String, bars: Bool = false, areas: Bool = false,
-        rangeComparison: Bool = true, legend: ChartLegendPlacement? = nil
+        rangeComparison: Bool = false, legend: ChartLegendPlacement? = nil
     ) -> some View {
         InsightTimelineChart(
             series: series, currency: currency, settings: settings, title: strings.t("statsPage.title"),

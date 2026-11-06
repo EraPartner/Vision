@@ -41,7 +41,8 @@ struct PortfolioPerformanceWidgets: View {
                 ) {
                     PortfolioSeriesChart(
                         series: derived.value, title: shell.strings.t("performance.valueOverTime"),
-                        currency: data.currency, shell: shell, area: true, dayTicks: dayTicks, colors: colors)
+                        currency: data.currency, shell: shell, area: true, dayTicks: dayTicks, colors: colors,
+                        primary: "value")
                     if derived.hasFxNeutral {
                         HStack {
                             Toggle(
@@ -76,7 +77,8 @@ struct PortfolioPerformanceWidgets: View {
                 ) {
                     PortfolioSeriesChart(
                         series: derived.relative, title: shell.strings.t("performance.relativeTitle"),
-                        currency: data.currency, shell: shell, percent: true, area: true, dayTicks: dayTicks, colors: colors)
+                        currency: data.currency, shell: shell, percent: true, area: true, dayTicks: dayTicks, colors: colors,
+                        primary: "value")
                 }
             }
             if model.widgets.isVisible("breakdown"), !data.snapshots.isEmpty, !data.breakdownSummary.isEmpty {

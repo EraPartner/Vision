@@ -10,6 +10,8 @@ struct ResearchMarketChartView: View {
     let shell: NativeShellModel
     @State private var selected: Int?
     @State private var selectsVolume = false
+    /// Range compare (`scrubbable`): drag, or click, move, click.
+    @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @State private var plotCache = ChartLinePlotCache()
     @Environment(\.visionTheme) private var theme
@@ -39,7 +41,7 @@ struct ResearchMarketChartView: View {
                     .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.monotone)
                 }
-                if let selected, plot.times.indices.contains(selected) {
+                if scrub.range == nil, let selected, plot.times.indices.contains(selected) {
                     RuleMark(x: .value("Time", plot.times[selected])).foregroundStyle(
                         theme.secondaryLabel.opacity(0.6))
                 }
@@ -60,35 +62,39 @@ struct ResearchMarketChartView: View {
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let location):
-                                selectsVolume = false
-                                select(location.x, proxy: proxy, geometry: geometry, plot: plot)
-                            case .ended: selected = nil
-                            }
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 0).onChanged { value in
-                                focused = true
-                                selectsVolume = false
-                                select(value.location.x, proxy: proxy, geometry: geometry, plot: plot)
-                            })
+                    ChartRangeCompareLayer(
+                        scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
+                        view: ChartScrubView(scrub, count: plot.times.count, series: plot.scrubSeries()),
+                        indexAt: { x in proxy.value(atX: x, as: Date.self).flatMap { plot.nearestOffset(to: $0) } },
+                        xOf: { plot.times.indices.contains($0) ? proxy.position(forX: plot.times[$0]) : nil },
+                        yOf: { _, value in proxy.position(forY: value) },
+                        colorOf: { _ in color },
+                        titleOf: pointTitle,
+                        deltaOf: { row in
+                            ChartScrubDelta.text(
+                                start: row.start, end: row.end,
+                                formatValue: { money(Decimal($0)) },
+                                formatPercent: { percent($0) })
+                        },
+                        onHover: { position in
+                            selectsVolume = false
+                            if selected != position { selected = position }
+                        },
+                        onPress: { focused = true })
                 }
             }
             .frame(height: 320).focusable().focused($focused).focusEffectDisabled()
-            .onKeyPress(.leftArrow) {
-                move(-1)
-                return .handled
-            }.onKeyPress(.rightArrow) {
-                move(1)
-                return .handled
+            .onKeyPress(phases: .down) { press in
+                ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: plot.times.count)
             }
-            .onKeyPress(.escape) {
-                selected = nil
-                return .handled
-            }.onChange(of: data.raw) { _, _ in selected = nil }
+            .onChange(of: data.raw) { _, _ in selected = nil }
+            .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
+            .onChange(of: focused) { _, focused in
+                if !focused {
+                    selected = nil
+                    scrub.clear()
+                }
+            }
             .accessibilityLabel(shell.strings.t("market.priceChart"))
             if showsVolume {
                 // Its bars do not depend on the selection, so a hover leaves them alone.
@@ -106,7 +112,7 @@ struct ResearchMarketChartView: View {
                 )
                 .equatable()
             }
-            if let selected, data.points.indices.contains(selected) {
+            if scrub.range == nil, let selected, data.points.indices.contains(selected) {
                 let point = data.points[selected]
                 let date = ResearchMarketDisplay.date(point.time)
                 HStack {
@@ -141,18 +147,17 @@ struct ResearchMarketChartView: View {
         }
         return formatter.string(from: date)
     }
-    private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy, plot: ChartLinePlot) {
-        guard let frame = proxy.plotFrame, let date: Date = proxy.value(atX: x - geometry[frame].origin.x) else {
-            selected = nil
-            return
-        }
-        let nearest = plot.nearestOffset(to: date)
-        if nearest != selected { selected = nearest }
+    private func pointTitle(_ index: Int) -> String {
+        guard data.points.indices.contains(index) else { return "" }
+        let date = ResearchMarketDisplay.date(data.points[index].time)
+        return VisionFormat.appDate(date, format: shell.settings.dateFormat, timeZone: .current) + " "
+            + VisionFormat.time(date, locale: shell.settings.numberFormat.locale, timeZone: .current)
     }
-    private func move(_ step: Int) {
-        if !data.points.isEmpty {
-            selected = min(max((selected ?? (step > 0 ? -1 : data.points.count)) + step, 0), data.points.count - 1)
-        }
+    private func money(_ value: Decimal) -> String {
+        ResearchMarketDisplay.money(value, currency: data.currency ?? "USD", shell: shell, digits: 2)
+    }
+    private func percent(_ value: Double) -> String {
+        VisionFormat.percent(Decimal(value), digits: 1, locale: shell.settings.numberFormat.locale)
     }
 }
 
