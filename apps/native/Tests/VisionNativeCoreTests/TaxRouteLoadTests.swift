@@ -26,6 +26,8 @@ struct TaxRouteLoadTests {
     @Test func lateLiveProbeCannotReturnAnOlderCanonicalRouteOrReplaceNewData() async throws {
         let transport = try TaxRouteTransport()
         let screens = TaxScreens(client: routeClient(transport), now: { routeFixtureNow })
+        // The startup live-year check reads the live year too; it is done before the paused probe.
+        await screens.advanceLiveYearIfNeeded()
         await transport.pauseOverview(year: nil)
         let oldRoute = try #require(NativeRoute("/tax?year=2024&old=1"))
         let old = Task { await screens.loadRoute(route: oldRoute, currency: .eur) }
