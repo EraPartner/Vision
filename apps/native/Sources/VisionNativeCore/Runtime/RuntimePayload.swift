@@ -1,30 +1,29 @@
 import CryptoKit
 import Foundation
 
-/// Where the runtime payload (PostgreSQL, the compiled backend, the Apple Foundation Models
-/// helper, the frontend build and the migrations) and the synthetic Demo seed were found.
+/// Where the runtime payload (the compiled backend, its database tool and analysis sandbox,
+/// the Apple Foundation Models helper, the frontend build and the migrations) and the
+/// synthetic Demo seed were found.
 public struct RuntimePayloadLocation: Sendable, Equatable {
     public enum Source: Sendable, Equatable {
         case environment
         case appBundle
     }
 
-    /// The prepared `native-runtime` tree (`manifest.json`, `postgres/`, `vision-backend`, `db/`, …).
+    /// The prepared `native-runtime` tree (`manifest.json`, `vision-backend`, `tools/`, `db/`, …).
     public let runtimeDirectory: String
-    /// `demo-seed/` beside it (`demo-seed.dump` and `manifest.json`).
+    /// `demo-seed/` beside it (`vision-demo.sqlite3` and `manifest.json`).
     public let demoSeedDirectory: String
     public let source: Source
 }
 
-/// The tools found in a verified payload (`NativeTools`).
+/// The tools found in a verified payload (`NativeTools`). Vision Native only runs the
+/// compiled backend, which is also the Bun that runs the database tool.
 public struct NativeTools: Sendable, Equatable {
-    public let binDirectory: String
-    public let versions: [String: String]
-    public let versionNumbers: [String: Int]
     public let compiledBackend: String
 
-    public func tool(_ name: String) -> String {
-        PathUtilities.join(binDirectory, name)
+    public init(compiledBackend: String) {
+        self.compiledBackend = compiledBackend
     }
 }
 
@@ -36,14 +35,15 @@ public enum RuntimeVerificationMode: String, Sendable, Equatable {
 }
 
 /// Payload discovery and verification, ported from `verifyRuntimeManifest`,
-/// `verifyRuntimeManifestOnLaunch`, `bundledPostgresBin` and `discoverPostgres18` in
-/// `packaging/electron/runtime/native.ts` and `runtime-manifest.ts`.
+/// `verifyRuntimeManifestOnLaunch` and `discover` in `packaging/electron/runtime/native.ts`
+/// and `runtime-manifest.ts`.
 ///
 /// The payload (`packaging/electron/scripts/prepare-native-runtime.ts`) holds
-/// `vision-backend`, `vision-apple-ai`, `dist/`, `db/` (the Kysely migrations the backend
-/// applies at boot), `config/postgres/app-role-grants.sql.tpl`, `postgres/` and `licenses/`.
-/// It has no Alembic runtime and no Chrome Headless Shell: reports print through the
-/// shell, and the backend locates `vision-apple-ai` itself from `VISION_RUNTIME_ROOT`.
+/// `vision-backend`, `vision-apple-ai`, `tools/db-file.js`, `tools/analysis-sandbox.js`,
+/// `dist/` and `db/` (the SQL migrations the backend applies at boot, ADR-263). It has no
+/// database server and no Chrome Headless Shell: reports print through the shell, and the
+/// backend locates `vision-apple-ai` and the analysis sandbox itself from
+/// `VISION_RUNTIME_ROOT`.
 public enum RuntimePayload {
     /// Development override: an absolute path to a prepared `native-runtime` directory.
     /// Honoured in Debug builds only.
@@ -53,7 +53,7 @@ public enum RuntimePayload {
     public static let demoSeedDirectoryName = "demo-seed"
 
     public static let missingPayloadMessage =
-        "This Vision Native build has no runtime payload (PostgreSQL 18, the backend and its migrations). "
+        "This Vision Native build has no runtime payload (the backend, its database tool and migrations). "
         + "Install with ./install-native.sh, which stages the payload into the app, or, in a Debug build, set "
         + "\(environmentKey) to a prepared native-runtime directory "
         + "(cd packaging/electron && bun run prepare:native)."
@@ -287,93 +287,26 @@ public enum RuntimePayload {
         return (entries, .full)
     }
 
-    // MARK: - PostgreSQL
-
-    /// Safe relative path in payload metadata: not absolute and without `..`.
-    private static func isSafeRelative(_ value: String) -> Bool {
-        !value.hasPrefix("/")
-            && !value.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "/" || $0 == "\\" })
-                .contains("..")
-    }
-
-    /// `bundledPostgresBin`: `postgres/runtime.json` must pin PostgreSQL 18.6 for this
-    /// platform and architecture. `nil` when the payload has no PostgreSQL metadata.
-    public static func postgresBinDirectory(runtimeRoot: String, fileSystem: any RuntimeFileSystem) throws
-        -> String?
-    {
-        let postgresRoot = PathUtilities.join(runtimeRoot, "postgres")
-        guard let data = try fileSystem.readIfPresent(PathUtilities.join(postgresRoot, "runtime.json")) else {
-            return nil
-        }
-        guard let metadata = try? JSONValue.parse(data) else {
-            throw NativeRuntimeError("POSTGRES_RUNTIME_CORRUPT", "Packaged PostgreSQL metadata is invalid")
-        }
-        guard metadata.objectValue != nil,
-            metadata["version"] == .int(1),
-            metadata["postgresMajor"] == .int(RuntimeConstants.postgresMajor),
-            metadata["postgresVersion"] == .string(RuntimeConstants.postgresVersion),
-            metadata["platform"] == .string(RuntimeConstants.payloadPlatform),
-            metadata["architecture"] == .string(RuntimeConstants.payloadArchitecture),
-            let binRelative = metadata["binRelative"]?.stringValue,
-            isSafeRelative(binRelative)
-        else {
-            throw NativeRuntimeError(
-                "POSTGRES_RUNTIME_MISMATCH", "Packaged PostgreSQL metadata does not match this Vision build")
-        }
-        let root = PathUtilities.join(postgresRoot, "root")
-        let binDirectory = PathUtilities.join(root, binRelative)
-        guard binDirectory.hasPrefix(root + "/") else {
-            throw NativeRuntimeError("POSTGRES_RUNTIME_CORRUPT", "Packaged PostgreSQL binary path is unsafe")
-        }
-        return binDirectory
-    }
+    // MARK: - Tools
 
     /// Verifies the payload (hashing it on the first launch of an installed payload, ADR-235)
-    /// and discovers every tool (`discover`). Vision Native only supports the packaged,
-    /// managed PostgreSQL and the compiled backend. `verification` receives how the payload
-    /// was verified (`recordBootPhase("runtime_manifest_<mode>")` in Electron).
+    /// and finds the compiled backend (`discover`). Vision Native does not run the Bun source
+    /// mode. `verification` receives how the payload was verified
+    /// (`recordBootPhase("runtime_manifest_<mode>")` in Electron).
     public static func discoverTools(
         runtimeRoot: String,
         markerPath: String,
         fileSystem: any RuntimeFileSystem,
-        runner: any ProcessRunning,
-        childEnvironment: [String: String],
         verification: (RuntimeVerificationMode) -> Void = { _ in }
-    ) async throws -> NativeTools {
+    ) throws -> NativeTools {
         let verified = try verifyManifestOnLaunch(
             runtimeRoot: runtimeRoot, markerPath: markerPath, fileSystem: fileSystem)
         verification(verified.mode)
-        guard let binDirectory = try postgresBinDirectory(runtimeRoot: runtimeRoot, fileSystem: fileSystem),
-            RuntimeConstants.requiredPostgresTools.allSatisfy({
-                fileSystem.isExecutable(PathUtilities.join(binDirectory, $0))
-            })
-        else {
-            throw NativeRuntimeError(
-                "POSTGRES_NOT_FOUND",
-                "Vision Native's packaged PostgreSQL \(RuntimeConstants.postgresVersion) runtime was not found. "
-                    + "Reinstall with ./install-native.sh or prepare the native runtime before starting.")
-        }
-        var versions: [String: String] = [:]
-        var versionNumbers: [String: Int] = [:]
-        for name in RuntimeConstants.versionCheckedPostgresTools {
-            let result = try await runner.run(
-                PathUtilities.join(binDirectory, name), ["--version"],
-                options: RunOptions(environment: childEnvironment, timeout: 10))
-            let output = "\(result.stdout)\n\(result.stderr)"
-            try PostgresSQL.assertMajor18(name, output)
-            versions[name] = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            versionNumbers[name] = PostgresSQL.parseVersionNumber(output)
-        }
         let compiledBackend = PathUtilities.join(runtimeRoot, "vision-backend")
         guard fileSystem.isExecutable(compiledBackend) else {
             throw NativeRuntimeError(
                 "BUN_NOT_FOUND", "Bun was not found and no packaged Vision backend executable is available.")
         }
-        return NativeTools(
-            binDirectory: binDirectory,
-            versions: versions,
-            versionNumbers: versionNumbers,
-            compiledBackend: compiledBackend
-        )
+        return NativeTools(compiledBackend: compiledBackend)
     }
 }

@@ -261,8 +261,10 @@ public enum BackupRetention {
     }
 }
 
-/// The legacy `.sql` / `.sql.enc` backups (`VISIONENC1` / `VISIONENC2`).
-public enum LegacySQLBackup {
+/// A single encrypted backup file (`VISIONENC1` / `VISIONENC2`): `isEncryptedBackupFile` and
+/// `decryptBackupFileToTemp` in `backup/crypto.ts`. Restore accepts an encrypted bare SQLite
+/// database this way.
+public enum EncryptedBackupFile {
     public static let magicV1 = Array("VISIONENC1".utf8)
     public static let magicV2 = Array("VISIONENC2".utf8)
 

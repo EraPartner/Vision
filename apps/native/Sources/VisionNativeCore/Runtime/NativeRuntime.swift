@@ -7,17 +7,6 @@ public enum BackendStartResult: Sendable, Equatable {
     case started(pid: Int32, port: Int, database: String)
 }
 
-/// `ManagedClusterResult` for the managed (packaged) cluster.
-public struct ManagedClusterResult: Sendable, Equatable {
-    public enum Status: Sendable, Equatable {
-        case existing
-        case initialized
-    }
-
-    public let status: Status
-    public let configChanged: Bool
-}
-
 /// Where an interrupted database switch stopped (`classifyDatabaseSwitchState`).
 public enum DatabaseSwitchState: Sendable, Equatable {
     case activated
@@ -35,18 +24,16 @@ public enum DatabaseSwitchState: Sendable, Equatable {
     }
 }
 
-/// Supervises Vision Native's private PostgreSQL 18 cluster and the packaged Bun
-/// backend. A port of the lifecycle half of `createNativeRuntime` in
-/// `packaging/electron/runtime/native.ts`: layout, generated credentials, payload
-/// discovery, `initdb`, role and extension bootstrap, PostgreSQL start and stop, the
-/// backend child, PID ownership, health, the database switch used by Demo seeding and
-/// restore, the plain dump and the attachment switch used by backup and restore (phase
-/// 1d). Migrations are TypeScript/Kysely and run in the backend at boot; the runtime reads
-/// the `public.kysely_migration` ledger for the schema head.
+/// Supervises Vision Native's packaged Bun backend over one SQLite database file (ADR-263).
+/// A port of `createNativeRuntime` in `packaging/electron/runtime/native.ts`: layout,
+/// `runtime.env`, payload discovery, the backend child, PID ownership, health, the database
+/// tool (`verify`, `snapshot`, `create`), the database generation switch used by Demo
+/// seeding and restore, and the attachment switch used by backup and restore. The backend
+/// opens the database itself and applies pending migrations at boot, after writing its own
+/// pre-migration copy.
 public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     public nonisolated let layout: RuntimeLayout
     public nonisolated let names: RuntimeNames
-    public nonisolated let postgresPort: Int
     /// The verified payload root (`VISION_RUNTIME_ROOT` for the backend).
     public nonisolated let runtimeRoot: String
 
@@ -56,21 +43,19 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     private let recordBootPhase: (@Sendable (String, Int) -> Void)?
     private var appPort: Int
     private var tools: NativeTools?
-    private var postgresChild: SpawnedChild?
     private var backendChild: SpawnedChild?
     private var shuttingDown = false
-    /// The staging database of a Demo restore whose switch plan is not persisted yet.
-    private var stagingRestoreDatabase: String?
+    /// The staging generation of an activation whose switch plan is not persisted yet.
+    private var stagingRestoreDirectory: String?
     /// `restoreSwitchOwnedThisLaunch`: this launch persisted the pending database switch,
-    /// so `bootstrapDatabase` must not treat it as an interrupted one and roll it back.
+    /// so the launch recovery must not treat it as an interrupted one and roll it back.
     private var restoreSwitchOwnedThisLaunch = false
-    /// `startupRestoreRecovery`: the one coordinated recovery `bootstrapDatabase` runs per
-    /// launch. A failure stays memoized, so every later bootstrap fails closed too.
+    /// `startupRestoreRecovery`: the one coordinated recovery per launch. A failure stays
+    /// memoized, so every later start fails closed too.
     private var startupRestoreRecovery: Task<Void, Error>?
 
     public init(
         layout: RuntimeLayout,
-        postgresPort: Int = VisionNativeIdentity.postgresPort,
         runtimeRoot: String,
         appPort: Int,
         inheritedEnvironment: [String: String],
@@ -80,7 +65,6 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         self.recordBootPhase = recordBootPhase
         self.layout = layout
         names = try RuntimeNames(runtimeId: layout.runtimeId)
-        self.postgresPort = try validateNetworkPort(postgresPort, "native PostgreSQL port")
         self.runtimeRoot = PathUtilities.normalize(runtimeRoot)
         self.appPort = appPort
         self.inheritedEnvironment = inheritedEnvironment
@@ -119,18 +103,14 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         return tools
     }
 
-    private func tool(_ name: String) throws -> String {
-        try requireTools().tool(name)
-    }
-
     private func ensureDiscovered() async throws {
         if tools == nil { try await discover() }
     }
 
     public var currentAppPort: Int { appPort }
 
-    /// From now on refuses to spawn PostgreSQL or the backend and to begin a database
-    /// switch, so a launch that is still running cannot start anything behind a quit.
+    /// From now on refuses to spawn the backend and to begin a database switch, so a launch
+    /// that is still running cannot start anything behind a quit.
     public func beginShutdown() {
         shuttingDown = true
     }
@@ -147,44 +127,30 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     // MARK: - Layout and discovery
 
-    /// `ensureLayout`: private directories, then `runtime.env` (created once, upgraded
-    /// with a cluster administrator when older and stripped of the secrets of removed
-    /// features), validated and pinned to the port.
-    @discardableResult
-    public func prepareLayout() throws -> DatabaseConfig {
-        for directory in [layout.nativeRoot, layout.logs, layout.attachments, layout.cache, layout.postgresRoot] {
+    /// `ensureLayout`: private directories (the database directory included), then
+    /// `runtime.env`, created with the header alone or stripped of the settings of removed
+    /// features (the database server's credentials among them).
+    public func ensureLayout() async throws {
+        for directory in [
+            layout.nativeRoot, layout.logs, layout.attachments, layout.cache, layout.databaseDirectory,
+        ] {
             try fileSystem.createDirectory(directory, mode: 0o700)
         }
-        let text: String
         switch try readRuntimeEnv() {
         case .some(let existing):
-            let upgraded = RuntimeEnvFile.stripRetired(
-                RuntimeEnvFile.ensureAdmin(existing, names: names, random: dependencies.random))
-            _ = try RuntimeEnvFile.databaseConfig(upgraded)
+            let upgraded = RuntimeEnvFile.stripRetired(existing)
             if upgraded != existing {
                 try fileSystem.writeText(layout.env, upgraded, mode: 0o600)
             } else {
                 try fileSystem.setMode(layout.env, 0o600)
             }
-            text = upgraded
         case .none:
-            text = RuntimeEnvFile.render(names: names, postgresPort: postgresPort, random: dependencies.random)
-            try fileSystem.writeText(layout.env, text, mode: 0o600)
+            try fileSystem.writeText(layout.env, RuntimeEnvFile.header, mode: 0o600)
         }
-        let config = try RuntimeEnvFile.databaseConfig(text)
-        guard config.port == postgresPort else {
-            throw NativeRuntimeError(
-                "POSTGRES_PORT_MISMATCH", "Native runtime configuration targets a different PostgreSQL port.")
-        }
-        return config
     }
 
-    public func ensureLayout() async throws {
-        try prepareLayout()
-    }
-
-    /// `runtime.env` holds every database secret, so it is read without following a
-    /// symlink and must be a regular file; `nil` when it does not exist yet.
+    /// `runtime.env` holds the market-data keys, so it is read without following a symlink
+    /// and must be a regular file; `nil` when it does not exist yet.
     private func readRuntimeEnv() throws -> String? {
         switch try fileSystem.readNoFollow(layout.env) {
         case .missing:
@@ -196,20 +162,32 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
     }
 
+    /// `importApplicationEnv`: copies the market-data keys of `values` into `runtime.env`.
+    /// Returns the imported keys.
+    @discardableResult
+    public func importApplicationEnvironment(_ values: [String: String]) async throws -> [String] {
+        let additions = try RuntimeEnvFile.validateApplicationEnvironment(values)
+        let contents = try readRuntimeEnv() ?? RuntimeEnvFile.header
+        try fileSystem.writeText(layout.env, RuntimeEnvFile.importing(additions, into: contents), mode: 0o600)
+        return additions.map(\.0)
+    }
+
     /// `discover`: verifies the payload manifest (a full hash once per installed payload, a
-    /// size check afterwards, ADR-235) and finds every tool.
+    /// size check afterwards, ADR-235) off the actor and finds the compiled backend.
     @discardableResult
     public func discoverTools() async throws -> NativeTools {
         let started = Date()
         let recorder = recordBootPhase
-        let milliseconds: @Sendable (Date) -> Int = { Int(Date().timeIntervalSince($0) * 1000) }
-        let discovered = try await RuntimePayload.discoverTools(
-            runtimeRoot: runtimeRoot,
-            markerPath: PathUtilities.join(layout.nativeRoot, RuntimeConstants.runtimeVerificationMarker),
-            fileSystem: fileSystem,
-            runner: dependencies.runner,
-            childEnvironment: safeEnvironment(),
-            verification: { mode in recorder?("runtime_manifest_\(mode.rawValue)", milliseconds(started)) })
+        let root = runtimeRoot
+        let marker = PathUtilities.join(layout.nativeRoot, RuntimeConstants.runtimeVerificationMarker)
+        let fileSystem = self.fileSystem
+        let discovered = try await runBlocking {
+            try RuntimePayload.discoverTools(
+                runtimeRoot: root, markerPath: marker, fileSystem: fileSystem,
+                verification: { mode in
+                    recorder?("runtime_manifest_\(mode.rawValue)", Int(Date().timeIntervalSince(started) * 1000))
+                })
+        }
         tools = discovered
         return discovered
     }
@@ -218,300 +196,21 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         try await discoverTools()
     }
 
-    // MARK: - PostgreSQL cluster
-
-    /// `ensureManagedPostgresConfig`: writes `vision.conf` and includes it from
-    /// `postgresql.conf`. Returns whether anything changed (a restart is then needed).
-    @discardableResult
-    public func ensureManagedPostgresConfig(_ dataDirectory: String) throws -> Bool {
-        let visionConf = PathUtilities.join(dataDirectory, "vision.conf")
-        let desired = PostgresSQL.visionConf(port: postgresPort)
-        let current = try fileSystem.readIfPresent(visionConf).map { String(decoding: $0, as: UTF8.self) }
-        var changed = current != desired
-        if changed { try fileSystem.writeText(visionConf, desired, mode: 0o600) }
-        let postgresqlConf = PathUtilities.join(dataDirectory, "postgresql.conf")
-        let base = try fileSystem.readText(postgresqlConf)
-        if !PostgresSQL.includesVisionConf(base) {
-            let terminated = base.hasSuffix("\n") ? base : base + "\n"
-            try fileSystem.writeText(postgresqlConf, terminated + PostgresSQL.includeLine + "\n", mode: 0o600)
-            changed = true
-        }
-        return changed
+    /// `recoverOnce`: the coordinated launch recovery, at most once per launch and never
+    /// for a switch this launch owns.
+    private func recoverOnce() async throws {
+        if restoreSwitchOwnedThisLaunch { return }
+        let recovery = startupRestoreRecovery ?? Task { try await self.recoverInterruptedRestore() }
+        startupRestoreRecovery = recovery
+        try await recovery.value
     }
 
-    /// `ensureManagedPostgresCluster`: opens the existing major-18 cluster, or quarantines
-    /// an interrupted one and initializes a new cluster in a staging directory that is
-    /// renamed into place only after `initdb` and the configuration succeed.
-    public func ensureManagedPostgresCluster(_ config: DatabaseConfig) async throws -> ManagedClusterResult {
-        let versionPath = PathUtilities.join(layout.postgresData, "PG_VERSION")
-        if let versionData = try fileSystem.readIfPresent(versionPath) {
-            let version = String(decoding: versionData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard version == String(RuntimeConstants.postgresMajor) else {
-                throw NativeRuntimeError(
-                    "POSTGRES_DATA_WRONG_VERSION",
-                    "Vision's private PostgreSQL cluster must be major \(RuntimeConstants.postgresMajor).")
-            }
-            try fileSystem.setMode(layout.postgresData, 0o700)
-            let changed = try ensureManagedPostgresConfig(layout.postgresData)
-            return ManagedClusterResult(status: .existing, configChanged: changed)
-        }
-        if let existing = fileSystem.info(layout.postgresData) {
-            guard existing.kind != .symlink else {
-                throw NativeRuntimeError("POSTGRES_DATA_UNSAFE", "Vision PostgreSQL data directory is a symlink")
-            }
-            try fileSystem.move(
-                layout.postgresData, PathUtilities.join(layout.postgresRoot, "data.incomplete-\(nowMilliseconds())"))
-        }
-        let processID = ProcessInfo.processInfo.processIdentifier
-        let staging = PathUtilities.join(layout.postgresRoot, "data.initializing-\(processID)-\(nowMilliseconds())")
-        let secretDirectory = try fileSystem.makeTemporaryDirectory(prefix: "vision-initdb-")
-        do {
-            let passwordFile = PathUtilities.join(secretDirectory, "password")
-            try fileSystem.writeText(passwordFile, "\(config.adminPassword)\n", mode: 0o600)
-            _ = try await run(
-                try tool("initdb"),
-                PostgresSQL.initdbArguments(
-                    dataDirectory: staging, adminRole: config.adminRole, passwordFile: passwordFile),
-                timeout: 5 * 60,
-                environment: ChildEnvironment.managedPostgres(inherited: inheritedEnvironment))
-            try ensureManagedPostgresConfig(staging)
-            try fileSystem.setMode(staging, 0o700)
-            try fileSystem.move(staging, layout.postgresData)
-            try? fileSystem.remove(secretDirectory)
-            return ManagedClusterResult(status: .initialized, configChanged: true)
-        } catch {
-            if fileSystem.exists(staging) {
-                try? fileSystem.move(
-                    staging, PathUtilities.join(layout.postgresRoot, "data.failed-\(nowMilliseconds())"))
-            }
-            try? fileSystem.remove(secretDirectory)
-            throw error
-        }
-    }
-
-    /// `withPgPass`: runs one command with a temporary 0600 password file for one role,
-    /// removed afterwards.
-    private func runWithPgPass(
-        _ config: DatabaseConfig,
-        role: String,
-        password: String,
-        _ executable: String,
-        _ arguments: [String],
-        timeout: TimeInterval
-    ) async throws -> RunResult {
-        let directory = try fileSystem.makeTemporaryDirectory(prefix: "vision-pgpass-")
-        do {
-            let pgpass = PathUtilities.join(directory, "pgpass")
-            try fileSystem.writeText(pgpass, "\(host):\(config.port):*:\(role):\(password)\n", mode: 0o600)
-            let result = try await run(
-                executable, arguments, timeout: timeout, environment: safeEnvironment([("PGPASSFILE", pgpass)]))
-            try? fileSystem.remove(directory)
-            return result
-        } catch {
-            try? fileSystem.remove(directory)
-            throw error
-        }
-    }
-
-    private func runAsClusterAdmin(
-        _ config: DatabaseConfig,
-        _ executable: String,
-        _ arguments: [String],
-        timeout: TimeInterval
-    ) async throws -> RunResult {
-        try await runWithPgPass(
-            config, role: config.adminRole, password: config.adminPassword, executable, arguments, timeout: timeout)
-    }
-
-    private func runAsOwner(
-        _ config: DatabaseConfig,
-        _ executable: String,
-        _ arguments: [String],
-        timeout: TimeInterval
-    ) async throws -> RunResult {
-        try await runWithPgPass(
-            config, role: config.ownerRole, password: config.ownerPassword, executable, arguments, timeout: timeout)
-    }
-
-    /// `inspectReadyPostgres`: the server on our port must be major 18, loopback-only
-    /// and serve exactly our data directory.
-    private func inspectReadyPostgres(_ config: DatabaseConfig) async throws {
-        let psql = try tool("psql")
-        let result = try await runAsClusterAdmin(
-            config, psql,
-            [
-                "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--dbname", "postgres",
-                "--tuples-only", "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command",
-                PostgresSQL.inspectServerQuery,
-            ],
-            timeout: 10)
-        let lines = result.stdout.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        guard let versionNum = lines.first.flatMap({ Int($0) }),
-            versionNum / 10_000 == RuntimeConstants.postgresMajor
-        else {
-            throw NativeRuntimeError(
-                "POSTGRES_WRONG_VERSION", "Native PostgreSQL server must be major \(RuntimeConstants.postgresMajor).")
-        }
-        let addresses = (lines.count > 1 ? lines[1] : "").split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard PostgresSQL.isLoopbackOnly(addresses) else {
-            throw NativeRuntimeError(
-                "POSTGRES_UNSAFE_BIND", "PostgreSQL listen_addresses is not loopback-only; refusing to start Vision.")
-        }
-        let actual = lines.count > 2 ? fileSystem.realPath(lines[2]) : nil
-        guard let expected = fileSystem.realPath(layout.postgresData), actual == expected else {
-            throw NativeRuntimeError(
-                "POSTGRES_PORT_COLLISION", "The native PostgreSQL port belongs to a different database cluster.")
-        }
-    }
-
-    private func postgresIsReady(timeout: TimeInterval) async -> Bool {
-        guard let pgIsReady = try? tool("pg_isready") else { return false }
-        let arguments = ["-h", host, "-p", String(postgresPort), "-d", "postgres"]
-        return (try? await run(pgIsReady, arguments, timeout: timeout)) != nil
-    }
-
-    /// `startManagedPostgres`: refuses an occupied port, then runs `postgres` directly
-    /// with its output appended to `postgres.log` and records its PID.
-    private func startManagedPostgres() async throws {
-        guard await dependencies.ports.isPortFree(postgresPort) else {
-            throw NativeRuntimeError(
-                "POSTGRES_PORT_COLLISION", "Native PostgreSQL port \(postgresPort) is already in use.")
-        }
-        let recordPath = layout.postgresPid
-        let spawnedPID = LockedValue<Int32>(0)
-        try ensureNotShuttingDown()
-        let child = try dependencies.spawner.spawn(
-            try tool("postgres"),
-            PostgresSQL.serverArguments(dataDirectory: layout.postgresData, port: postgresPort),
-            cwd: layout.postgresRoot,
-            environment: ChildEnvironment.managedPostgres(inherited: inheritedEnvironment),
-            logPath: layout.postgresLog,
-            onExit: { [self] in
-                let pid = spawnedPID.withLock { $0 }
-                Task { await self.clearPIDRecord(recordPath, pid: pid) }
-            })
-        guard child.pid > 1 else {
-            throw NativeRuntimeError("POSTGRES_UNAVAILABLE", "Native PostgreSQL did not provide a process id")
-        }
-        spawnedPID.withLock { $0 = child.pid }
-        postgresChild = child
-        try fileSystem.writeFile(
-            recordPath,
-            try PIDRecord.postgres(
-                pid: child.pid, port: postgresPort, runtimeId: names.id, dataDirectory: layout.postgresData, now: now()
-            ).serialized(),
-            mode: 0o600)
-    }
-
-    /// Removes a PID record only when it still names the exited process.
-    private func clearPIDRecord(_ path: String, pid: Int32) {
-        guard pid > 1, PIDRecord.recordedPID(try? fileSystem.readIfPresent(path)) == pid else { return }
-        try? fileSystem.remove(path)
-    }
-
-    /// `ensurePostgresReady`: reuses a running cluster that passes inspection (restarting
-    /// it after a configuration change), otherwise starts it and probes every 50 ms for up
-    /// to 30 seconds (a clean cluster accepts connections about 0.1 s after the spawn).
-    public func ensurePostgresReady(startService: Bool) async throws {
+    /// `ensureDatabaseReady`: layout and interrupted-restore recovery before a backend opens
+    /// the database.
+    public func ensureDatabaseReady() async throws {
+        try await ensureLayout()
         try await ensureDiscovered()
-        let config = try prepareLayout()
-        let cluster = try await ensureManagedPostgresCluster(config)
-        var ready = await postgresIsReady(timeout: 5)
-        if ready {
-            do {
-                try await inspectReadyPostgres(config)
-            } catch let error as NativeRuntimeError where error.code == "POSTGRES_WRONG_VERSION" {
-                throw error
-            } catch {
-                throw NativeRuntimeError(
-                    "POSTGRES_PORT_COLLISION", "Native PostgreSQL port \(postgresPort) is occupied by another server.")
-            }
-            if !cluster.configChanged { return }
-            guard startService else {
-                throw NativeRuntimeError(
-                    "POSTGRES_RESTART_REQUIRED", "Managed PostgreSQL configuration changed and requires a restart.")
-            }
-            try await stopPostgres()
-            ready = false
-        }
-        if !ready && startService {
-            try await startManagedPostgres()
-            let deadline = now().addingTimeInterval(30)
-            while now() < deadline {
-                if postgresChild?.hasExited() == true { break }
-                ready = await postgresIsReady(timeout: 3)
-                if ready { break }
-                await dependencies.clock.sleep(milliseconds: 50)
-            }
-        }
-        guard ready else {
-            throw NativeRuntimeError("POSTGRES_UNAVAILABLE", "PostgreSQL 18 did not become ready on 127.0.0.1.")
-        }
-        try await inspectReadyPostgres(config)
-    }
-
-    public func ensurePostgresReady() async throws {
-        try await ensurePostgresReady(startService: true)
-    }
-
-    /// `runSecretAdminSql`: SQL containing secrets goes through a 0600 file, never argv,
-    /// and a failure never echoes the statement.
-    private func runSecretAdminSQL(_ config: DatabaseConfig, _ sql: String, timeout: TimeInterval = 10) async throws {
-        let directory = try fileSystem.makeTemporaryDirectory(prefix: "vision-pg-admin-")
-        do {
-            let sqlFile = PathUtilities.join(directory, "command.sql")
-            try fileSystem.writeText(sqlFile, "\(sql)\n", mode: 0o600)
-            do {
-                _ = try await runAsClusterAdmin(
-                    config, try tool("psql"),
-                    [
-                        "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--dbname", "postgres",
-                        "--set", "ON_ERROR_STOP=1", "--no-psqlrc", "--file", sqlFile,
-                    ],
-                    timeout: timeout)
-            } catch {
-                throw NativeRuntimeError("POSTGRES_ROLE_BOOTSTRAP_FAILED", "Native database role bootstrap failed")
-            }
-            try? fileSystem.remove(directory)
-        } catch {
-            try? fileSystem.remove(directory)
-            throw error
-        }
-    }
-
-    /// `bootstrapDatabase`: owner and application roles (created once, passwords and
-    /// attributes reset every launch), the read-only analysis executor, the database
-    /// owned by the migration owner, and the required extensions, all in one psql session
-    /// (`PostgresSQL.bootstrapSQL`). Table grants and migrations belong to the backend,
-    /// which migrates at boot from `db/migrations` and applies
-    /// `config/postgres/app-role-grants.sql.tpl`.
-    @discardableResult
-    public func bootstrapDatabase() async throws -> DatabaseConfig {
-        let config = try prepareLayout()
-        try await ensurePostgresReady(startService: true)
-        // An interrupted restore is resolved before a replacement database could be created.
-        if !restoreSwitchOwnedThisLaunch {
-            let recovery = startupRestoreRecovery ?? Task { try await self.recoverInterruptedRestore() }
-            startupRestoreRecovery = recovery
-            try await recovery.value
-        }
-        try await runSecretAdminSQL(config, try PostgresSQL.bootstrapSQL(config), timeout: 60)
-        return config
-    }
-
-    /// `installRequiredExtensions`: `pg_stat_statements` is untrusted, so the private
-    /// cluster administrator installs all three; the owner stays a non-superuser.
-    private func installRequiredExtensions(_ database: String, _ config: DatabaseConfig) async throws {
-        let target = try validateIdentifier(database, "database name")
-        _ = try await runAsClusterAdmin(
-            config, try tool("psql"),
-            [
-                "-h", host, "-p", String(config.port), "-U", config.adminRole, "-d", target, "--set",
-                "ON_ERROR_STOP=1", "--no-psqlrc", "--command", PostgresSQL.createExtensions,
-            ],
-            timeout: 30)
+        try await recoverOnce()
     }
 
     // MARK: - Runtime marker
@@ -582,22 +281,16 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         return PIDRecord.commandMatchesBackend(psOutput: output, backendExecutable: backend)
     }
 
-    /// `start`: bootstraps the database, reuses a healthy backend this runtime started
-    /// earlier, refuses to touch a PID owned by another program, then spawns the
+    /// `start`: recovers an interrupted restore, reuses a healthy backend this runtime
+    /// started earlier, refuses to touch a PID owned by another program, then spawns the
     /// compiled backend on the loopback app port with the allowlisted environment. The
-    /// backend applies the pending Kysely migrations at boot.
+    /// backend opens the SQLite file and applies pending migrations itself.
     /// Unlike Electron (`BACKEND_STALE_PID`), a recorded backend of ours that does not
     /// answer `/health` is stopped and replaced, so Retry can recover from it.
-    ///
-    /// `beforeMigrations` runs after PostgreSQL is ready and before the backend is spawned,
-    /// only when an existing database is behind the packaged migration chain. A thrown
-    /// error aborts the start: no backend is spawned, so no migration runs without the
-    /// backup the hook was meant to take (`NativeStartOptions.beforeMigrations`).
-    public func start(beforeMigrations: (@Sendable (PendingMigrations) async throws -> Void)? = nil) async throws
-        -> BackendStartResult
-    {
+    @discardableResult
+    public func start() async throws -> BackendStartResult {
         try await assertNativeActive()
-        let config = try await bootstrapDatabase()
+        try await ensureDatabaseReady()
         let tools = try requireTools()
         if let existing = PIDRecord.recordedPID(try? fileSystem.readIfPresent(layout.pid)),
             dependencies.processes.exists(existing)
@@ -617,9 +310,6 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         let port = appPort
         guard await dependencies.ports.isPortFree(port) else {
             throw NativeRuntimeError("PORT_COLLISION", "Native backend port \(port) is already in use.")
-        }
-        if let beforeMigrations, let pending = try await pendingMigrations() {
-            try await beforeMigrations(pending)
         }
         let runtimeEnvironment = RuntimeEnvFile.parse(try fileSystem.readText(layout.env))
         let environment = ChildEnvironment.backend(
@@ -648,7 +338,13 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                 pid: child.pid, port: port, runtimeId: names.id, command: tools.compiledBackend, now: now()
             ).serialized(),
             mode: 0o600)
-        return .started(pid: child.pid, port: port, database: config.database)
+        return .started(pid: child.pid, port: port, database: layout.database)
+    }
+
+    /// Removes a PID record only when it still names the exited process.
+    private func clearPIDRecord(_ path: String, pid: Int32) {
+        guard pid > 1, PIDRecord.recordedPID(try? fileSystem.readIfPresent(path)) == pid else { return }
+        try? fileSystem.remove(path)
     }
 
     /// `stopBackend`: SIGTERM, up to `forceAfterMilliseconds` of grace, then SIGKILL, only
@@ -685,34 +381,19 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         try? fileSystem.remove(layout.pid)
     }
 
-    /// `stopPostgres`: `pg_ctl stop -m fast` on exactly our data directory.
-    public func stopPostgres() async throws {
-        guard fileSystem.exists(PathUtilities.join(layout.postgresData, "PG_VERSION")) else {
-            try? fileSystem.remove(layout.postgresPid)
-            return
-        }
-        try await ensureDiscovered()
-        let postmasterPid = PathUtilities.join(layout.postgresData, "postmaster.pid")
-        guard fileSystem.exists(postmasterPid) else {
-            try? fileSystem.remove(layout.postgresPid)
-            return
-        }
-        do {
-            _ = try await run(
-                try tool("pg_ctl"), ["-D", layout.postgresData, "-m", "fast", "-w", "-t", "30", "stop"], timeout: 35)
-        } catch {
-            if fileSystem.exists(postmasterPid) { throw error }
-        }
-        try? fileSystem.remove(layout.postgresPid)
-    }
-
-    /// `stop`: the backend, then PostgreSQL unless `keepPostgres`.
-    public func stop(keepPostgres: Bool) async throws {
+    /// `stop`: the backend, the only process that holds the database open.
+    public func stop() async throws {
         try await stopBackend()
-        if !keepPostgres { try await stopPostgres() }
     }
 
-    /// The last lines of `backend.log`, redacted, for the app log after a failed start.
+    /// `restart`.
+    @discardableResult
+    public func restart() async throws -> BackendStartResult {
+        try await stop()
+        return try await start()
+    }
+
+    /// The last lines of `backend.log`, without colour codes, for the app log after a failed start.
     public func backendLogTail(lines: Int = 200) -> String {
         guard let data = try? fileSystem.readIfPresent(layout.backendLog) else { return "" }
         let text = String(decoding: data, as: UTF8.self)
@@ -723,202 +404,195 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     /// `backendStartupFailure`: why the backend from the last `start()` exited, or `nil`
     /// while it runs (or when none was started), so a launch can show the reason instead of
     /// polling until it times out. Unlike Electron it has no exit code to report.
-    public func backendStartupFailure() -> String? {
+    public func backendStartupFailure() -> BackendStartupFailure? {
         guard backendChild?.hasExited() == true else { return nil }
         let data = try? fileSystem.readIfPresent(layout.backendLog)
         let tail = data.map { String(decoding: $0.suffix(65_536), as: UTF8.self) } ?? ""
-        return BackendLog.lastStartupError(tail) ?? "The Vision backend stopped during startup."
+        return BackendLog.lastStartupFailure(tail)
+            ?? BackendStartupFailure(message: "The Vision backend stopped during startup.")
     }
 
-    // MARK: - Database switch (Demo seeding)
+    // MARK: - Database tool
 
-    private func adminDatabasePsql(_ database: String, _ command: String, timeout: TimeInterval = 30) async throws
-        -> RunResult
-    {
+    /// `runDatabaseTool`: `tools/db-file.js` through the packaged backend executable acting
+    /// as Bun, so the tool uses the same Bun and SQLite as the backend. A failure carries the
+    /// tool's own JSON error when it printed one.
+    private func runDatabaseTool(_ command: DatabaseTool) async throws -> DatabaseFileReport {
         try await ensureDiscovered()
-        let config = try prepareLayout()
-        let target = try validateIdentifier(database, "database name")
-        return try await runAsClusterAdmin(
-            config, try tool("psql"),
-            [
-                "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--dbname", target, "--set",
-                "ON_ERROR_STOP=1", "--no-psqlrc", "--command", command,
-            ],
-            timeout: timeout)
-    }
-
-    private func adminPsql(_ command: String) async throws {
-        _ = try await adminDatabasePsql("postgres", command)
-    }
-
-    private func terminateDatabaseConnections(_ database: String) async throws {
-        let name = try validateIdentifier(database, "database name")
-        try await adminPsql(PostgresSQL.terminateConnections(name))
-    }
-
-    public func databaseExists(_ database: String) async throws -> Bool {
-        let name = try validateIdentifier(database, "database name")
-        let result = try await adminDatabasePsql("postgres", PostgresSQL.databaseExistsQuery(name))
-        return result.stdout.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.contains("1")
-    }
-
-    /// `restoreDatabaseName`: `<base[0..40]>_<suffix>_<10 hex>`.
-    private func temporaryDatabaseName(_ base: String, _ suffix: String) throws -> String {
-        try validateIdentifier(
-            "\(base.prefix(40))_\(suffix)_\(dependencies.random.hex(byteCount: 5))", "temporary database name")
-    }
-
-    private func createEmptyDatabase(_ database: String, owner: String) async throws {
-        let config = try prepareLayout()
-        let name = try validateIdentifier(database, "database name")
-        let ownerRole = try validateIdentifier(owner, "owner role")
-        _ = try await runAsClusterAdmin(
-            config, try tool("createdb"),
-            [
-                "-h", host, "-p", String(postgresPort), "-U", config.adminRole, "--template", "template0", "--owner",
-                ownerRole, name,
-            ],
-            timeout: 30)
-    }
-
-    /// `restoreIntoDatabase`: extensions as the administrator, objects as the restricted
-    /// owner in one transaction (`pg_restore` for a custom dump, `psql --file` for plain
-    /// SQL), then the two runtime-managed materialized views handed to the application role.
-    private func restoreIntoDatabase(
-        _ source: String, _ database: String, _ config: DatabaseConfig, format: RestoreFormat
-    ) async throws {
-        guard let info = fileSystem.info(source), info.kind == .file, info.size > 0 else {
+        let backend = try requireTools().compiledBackend
+        let tool = PathUtilities.join(runtimeRoot, RuntimeConstants.packagedDatabaseTool)
+        guard fileSystem.isExecutable(backend), fileSystem.info(tool) != nil else {
             throw NativeRuntimeError(
-                "INVALID_POSTGRES_DUMP", "PostgreSQL restore source is empty or not a file")
+                "DATABASE_TOOL_MISSING", "Vision's database tool is missing from this installation. Reinstall Vision.")
         }
-        let target = try validateIdentifier(database, "database name")
-        try await installRequiredExtensions(target, config)
-        switch format {
-        case .custom:
-            _ = try await runAsOwner(
-                config, try tool("pg_restore"),
-                [
-                    "--exit-on-error", "--single-transaction", "--no-owner", "--no-acl", "--no-comments", "-h", host,
-                    "-p", String(config.port), "-U", config.ownerRole, "-d", target, source,
-                ],
-                timeout: 30 * 60)
-        case .plain:
-            _ = try await runAsOwner(
-                config, try tool("psql"),
-                [
-                    "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", target, "--set",
-                    "ON_ERROR_STOP=1", "--no-psqlrc", "--single-transaction", "--file", source,
-                ],
-                timeout: 30 * 60)
-        }
-        _ = try await adminDatabasePsql(target, try PostgresSQL.materializedViewOwnership(appRole: config.appRole))
-    }
-
-    /// `readSchemaLedger`: the highest `public.kysely_migration` name of `database`, as the
-    /// migration owner. The first query reports whether the ledger exists so that a missing
-    /// table is not an error; `nil` means no ledger (or an empty one).
-    private func readSchemaLedger(_ database: String, _ config: DatabaseConfig, timeout: TimeInterval) async throws
-        -> String?
-    {
-        let psql = try tool("psql")
-        func query(_ command: String) async throws -> String {
-            let result = try await runAsOwner(
-                config, psql,
-                [
-                    "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", database,
-                    "--tuples-only", "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command", command,
-                ],
-                timeout: timeout)
-            return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard try await query(MigrationLedger.ledgerExistsSQL) == "t" else { return nil }
-        let head = try await query(MigrationLedger.headSQL)
-        return head.isEmpty ? nil : head
-    }
-
-    /// `validateRestoredDatabase`: public tables exist, the Kysely ledger exists (a backup
-    /// without it predates the TypeScript baseline and is refused) and its head matches the
-    /// backup's.
-    private func validateRestoredDatabase(_ database: String, _ config: DatabaseConfig, expectedSchemaHead: String)
-        async throws
-    {
-        let target = try validateIdentifier(database, "database name")
-        let result = try await runAsOwner(
-            config, try tool("psql"),
-            [
-                "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", target, "--tuples-only",
-                "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command",
-                PostgresSQL.publicTableCountQuery,
-            ],
-            timeout: 30)
-        guard let tableCount = Int(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)), tableCount > 0
-        else {
-            throw NativeRuntimeError("RESTORE_VALIDATION_FAILED", "Restored database has no public schema tables")
-        }
-        guard let head = try await readSchemaLedger(target, config, timeout: 30) else {
-            throw MigrationLedger.preBaselineBackupError()
-        }
-        let expected = expectedSchemaHead.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard expected.isEmpty || head == expected else {
+        let environment = ChildEnvironment.databaseTool(
+            inherited: inheritedEnvironment, layout: layout, runtimeRoot: runtimeRoot)
+        let stdout: String
+        do {
+            stdout = try await run(
+                backend, [tool] + command.arguments, timeout: 30 * 60, environment: environment, cwd: runtimeRoot
+            ).stdout
+        } catch {
+            let output = (error as? ProcessRunError)?.stdout ?? ""
+            if case .failure(let message)? = try? DatabaseTool.parseOutput(output) {
+                throw NativeRuntimeError(command.failureCode, message)
+            }
             throw NativeRuntimeError(
-                "RESTORE_VALIDATION_FAILED", "Restored database schema revision does not match backup metadata")
+                command.failureCode, "Vision's database tool failed: \(backupErrorMessage(error))")
+        }
+        switch try DatabaseTool.parseOutput(stdout) {
+        case .report(let report)?:
+            return report
+        case .failure(let message)?:
+            throw NativeRuntimeError(command.failureCode, message)
+        case nil:
+            throw NativeRuntimeError(command.failureCode, "Vision's database tool returned no result")
         }
     }
 
-    /// `validateCustomDump`: a non-empty regular file that `pg_restore --list` accepts.
-    public func validateCustomDump(_ path: String) async throws {
-        guard let info = fileSystem.info(path), info.kind == .file, info.size > 0 else {
-            throw NativeRuntimeError("INVALID_POSTGRES_DUMP", "PostgreSQL custom dump is empty or not a file")
+    /// `verifyDatabaseFile`: `integrity_check`, `foreign_key_check` and the migration
+    /// ledger of a database file.
+    public func verifyDatabaseFile(_ path: String) async throws -> DatabaseFileReport {
+        try await runDatabaseTool(.verify(PathUtilities.normalize(path)))
+    }
+
+    /// `snapshotDatabase`: a consistent copy of the live database (`VACUUM INTO`, verified)
+    /// at `destination`, written to a `.partial` sidecar and renamed only once the tool
+    /// verified it, so a failure never leaves a file at the final name.
+    public func snapshotDatabase(to destination: String) async throws -> DatabaseFileReport {
+        try await ensureLayout()
+        guard fileSystem.exists(layout.database) else {
+            throw NativeRuntimeError("DATABASE_MISSING", "Vision has no database to back up yet.")
         }
-        try await ensureDiscovered()
+        let finalPath = PathUtilities.normalize(destination)
+        let partialPath = "\(finalPath).partial"
+        try fileSystem.createDirectory(PathUtilities.dirname(finalPath), mode: 0o700)
+        try? fileSystem.remove(partialPath)
         do {
-            _ = try await run(try tool("pg_restore"), ["--list", path], timeout: 60)
+            let report = try await runDatabaseTool(.snapshot(source: layout.database, destination: partialPath))
+            try fileSystem.move(partialPath, finalPath)
+            try fileSystem.setMode(finalPath, 0o600)
+            return report.at(finalPath)
         } catch {
-            throw NativeRuntimeError("INVALID_POSTGRES_DUMP", "PostgreSQL custom dump is corrupt or truncated")
-        }
-    }
-
-    /// `activateRestoredDatabase`: restores into a staging database, validates it, persists
-    /// the rename plan, stops the backend and swaps names, keeping the previous database.
-    public func activateRestoredDatabase(_ path: String, expectedSchemaHead: String) async throws
-        -> DatabaseSwitchToken
-    {
-        try await activateRestoredDatabase(path, format: .custom, expectedSchemaHead: expectedSchemaHead)
-    }
-
-    public func activateRestoredDatabase(_ path: String, format: RestoreFormat, expectedSchemaHead: String)
-        async throws -> DatabaseSwitchToken
-    {
-        try await assertNativeActive()
-        let config = try await bootstrapDatabase()
-        let staging = try temporaryDatabaseName(config.database, "restore")
-        let previous = try temporaryDatabaseName(config.database, "previous")
-        var token: DatabaseSwitchToken?
-        stagingRestoreDatabase = staging
-        do {
-            try await createEmptyDatabase(staging, owner: config.ownerRole)
-        } catch {
-            stagingRestoreDatabase = nil
+            try? fileSystem.remove(partialPath)
             throw error
         }
+    }
+
+    /// `createDatabaseFile`: a new database at the packaged migration head, optionally
+    /// loaded with a data-only SQL file.
+    public func createDatabaseFile(_ destination: String, seedSQL: String? = nil) async throws -> DatabaseFileReport {
+        try await runDatabaseTool(
+            .create(PathUtilities.normalize(destination), seedSQL: seedSQL.map(PathUtilities.normalize)))
+    }
+
+    /// `getDatabaseStats`: file statistics of the live database, read without the backend.
+    public func getDatabaseStats() async throws -> DatabaseFileStats {
+        try DatabaseStatistics.readFileStats(layout.database, fileSystem: fileSystem)
+    }
+
+    /// `getLocalMigrationVersion`: the newest migration in the payload's `db/migrations`;
+    /// 0 when it has none or the directory cannot be read.
+    public func packagedMigrationVersion() async -> Int {
+        (try? MigrationLedger.packagedVersion(
+            migrationsDirectory: PathUtilities.join(runtimeRoot, "db", "migrations"), fileSystem: fileSystem)) ?? 0
+    }
+
+    /// `pendingSchemaUpgrade`: the live database is behind this build's migrations, so the
+    /// backend backs it up and migrates it at start. Version 0 is a database no migration
+    /// has touched yet: nothing to back up.
+    public func pendingSchemaUpgrade() async -> PendingSchemaUpgrade? {
+        let packaged = await packagedMigrationVersion()
+        guard let stats = try? DatabaseStatistics.readFileStats(layout.database, fileSystem: fileSystem),
+            let databaseVersion = stats.schemaVersion, databaseVersion != 0, databaseVersion < packaged
+        else { return nil }
+        return PendingSchemaUpgrade(databaseVersion: databaseVersion, packagedVersion: packaged)
+    }
+
+    // MARK: - Database generation switch (Demo seeding and restore)
+
+    private func generationNonce() -> String {
+        "\(nowMilliseconds())-\(dependencies.random.hex(byteCount: 4))"
+    }
+
+    private func generationPath(_ kind: String, _ nonce: String) -> String {
+        PathUtilities.join(layout.userDataDirectory, "\(RuntimeConstants.databaseDirectoryName).\(kind)-\(nonce)")
+    }
+
+    /// `switchTokenDirectories`: the three directories a persisted token names, after
+    /// checking that they are this runtime's database generations, so a tampered or foreign
+    /// token can never make the runtime rename an arbitrary directory.
+    private func switchTokenDirectories(_ token: JSONValue) throws -> (live: String, previous: String, activated: String) {
+        func generation(_ value: JSONValue?, _ kind: String) -> String? {
+            guard let path = value?.stringValue, PathUtilities.dirname(path) == layout.userDataDirectory,
+                PathUtilities.fullMatch(
+                    PathUtilities.basename(path), "\(RuntimeConstants.databaseDirectoryName)\\.\(kind)-[0-9a-z-]{1,64}")
+            else { return nil }
+            return path
+        }
+        guard DatabaseSwitchToken.isSqliteToken(token),
+            token["liveDirectory"] == .string(layout.databaseDirectory),
+            let previous = generation(token["previousDirectory"], "previous"),
+            let activated = generation(token["activatedDirectory"], "restore")
+        else {
+            throw NativeRuntimeError("NO_DATABASE_SWITCH", "No matching native database switch is available")
+        }
+        return (layout.databaseDirectory, previous, activated)
+    }
+
+    /// `activateRestoredDatabase`: stages the file as the next database generation, verifies
+    /// the staged copy (integrity, foreign keys, ledger, and the expected checksum and schema
+    /// version), then swaps generations with two directory renames journaled beforehand.
+    /// Nothing live changes before the copy has passed verification; a failure after the
+    /// journal is written puts the previous generation back.
+    public func activateRestoredDatabase(_ path: String, expectedSchemaVersion: Int?, expectedSha256: String?)
+        async throws -> DatabaseActivation
+    {
+        try await assertNativeActive()
+        try await ensureLayout()
+        try await ensureDiscovered()
+        try await recoverOnce()
+        let source = PathUtilities.normalize(path)
+        guard let info = fileSystem.info(source), info.kind == .file, info.size > 0 else {
+            throw NativeRuntimeError("INVALID_DATABASE_FILE", "The database to restore is empty or not a file")
+        }
+        let nonce = generationNonce()
+        let staging = generationPath("restore", nonce)
+        let previous = generationPath("previous", nonce)
+        var token: DatabaseSwitchToken?
+        try fileSystem.createDirectory(staging, mode: 0o700)
+        stagingRestoreDirectory = staging
         do {
-            try await restoreIntoDatabase(path, staging, config, format: format)
-            try await validateRestoredDatabase(staging, config, expectedSchemaHead: expectedSchemaHead)
+            let stagedFile = PathUtilities.join(staging, RuntimeConstants.databaseFileName)
+            try fileSystem.copyFileDurably(source, stagedFile, mode: 0o600)
+            let validation = try await verifyDatabaseFile(stagedFile)
+            if let expectedSha256, validation.sha256 != expectedSha256 {
+                throw NativeRuntimeError(
+                    "DATABASE_CHECKSUM_MISMATCH",
+                    "The database in the backup does not match its recorded checksum; the backup is corrupt.")
+            }
+            if let expectedSchemaVersion, validation.schemaVersion != expectedSchemaVersion {
+                throw NativeRuntimeError(
+                    "DATABASE_SCHEMA_MISMATCH", "Restored database schema revision does not match backup metadata")
+            }
             try ensureNotShuttingDown()
             let plan = DatabaseSwitchToken(
-                version: 1, liveDatabase: config.database, previousDatabase: previous, activatedDatabase: staging,
+                liveDirectory: layout.databaseDirectory, previousDirectory: previous, activatedDirectory: staging,
                 activatedAt: isoTimestamp(now()))
             token = plan
-            // From here the persisted plan owns the staging database (rollback handles it).
-            stagingRestoreDatabase = nil
+            // Persist the complete rename plan before touching the live database. Recovery
+            // can then tell every interruption point apart without creating a replacement
+            // empty database or guessing which copy is live.
             try await writeState(set: ["pendingDatabaseSwitch": try JSONValue(encoding: plan)], remove: [])
+            stagingRestoreDirectory = nil
             restoreSwitchOwnedThisLaunch = true
-            try await stop(keepPostgres: true)
-            try await terminateDatabaseConnections(config.database)
-            try await terminateDatabaseConnections(staging)
-            try await adminPsql(try PostgresSQL.renameDatabase(config.database, to: previous))
-            try await adminPsql(try PostgresSQL.renameDatabase(staging, to: config.database))
-            return plan
+            try await stop()
+            if fileSystem.exists(layout.databaseDirectory) {
+                try fileSystem.move(layout.databaseDirectory, previous)
+            }
+            try fileSystem.move(staging, layout.databaseDirectory)
+            fileSystem.syncDirectory(layout.userDataDirectory)
+            return DatabaseActivation(switchToken: plan, validation: validation)
         } catch {
             if let token {
                 do {
@@ -932,70 +606,67 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                     )
                 }
             } else {
-                stagingRestoreDatabase = nil
-                if (try? await databaseExists(staging)) == true {
-                    try? await terminateDatabaseConnections(staging)
-                    try? await adminPsql(try PostgresSQL.dropDatabase(staging))
-                }
+                stagingRestoreDirectory = nil
+                try? fileSystem.remove(staging)
             }
             throw error
         }
     }
 
-    /// Drops the staging database of a Demo restore that a quit interrupted before its
+    /// Removes the staging generation of an activation that a quit interrupted before its
     /// switch plan was persisted. A persisted plan is rolled back on the next launch.
-    public func discardStagingRestore() async {
-        guard let staging = stagingRestoreDatabase else { return }
-        stagingRestoreDatabase = nil
-        guard (try? await databaseExists(staging)) == true else { return }
-        try? await terminateDatabaseConnections(staging)
-        try? await adminPsql(try PostgresSQL.dropDatabase(staging))
+    public func discardStagingRestore() {
+        guard let staging = stagingRestoreDirectory else { return }
+        stagingRestoreDirectory = nil
+        try? fileSystem.remove(staging)
     }
 
-    /// `rollbackDatabaseSwitch`: restores the previous database for every interruption
-    /// point and preserves the failed copy for inspection.
+    /// `rollbackDatabaseSwitch`: puts the previous generation back for every interruption
+    /// point and preserves the failed one for inspection.
     public func rollbackDatabaseSwitch(_ token: JSONValue?) async throws {
-        let config = try prepareLayout()
+        try await ensureLayout()
         var candidate = token
         if candidate == nil || candidate?.isTruthy == false {
             candidate = try await readState()?["pendingDatabaseSwitch"]
         }
-        guard let switchToken = candidate, switchToken["liveDatabase"] == .string(config.database) else {
+        guard let switchToken = candidate, switchToken.isTruthy else {
             throw NativeRuntimeError("NO_DATABASE_SWITCH", "No matching native database switch is available")
         }
-        let previous = try validateIdentifier(switchToken["previousDatabase"]?.stringValue, "previous database name")
-        let activated = try validateIdentifier(
-            switchToken["activatedDatabase"]?.stringValue, "activated database name")
-        try await stop(keepPostgres: true)
-        let liveExists = try await databaseExists(config.database)
-        let previousExists = try await databaseExists(previous)
-        let activatedExists = try await databaseExists(activated)
+        let (live, previous, activated) = try switchTokenDirectories(switchToken)
+        try await stop()
+        // ensureLayout recreates an empty live directory; only a database file inside it
+        // makes the live generation real.
+        let liveExists = fileSystem.exists(PathUtilities.join(live, RuntimeConstants.databaseFileName))
+        let previousExists = fileSystem.exists(previous)
+        let activatedExists = fileSystem.exists(activated)
         let state = DatabaseSwitchState.classify(liveExists: liveExists, previousExists: previousExists)
         if state == .unsafe {
             throw NativeRuntimeError(
                 "DATABASE_SWITCH_UNSAFE",
                 "Neither the live nor previous native database exists; automatic rollback is unsafe")
         }
-        if liveExists { try await terminateDatabaseConnections(config.database) }
-        if previousExists { try await terminateDatabaseConnections(previous) }
-        if activatedExists { try await terminateDatabaseConnections(activated) }
-
         var preservedFailed: String? = activatedExists ? activated : nil
-        if state == .activated {
-            let failed = try temporaryDatabaseName(config.database, "failed")
-            try await adminPsql(try PostgresSQL.renameDatabase(config.database, to: failed))
+        if state == .activated || state == .betweenRenames {
+            let failed = generationPath("failed", generationNonce())
+            // The live directory exists in both states: as the activated generation, or as
+            // the empty directory a layout check recreated.
+            let liveDirectoryExists = fileSystem.exists(live)
+            if liveDirectoryExists { try fileSystem.move(live, failed) }
             do {
-                try await adminPsql(try PostgresSQL.renameDatabase(previous, to: config.database))
+                try fileSystem.move(previous, live)
             } catch {
-                try? await adminPsql(try PostgresSQL.renameDatabase(failed, to: config.database))
+                if liveDirectoryExists { try? fileSystem.move(failed, live) }
                 throw error
             }
-            preservedFailed = failed
-        } else if state == .betweenRenames {
-            try await adminPsql(try PostgresSQL.renameDatabase(previous, to: config.database))
+            fileSystem.syncDirectory(layout.userDataDirectory)
+            if state == .activated {
+                preservedFailed = failed
+            } else {
+                try? fileSystem.remove(failed)
+            }
         }
         var rollback: [String: JSONValue] = [
-            "restoredDatabase": .string(state == .beforeRenames ? config.database : previous),
+            "restoredDatabase": .string(state == .beforeRenames ? live : previous),
             "rolledBackAt": .string(isoTimestamp(now())),
         ]
         if let preservedFailed { rollback["preservedFailedDatabase"] = .string(preservedFailed) }
@@ -1004,110 +675,39 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         startupRestoreRecovery = nil
     }
 
-    /// `finalizeDatabaseSwitch`: clears the pending switch and remembers the previous name.
+    /// `prunePreviousDatabaseGenerations`: keeps the newest previous generations.
+    private func prunePreviousDatabaseGenerations() throws {
+        let prefix = "\(RuntimeConstants.databaseDirectoryName).previous-"
+        let generations = try fileSystem.contentsOfDirectory(layout.userDataDirectory)
+            .filter { $0.hasPrefix(prefix) }
+            .map { PathUtilities.join(layout.userDataDirectory, $0) }
+            .filter { fileSystem.info($0)?.kind == .directory }
+            .map { (path: $0, modified: fileSystem.modificationDate($0) ?? .distantPast) }
+            .sorted { $0.modified != $1.modified ? $0.modified > $1.modified : $0.path > $1.path }
+        for old in generations.dropFirst(RuntimeConstants.previousDatabaseGenerationsKept) {
+            try fileSystem.remove(old.path)
+        }
+    }
+
+    /// `finalizeDatabaseSwitch`: clears the pending switch and remembers the previous
+    /// generation; pruning older generations is cleanup that never fails the restore.
     public func finalizeDatabaseSwitch(_ token: DatabaseSwitchToken) async throws {
         try await writeState(
             set: [
-                "previousDatabase": .string(token.previousDatabase),
+                "previousDatabase": .string(token.previousDirectory),
                 "lastDatabaseSwitchAt": .string(isoTimestamp(now())),
             ],
             remove: ["pendingDatabaseSwitch"])
         restoreSwitchOwnedThisLaunch = false
         startupRestoreRecovery = nil
-    }
-
-    /// `getDatabaseStats` as the migration owner.
-    public func getDatabaseStats() async throws -> DatabaseStats {
-        let config = try prepareLayout()
-        try await ensureDiscovered()
-        let psql = try tool("psql")
-        let result = try await runAsOwner(
-            config, psql,
-            [
-                "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", config.database,
-                "--tuples-only", "--no-align", "--field-separator", "\t", "--quiet", "--no-psqlrc", "--set",
-                "ON_ERROR_STOP=1", "--command", DatabaseStatistics.sql,
-            ],
-            timeout: 60)
-        return try DatabaseStatistics.parse(result.stdout)
-    }
-
-    // MARK: - Backup and restore (phase 1d)
-
-    /// `getSchemaHead`: the highest `public.kysely_migration` name of the live database,
-    /// or "" without a ledger.
-    public func schemaHead() async throws -> String {
-        let config = try prepareLayout()
-        try await ensureDiscovered()
-        return try await readSchemaLedger(config.database, config, timeout: 10) ?? ""
-    }
-
-    /// `getAppliedMigrations`: every migration name in the live database's ledger; empty
-    /// without a ledger.
-    public func appliedMigrations() async throws -> [String] {
-        let config = try prepareLayout()
-        try await ensureDiscovered()
-        guard try await readSchemaLedger(config.database, config, timeout: 10) != nil else { return [] }
-        let result = try await runAsOwner(
-            config, try tool("psql"),
-            [
-                "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", config.database,
-                "--tuples-only", "--no-align", "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command",
-                MigrationLedger.appliedSQL,
-            ],
-            timeout: 10)
-        return result.stdout.split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-    }
-
-    /// `pendingMigrations`: the packaged migrations an existing database has not applied
-    /// yet. A database without a ledger is new, so there is no user data to protect.
-    public func pendingMigrations() async throws -> PendingMigrations? {
-        let packagedHead = try MigrationLedger.chainHead(
-            migrationsDirectory: PathUtilities.join(runtimeRoot, "db", "migrations"), fileSystem: fileSystem)
-        guard !packagedHead.isEmpty else { return nil }
-        let appliedHead = try await schemaHead()
-        guard !appliedHead.isEmpty, packagedHead > appliedHead else { return nil }
-        return PendingMigrations(appliedHead: appliedHead, packagedHead: packagedHead)
-    }
-
-    /// `dumpDatabase(destination, { format: "plain" })`: `pg_dump` as the migration owner
-    /// without owners, ACLs, comments or the cluster-installed extensions, into
-    /// `<destination>.partial`, renamed and made 0600 once it is non-empty.
-    public func dumpDatabase(to destination: String) async throws {
-        let config = try prepareLayout()
-        try await ensureDiscovered()
-        let finalPath = PathUtilities.normalize(destination)
-        let partialPath = "\(finalPath).partial"
-        try fileSystem.createDirectory(PathUtilities.dirname(finalPath), mode: 0o700)
-        try? fileSystem.remove(partialPath)
         do {
-            var arguments = [
-                "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", config.database, "--no-owner",
-                "--no-acl", "--no-comments",
-            ]
-            for extensionName in RuntimeConstants.requiredPostgresExtensions {
-                arguments += ["--exclude-extension", extensionName]
-            }
-            arguments += ["--format=plain", "--file", partialPath]
-            _ = try await runAsOwner(config, try tool("pg_dump"), arguments, timeout: 30 * 60)
-            guard let info = fileSystem.info(partialPath), info.kind == .file, info.size > 0 else {
-                throw NativeRuntimeError("POSTGRES_DUMP_EMPTY", "PostgreSQL dump is empty")
-            }
-            try fileSystem.move(partialPath, finalPath)
-            try fileSystem.setMode(finalPath, 0o600)
+            try prunePreviousDatabaseGenerations()
         } catch {
-            try? fileSystem.remove(partialPath)
-            throw error
+            fputs("[native] could not prune previous database generations: \(backupErrorMessage(error))\n", stderr)
         }
     }
 
-    /// `getLocalMigrationChainHead`: the highest `NNNN_name` migration in the payload's
-    /// `db/migrations` (rollback files excluded); empty when the payload has none.
-    public func migrationChainHead() async -> String {
-        (try? MigrationLedger.chainHead(
-            migrationsDirectory: PathUtilities.join(runtimeRoot, "db", "migrations"), fileSystem: fileSystem)) ?? ""
-    }
+    // MARK: - Attachments
 
     /// `exportAttachments`: a private copy of the attachments tree.
     public func exportAttachments(to destination: String) async throws {
@@ -1193,10 +793,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     }
 
     /// The attachment half of `recoverInterruptedRestore` on its own; launch uses the
-    /// coordinated recovery, which also rolls the database switch back. While
-    /// `pendingDatabaseSwitch` is still persisted the restore never reached its commit
-    /// point, so the previous attachment tree goes back; once the database switch was
-    /// finalized the restored tree is kept and only the previous one is removed.
+    /// coordinated recovery, which also rolls the database switch back.
     @discardableResult
     public func recoverPendingAttachmentSwitch() async throws -> AttachmentSwitchRecovery? {
         guard let token = try await persistedAttachmentSwitch() else { return nil }
@@ -1213,13 +810,16 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     /// journals together before any write or Demo seed decision. While the database switch
     /// is pending the backend stops, the previous attachment tree comes back and the
     /// database switch rolls back; once the database switch was finalized the attachment
-    /// journal is cleanup only. A malformed journal or an ambiguous switch throws, so
-    /// startup fails closed instead of creating a replacement database.
+    /// journal is cleanup only. A database journal this version did not write is left alone;
+    /// a malformed attachment journal or an ambiguous switch throws, so startup fails closed
+    /// instead of creating a replacement database.
     public func recoverInterruptedRestore() async throws {
         let state = try await readState()
+        let pending = state?["pendingDatabaseSwitch"].flatMap { $0.isTruthy ? $0 : nil }
+        if let pending, !DatabaseSwitchToken.isSqliteToken(pending) { return }
         let attachments = try await persistedAttachmentSwitch()
-        if let pending = state?["pendingDatabaseSwitch"], pending.isTruthy {
-            try await stop(keepPostgres: true)
+        if let pending {
+            try await stop()
             if let attachments { try await rollbackPendingAttachmentSwitch(attachments) }
             try await rollbackDatabaseSwitch(pending)
         } else if let attachments {
@@ -1228,9 +828,14 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
     }
 
+    /// `start()` without waiting for readiness, as a restore rollback restarts.
+    public func startBackend() async throws {
+        try await start()
+    }
+
     /// `start()` then `waitUntilReady({ detailed: true })`, as a restore does after the switch.
     public func startBackendAndWait() async throws {
-        _ = try await start()
+        try await start()
         try await waitUntilReady(detailed: true)
     }
 }

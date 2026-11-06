@@ -31,7 +31,7 @@ public enum RuntimeMarker {
     }
 }
 
-/// `backend.pid.json` and `postgres.pid.json`.
+/// `backend.pid.json`.
 public enum PIDRecord {
     /// `probeableProcessId`: an integer above 1, never a group or `init`.
     public static func probeablePID(_ value: JSONValue?) -> Int32? {
@@ -55,18 +55,6 @@ public enum PIDRecord {
         ])
     }
 
-    public static func postgres(pid: Int32, port: Int, runtimeId: String, dataDirectory: String, now: Date)
-        -> JSONValue
-    {
-        .object([
-            "pid": .int(Int(pid)),
-            "runtimeId": .string(runtimeId),
-            "port": .int(port),
-            "dataDirectory": .string(dataDirectory),
-            "startedAt": .string(isoTimestamp(now)),
-        ])
-    }
-
     /// `processMatchesBackend`: the `ps -o command=` line of the recorded process must
     /// contain the backend executable path before Vision may signal it.
     public static func commandMatchesBackend(psOutput: String, backendExecutable: String) -> Bool {
@@ -76,11 +64,29 @@ public enum PIDRecord {
     }
 }
 
+/// Why the backend stopped during start-up, from its last failure log line
+/// (`BackendStartupFailure`).
+public struct BackendStartupFailure: Sendable, Equatable {
+    public let message: String
+    /// The error's code when it had one, for example `PRE_MIGRATION_BACKUP_FAILED`.
+    public let code: String?
+
+    public init(message: String, code: String? = nil) {
+        self.message = message
+        self.code = code
+    }
+
+    /// The backend could not copy the database before migrating it (ADR-242/263); the
+    /// shell wraps the message in `app.preMigrationBackupFailed`.
+    public static let preMigrationBackupFailedCode = "PRE_MIGRATION_BACKUP_FAILED"
+}
+
 /// The backend's own log (`logs/backend.log`).
 public enum BackendLog {
-    /// `lastStartupError`: the `error` of the last "Failed to start application" log line,
-    /// so the shell can show why startup stopped; `nil` when there is none.
-    public static func lastStartupError(_ log: String) -> String? {
+    /// `lastStartupFailure`: the `error` and `code` of the last "Failed to start
+    /// application" log line, so the shell can show why startup stopped; `nil` when there is
+    /// none.
+    public static func lastStartupFailure(_ log: String) -> BackendStartupFailure? {
         guard
             let line = log.split(separator: "\n", omittingEmptySubsequences: false).reversed()
                 .first(where: { $0.contains("Failed to start application") }),
@@ -90,7 +96,13 @@ public enum BackendLog {
         else {
             return nil
         }
-        return message
+        let code = parsed["code"]?.stringValue
+        return BackendStartupFailure(message: message, code: code?.isEmpty == false ? code : nil)
+    }
+
+    /// `lastStartupError`: the message alone.
+    public static func lastStartupError(_ log: String) -> String? {
+        lastStartupFailure(log)?.message
     }
 }
 
@@ -150,14 +162,9 @@ public enum AppSettings {
     }
 }
 
-/// Redacts database credentials and ANSI colours from log text before it is copied
-/// into the app log (`redactStartupDiagnostics`).
+/// `redactStartupDiagnostics`: strips ANSI colours from log text before it is copied into
+/// the app log. The SQLite runtime passes no database credentials, so there is nothing else
+/// to redact.
 public func redactDiagnostics(_ text: String) -> String {
-    var result = text.replacingOccurrences(
-        of: #"(postgres(?:ql)?://[^:\s/@]+:)[^@\s/]+(@)"#,
-        with: "$1***$2",
-        options: [.regularExpression, .caseInsensitive]
-    )
-    result = result.replacingOccurrences(of: "\u{1B}\\[[0-9;]*m", with: "", options: .regularExpression)
-    return result
+    text.replacingOccurrences(of: "\u{1B}\\[[0-9;]*m", with: "", options: .regularExpression)
 }

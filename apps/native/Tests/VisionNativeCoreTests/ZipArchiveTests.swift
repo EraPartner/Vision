@@ -309,27 +309,31 @@ private func zip64ExtraFields(_ raw: [UInt8]) throws -> (uncompressed: Int, comp
         }
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }
-        let dump = (0..<300_000).map { UInt8(truncatingIfNeeded: ($0 / 5) &* 7) }
-        try writeBytes(directory + "/db.sql", dump)
+        // A SQLite header, then enough varied bytes for real deflate blocks.
+        let database =
+            [UInt8](sqliteDatabase(userVersion: 3)) + (0..<300_000).map { UInt8(truncatingIfNeeded: ($0 / 5) &* 7) }
+        try writeBytes(directory + "/db.sqlite3", database)
         try BackupFiles.createDirectory(directory + "/attachments/tx-1")
         try writeBytes(directory + "/attachments/tx-1/caf\u{e9}.pdf", Array("pdf".utf8))
         let zipPath: String
         if forceZip64 {
             zipPath = directory + "/forced.zip"
             let writer = try ZipWriter(path: zipPath, forceZip64: true)
-            try writer.addFile(name: "db.sql", path: directory + "/db.sql")
+            try writer.addFile(name: "db.sqlite3", path: directory + "/db.sqlite3")
             try BackupBundle.addTree(writer, root: directory + "/attachments", prefix: "attachments")
             try writer.finish()
         } else {
             zipPath = try BackupBundle.create(
-                destinationDirectory: directory + "/out", deviceId: "dev", schemaHead: "0130_head", appVersion: "1",
-                dbSqlPath: directory + "/db.sql", attachmentsDirectory: directory + "/attachments",
-                frontendState: .object(["keys": .object([:])]), now: Date(timeIntervalSince1970: 1_760_000_000))
+                destinationDirectory: directory + "/out", deviceId: "dev", appVersion: "1",
+                databasePath: directory + "/db.sqlite3",
+                database: BundleDatabaseInfo(schemaVersion: 3, sqliteVersion: nil, sha256: nil, bytes: nil),
+                attachmentsDirectory: directory + "/attachments", frontendState: .object(["keys": .object([:])]),
+                now: Date(timeIntervalSince1970: 1_760_000_000))
         }
         let status = try run(Self.python, ["-I", "-c", Self.script, zipPath, directory + "/py"])
         #expect(status == 0)
-        let extracted = try readBytes(directory + "/py/db.sql")
-        #expect(extracted == dump)
+        let extracted = try readBytes(directory + "/py/db.sqlite3")
+        #expect(extracted == database)
         let attachment = try readBytes(directory + "/py/attachments/tx-1/caf\u{e9}.pdf")
         #expect(attachment == Array("pdf".utf8))
     }

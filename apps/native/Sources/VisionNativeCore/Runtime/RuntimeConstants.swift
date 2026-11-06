@@ -4,15 +4,10 @@ import Foundation
 /// They are persistence contracts (packaging/AGENTS.md): change them only together with
 /// the Electron runtime and a migration plan.
 public enum RuntimeConstants {
-    public static let postgresMajor = 18
-    public static let postgresMinor = 6
-    public static let postgresVersion = "\(postgresMajor).\(postgresMinor)"
     /// `RUNTIME_VERIFICATION_MARKER`: records the last full payload verification, below the
     /// runtime's `nativeRoot`.
     public static let runtimeVerificationMarker = "runtime-verification.json"
     public static let loopbackHost = "127.0.0.1"
-    /// `DEFAULT_POSTGRES_PORT`: the port a URL without a port means.
-    public static let defaultPostgresPort = 54329
     /// `DEFAULT_APP_PORT`: last-resort backend port when no random port is free.
     public static let defaultAppPort = 3002
     /// `pickRandomFreePort` in `packaging/electron/main.ts`: 20000–59999, 64 tries.
@@ -20,17 +15,31 @@ public enum RuntimeConstants {
     public static let randomAppPortAttempts = 64
     /// `resolveAppPort`: the persisted `appPort` bounds.
     public static let persistedAppPortRange = 1024...65535
-    public static let runtimeManagedMaterializedViews = ["mv_monthly_summary", "mv_category_totals"]
-    public static let requiredPostgresExtensions = ["pg_trgm", "pgcrypto", "pg_stat_statements"]
-    public static let requiredPostgresTools = [
-        "postgres", "initdb", "pg_ctl", "psql", "pg_dump", "pg_restore", "pg_isready", "createdb", "dropdb",
+    /// `DATABASE_DIRECTORY_NAME`: `<userData>/database` holds one database generation (the
+    /// file, its `-wal` and `-shm` sidecars and the backend's `pre-migration-backups/`), so
+    /// a restore swaps the whole directory and a write-ahead log never sits beside the wrong
+    /// database (ADR-263).
+    public static let databaseDirectoryName = "database"
+    /// `DATABASE_FILE_NAME`: the backend's `VISION_DATABASE_PATH` inside that directory.
+    public static let databaseFileName = "vision.sqlite3"
+    /// `PREVIOUS_DATABASE_GENERATIONS_KEPT`: previous generations kept after a committed restore.
+    public static let previousDatabaseGenerationsKept = 3
+    /// `PACKAGED_DATABASE_TOOL`: run by the backend executable as Bun (`BUN_BE_BUN=1`).
+    public static let packagedDatabaseTool = "tools/db-file.js"
+    /// `PACKAGED_ANALYSIS_SANDBOX`: the analysis SQL sandbox the backend starts itself.
+    public static let packagedAnalysisSandbox = "tools/analysis-sandbox.js"
+    /// `NATIVE_APPLICATION_ENV_KEYS`: the market-data keys `importApplicationEnv` copies
+    /// into `runtime.env`.
+    public static let applicationEnvironmentKeys = [
+        "TWELVE_DATA_API_KEY", "FINNHUB_API_KEY", "FMP_API_KEY", "ALPHA_VANTAGE_API_KEY", "FRED_API_KEY",
     ]
-    public static let versionCheckedPostgresTools = ["postgres", "psql", "pg_dump", "pg_restore"]
-    public static let analysisRole = "vision_analysis_executor"
-    /// `RETIRED_NATIVE_ENV_KEYS`: secrets of removed features. An older `runtime.env` may
-    /// still hold them; they are stripped on the next layout check and never reach the backend.
+    /// `RETIRED_NATIVE_ENV_KEYS`: settings of removed features (cloud AI, AI reference
+    /// mapping and the database server older versions ran). An older `runtime.env` may still
+    /// hold them; they are stripped on the next layout check and never reach a child.
     public static let retiredEnvironmentKeys: Set<String> = [
-        "OPENAI_API_KEY", "OPENAI_API_ENABLED", "AI_REFERENCE_MAPPING_KEY",
+        "OPENAI_API_KEY", "OPENAI_API_ENABLED", "AI_REFERENCE_MAPPING_KEY", "DATABASE_URL",
+        "DATABASE_URL_MIGRATIONS", "DATABASE_URL_ANALYSIS", "VISION_POSTGRES_ADMIN_ROLE",
+        "VISION_POSTGRES_ADMIN_PASSWORD",
     ]
     public static let childEnvironmentAllowlist = [
         "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "TZ",
@@ -47,12 +56,11 @@ public enum RuntimeConstants {
     }
 }
 
-/// Vision Native's own identity (ADR-204). It never shares a data directory, runtime id
-/// or PostgreSQL port with the Electron "Vision" (54329) or "Vision Demo" (54330) apps.
+/// Vision Native's own identity (ADR-204). It never shares a data directory or runtime id
+/// with the Electron "Vision" or "Vision Demo" apps.
 public enum VisionNativeIdentity {
     public static let userDataName = "Vision Native"
     public static let runtimeId = "vision_native"
-    public static let postgresPort = 54331
     /// Electron application-data folders Vision Native must never read, lock or mutate.
     public static let foreignUserDataNames: Set<String> = ["Vision", "Vision Demo", "Vision Development"]
 

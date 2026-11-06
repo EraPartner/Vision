@@ -5,22 +5,21 @@ import Testing
 // The CI interop gate (ADR-204 phase 1): with VISION_NATIVE_INTEROP_DIR set, this writes
 // backup bundles (unencrypted and v2-encrypted) with Vision Native's own code, from
 // synthetic data only, so they can be opened with the Electron readers
-// (`packaging/electron/backup/bundle.ts`). The bundle's dump carries a Kysely migration
-// ledger, which the Electron restore requires. Without the variable the test is skipped.
+// (`packaging/electron/backup/bundle.ts`). The bundle's database is a SQLite file whose
+// header records the schema version (format 2, ADR-263). Without the variable the test is
+// skipped.
 
 enum NativeInterop {
     static let environmentKey = "VISION_NATIVE_INTEROP_DIR"
     /// Synthetic test secret, also in native-interop.test.ts.
     static let passphrase = "vision-native-interop-passphrase"
     static let deviceId = "native-interop"
-    static let schemaHead = "0161_interop_fixture"
+    static let schemaVersion = 3
     static let appVersion = "0.1.0-interop"
     static let createdAt = Date(timeIntervalSince1970: 1_760_000_000.25)
-    static let dbSql =
-        "-- synthetic Vision Native interop fixture\n"
-        + "CREATE TABLE interop_probe (id integer PRIMARY KEY, value text);\n"
-        + "INSERT INTO interop_probe VALUES (1, 'vision-native');\n"
-        + "INSERT INTO public.kysely_migration (name, timestamp) VALUES ('0161_interop_fixture', '2026-01-01');\n"
+    static let database = sqliteDatabase(userVersion: schemaVersion, body: "synthetic Vision Native interop fixture")
+    static let databaseInfo = BundleDatabaseInfo(
+        schemaVersion: schemaVersion, sqliteVersion: "3.43.2", sha256: sha256Hex(database), bytes: database.count)
     static let attachments = ["tx-001/receipt.txt": "SYNTHETIC-RECEIPT", "tx-002/notes/a.txt": "synthetic note é"]
     static let frontendState = JSONValue.object([
         "keys": .object(["vision.language": .string("nl"), "vision.theme": .string("dark")])
@@ -36,8 +35,8 @@ enum NativeInterop {
         let work = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: work) }
 
-        let dbSql = work + "/db.sql"
-        try writeBytes(dbSql, Array(NativeInterop.dbSql.utf8))
+        let databasePath = work + "/snapshot.sqlite3"
+        try writeBytes(databasePath, [UInt8](NativeInterop.database))
         for (relative, content) in NativeInterop.attachments {
             let path = work + "/attachments/" + relative
             try BackupFiles.createDirectory(PathUtilities.dirname(path))
@@ -46,9 +45,10 @@ enum NativeInterop {
         func bundle(into directory: String) throws -> String {
             try BackupFiles.createDirectory(directory)
             return try BackupBundle.create(
-                destinationDirectory: directory, deviceId: NativeInterop.deviceId, schemaHead: NativeInterop.schemaHead,
-                appVersion: NativeInterop.appVersion, dbSqlPath: dbSql, attachmentsDirectory: work + "/attachments",
-                frontendState: NativeInterop.frontendState, now: NativeInterop.createdAt)
+                destinationDirectory: directory, deviceId: NativeInterop.deviceId, appVersion: NativeInterop.appVersion,
+                databasePath: databasePath, database: NativeInterop.databaseInfo,
+                attachmentsDirectory: work + "/attachments", frontendState: NativeInterop.frontendState,
+                now: NativeInterop.createdAt)
         }
         let plain = try bundle(into: work + "/plain")
         let plainTarget = output + "/swift-plain.visionbak"
@@ -61,8 +61,9 @@ enum NativeInterop {
         // The Swift reader opens both, so a failure here is not an interop finding.
         let reopened = try BackupBundle.open(encryptedTarget, passphrase: NativeInterop.passphrase, temporaryParent: work)
         defer { reopened.cleanup() }
-        #expect(try String(contentsOfFile: reopened.dbSqlPath, encoding: .utf8) == NativeInterop.dbSql)
-        #expect(try BackupRestore.readDumpSchemaLedger(reopened.dbSqlPath) == NativeInterop.schemaHead)
+        #expect(try readBytes(reopened.databasePath) == [UInt8](NativeInterop.database))
+        #expect(BackupRestore.metadataSchemaVersion(reopened.metadata) == NativeInterop.schemaVersion)
+        #expect(BackupRestore.metadataSha256(reopened.metadata) == sha256Hex(NativeInterop.database))
 
         var attachments: [String: JSONValue] = [:]
         for (relative, content) in NativeInterop.attachments { attachments[relative] = .string(content) }
@@ -70,8 +71,9 @@ enum NativeInterop {
             "bundle": .object([
                 "plain": .string("swift-plain.visionbak"), "encrypted": .string("swift-encrypted.visionbak.enc"),
                 "passphrase": .string(NativeInterop.passphrase), "deviceId": .string(NativeInterop.deviceId),
-                "schemaHead": .string(NativeInterop.schemaHead), "appVersion": .string(NativeInterop.appVersion),
-                "createdAt": .string(isoTimestamp(NativeInterop.createdAt)), "dbSql": .string(NativeInterop.dbSql),
+                "schemaVersion": .int(NativeInterop.schemaVersion), "appVersion": .string(NativeInterop.appVersion),
+                "createdAt": .string(isoTimestamp(NativeInterop.createdAt)),
+                "databaseSha256": .string(sha256Hex(NativeInterop.database)),
                 "attachments": .object(attachments), "frontendState": NativeInterop.frontendState,
             ]),
         ])

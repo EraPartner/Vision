@@ -107,10 +107,10 @@ private func makeSupervisor(
 
         let again = try await supervisor.launch()
         #expect(again == url)
-        #expect(harness.spawner.spawns.count == 2)
+        #expect(harness.spawner.spawns.count == 1)
     }
 
-    @Test func shutdownStopsTheBackendAndPostgres() async throws {
+    @Test func shutdownStopsTheBackend() async throws {
         let harness = try Harness()
         harness.installSeed()
         let supervisor = makeSupervisor(harness)
@@ -118,7 +118,6 @@ private func makeSupervisor(
         await supervisor.shutdown()
         #expect(await supervisor.phase == .stopped)
         #expect(harness.processes.sentSignals.map { $0.1 } == [SIGTERM])
-        #expect(harness.runner.calls(named: "pg_ctl").count == 1)
         #expect(!harness.fileSystem.exists(harness.layout.pid))
     }
 
@@ -130,7 +129,7 @@ private func makeSupervisor(
         _ = try await supervisor.launch()
         await supervisor.shutdown()
         #expect(harness.processes.sentSignals.isEmpty)
-        #expect(harness.runner.calls(named: "pg_ctl").isEmpty)
+        #expect(harness.fileSystem.exists(harness.layout.pid))
         #expect(harness.fileSystem.json(harness.layout.settings)?["keepServicesOnQuit"] == .bool(true))
     }
 
@@ -149,7 +148,7 @@ private func makeSupervisor(
         let supervisor = makeSupervisor(harness)
         _ = try await supervisor.launch()
         await supervisor.shutdown()
-        #expect(harness.runner.calls(named: "pg_ctl").count == 1)
+        #expect(harness.processes.sentSignals.map { $0.1 } == [SIGTERM])
     }
 
     @Test func occupiedPersistedPortIsRepickedOnce() async throws {
@@ -212,8 +211,6 @@ private func makeSupervisor(
         #expect(harness.processes.sentSignals.map { $0.1 } == [SIGTERM])
         #expect(!harness.processes.exists(firstBackend.pid))
         #expect(!harness.fileSystem.exists(harness.layout.pid))
-        #expect(harness.postgresRunning)
-        #expect(harness.runner.calls(named: "pg_ctl").isEmpty)
 
         ready.withLock { $0 = true }
         let url = try await supervisor.launch()
@@ -224,32 +221,27 @@ private func makeSupervisor(
         #expect(harness.fileSystem.json(harness.layout.pid)?["pid"] == .int(Int(backends[1].pid)))
     }
 
-    @Test(.timeLimit(.minutes(1))) func shutdownDuringPrepareStopsServices() async throws {
+    @Test(.timeLimit(.minutes(1))) func shutdownDuringDemoSeedingDropsTheStagingGeneration() async throws {
         let harness = try Harness()
         harness.installSeed()
-        let restoring = Latch()
+        let verifying = Latch()
         let release = Latch()
         harness.runner.gate = { call in
-            // Skip the `--version` discovery probe and the `--list` dump validation.
-            guard call.name == "pg_restore", !call.arguments.contains("--list"), call.arguments != ["--version"]
-            else { return }
-            restoring.open()
+            guard call.name == "vision-backend" else { return }
+            verifying.open()
             await release.wait()
         }
         let supervisor = makeSupervisor(harness)
         let launch = Task { try await supervisor.launch() }
-        await restoring.wait()
+        await verifying.wait()
         #expect(await supervisor.phase == .seedingDemo)
+        let staging = { harness.fileSystem.paths(withPrefix: testUserData + "/database.restore-") }
+        #expect(!staging().isEmpty)
 
-        // Returns while pg_restore is still in flight.
+        // Returns while the seed verification is still in flight.
         await supervisor.shutdown()
         #expect(await supervisor.phase == .stopped)
-        #expect(harness.runner.calls(named: "pg_ctl").count == 1)
-        #expect(!harness.postgresRunning)
-        let dropped = harness.runner.calls(named: "psql").contains { call in
-            call.arguments.contains { $0.hasPrefix("DROP DATABASE \"vision_native_restore_") }
-        }
-        #expect(dropped)
+        #expect(staging().isEmpty)
 
         release.open()
         let result = await launch.result
@@ -259,10 +251,51 @@ private func makeSupervisor(
         }
         #expect((error as? NativeRuntimeError)?.code == "SHUTTING_DOWN")
         #expect(await supervisor.phase == .stopped)
-        #expect(harness.spawner.spawns.filter { $0.executable.hasSuffix("/vision-backend") }.isEmpty)
-        #expect(harness.spawner.spawns.count == 1)
+        #expect(harness.spawner.spawns.isEmpty)
+        #expect(staging().isEmpty)
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["pendingDatabaseSwitch"] == nil)
+    }
+
+    /// ADR-242/263: the backend backs an outdated database up before it migrates it; the
+    /// launch logs that and shows `splash.backingUp`.
+    @Test func anOutdatedDatabaseIsReportedAsBackingUp() async throws {
+        let harness = try Harness()
+        harness.installSeed(schemaVersion: 1)
+        let log = RecordingLog()
+        _ = try await makeSupervisor(harness, log: log).launch()
+        #expect(log.lines.contains { $0.contains("[pre-migration-backup] database at schema 1, this build ships 3") })
+        let phases = log.lines.filter { $0.contains("[runtime] phase ") }
+        let backingUp = try #require(phases.firstIndex { $0.hasSuffix("phase backingUpDatabase") })
+        let starting = try #require(phases.firstIndex { $0.hasSuffix("phase startingBackend") })
+        #expect(starting < backingUp)
+        #expect(LaunchAppearance.statusKey(for: .backingUpDatabase) == "splash.backingUp")
+    }
+
+    @Test func aCurrentDatabaseSkipsTheBackingUpPhase() async throws {
+        let harness = try Harness()
+        harness.installSeed()
+        let log = RecordingLog()
+        _ = try await makeSupervisor(harness, log: log).launch()
+        #expect(!log.lines.contains { $0.contains("backingUpDatabase") || $0.contains("[pre-migration-backup]") })
+    }
+
+    @Test func aBackendThatExitsDuringStartupFailsWithItsOwnCode() async throws {
+        let harness = try Harness()
+        harness.installSeed()
+        let fileSystem = harness.fileSystem
+        let spawner = harness.spawner
+        let backendLog = harness.layout.backendLog
+        let processes = harness.processes
+        spawner.onSpawn = { spawn in
+            processes.add(spawn.pid)
+            fileSystem.addFile(
+                backendLog,
+                "[ERROR] Failed to start application {\"error\":\"disk full\",\"code\":\"PRE_MIGRATION_BACKUP_FAILED\"}\n")
+            spawner.markExited(spawn.pid)
+        }
+        let error = await #expect(throws: NativeRuntimeError.self) { try await makeSupervisor(harness).launch() }
+        #expect(error == NativeRuntimeError("PRE_MIGRATION_BACKUP_FAILED", "disk full"))
     }
 
     @Test func logIsRotatedOnlyByTheInstanceHoldingTheLock() async throws {

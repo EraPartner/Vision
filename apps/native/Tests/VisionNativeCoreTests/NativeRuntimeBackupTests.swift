@@ -2,219 +2,177 @@ import Foundation
 import Testing
 @testable import VisionNativeCore
 
-// The runtime side of backup and restore: pg_dump, the Kysely schema head and a plain-SQL
-// restore into a staging database.
+// The runtime side of backup and restore: the database generation switch (stage, verify,
+// two journaled directory renames), its finalization and rollback.
 
-private let schemaHeadQuery = MigrationLedger.headSQL
+private let restoreSource = "/Users/demo/Restore/db.sqlite3"
 
-private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness {
-    let harness = try Harness()
-    let base = harness.runner.handler
-    let fileSystem = harness.fileSystem
-    harness.runner.handler = { call in
-        if call.name == "pg_dump", let index = call.arguments.firstIndex(of: "--file") {
-            fileSystem.addFile(call.arguments[index + 1], dumpContent)
-            return RunResult()
-        }
-        return try base(call)
-    }
-    return harness
+/// The fake's switch generation nonce: the clock's milliseconds and four random bytes.
+private func generations(_ harness: Harness, _ kind: String) -> [String] {
+    (try? harness.fileSystem.contentsOfDirectory(testUserData))?
+        .filter { $0.hasPrefix("database.\(kind)-") }.map { "\(testUserData)/\($0)" } ?? []
 }
 
-@Suite struct NativeRuntimeBackupTests {
-    @Test func theSchemaHeadIsTheHighestLedgerName() async throws {
-        let harness = try backupHarness()
+@Suite struct NativeRuntimeDatabaseSwitchTests {
+    @Test func activationStagesVerifiesAndSwapsTheGenerations() async throws {
+        let harness = try Harness()
+        let old = harness.installDatabase(body: "old")
+        let restored = sqliteDatabase(userVersion: 3, body: "restored")
+        harness.fileSystem.addFile(restoreSource, restored)
         let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        let head = try await runtime.schemaHead()
-        #expect(head == "0130_head")
-        let call = try #require(harness.runner.calls(named: "psql").first { $0.arguments.contains(schemaHeadQuery) })
-        #expect(call.arguments.contains("vision_native_owner"))
-        #expect(call.options.environment["PGPASSFILE"] != nil)
-        // The ledger is checked first so a database without it reads as empty, not as an error.
-        let exists = harness.runner.calls(named: "psql").contains {
-            $0.arguments.contains(MigrationLedger.ledgerExistsSQL)
-        }
-        #expect(exists)
+
+        let activation = try await runtime.activateRestoredDatabase(
+            restoreSource, expectedSchemaVersion: 3, expectedSha256: sha256Hex(restored))
+        let token = activation.switchToken
+        #expect(token.version == 2)
+        #expect(token.kind == "sqlite-directory")
+        #expect(token.liveDirectory == harness.layout.databaseDirectory)
+        #expect(activation.validation.sha256 == sha256Hex(restored))
+        #expect(harness.toolCommands.first?.first == "verify")
+        #expect(harness.toolCommands.first?.last == "\(token.activatedDirectory)/vision.sqlite3")
+
+        #expect(try harness.fileSystem.readFile(harness.layout.database) == restored)
+        #expect(try harness.fileSystem.mode(harness.layout.database) == 0o600)
+        #expect(try harness.fileSystem.readFile("\(token.previousDirectory)/vision.sqlite3") == old)
+        #expect(!harness.fileSystem.exists(token.activatedDirectory))
+        #expect(try harness.fileSystem.readFile(restoreSource) == restored)
+        #expect(harness.fileSystem.syncedDirectories.contains(testUserData))
+        let pending = harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"]
+        #expect(try pending?.decode(DatabaseSwitchToken.self) == token)
     }
 
-    @Test func aDatabaseWithoutALedgerHasNoSchemaHead() async throws {
-        let harness = try backupHarness()
-        harness.ledger = nil
+    @Test(arguments: [
+        (String(repeating: "0", count: 64), 3, "DATABASE_CHECKSUM_MISMATCH"),
+        (nil, 2, "DATABASE_SCHEMA_MISMATCH"),
+    ] as [(String?, Int, String)])
+    func aCopyThatFailsVerificationLeavesTheLiveDatabaseAlone(
+        _ sha256: String?, _ schemaVersion: Int, _ code: String
+    ) async throws {
+        let harness = try Harness()
+        let old = harness.installDatabase(body: "old")
+        harness.fileSystem.addFile(restoreSource, sqliteDatabase(userVersion: 3, body: "restored"))
         let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        #expect(try await runtime.schemaHead() == "")
-        #expect(try await runtime.appliedMigrations() == [])
-        #expect(try await runtime.pendingMigrations() == nil)
-    }
-
-    @Test func appliedMigrationsListTheLedger() async throws {
-        let harness = try backupHarness()
-        harness.ledger = ["0130_head", "0001_baseline"]
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        #expect(try await runtime.appliedMigrations() == ["0001_baseline", "0130_head"])
-    }
-
-    @Test func pendingMigrationsNeedAnExistingDatabaseBehindThePayload() async throws {
-        let harness = try backupHarness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        // The ledger ends at the payload's newest migration (0130_head): nothing is pending.
-        #expect(try await runtime.pendingMigrations() == nil)
-        harness.ledger = ["0001_baseline"]
-        #expect(
-            try await runtime.pendingMigrations()
-                == PendingMigrations(appliedHead: "0001_baseline", packagedHead: "0130_head"))
-        // A database from a newer build is not "behind" the payload.
-        harness.ledger = ["0131_future"]
-        #expect(try await runtime.pendingMigrations() == nil)
-    }
-
-    @Test func dumpsPlainSqlAsTheOwnerIntoAPrivateFile() async throws {
-        let harness = try backupHarness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        try await runtime.dumpDatabase(to: "/tmp/vision_bak_1/db.sql")
-
-        #expect(harness.fileSystem.text("/tmp/vision_bak_1/db.sql") == "-- dump\n")
-        #expect(try harness.fileSystem.mode("/tmp/vision_bak_1/db.sql") == 0o600)
-        #expect(harness.fileSystem.node("/tmp/vision_bak_1/db.sql.partial") == nil)
-        // Tool discovery probes each binary with `--version` first; skip the probe.
-        let dump = try #require(harness.runner.calls(named: "pg_dump").first { $0.arguments != ["--version"] })
-        for flag in ["--no-owner", "--no-acl", "--no-comments", "--format=plain"] {
-            #expect(dump.arguments.contains(flag))
-        }
-        #expect(
-            dump.arguments.filter { $0 == "--exclude-extension" }.count
-                == RuntimeConstants.requiredPostgresExtensions.count)
-        let user = dump.arguments.firstIndex(of: "-U").map { dump.arguments[$0 + 1] }
-        #expect(user == "vision_native_owner")
-        #expect(dump.arguments.last == "/tmp/vision_bak_1/db.sql.partial")
-    }
-
-    @Test func anEmptyDumpFails() async throws {
-        let harness = try backupHarness(dumpContent: "")
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        do {
-            try await runtime.dumpDatabase(to: "/tmp/vision_bak_2/db.sql")
-            Issue.record("an empty dump was accepted")
-        } catch let error as NativeRuntimeError {
-            #expect(error.code == "POSTGRES_DUMP_EMPTY")
-        }
-        #expect(harness.fileSystem.node("/tmp/vision_bak_2/db.sql") == nil)
-        #expect(harness.fileSystem.node("/tmp/vision_bak_2/db.sql.partial") == nil)
-    }
-
-    @Test func aPlainDumpIsRestoredWithPsqlInOneTransaction() async throws {
-        let harness = try backupHarness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        harness.fileSystem.addFile("/tmp/vision_restore_1/db.sql", "CREATE TABLE t (id integer);\n")
-
-        let token = try await runtime.activateRestoredDatabase(
-            "/tmp/vision_restore_1/db.sql", format: .plain, expectedSchemaHead: "0130_head")
-        #expect(token.liveDatabase == "vision_native")
-        #expect(harness.databases.contains("vision_native"))
-        #expect(harness.databases.contains(token.previousDatabase))
-        #expect(harness.runner.calls(named: "pg_restore").allSatisfy { $0.arguments == ["--version"] })
-        let restore = try #require(
-            harness.runner.calls(named: "psql").first { $0.arguments.contains("/tmp/vision_restore_1/db.sql") })
-        #expect(restore.arguments.contains("--single-transaction"))
-        #expect(restore.arguments.contains("ON_ERROR_STOP=1"))
-        // The staging database is validated against the ledger before it can become live.
-        let ledgerChecks = harness.runner.calls(named: "psql").filter {
-            $0.arguments.contains(MigrationLedger.headSQL)
-        }
-        #expect(ledgerChecks.contains { $0.arguments.contains(token.activatedDatabase) })
-        let state = try #require(harness.fileSystem.json(harness.layout.state))
-        #expect(state["pendingDatabaseSwitch"]?["previousDatabase"] == .string(token.previousDatabase))
-    }
-
-    @Test func aRestoredDatabaseWithoutTheLedgerIsRefusedAsPreBaseline() async throws {
-        let harness = try backupHarness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        harness.fileSystem.addFile("/tmp/vision_restore_2/db.sql", "CREATE TABLE t (id integer);\n")
-        harness.ledger = nil
         let error = await #expect(throws: NativeRuntimeError.self) {
             try await runtime.activateRestoredDatabase(
-                "/tmp/vision_restore_2/db.sql", format: .plain, expectedSchemaHead: "0130_head")
+                restoreSource, expectedSchemaVersion: schemaVersion, expectedSha256: sha256)
         }
-        #expect(error?.code == "BACKUP_PRE_BASELINE")
-        // Nothing was switched: the live database stays and no switch plan was persisted.
-        #expect(harness.databases == ["vision_native"])
+        #expect(error?.code == code)
+        #expect(try harness.fileSystem.readFile(harness.layout.database) == old)
+        #expect(generations(harness, "restore").isEmpty)
+        #expect(generations(harness, "previous").isEmpty)
         #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] == nil)
     }
 
-    @Test func aRestoredLedgerThatDisagreesWithTheBackupIsRefused() async throws {
-        let harness = try backupHarness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        harness.fileSystem.addFile("/tmp/vision_restore_3/db.sql", "CREATE TABLE t (id integer);\n")
+    @Test func aFileThatIsNotADatabaseIsRefusedByTheTool() async throws {
+        let harness = try Harness()
+        harness.installDatabase()
+        harness.fileSystem.addFile(restoreSource, "CREATE TABLE t (id integer);\n")
         let error = await #expect(throws: NativeRuntimeError.self) {
-            try await runtime.activateRestoredDatabase(
-                "/tmp/vision_restore_3/db.sql", format: .plain, expectedSchemaHead: "0129_prev")
+            try await harness.makeRuntime().activateRestoredDatabase(
+                restoreSource, expectedSchemaVersion: nil, expectedSha256: nil)
         }
-        #expect(error?.code == "RESTORE_VALIDATION_FAILED")
-        #expect(harness.databases == ["vision_native"])
+        #expect(error?.code == "DATABASE_VERIFY_FAILED")
+        #expect(generations(harness, "restore").isEmpty)
+    }
+
+    @Test func anEmptySourceIsRefusedBeforeAnyCopy() async throws {
+        let harness = try Harness()
+        harness.fileSystem.addFile(restoreSource, Data())
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await harness.makeRuntime().activateRestoredDatabase(
+                restoreSource, expectedSchemaVersion: nil, expectedSha256: nil)
+        }
+        #expect(error?.code == "INVALID_DATABASE_FILE")
+        #expect(harness.toolCommands.isEmpty)
+    }
+
+    @Test func rollbackPutsThePreviousGenerationBackAndKeepsTheFailedOne() async throws {
+        let harness = try Harness()
+        let old = harness.installDatabase(body: "old")
+        let restored = sqliteDatabase(userVersion: 3, body: "restored")
+        harness.fileSystem.addFile(restoreSource, restored)
+        let runtime = try harness.makeRuntime()
+        let activation = try await runtime.activateRestoredDatabase(
+            restoreSource, expectedSchemaVersion: nil, expectedSha256: nil)
+
+        try await runtime.rollbackDatabaseSwitch(nil)
+        #expect(try harness.fileSystem.readFile(harness.layout.database) == old)
+        #expect(!harness.fileSystem.exists(activation.switchToken.previousDirectory))
+        let state = try #require(harness.fileSystem.json(harness.layout.state))
+        #expect(state["pendingDatabaseSwitch"] == nil)
+        let failed = try #require(state["lastRollback"]?["preservedFailedDatabase"]?.stringValue)
+        #expect(PathUtilities.basename(failed).hasPrefix("database.failed-"))
+        #expect(try harness.fileSystem.readFile("\(failed)/vision.sqlite3") == restored)
+    }
+
+    @Test func aTokenNamingAForeignDirectoryIsRefused() async throws {
+        let harness = try Harness()
+        harness.installDatabase()
+        let token = DatabaseSwitchToken(
+            liveDirectory: harness.layout.databaseDirectory, previousDirectory: "/Users/demo/Documents",
+            activatedDirectory: "\(testUserData)/database.restore-1-aa", activatedAt: "2026-11-06T00:00:00.000Z")
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await harness.makeRuntime().rollbackDatabaseSwitch(try JSONValue(encoding: token))
+        }
+        #expect(error?.code == "NO_DATABASE_SWITCH")
+        #expect(harness.fileSystem.exists(harness.layout.database))
+    }
+
+    @Test func finalizeClearsTheSwitchAndKeepsThreePreviousGenerations() async throws {
+        let harness = try Harness()
+        harness.installDatabase(body: "old")
+        for index in 0..<4 {
+            let path = "\(testUserData)/database.previous-\(index)-00000000"
+            harness.fileSystem.addFile("\(path)/vision.sqlite3", sqliteDatabase(userVersion: 3, body: "\(index)"))
+            harness.fileSystem.setModificationDate(path, Date(timeIntervalSince1970: Double(1_000 + index)))
+        }
+        harness.fileSystem.addFile(restoreSource, sqliteDatabase(userVersion: 3, body: "restored"))
+        let runtime = try harness.makeRuntime()
+        let activation = try await runtime.activateRestoredDatabase(
+            restoreSource, expectedSchemaVersion: nil, expectedSha256: nil)
+        harness.fileSystem.setModificationDate(
+            activation.switchToken.previousDirectory, Date(timeIntervalSince1970: 2_000))
+
+        try await runtime.finalizeDatabaseSwitch(activation.switchToken)
+        let state = try #require(harness.fileSystem.json(harness.layout.state))
+        #expect(state["pendingDatabaseSwitch"] == nil)
+        #expect(state["previousDatabase"] == .string(activation.switchToken.previousDirectory))
+        #expect(
+            Set(generations(harness, "previous")) == [
+                activation.switchToken.previousDirectory,
+                "\(testUserData)/database.previous-3-00000000",
+                "\(testUserData)/database.previous-2-00000000",
+            ])
+    }
+
+    @Test func aQuitBeforeThePlanIsPersistedDropsTheStagingGeneration() async throws {
+        let harness = try Harness()
+        harness.installDatabase()
+        harness.fileSystem.addFile(restoreSource, sqliteDatabase(userVersion: 3, body: "restored"))
+        let runtime = try harness.makeRuntime()
+        let staged = Latch()
+        let release = Latch()
+        harness.runner.gate = { call in
+            guard call.name == "vision-backend" else { return }
+            staged.open()
+            await release.wait()
+        }
+        let activation = Task {
+            try await runtime.activateRestoredDatabase(restoreSource, expectedSchemaVersion: nil, expectedSha256: nil)
+        }
+        await staged.wait()
+        #expect(generations(harness, "restore").count == 1)
+        await runtime.beginShutdown()
+        await runtime.discardStagingRestore()
+        #expect(generations(harness, "restore").isEmpty)
+        release.open()
+        let error = await #expect(throws: (any Error).self) { try await activation.value }
+        #expect(error != nil)
+        #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] == nil)
     }
 }
 
-/// ADR-242: the backup hook runs after PostgreSQL is ready and before the backend, which
-/// migrates at boot, is spawned.
-@Suite struct NativePreMigrationBackupTests {
-    private func backendSpawns(_ harness: Harness) -> Int {
-        harness.spawner.spawns.filter { $0.executable.hasSuffix("vision-backend") }.count
-    }
-
-    @Test func theHookRunsBeforeTheBackendSpawnsWhenTheDatabaseIsBehind() async throws {
-        let harness = try Harness()
-        harness.ledger = ["0001_baseline"]
-        let seen = LockedValue<[PendingMigrations]>([])
-        let backendsAtHook = LockedValue<Int>(-1)
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start(beforeMigrations: { pending in
-            seen.withLock { $0.append(pending) }
-            backendsAtHook.withLock { $0 = harness.spawner.spawns.filter { $0.executable.hasSuffix("vision-backend") }.count }
-        })
-        #expect(seen.withLock { $0 } == [PendingMigrations(appliedHead: "0001_baseline", packagedHead: "0130_head")])
-        #expect(backendsAtHook.withLock { $0 } == 0)
-        #expect(backendSpawns(harness) == 1)
-    }
-
-    @Test func aFailingHookAbortsTheStartWithoutABackend() async throws {
-        let harness = try Harness()
-        harness.ledger = ["0001_baseline"]
-        let runtime = try harness.makeRuntime()
-        let error = await #expect(throws: NativeRuntimeError.self) {
-            try await runtime.start(beforeMigrations: { _ in
-                throw NativeRuntimeError("PRE_MIGRATION_BACKUP_FAILED", "disk full")
-            })
-        }
-        #expect(error?.code == "PRE_MIGRATION_BACKUP_FAILED")
-        #expect(backendSpawns(harness) == 0)
-        #expect(!harness.fileSystem.exists(harness.layout.pid))
-    }
-
-    @Test(arguments: [nil, ["0130_head"], ["0131_future"]] as [[String]?])
-    func theHookIsSkippedForNewUpToDateOrNewerDatabases(_ ledger: [String]?) async throws {
-        let harness = try Harness()
-        harness.ledger = ledger
-        let calls = LockedValue<Int>(0)
-        _ = try await harness.makeRuntime().start(beforeMigrations: { _ in calls.withLock { $0 += 1 } })
-        #expect(calls.withLock { $0 } == 0)
-        #expect(backendSpawns(harness) == 1)
-    }
-
-    @Test func noHookMeansNoCheck() async throws {
-        let harness = try Harness()
-        harness.ledger = ["0001_baseline"]
-        _ = try await harness.makeRuntime().start()
-        #expect(backendSpawns(harness) == 1)
-    }
-
+@Suite struct NativeRuntimePayloadTimingTests {
     @Test func theLaunchTimesThePayloadVerification() async throws {
         let harness = try Harness()
         let phases = LockedValue<[String]>([])
@@ -224,7 +182,7 @@ private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness 
             recordBootPhase: { phase, _ in phases.withLock { $0.append(phase) } })
         _ = try await runtime.start()
         #expect(phases.withLock { $0 } == ["runtime_manifest_full"])
-        try await runtime.stop(keepPostgres: false)
+        try await runtime.stop()
 
         let again = try NativeRuntime(
             layout: harness.layout, runtimeRoot: testRuntimeRoot, appPort: 41_000,
@@ -270,19 +228,17 @@ private struct AttachmentRuntime {
 }
 
 @Suite struct NativeRuntimeAttachmentSwitchTests {
-    @Test func theMigrationChainHeadComesFromThePayload() async throws {
+    @Test func thePackagedMigrationVersionComesFromThePayload() async throws {
         let harness = try Harness(payload: false)
         let runtime = try harness.makeRuntime()
-        let empty = await runtime.migrationChainHead()
-        #expect(empty == "")
+        #expect(await runtime.packagedMigrationVersion() == 0)
         for name in [
             "0129_prev.sql", "0130_head.sql", "0131_undo.down.sql", "0132_notes.txt", "_0999_hidden.sql", "readme.sql",
             "0133_Upper.sql",
         ] {
             harness.fileSystem.addFile("\(testRuntimeRoot)/db/migrations/\(name)", "-- migration\n")
         }
-        let head = await runtime.migrationChainHead()
-        #expect(head == "0130_head")
+        #expect(await runtime.packagedMigrationVersion() == 130)
     }
 
     @Test func replaceFinalizePersistsAndClearsTheToken() async throws {
@@ -374,77 +330,85 @@ private struct AttachmentRuntime {
 /// every rename boundary, never creates a replacement live database, and a second
 /// bootstrap leaves the result alone.
 @Suite struct NativeRestoreRecoveryTests {
-    private static let live = "vision_native"
-    private static let previous = "vision_native_previous_fixture"
-    private static let activated = "vision_native_restore_fixture"
+    private static let previous = "\(testUserData)/database.previous-1-fixture"
+    private static let activated = "\(testUserData)/database.restore-1-fixture"
+    private static let old = sqliteDatabase(userVersion: 3, body: "old")
+    private static let restored = sqliteDatabase(userVersion: 3, body: "restored")
 
     private func writeMarker(_ harness: Harness, _ state: JSONValue) throws {
         harness.fileSystem.addFile(harness.layout.state, try state.serialized())
     }
 
-    private func createdLive(_ harness: Harness) -> Bool {
-        harness.runner.calls(named: "createdb").contains { $0.arguments.last == Self.live }
+    private func pendingSwitch(_ harness: Harness) throws -> JSONValue {
+        try JSONValue(
+            encoding: DatabaseSwitchToken(
+                liveDirectory: harness.layout.databaseDirectory, previousDirectory: Self.previous,
+                activatedDirectory: Self.activated, activatedAt: "2026-11-06T00:00:00.000Z"))
     }
 
     @Test(arguments: ["before", "between", "after"])
-    func startupRecoversAnInterruptedRestoreBeforeBootstrap(_ phase: String) async throws {
+    func startupRecoversAnInterruptedRestoreBeforeTheBackendOpensTheDatabase(_ phase: String) async throws {
         let harness = try Harness()
-        let runtime = try harness.makeRuntime()
-        try await runtime.ensurePostgresReady()
+        let live = harness.layout.database
         switch phase {
-        case "before": harness.databases = [Self.live, Self.activated]
-        case "between": harness.databases = [Self.previous, Self.activated]
-        default: harness.databases = [Self.previous, Self.live]
+        case "before":
+            harness.fileSystem.addFile(live, Self.old)
+            harness.fileSystem.addFile("\(Self.activated)/vision.sqlite3", Self.restored)
+        case "between":
+            harness.fileSystem.addFile("\(Self.previous)/vision.sqlite3", Self.old)
+            harness.fileSystem.addFile("\(Self.activated)/vision.sqlite3", Self.restored)
+        default:
+            harness.fileSystem.addFile("\(Self.previous)/vision.sqlite3", Self.old)
+            harness.fileSystem.addFile(live, Self.restored)
         }
         try writeMarker(
             harness,
-            .object([
-                "activeRuntime": .string("native"),
-                "pendingDatabaseSwitch": .object([
-                    "version": .int(1), "liveDatabase": .string(Self.live), "previousDatabase": .string(Self.previous),
-                    "activatedDatabase": .string(Self.activated),
-                ]),
-            ]))
+            .object(["activeRuntime": .string("native"), "pendingDatabaseSwitch": try pendingSwitch(harness)]))
 
-        try await runtime.bootstrapDatabase()
+        let runtime = try harness.makeRuntime()
+        try await runtime.ensureDatabaseReady()
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["pendingDatabaseSwitch"] == nil)
-        #expect(harness.databases.contains(Self.live))
-        #expect(!harness.databases.contains(Self.previous))
-        #expect(!createdLive(harness))
+        #expect(try harness.fileSystem.readFile(live) == Self.old)
+        #expect(!harness.fileSystem.exists(Self.previous))
+        let preserved = try #require(state["lastRollback"]?["preservedFailedDatabase"]?.stringValue)
         if phase == "after" {
-            // The candidate was kept aside under a failed name; the original is live again.
-            let failed = try #require(state["lastRollback"]?["preservedFailedDatabase"]?.stringValue)
-            #expect(harness.databases == [Self.live, failed])
+            #expect(PathUtilities.basename(preserved).hasPrefix("database.failed-"))
+            #expect(try harness.fileSystem.readFile("\(preserved)/vision.sqlite3") == Self.restored)
         } else {
-            #expect(harness.databases == [Self.live, Self.activated])
+            #expect(preserved == Self.activated)
+            #expect(try harness.fileSystem.readFile("\(Self.activated)/vision.sqlite3") == Self.restored)
         }
 
-        let settled = harness.databases
-        try await runtime.bootstrapDatabase()
-        #expect(harness.databases == settled)
-        #expect(!createdLive(harness))
+        let settled = harness.fileSystem.paths(withPrefix: testUserData + "/database")
+        try await runtime.ensureDatabaseReady()
+        #expect(harness.fileSystem.paths(withPrefix: testUserData + "/database") == settled)
     }
 
-    @Test func anAmbiguousSwitchFailsClosedWithoutAReplacementDatabase() async throws {
+    @Test func anAmbiguousSwitchFailsClosedEveryTime() async throws {
         let harness = try Harness()
+        harness.fileSystem.addFile("\(Self.activated)/vision.sqlite3", Self.restored)
+        try writeMarker(harness, .object(["pendingDatabaseSwitch": try pendingSwitch(harness)]))
         let runtime = try harness.makeRuntime()
-        try await runtime.ensurePostgresReady()
-        harness.databases = [Self.activated]
-        try writeMarker(
-            harness,
-            .object([
-                "pendingDatabaseSwitch": .object([
-                    "version": .int(1), "liveDatabase": .string(Self.live), "previousDatabase": .string(Self.previous),
-                    "activatedDatabase": .string(Self.activated),
-                ])
-            ]))
         for _ in 0..<2 {
-            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.bootstrapDatabase() }
+            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.start() }
             #expect(error?.code == "DATABASE_SWITCH_UNSAFE")
         }
-        #expect(!createdLive(harness))
+        #expect(harness.spawner.spawns.isEmpty)
+        #expect(!harness.fileSystem.exists(harness.layout.database))
         #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] != nil)
+    }
+
+    @Test func aJournalFromTheDatabaseServerVersionIsLeftAlone() async throws {
+        let harness = try Harness()
+        let legacy = JSONValue.object([
+            "version": .int(1), "liveDatabase": .string("vision_native"),
+            "previousDatabase": .string("vision_native_previous_x"), "activatedDatabase": .string("vision_native_restore_x"),
+        ])
+        try writeMarker(harness, .object(["activeRuntime": .string("native"), "pendingDatabaseSwitch": legacy]))
+        _ = try await harness.makeRuntime().start()
+        #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] == legacy)
+        #expect(harness.spawner.spawns.count == 1)
     }
 
     @Test func aMalformedAttachmentJournalFailsClosed() async throws {
@@ -465,9 +429,9 @@ private struct AttachmentRuntime {
             #expect(error?.code == "INVALID_RESTORE_JOURNAL")
             #expect(harness.fileSystem.json(harness.layout.state)?["pendingAttachmentSwitch"] != nil)
         }
-        let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.bootstrapDatabase() }
+        let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.ensureDatabaseReady() }
         #expect(error?.code == "INVALID_RESTORE_JOURNAL")
-        #expect(!createdLive(harness))
+        #expect(harness.spawner.spawns.isEmpty)
     }
 
     @Test func aMarkerThatIsNotAnObjectIsRejected() async throws {

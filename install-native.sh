@@ -2,16 +2,16 @@
 set -euo pipefail
 
 # Build Vision Native (apps/native/, ADR-204) in Release, stage its runtime payload
-# (PostgreSQL 18, the compiled backend and its Kysely migrations, the Apple Foundation
-# Models helper, the frontend build and the synthetic Demo seed) into the app, and
+# (the compiled backend with its SQLite migrations and database tool, the Apple Foundation
+# Models helper, the frontend build and the synthetic Demo seed database) into the app, and
 # install it to /Applications. Vision Native runs only on synthetic Demo data in its
 # own application-data directory.
 #
 # VISION_NATIVE_VARIANT picks the build (phase 1e):
 #   demo (default) -> /Applications/Vision Native Demo.app, data in
-#                     ~/Library/Application Support/Vision Native Demo, PostgreSQL 54332
+#                     ~/Library/Application Support/Vision Native Demo
 #   standard       -> /Applications/Vision Native.app, data in
-#                     ~/Library/Application Support/Vision Native, PostgreSQL 54331
+#                     ~/Library/Application Support/Vision Native
 #
 # VISION_NATIVE_SKIP_PAYLOAD=1 builds without a payload (the app then explains how to
 # provide one). The payload uses the same prepare scripts as install-demo.sh, so it holds
@@ -160,7 +160,7 @@ APP_SRC="$(find_built_app \
 if [ "$STAGE_PAYLOAD" = "1" ]; then
   # The same files build-native-package.ts requires of the Electron payload, plus the seed.
   for staged in runtime/manifest.json runtime/vision-backend runtime/db/migrations/0001_baseline.sql \
-    demo-seed/manifest.json demo-seed/demo-seed.dump; do
+    runtime/tools/db-file.js demo-seed/manifest.json demo-seed/vision-demo.sqlite3; do
     if [ ! -f "$APP_SRC/Contents/Resources/$staged" ]; then
       echo "ERROR: the built app is missing Contents/Resources/$staged."
       exit 1
@@ -185,7 +185,7 @@ echo "  $APP_NAME installed successfully."
 echo "  Open it with:"
 echo "    open \"$APP_DEST\""
 echo ""
-echo "  It starts its own PostgreSQL 18 cluster and backend on synthetic Demo data in"
+echo "  It starts its own backend on a synthetic Demo SQLite database in"
 echo "  ~/Library/Application Support/$APP_NAME/. Your Vision and Vision Demo data are untouched."
 if [ "$VARIANT" = "demo" ]; then
   echo "  Reset its synthetic dataset with: bun run demo:reset-vision-native (then reopen it)."

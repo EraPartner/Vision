@@ -12,9 +12,8 @@ enum ShellState: Equatable, Sendable {
 
 enum ShellResolver {
     /// Debug builds honour a loopback `VISION_NATIVE_BACKEND_URL` and skip supervision;
-    /// otherwise Vision Native starts its own PostgreSQL and backend and waits until the
-    /// backend is ready.
-    static func resolve() async -> ShellState {
+    /// otherwise Vision Native starts its own backend and waits until it is ready.
+    static func resolve(strings: ShellStrings?) async -> ShellState {
         switch BackendLocator.developerOverride(
             environment: ProcessInfo.processInfo.environment, allowOverride: AppRuntime.isDebugBuild)
         {
@@ -29,9 +28,18 @@ enum ShellResolver {
             let url = try await AppRuntime.supervisor.launch()
             return .ready(url)
         } catch {
-            let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            return .unavailable(reason)
+            return .unavailable(startupDetail(error, strings: strings))
         }
+    }
+
+    /// `backendStartupDetail` in `main.ts`: a failed pre-migration backup gets the localized
+    /// explanation; anything else shows its own message.
+    static func startupDetail(_ error: Error, strings: ShellStrings?) -> String {
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        guard (error as? NativeRuntimeError)?.code == BackendStartupFailure.preMigrationBackupFailedCode else {
+            return message
+        }
+        return strings?.t("app.preMigrationBackupFailed", ["error": message], fallback: message) ?? message
     }
 
     /// The developer override must answer `GET /health` with 200.

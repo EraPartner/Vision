@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-05
-updated: 2026-11-05
+date: 2026-11-06
+updated: 2026-11-06
 tags:
   [
     architecture,
@@ -14,7 +14,7 @@ tags:
     xcodegen,
     ci,
     packaging,
-    postgresql,
+    sqlite,
     runtime,
     menus,
     backup,
@@ -28,13 +28,13 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/, restarted by ADR-269 (first revived by ADR-249) and native-only (no web view). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the shell (window, launch state, menus, dock and vibrancy, page zoom), backup and restore (bundle format, Keychain passphrase, restore allow-list, pre-migration and quit-time backup), the standard and Demo variants of one build, the Debug-only backend override, the generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native navigation shell and screens, the Swift ports of analysis interchange and research presentation, reports printed from server HTML, the CI swift job, and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/, restarted by ADR-269 (first revived by ADR-249) and native-only (no web view). Covers the directory layout, the runtime supervisor that starts the backend over its own SQLite database on synthetic Demo data, payload discovery, the shell (window, launch state, menus, dock and vibrancy, page zoom), backup and restore (bundle format, Keychain passphrase, restore allow-list, pre-migration and quit-time backup), the standard and Demo variants of one build, the Debug-only backend override, the generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native navigation shell and screens, the Swift ports of analysis interchange and research presentation, reports printed from server HTML, the CI swift job, and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
 # Vision Native App Architecture
 
-> [!warning] Restarted on 2026-11-05 by [[docs/adr/269-restart-swift-port|ADR-269]] from `7334283`. Except for the CI section, this page still describes the app as it was on 2026-10-26: a PostgreSQL 18 runtime and the TypeScript app of that day. The backend now uses SQLite ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]); the sections are updated as the catch-up phases land.
+> [!warning] Restarted on 2026-11-05 by [[docs/adr/269-restart-swift-port|ADR-269]] from `7334283`. The runtime, backup and restore sections describe the SQLite runtime ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]], catch-up phase 1). The screen sections still describe the TypeScript app of 2026-10-26 and are updated as the later catch-up phases land.
 
 > [!warning] Restored on 2026-10-25 by [[docs/adr/249-revive-swift-app|ADR-249]] and caught up to the TypeScript app. The app is native-only: there is no `WKWebView` shell, JavaScript bridge, audit anchor or Alembic runtime. Phase headings below name the order in which screens were ported; they are not a status. [[docs/adr/204-vision-native-swift-app-target|ADR-204]] and its phase ADRs stay historical.
 
@@ -43,8 +43,8 @@ aliases: [vision native, native app, swift app]
 > `com.vaultvoyager.vision-native-demo` for the Demo variant), that mirrors the
 > [[docs/architecture/electron|Electron shell]] with SwiftUI screens
 > ([[docs/adr/204-vision-native-swift-app-target|ADR-204]], revived by
-> [[docs/adr/249-revive-swift-app|ADR-249]]). It runs its own PostgreSQL 18 cluster and the same
-> TypeScript backend on synthetic Demo data; every route is a native screen, and the React
+> [[docs/adr/249-revive-swift-app|ADR-249]]). It runs the same TypeScript backend over its own
+> SQLite database file on synthetic Demo data; every route is a native screen, and the React
 > frontend is not loaded. The only WebKit use is `NativeReportHTMLPrinter`, which prints the server's
 > report HTML off screen (see [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|reports]]).
 > Electron stays the product until a switch-over ADR. The phase 1 hand-over is recorded in
@@ -72,7 +72,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                                      |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                                                     |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                                                  |
-| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                                                                                                       |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, backend lifecycle, SQLite database tool and switch, Demo seeding, seams                                                                                                            |
 | `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: menu model, window frame, appearance, raw-state store, notices, health watchdog                                                                                            |
 | `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore, the quiescent snapshot and `BackupService`                                                                                                                        |
 | `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle)                                                                                                                                              |
@@ -82,7 +82,7 @@ aliases: [vision native, native app, swift app]
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
 automatic signing, no hardened runtime and no App Sandbox, because the app supervises the bundled
-PostgreSQL runtime as child processes. App Transport Security allows only local networking
+backend and database tool as child processes. App Transport Security allows only local networking
 (`NSAllowsLocalNetworking`).
 
 XcodeGen stays the project-file tool: ADR-204 decision 3 made it the default and the owner has not
@@ -91,59 +91,62 @@ objected. The macOS deployment target (`project.yml` and `Package.swift`) and th
 
 ## Runtime supervision
 
-Vision Native starts, supervises and stops its own PostgreSQL 18 cluster and compiled backend. The
-Swift code ports `packaging/electron/runtime/native.ts` and `native-demo.ts` and reuses their SQL,
-roles, extensions and manifest semantics. See the
-[[docs/guides/native-macos-runtime|Native macOS Runtime Guide]],
-[[docs/adr/113-native-macos-runtime|ADR-113]] and
-[[docs/adr/114-native-deterministic-demo-runtime|ADR-114]]. It does not depend on Vision Demo
-running.
+Vision Native starts, supervises and stops the compiled backend, which opens one SQLite database
+file in-process ([[docs/adr/263-sqlite-replaces-postgresql|ADR-263]]). There is no database
+server. The Swift code ports `packaging/electron/runtime/native.ts`, `native-demo.ts` and
+`database-stats.ts` and keeps their file layout, journal and manifest semantics. See
+[[docs/adr/114-native-deterministic-demo-runtime|ADR-114]] for the Demo seed. It does not depend
+on Vision Demo running.
 
-| Type                | Role                                                                                    |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| `RuntimeSupervisor` | Actor. Single instance lock, payload, app port, Demo seeding, start, readiness and quit |
-| `NativeRuntime`     | Actor. Cluster creation, `postgres` and backend processes, roles, PID records, switches |
-| `NativeDemo`        | Seed validation, staging restore, count verification, finalize and rollback             |
-| `RuntimePayload`    | Payload location, `manifest.json` verification, PostgreSQL and Chrome metadata, tools   |
-| `RuntimeFileSystem` | Protocol seams for files, processes, signals, ports, HTTP, clock and randomness (tests) |
+| Type                 | Role                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| `RuntimeSupervisor`  | Actor. Single instance lock, payload, app port, Demo seeding, start, readiness and quit       |
+| `NativeRuntime`      | Actor. Backend process, PID records, database tool, database and attachment generation switch |
+| `NativeDemo`         | Seed manifest validation, seed activation, verification after start, finalize and rollback    |
+| `DatabaseTool`       | `tools/db-file.js` commands (`verify`, `snapshot`, `create`) and their JSON result line       |
+| `DatabaseStatistics` | The SQLite file header (page size, `user_version`, library version) without the backend       |
+| `RuntimePayload`     | Payload location, `manifest.json` verification, the compiled backend                          |
+| `RuntimeFileSystem`  | Protocol seams for files, processes, signals, ports, HTTP, clock and randomness (tests)       |
 
 ### Data directory
 
 Everything lives below `~/Library/Application Support/Vision Native/` (the Demo variant:
 `Vision Native Demo/`, see [[docs/architecture/native-app#Variants|Variants]]). Vision
 Native refuses any other application-data directory, and a directory that belongs to the other
-variant, and never reads, locks or changes the `Vision` or `Vision Demo` directories. Below `native/<runtimeId>/` the layout is the Electron native runtime's, so a later
-phase can switch directories without converting files.
+variant, and never reads, locks or changes the `Vision` or `Vision Demo` directories. The layout
+is the Electron native runtime's, so a later phase can switch directories without converting
+files.
 
 ```text
 Vision Native/
   settings.json             appPort (persisted random backend port), keepServicesOnQuit
   vision-native.lock        single-instance lock (flock)
   demo-reset-request.json   optional request to restore the canonical seed on next launch
-    logs/main.log             lifecycle log, rotated once at 2 MB
-  pre-update-backups/       bundles taken before boot-time migrations (ADR-242)
+  logs/main.log             lifecycle log, rotated once at 2 MB
+  database/                 the live generation (0700)
+    vision.sqlite3          the database, with its -wal and -shm files
+    pre-migration-backups/  the backend's copies before it migrates (ADR-242/263)
+  database.previous-<ms-hex8>/  earlier generations, the newest three kept
+  database.failed-<ms-hex8>/    a generation a rollback set aside
   native/vision_native/
-    runtime.env             generated credentials (0600)
+    runtime.env             the market-data API keys (0600)
     runtime-state.json      runtime marker (activeRuntime, demoSeed, pendingDatabaseSwitch)
     backend.pid.json        backend PID record
-    postgres.pid.json       PostgreSQL PID record
-    logs/backend.log, logs/postgres.log
-    postgres/data/          PostgreSQL 18 cluster (0700)
-    raw-state.json            per-device UI state the web app kept in localStorage (ADR-211)
+    logs/backend.log
+    raw-state.json          per-device UI state the web app kept in localStorage (ADR-211)
     attachments/, cache/
 ```
 
-The runtime id is `vision_native`, so the database is `vision_native` and the roles are
-`vision_native_admin`, `vision_native_owner` and `vision_native_app`, plus
-`vision_analysis_executor`. PostgreSQL listens on `127.0.0.1:54331`, next to Vision (54329),
-Vision Demo (54330) and Vision Native Demo (54332, runtime id `vision_native_demo`), so all four
-can run at once.
+`runtime.env` holds only its header and the market-data keys that `importApplicationEnvironment`
+copies in. Older files lose the retired settings (the database server's URLs and administrator,
+cloud AI keys) on the next layout check, and those keys never reach a child process.
 
 ### Payload discovery
 
-The payload (PostgreSQL 18.6, `vision-backend`, `vision-apple-ai`, the Kysely `db/migrations`, the
-built frontend and licences) is not committed. There is no Alembic runtime and no Chrome Headless
-Shell: reports print through the shell. The supervisor looks for it in this order:
+The payload (`vision-backend`, `vision-apple-ai`, `db/migrations`, `tools/db-file.js`,
+`tools/analysis-sandbox.js`, the built frontend and licences) is not committed. There is no
+database server, no Alembic runtime and no Chrome Headless Shell. The supervisor looks for it in
+this order:
 
 1. `VISION_NATIVE_RUNTIME_DIR`, in Debug builds only: an absolute path to a prepared
    `native-runtime` directory (for example `packaging/electron/native-runtime` or
@@ -151,65 +154,94 @@ Shell: reports print through the shell. The supervisor looks for it in this orde
    like `VISION_NATIVE_BACKEND_URL`.
 2. `Contents/Resources/runtime/` in the app bundle, which `install-native.sh` stages.
 
-The synthetic seed is the `demo-seed/` sibling of the runtime directory in both cases. A missing
-payload fails with `NATIVE_RUNTIME_MISSING`, and the window shows the reason, the install command
-and the Retry button. Before any process starts, every file must match `manifest.json` (size and
-SHA-256, no unlisted, symlinked or special files), and `postgres/runtime.json` must pin the
-expected version for this platform and architecture.
+The synthetic seed (`vision-demo.sqlite3` and its version 2 `manifest.json`) is the `demo-seed/`
+sibling of the runtime directory in both cases. A missing payload fails with
+`NATIVE_RUNTIME_MISSING`, and the window shows the reason, the install command and the Retry
+button. Before any process starts, every file must match `manifest.json` (size and SHA-256, no
+unlisted, symlinked or special files; hashed in full once per installed payload, ADR-235).
+
+### Database tool
+
+`NativeRuntime` runs `tools/db-file.js` through the packaged `vision-backend` executable with
+`BUN_BE_BUN=1`, so the tool uses the backend's own Bun and SQLite. The child gets the allowlisted
+environment plus `NODE_ENV=production`, `VISION_SKIP_DOTENV=1`, `VISION_RUNTIME_ROOT` and
+`VISION_DATABASE_PATH`. `verify <file>` runs `integrity_check`, `foreign_key_check` and reads the
+migration ledger; `snapshot <source> <destination>` writes a consistent copy with `VACUUM INTO`
+and verifies it; `create <file> [seed.sql]` makes a database at the packaged migration head. The
+last stdout line that is a JSON object with a boolean `ok` is the result: a report with the size,
+SHA-256, SQLite version, schema version, pending migrations and (for `verify`) row counts per
+table, or `{ ok: false, error }`, which becomes `DATABASE_VERIFY_FAILED`,
+`DATABASE_SNAPSHOT_FAILED` or `DATABASE_CREATE_FAILED` with the tool's own message.
+
+### Database generation switch
+
+Demo seeding and restore replace the live database the same way
+(`activateRestoredDatabase`). The source is copied with `fsync` into a
+`database.restore-<nonce>` sibling and verified there, including the expected checksum and
+schema version. Only then is the switch plan
+`{ version: 2, kind: "sqlite-directory", liveDirectory, previousDirectory, activatedDirectory,
+activatedAt }` written to `runtime-state.json` as `pendingDatabaseSwitch`, the backend stopped, and
+the directories swapped with two renames. `finalizeDatabaseSwitch` clears the plan and prunes
+older previous generations by modification time; pruning never fails the restore.
+`rollbackDatabaseSwitch` classifies where an interrupted switch stopped (before the renames,
+between them, or after) from whether `database/vision.sqlite3` and the previous generation exist,
+puts the previous generation back and keeps the failed one as `database.failed-<nonce>`. When
+neither exists it refuses (`DATABASE_SWITCH_UNSAFE`) instead of creating an empty database. A
+token whose directories are not this runtime's generation siblings is refused
+(`NO_DATABASE_SWITCH`), and a journal written by the PostgreSQL versions is left alone.
 
 ### Start sequence
 
 `ShellResolver` calls `RuntimeSupervisor.launch()`. Concurrent calls share one launch, and a call
-after a failure retries. A failed launch stops the backend it started and leaves PostgreSQL
-running, so Retry starts a fresh backend.
+after a failure retries. A failed launch stops the backend it started, so Retry starts a fresh
+backend.
 
 1. Take the exclusive lock on `vision-native.lock`. A second instance fails with
    `NATIVE_ALREADY_RUNNING`. Only the instance that holds the lock rotates `main.log`.
 2. Locate the payload and resolve the app port: the persisted `appPort`, otherwise a random free
    port from 20000 to 59999 (64 tries, then 3002), persisted to `settings.json`. A corrupt
    `settings.json` is renamed to `settings.json.corrupt-<ms>`.
-3. Create the private directories and `runtime.env`, verify the payload and check that every
-   PostgreSQL tool reports major 18.
-4. Prepare the Demo seed. A seed whose `logicalSha256` and `schemaRevision` match the marker is
-   kept. Otherwise the dump is restored into a staging database, its schema head and table counts
-   are verified, and it is renamed into place while the previous database is kept for rollback.
-   An interrupted restore from an earlier launch is recovered first (see
-   [[docs/architecture/native-app#Restore|Restore]]).
-5. Start the backend. This runs `initdb` once (scram, C locale, data checksums), writes
-   `vision.conf`, starts `postgres` on the loopback port with Unix sockets disabled, inspects the
-   server (major 18, loopback-only, our data directory), bootstraps the roles, database and
-   extensions, then spawns `vision-backend` with the allowlisted environment. A port held by
-   another process fails closed. A backend `PORT_COLLISION` re-picks the app port once. A recorded
+3. Create the private directories and `runtime.env`, and verify the payload.
+4. Recover an interrupted restore (both journals, attachments then database, ADR-207) and prepare
+   the Demo seed. A seed whose `logicalSha256`, `databaseSha256` and `schemaVersion` match the
+   marker, with a database file present, is kept. Otherwise the packaged database is activated as
+   the next generation while the previous one is kept for rollback.
+5. When the database's header `user_version` is behind the payload's newest migration, log it:
+   the backend backs the database up before it migrates (ADR-242/263).
+6. Start the backend: spawn `vision-backend` with the allowlisted environment,
+   `VISION_DATABASE_PATH`, `APP_TIMEZONE` (the Mac's zone unless `runtime.env` pins one, ADR-264)
+   and the loopback port. A backend `PORT_COLLISION` re-picks the app port once. A recorded
    backend of ours that answers `/health` within three probes is reused; one that does not is
-   stopped and replaced (Electron fails here with `BACKEND_STALE_PID`). When an existing database
-   is behind the packaged `db/migrations` chain, the standard variant first takes a pre-migration
-   backup (see [[docs/architecture/native-app#Pre-migration backup|Pre-migration backup]]); the
-   backend then applies the Kysely migrations at boot.
-6. After a seed switch, wait for `/health/detailed` to report a connected database, recheck the
-   stable counts and finalize the switch. Any failure rolls the switch back.
-7. Poll `GET /health/detailed` (20 probes at 100 ms, then every 300 ms, about 3 minutes). Then
-   `ShellController` opens the raw-state store, installs the SwiftUI shell and starts the health
-   watchdog; no page is loaded. A timeout copies the redacted tail of `backend.log` into
-   `main.log`.
+   stopped and replaced (Electron fails here with `BACKEND_STALE_PID`). With a pending schema
+   upgrade the phase is `backingUpDatabase` and the splash shows `splash.backingUp`.
+7. After a seed switch, wait for `/health/detailed` to report a connected database, verify the
+   database again (the schema must not have moved backwards, and the stable tables keep the
+   seed's row counts) and finalize the switch. Any failure rolls the switch back.
+8. Poll `GET /health/detailed` (20 probes at 100 ms, then every 300 ms, about 3 minutes). A
+   backend that exits meanwhile fails the launch with its last "Failed to start application" error
+   and code; `PRE_MIGRATION_BACKUP_FAILED` is shown with the localized
+   `app.preMigrationBackupFailed` text. Then `ShellController` opens the raw-state store, installs
+   the SwiftUI shell and starts the health watchdog; no page is loaded. A timeout copies the tail
+   of `backend.log`, without colour codes, into `main.log`.
 
 ### Stop sequence
 
 On quit the app delegate answers `terminateLater` and calls `RuntimeSupervisor.shutdown()` with
 a 45-second hard limit. Like Electron, the quit does not wait for a launch in progress. It cancels
-the launch, which ends a running tool such as `initdb` or `pg_restore`. The runtime then refuses
-to spawn PostgreSQL or the backend or to begin a database switch. A Demo staging database
-without a persisted switch plan is dropped. A persisted plan is rolled back on the next launch.
-Tools run with `Foundation.Process` get `SIGTERM` on timeout or cancellation, then `SIGKILL` after 2
-seconds, and their output is read for at most 2 more seconds after exit. When `keepServicesOnQuit` is on (the database setting first, then the
-`settings.json` mirror), both processes keep running. Otherwise the backend gets `SIGTERM` and,
-after 10 seconds, `SIGKILL`, and PostgreSQL stops with `pg_ctl stop -m fast`. Vision Native
-signals a recorded PID only when `ps -o command=` shows its own `vision-backend`, removes stale
-records, and treats PIDs of 1 or less as untrusted. A backend left running by `keepServicesOnQuit` is
-reused by the next launch when it answers `/health`.
+the launch, which ends a running database tool. The runtime then refuses to spawn the backend or
+to begin a database switch, and a staging generation without a persisted switch plan is removed.
+A persisted plan is rolled back on the next launch. Tools run with `Foundation.Process` get
+`SIGTERM` on timeout or cancellation, then `SIGKILL` after 2 seconds, and their output is read for
+at most 2 more seconds after exit. When `keepServicesOnQuit` is on (the database setting first,
+then the `settings.json` mirror), the backend keeps running. Otherwise it gets `SIGTERM` and,
+after 10 seconds, `SIGKILL`. Vision Native signals a recorded PID only when `ps -o command=` shows
+its own `vision-backend`, removes stale records, and treats PIDs of 1 or less as untrusted. A
+backend left running by `keepServicesOnQuit` is reused by the next launch when it answers
+`/health`.
 
 Before the shutdown the shell runs the quit-time backup (see
 [[docs/architecture/native-app#Backup and restore|Backup and restore]]); the 45-second limit covers
-the backup and the shutdown. Not ported: external PostgreSQL clusters and the Bun source mode.
+the backup and the shutdown. Not ported: the Bun source mode.
 `BackendHealthWatchdog` only reports a lost backend as a notice; it does not restart it.
 
 ### Developer override
@@ -343,25 +375,30 @@ and the restore confirmation (`NSAlert`, Cancel as the default button).
 
 ### Format compatibility
 
-A bundle is a zip archive named `vision_backup_<deviceId>_<YYYY-MM-DD_HH-MM-SS>.visionbak`
-with `metadata.json` (Electron's field order), `db.sql` (`pg_dump --format=plain`), the
-`attachments/` tree and an optional `frontend-state.json`. It is written as `<name>.partial` and
-renamed when complete. Files read and written by Vision Native and Electron Vision are
+A bundle (format 2) is a zip archive named
+`vision_backup_<deviceId>_<YYYY-MM-DD_HH-MM-SS>.visionbak` with `metadata.json` (Electron's field
+order: `bundleVersion: 2`, `database: "sqlite"`, `schemaVersion`, `sqliteVersion`,
+`databaseSha256`, `databaseBytes`, `appVersion`, `deviceId`, `createdAt`, `encrypted`),
+`db.sqlite3` (a verified snapshot from the database tool), the `attachments/` tree and an optional
+`frontend-state.json`. It is written as `<name>.partial` and renamed when complete; with a
+passphrase the plain archive is built in a private work directory and only the encrypted file
+reaches the backup folder, again through a `.partial` name. Files read and written by Vision Native and Electron Vision are
 interchangeable:
 
-| Piece            | Implementation                                                                                                   |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Zip              | `ZipArchive.swift`: streaming writer and reader, deflate through the Compression framework, zip64, CRC-32 checks |
-| v2 encryption    | `VISIONBAK2`, 16-byte salt, 12-byte nonce, AES-256-GCM, 16-byte tag; key `scrypt(N=2^15, r=8, p=1)`              |
-| v1 decryption    | `VISIONBAK1`, 16-byte IV, AES-256-CBC; key `scrypt(N=2^14, r=8, p=1)` with the salt `vision-backup-v1`           |
-| Legacy SQL files | `.sql` and `.sql.enc` (`VISIONENC1` / `VISIONENC2`) restore as database-only backups                             |
-| Key derivation   | `Scrypt.swift`, checked against the RFC 7914 vectors                                                             |
+| Piece          | Implementation                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Zip            | `ZipArchive.swift`: streaming writer and reader, deflate through the Compression framework, zip64, CRC-32 checks |
+| v2 encryption  | `VISIONBAK2`, 16-byte salt, 12-byte nonce, AES-256-GCM, 16-byte tag; key `scrypt(N=2^15, r=8, p=1)`              |
+| v1 decryption  | `VISIONBAK1`, 16-byte IV, AES-256-CBC; key `scrypt(N=2^14, r=8, p=1)` with the salt `vision-backup-v1`           |
+| Bare databases | `.sqlite3` and `.enc` (`VISIONENC2`) restore as database-only backups; `VISIONENC1` is refused by name           |
+| Key derivation | `Scrypt.swift`, checked against the RFC 7914 vectors                                                             |
 
 New bundles are always v2. AES-GCM is streamed (CommonCrypto AES-CTR plus GHASH), so a
 large bundle is never held in memory; tests compare it with CryptoKit and with files written by
 Node. The test resources carry the Electron Vision 1.0.2 fixture
-(`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`) byte for byte, and a
-test opens it. Extraction refuses absolute and `..` entry names and stops beyond 10 GiB of output
+(`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`) byte for byte; it
+decrypts, and its format 1 contents (a PostgreSQL dump) are refused with
+`BACKUP_FORMAT_UNSUPPORTED`, as in Electron. Extraction refuses absolute and `..` entry names and stops beyond 10 GiB of output
 or 100,000 entries. The v1 salt is Electron Vision's (`vision-backup-v1`, from the app name
 "Vision"); legacy files written by Vision Demo, whose salt differs, are out of scope.
 
@@ -390,39 +427,40 @@ removes older ones, and `.partial` leftovers, only when they are more than 10 mi
 
 Encryption checks and restores accept only a path the restore picker returned
 (`RestorePathAllowList`, Electron's `ALLOWED_RESTORE_PATHS`) with a `.visionbak`,
-`.visionbak.enc`, `.enc` or `.sql` extension; the picker offers a "Vision Backup" and an
+`.visionbak.enc`, `.sqlite3` or `.enc` extension; the picker offers a "Vision Backup" and an
 "All Files" filter. After the confirmation, the bundle is decrypted and extracted into a private
-temporary directory, and a bundle from a newer schema is refused with `BUNDLE_SCHEMA_NEWER`. The
-current schema is the highest name in the live database's `public.kysely_migration` ledger, else
-the newest `NNNN_name.sql` in the payload's `db/migrations` (Electron's `getLocalMigrationChainHead`).
-A dump without that ledger predates the TypeScript baseline and is refused with
-`BACKUP_PRE_BASELINE` (`MigrationLedger`). When neither schema head is known, a backup with a
-numbered revision is refused with `SCHEMA_UNKNOWN` instead of restoring unchecked, which is
-stricter than Electron. Only one restore runs at a time, and a backup run and the quit-time backup
-are refused while it runs. Then, as in `restoreNativeBundle`:
+temporary directory. A bundle without `db.sqlite3` that declares an older format is refused with
+`BACKUP_FORMAT_UNSUPPORTED`. `metadata.json` is untrusted: only a positive integer
+`schemaVersion` and a well-formed `databaseSha256` become restore expectations. A bundle whose
+schema version is newer than the payload's newest migration is refused with
+`BUNDLE_SCHEMA_NEWER`; an older one restores and the backend migrates it at start. A bare file
+must be a SQLite database (`BACKUP_UNRECOGNIZED` otherwise), and its header `user_version` gets
+the same check. Only one restore runs at a time, and a backup run and the quit-time backup are
+refused while it runs. Then, as in `restoreNativeBundle`:
 
-1. `psql --single-transaction` restores `db.sql` into a staging database, which is validated and
-   switched in with the persisted `pendingDatabaseSwitch` token (the Demo seeding switch).
+1. The database switches in as the next generation (see
+   [[docs/architecture/native-app#Database generation switch|Database generation switch]]); the
+   staged copy must match the metadata's checksum and schema version.
 2. The attachment tree is copied next to the live one, verified by fingerprint and swapped in;
    the previous tree is kept and the token persisted as `pendingAttachmentSwitch`.
 3. The backend starts and must pass `/health/detailed`; then the database switch is finalized.
 4. Removing the previous attachment tree is cleanup; a failure there is a warning.
 
-A failure before step 3 completes rolls back the attachments, then the database, then restarts the
-backend (unless the database switch could not be recovered). Errors keep Electron's
+A failure before step 3 completes rolls back the attachments, then the database, then starts the
+backend again without waiting for it (unless the database switch could not be recovered). Errors keep Electron's
 `"Error: <message>"` form, so native Settings reopens the passphrase prompt on
 `PASSPHRASE_REQUIRED` and `INVALID_PASSPHRASE`.
 
 Coordinated recovery and quiescent backups follow
 [[docs/adr/207-coordinated-native-recovery|ADR-207: Coordinated native recovery]]. The attachment
 journal is persisted before either rename. Startup recovery (`NativeRuntime.recoverInterruptedRestore`)
-runs before any write or Demo seed decision and before `bootstrapDatabase` could create a database.
+runs before any write or Demo seed decision and before the backend could open the database.
 While `pendingDatabaseSwitch` is persisted, the backend stops, the previous attachment tree returns
 and the database switch rolls back. Otherwise the restore committed: the restored tree stays and
 the previous one is removed. Rollback is safe to repeat at every rename boundary, and a malformed
 journal, a non-object runtime marker or an ambiguous switch fails the launch closed. A bundle
-backup stops the backend writer. `pg_dump`, the attachment copy and the schema head run inside
-that interval (`QuiescentSnapshot`). The backend then restarts to detailed readiness, also after a
+backup stops the backend writer. The database snapshot and the attachment copy run inside that
+interval (`QuiescentSnapshot`). The backend then restarts to detailed readiness, also after a
 failed capture. Around the capture the shell stops its health watchdog and starts it again
 afterwards, so the deliberate stop is not reported as a lost backend. A restore is refused while a
 backup runs, and quit waits for a running backup or restore. A backend that survives `SIGKILL`
@@ -438,17 +476,14 @@ restore uses the same path.
 
 ### Pre-migration backup
 
-[[docs/adr/242-backup-before-boot-migrations|ADR-242]]: when an existing database is behind the
-packaged `db/migrations` chain, `NativeRuntime.start` calls the supervisor's `beforeMigrations`
-hook after PostgreSQL is ready and before the backend is spawned (`PendingMigrations` compares the
-highest `public.kysely_migration` name with the highest packaged name; a database without a ledger
-is new and gets no backup). `PreMigrationBackupRelay` in `VisionNativeApp.swift` forwards the hook
-to `BackupService.backupBeforeMigrations`, which writes the usual bundle into
-`<data directory>/pre-update-backups` with `backendStopped: true` (no stop-and-restart, no
-frontend state), encrypted when a passphrase is set and with the same retention. A failed backup
-aborts the launch before any migration runs and shows `app.preMigrationBackupFailed` on the launch
-error page. Only the standard variant passes the hook; the Demo variant reseeds synthetic data at
-the packaged schema.
+[[docs/adr/242-backup-before-boot-migrations|ADR-242]] as changed by ADR-263: the backend itself
+copies the database into `database/pre-migration-backups` before it applies pending migrations.
+The shell only reports it: when the header `user_version` of an existing database (not 0) is
+below the payload's newest `NNNN_name.sql` (`NativeRuntime.pendingSchemaUpgrade`), the supervisor
+logs `[pre-migration-backup] database at schema N, this build ships M` and enters the
+`backingUpDatabase` phase after the start, which the splash shows as `splash.backingUp`. When the
+backend's copy fails it exits with `PRE_MIGRATION_BACKUP_FAILED`; the launch fails with that code
+and the launch error page shows `app.preMigrationBackupFailed` with the backend's message.
 
 ### Quit-time backup
 
@@ -478,10 +513,10 @@ missing or unknown value is the standard variant. A second XcodeGen target was r
 keeps one build, and Electron's `resources/DEMO` marker would need a copy step for the same
 result.
 
-| Variant    | App                      | Bundle id                             | Data directory                           | Runtime id           | PostgreSQL |
-| ---------- | ------------------------ | ------------------------------------- | ---------------------------------------- | -------------------- | ---------- |
-| `standard` | `Vision Native.app`      | `com.vaultvoyager.vision-native`      | `Application Support/Vision Native`      | `vision_native`      | 54331      |
-| `demo`     | `Vision Native Demo.app` | `com.vaultvoyager.vision-native-demo` | `Application Support/Vision Native Demo` | `vision_native_demo` | 54332      |
+| Variant    | App                      | Bundle id                             | Data directory                           | Runtime id           |
+| ---------- | ------------------------ | ------------------------------------- | ---------------------------------------- | -------------------- |
+| `standard` | `Vision Native.app`      | `com.vaultvoyager.vision-native`      | `Application Support/Vision Native`      | `vision_native`      |
+| `demo`     | `Vision Native Demo.app` | `com.vaultvoyager.vision-native-demo` | `Application Support/Vision Native Demo` | `vision_native_demo` |
 
 The Keychain service of the backup passphrase uses the runtime id with
 hyphens, for example `com.vaultvoyager.vision-native-demo.backup-passphrase`. The iCloud backup
@@ -508,13 +543,13 @@ states); no route shows the web app.
 `bun run native:generate` runs the five generators; CI's Verify Generated Artifacts job reruns it
 and fails when `apps/native/` changes. The outputs are committed.
 
-| Script                            | Inputs                                                                                                                                  | Output                                                         |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Sources/VisionNativeCore/API/Generated/` (models, operations) |
+| Script                            | Inputs                                                                                                                                  | Output                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Sources/VisionNativeCore/API/Generated/` (models, operations)                          |
 | `scripts/native-fixtures.ts`      | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Tests/VisionNativeCoreTests/Fixtures/api/`, `Contract/GeneratedModelDecodeTests.swift` |
-| `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/index.css`, `styles/skin-v2.css`, `styles/themes.ts`, `tailwind.config.ts`, `lib/motion.ts`, UI components | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift` |
-| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`       |
-| `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                                                                                                   | `Sources/VisionNativeCore/Navigation/Generated/`               |
+| `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/index.css`, `styles/skin-v2.css`, `styles/themes.ts`, `tailwind.config.ts`, `lib/motion.ts`, UI components | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift`                          |
+| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`                                |
+| `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                                                                                                   | `Sources/VisionNativeCore/Navigation/Generated/`                                        |
 
 The fixture generator writes a minimal and a maximal JSON sample for every emitted model; the generated
 Swift test decodes, re-encodes and compares each one, and `bun run native:test-generators` fails when the
@@ -1614,9 +1649,10 @@ is `SankeyLayout`, a port of the in-repo web layout that replaced d3-sankey
 
 `install-native.sh` requires `xcodegen` and `xcodebuild`. It prepares the payload with the same
 scripts as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native-runtime` and
-`build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`: PostgreSQL
-18, the compiled backend with its Kysely migrations, the Apple Foundation Models helper, the
-frontend build and the synthetic Demo seed, with no Alembic and no Chrome Headless Shell. It then
+`build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`: the
+compiled backend with its SQLite migrations, `tools/db-file.js` and `tools/analysis-sandbox.js`,
+the Apple Foundation Models helper, the frontend build and the synthetic Demo seed database, with
+no database server, no Alembic and no Chrome Headless Shell. It then
 generates the project and builds Release into `apps/native/build/`. A "Stage runtime payload"
 build phase copies the payload to `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/`
 before code signing. The script checks the staged files and `codesign --verify --strict`, then

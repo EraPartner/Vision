@@ -4632,6 +4632,7 @@ menu.settings
 menu.sourceCode
 menu.toggleSidebar
 menu.view
+splash.backingUp
 splash.starting
 splash.startingServices
 splash.waitingApp

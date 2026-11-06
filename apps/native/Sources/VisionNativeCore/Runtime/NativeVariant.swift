@@ -2,9 +2,9 @@ import Foundation
 
 /// The two builds of one Vision Native target (phase 1e). "Vision Native Demo" is the
 /// synthetic-data variant visual review and agents use; "Vision Native" is the standard
-/// one. Each has its own application-data directory, runtime id, PostgreSQL port and
-/// Keychain service name, so neither ever reads, locks or mutates the other's state, nor
-/// the Electron apps' ("Vision" on 54329, "Vision Demo" on 54330).
+/// one. Each has its own application-data directory (and so its own SQLite database), runtime
+/// id and Keychain service name, so neither ever reads, locks or mutates the other's state,
+/// nor the Electron apps' ("Vision" and "Vision Demo").
 ///
 /// The build setting `VISION_NATIVE_VARIANT` (`standard` or `demo`) picks the product
 /// name and bundle id and is copied into `Info.plist` as `VisionNativeVariant`, which the
@@ -37,13 +37,6 @@ public enum NativeVariant: String, Sendable, CaseIterable {
         switch self {
         case .standard: return VisionNativeIdentity.runtimeId
         case .demo: return "vision_native_demo"
-        }
-    }
-
-    public var postgresPort: Int {
-        switch self {
-        case .standard: return VisionNativeIdentity.postgresPort
-        case .demo: return 54332
         }
     }
 

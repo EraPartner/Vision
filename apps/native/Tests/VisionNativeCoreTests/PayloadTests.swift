@@ -74,7 +74,7 @@ import Testing
     @Test func preparedPayloadVerifies() throws {
         let harness = try Harness()
         let count = try RuntimePayload.verifyManifest(runtimeRoot: testRuntimeRoot, fileSystem: harness.fileSystem)
-        #expect(count > RuntimeConstants.requiredPostgresTools.count)
+        #expect(count >= 6)
     }
 
     @Test func modifiedFileFailsChecksum() throws {
@@ -89,7 +89,7 @@ import Testing
 
     @Test func unlistedFileIsRejected() throws {
         let harness = try Harness()
-        harness.fileSystem.addFile("\(testRuntimeRoot)/postgres/root/bin/extra", "x")
+        harness.fileSystem.addFile("\(testRuntimeRoot)/tools/extra.js", "x")
         let error = #expect(throws: NativeRuntimeError.self) {
             try RuntimePayload.verifyManifest(runtimeRoot: testRuntimeRoot, fileSystem: harness.fileSystem)
         }
@@ -130,77 +130,32 @@ import Testing
     }
 }
 
-@Suite struct PayloadMetadataTests {
-    @Test func postgresMetadataPinsVersionPlatformAndArchitecture() throws {
+@Suite struct PayloadToolDiscoveryTests {
+    @Test func discoveryVerifiesThePayloadAndFindsTheBackend() throws {
         let harness = try Harness()
-        let bin = try RuntimePayload.postgresBinDirectory(runtimeRoot: testRuntimeRoot, fileSystem: harness.fileSystem)
-        #expect(bin == "\(testRuntimeRoot)/postgres/root/bin")
-
-        harness.installPayload(postgresVersion: "18.5")
-        let error = #expect(throws: NativeRuntimeError.self) {
-            try RuntimePayload.postgresBinDirectory(runtimeRoot: testRuntimeRoot, fileSystem: harness.fileSystem)
-        }
-        #expect(error?.code == "POSTGRES_RUNTIME_MISMATCH")
-    }
-
-    @Test func postgresBinPathMayNotEscape() throws {
-        let fileSystem = FakeFileSystem()
-        fileSystem.addFile(
-            "/runtime/postgres/runtime.json",
-            """
-            {"version":1,"postgresMajor":18,"postgresVersion":"\(RuntimeConstants.postgresVersion)","platform":"darwin","architecture":"\(RuntimeConstants.payloadArchitecture)","binRelative":"../../bin"}
-            """)
-        let error = #expect(throws: NativeRuntimeError.self) {
-            try RuntimePayload.postgresBinDirectory(runtimeRoot: "/runtime", fileSystem: fileSystem)
-        }
-        #expect(error?.code == "POSTGRES_RUNTIME_MISMATCH")
-    }
-
-    @Test func missingPostgresMetadataMeansNoPackagedPostgres() throws {
-        #expect(try RuntimePayload.postgresBinDirectory(runtimeRoot: "/runtime", fileSystem: FakeFileSystem()) == nil)
-    }
-
-    @Test func toolDiscoveryVerifiesVersionsAndFindsEveryTool() async throws {
-        let harness = try Harness()
-        let modes = LockedValue<[RuntimeVerificationMode]>([])
-        let tools = try await RuntimePayload.discoverTools(
+        var modes: [RuntimeVerificationMode] = []
+        let tools = try RuntimePayload.discoverTools(
             runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem,
-            runner: harness.runner, childEnvironment: ["PATH": "/usr/bin"],
-            verification: { mode in modes.withLock { $0.append(mode) } })
-        #expect(tools.binDirectory == "\(testRuntimeRoot)/postgres/root/bin")
+            verification: { modes.append($0) })
         #expect(tools.compiledBackend == "\(testRuntimeRoot)/vision-backend")
-        #expect(tools.versionNumbers["psql"] == 180_006)
-        #expect(modes.withLock { $0 } == [.full])
-        let checked = Set(harness.runner.calls.filter { $0.arguments == ["--version"] }.map(\.name))
-        #expect(checked.isSuperset(of: RuntimeConstants.versionCheckedPostgresTools))
+        #expect(modes == [.full])
+        // Discovery runs nothing: the backend opens SQLite itself, no server tools to probe.
+        #expect(harness.runner.calls.isEmpty)
     }
 
-    @Test func theBackendIsRequiredButNoAlembicOrBrowserIs() async throws {
+    @Test func theBackendIsRequiredButNoAlembicBrowserOrDatabaseServerIs() throws {
         let harness = try Harness()
-        // Today's payload has no Alembic runtime and no Chrome Headless Shell.
-        for retired in ["vision-alembic", "chromium/runtime.json", "chromium/shell/chrome-headless-shell"] {
+        // Today's payload has no Alembic runtime, no Chrome Headless Shell and no PostgreSQL.
+        for retired in ["vision-alembic", "chromium/runtime.json", "postgres/runtime.json"] {
             #expect(harness.fileSystem.node("\(testRuntimeRoot)/\(retired)") == nil)
         }
         try harness.fileSystem.remove("\(testRuntimeRoot)/vision-backend")
         harness.writeManifest()
-        let error = await #expect(throws: NativeRuntimeError.self) {
-            try await RuntimePayload.discoverTools(
-                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem,
-                runner: harness.runner, childEnvironment: [:])
+        let error = #expect(throws: NativeRuntimeError.self) {
+            try RuntimePayload.discoverTools(
+                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
         }
         #expect(error?.code == "BUN_NOT_FOUND")
-    }
-
-    @Test func postgres17ToolsAreRejected() async throws {
-        let harness = try Harness()
-        harness.runner.handler = { call in
-            call.arguments == ["--version"] ? RunResult(stdout: "\(call.name) (PostgreSQL) 17.4\n") : RunResult()
-        }
-        await #expect(throws: NativeRuntimeError.self) {
-            try await RuntimePayload.discoverTools(
-                runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem,
-                runner: harness.runner, childEnvironment: [:])
-        }
     }
 }
 
@@ -214,7 +169,7 @@ private let testMarkerPath = "\(testUserData)/native/\(RuntimeConstants.runtimeV
         let first = try RuntimePayload.verifyManifestOnLaunch(
             runtimeRoot: testRuntimeRoot, markerPath: testMarkerPath, fileSystem: harness.fileSystem)
         #expect(first.mode == .full)
-        #expect(first.entries > RuntimeConstants.requiredPostgresTools.count)
+        #expect(first.entries >= 6)
         let marker = try #require(harness.fileSystem.json(testMarkerPath))
         #expect(marker["version"] == .int(1))
         #expect(marker["runtimeRoot"] == .string(testRuntimeRoot))

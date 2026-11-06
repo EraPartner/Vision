@@ -156,17 +156,17 @@ func readBytes(_ path: String) throws -> [UInt8] {
         #expect(BackupFiles.size(directory + "/out.enc") != nil)
     }
 
-    @Test func theRetiredV1FormatIsRefusedByNameForBundlesAndLegacySqlFiles() throws {
+    @Test func theRetiredV1FormatIsRefusedByNameForBundlesAndEncryptedFiles() throws {
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }
         let bundle = directory + "/legacy.visionbak.enc"
-        let sql = directory + "/legacy.sql.enc"
+        let sql = directory + "/legacy.sqlite3.enc"
         try writeBytes(bundle, Array("VISIONBAK1".utf8) + bytes(hex: Self.nodeV1Body))
         try writeBytes(sql, Array("VISIONENC1".utf8) + bytes(hex: Self.nodeV1Body))
         // Still recognised as encrypted, so the picker routes them to the refusal.
         #expect(BackupBundle.isEncrypted(bundle))
-        #expect(LegacySQLBackup.isEncrypted(sql))
-        #expect(!LegacySQLBackup.isEncrypted(bundle))
+        #expect(EncryptedBackupFile.isEncrypted(sql))
+        #expect(!EncryptedBackupFile.isEncrypted(bundle))
 
         #expect(throws: BackupFailure(EncryptedFile.retiredV1Message)) {
             try EncryptedFile.decrypt(
@@ -176,7 +176,7 @@ func readBytes(_ path: String) throws -> [UInt8] {
         #expect(throws: BackupFailure(EncryptedFile.retiredV1Message)) {
             try EncryptedFile.decrypt(
                 encryptedPath: sql, destinationPath: directory + "/sql.out", passphrase: "legacy-pass",
-                format: LegacySQLBackup.format)
+                format: EncryptedBackupFile.format)
         }
         #expect(!BackupFiles.exists(directory + "/bundle.out"))
         #expect(!BackupFiles.exists(directory + "/sql.out"))
@@ -203,12 +203,12 @@ func readBytes(_ path: String) throws -> [UInt8] {
         #expect(throws: BackupFailure(BackupPassphrase.required)) {
             try EncryptedFile.decrypt(
                 encryptedPath: directory + "/v2.enc", destinationPath: directory + "/out", passphrase: nil,
-                format: LegacySQLBackup.format)
+                format: EncryptedBackupFile.format)
         }
-        #expect(throws: BackupFailure(LegacySQLBackup.format.unsupportedFormatMessage)) {
+        #expect(throws: BackupFailure(EncryptedBackupFile.format.unsupportedFormatMessage)) {
             try EncryptedFile.decrypt(
                 encryptedPath: directory + "/other", destinationPath: directory + "/out", passphrase: "x",
-                format: LegacySQLBackup.format)
+                format: EncryptedBackupFile.format)
         }
     }
 

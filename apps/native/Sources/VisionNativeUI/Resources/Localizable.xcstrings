@@ -64333,6 +64333,24 @@
         }
       }
     },
+    "splash.backingUp": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backing up your data before the update…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back-up van je gegevens maken vóór de update…"
+          }
+        }
+      }
+    },
     "splash.starting": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
