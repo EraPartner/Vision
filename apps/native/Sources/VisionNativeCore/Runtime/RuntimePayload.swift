@@ -151,6 +151,15 @@ public enum RuntimePayload {
         return ParsedManifest(appVersion: manifest["appVersion"]?.stringValue, entries: entries)
     }
 
+    /// The Vision version the payload was prepared from (`appVersion`, the root package.json
+    /// version), which the About section and the updater show; `nil` without a readable manifest.
+    public static func appVersion(runtimeRoot: String, fileSystem: any RuntimeFileSystem) -> String? {
+        guard let data = try? readManifestBytes(runtimeRoot, fileSystem: fileSystem),
+            let manifest = try? parseManifest(data)
+        else { return nil }
+        return manifest.appVersion
+    }
+
     private static func readManifestBytes(_ runtimeRoot: String, fileSystem: any RuntimeFileSystem) throws -> Data {
         do {
             return try fileSystem.readFile(PathUtilities.join(runtimeRoot, "manifest.json"))

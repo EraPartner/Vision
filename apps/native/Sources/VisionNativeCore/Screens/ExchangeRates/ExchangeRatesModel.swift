@@ -30,6 +30,10 @@ public struct ScreenNotice: Equatable, Sendable, Identifiable {
         case warning
     }
 
+    /// A variable whose value follows the localized title after a space, as a web toast
+    /// built as `${t(key)} ${value}` does.
+    public static let titleSuffixVariable = "__titleSuffix"
+
     public let id: Int
     public let kind: Kind
     public let key: String

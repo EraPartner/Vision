@@ -139,9 +139,11 @@ struct NativeSidebarRail: View {
                 }
             }
             let settings = model.strings.t(NavigationRegistry.settingsTitleKey)
+            let updateReady = model.updates?.isUpdateReady ?? false
             railButton(
                 symbol: NavigationRegistry.settingsSymbol, label: settings, tooltip: settings + " · ⌘,",
-                isActive: false
+                isActive: false, badgeLabel: updateReady ? model.strings.t("layout.updateReady") : "",
+                dot: updateReady
             ) {
                 model.openSettings()
             }
@@ -152,7 +154,7 @@ struct NativeSidebarRail: View {
     /// One 32 pt icon button: the glass selection pill when active, a count pill on its corner.
     private func railButton(
         symbol: String, label: String, tooltip: String, isActive: Bool, badge: Int = 0, badgeLabel: String = "",
-        action: @escaping () -> Void
+        dot: Bool = false, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
@@ -167,6 +169,12 @@ struct NativeSidebarRail: View {
                                 : Color.clear)
                 )
                 .overlay(alignment: .topTrailing) { countPill(badge) }
+                // The update-ready dot, collapsed: `h-[7px] w-[7px]` primary at `right-1 top-1`.
+                .overlay(alignment: .topTrailing) {
+                    if dot {
+                        Circle().fill(theme.primary).frame(width: 7, height: 7).padding(4).accessibilityHidden(true)
+                    }
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

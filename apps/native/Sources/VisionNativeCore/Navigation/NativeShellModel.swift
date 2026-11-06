@@ -102,6 +102,8 @@ public final class NativeShellModel {
     public let shellNotifications: NativeShellNotificationsModel?
     /// `NavItemBadge` counts; the SDK supplies it, and the sidebar shows none without it.
     public var sidebarBadges: NativeSidebarBadgesModel?
+    /// The shared update status: the sidebar's Settings dot and the About section read it.
+    public var updates: NativeUpdateModel?
     /// DevtoolsRoot's API Inspector; shown only in admin mode.
     public var apiInspector: NativeAPIInspectorModel?
 

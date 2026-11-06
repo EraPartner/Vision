@@ -360,9 +360,8 @@ the first Mac run:
 
 ### Left for later phases
 
-The pre-update backup of an in-app update has no counterpart because there is no updater. Not
-ported: the renderer-ready watchdog (there is no renderer), the production security headers of
-`registerSecurityHeaders` (the Swift app serves no page), the text context menu with spelling
+Not ported: the renderer-ready watchdog (there is no renderer), the production security headers
+of `registerSecurityHeaders` (the Swift app serves no page), the text context menu with spelling
 suggestions, Electron's traffic-light position and JavaScript `alert`/`confirm` panels.
 
 ## Backup and restore
@@ -464,8 +463,8 @@ interval (`QuiescentSnapshot`). The backend then restarts to detailed readiness,
 failed capture. Around the capture the shell stops its health watchdog and starts it again
 afterwards, so the deliberate stop is not reported as a lost backend. A restore is refused while a
 backup runs, and quit waits for a running backup or restore. A backend that survives `SIGKILL`
-fails the stop. Vision Native has no updater, so the update-installer changes do not apply. The
-runtime manifest is already verified off the main thread with streamed hashes.
+fails the stop. The Swift app has no update installer (see "In-app updater"), so the
+update-installer changes do not apply. The runtime manifest is already verified off the main thread with streamed hashes.
 
 A confirmed restore is a lifecycle boundary for the native shell. `ShellController` suspends the
 Settings drafts and writers, drains accepted local-state and API writes, stops chat and import
@@ -521,7 +520,7 @@ result.
 The Keychain service of the backup passphrase uses the runtime id with
 hyphens, for example `com.vaultvoyager.vision-native-demo.backup-passphrase`. The iCloud backup
 folder follows the app name (`Vision Native Demo/Backups`). Both variants seed the synthetic Demo
-dataset on first launch and when the seed changes, and neither has an updater, so the standard
+dataset on first launch and when the seed changes, so the standard
 variant holds no real data until the phase 4 switch-over (ADR-204 decision 1).
 `install-native.sh` builds the Demo variant unless `VISION_NATIVE_VARIANT=standard`; a plain Xcode
 or CI build is the standard variant.
@@ -1711,7 +1710,20 @@ replaces `/Applications/Vision Native Demo.app` (with `VISION_NATIVE_VARIANT=sta
 It signs automatically with the free personal team from `VISION_NATIVE_TEAM_ID`, or from
 `VISION_NATIVE_TEAM_ID = <id>` in `apps/native/Config/Local.xcconfig`, so the signature stays
 stable between builds. Without either the app is signed ad-hoc and the script warns that the
-signature changes on every build. There is no updater: rerunning the script is the update path.
+signature changes on every build. Rerunning the script is the update path.
+
+## In-app updater
+
+`NativeUpdates.swift` ports `packaging/electron/updater.ts` and the web `useUpdateStatus` and
+About section (decided by Tor on 2026-11-06, overriding the updater cut of ADR-204 §5). The app
+checks the GitHub latest release every five minutes while the window is active and the user is
+present, shows the primary dot on the sidebar's Settings button when a newer release exists, and
+shows the status, release date, release-notes summary and link, Check for updates and Install
+update in Settings > About. The current version is the runtime payload's `appVersion` (the Vision
+version), which the About section and backups also report; the Demo variant is always up to date
+and does not call GitHub. No release carries a Swift app archive, so the app runs in Electron's
+`source` mode: Install update makes the pre-update backup into `<userData>/pre-update-backups`,
+then opens the release page and shows `update.manualDownload`.
 
 ## Related
 

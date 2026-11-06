@@ -385,6 +385,12 @@ struct NativeSidebar: View {
             await model.sidebarBadges?.run()
         }
         .task(id: model.route.path) { await model.sidebarBadges?.refresh() }
+        // `useUpdateStatus`: polled every five minutes on the same activity gate
+        // (`refetchInterval` is off while the document is hidden; `refetchOnWindowFocus`).
+        .task(id: scenePhase == .active && !UserPresence.shared.isAway) {
+            guard scenePhase == .active, !UserPresence.shared.isAway else { return }
+            await model.updates?.run()
+        }
     }
 
     /// Selecting a row (click or arrow keys) navigates; the selection follows the reported
@@ -565,7 +571,7 @@ struct NativeSidebar: View {
             }
             footerButton(
                 title: model.strings.t(NavigationRegistry.settingsTitleKey), symbol: NavigationRegistry.settingsSymbol,
-                isActive: false
+                isActive: false, updateReady: model.updates?.isUpdateReady ?? false
             ) {
                 model.openSettings()
             }
@@ -574,15 +580,22 @@ struct NativeSidebar: View {
         .padding(.bottom, 10)
     }
 
-    private func footerButton(title: String, symbol: String, isActive: Bool, action: @escaping () -> Void)
-        -> some View
-    {
+    private func footerButton(
+        title: String, symbol: String, isActive: Bool, updateReady: Bool = false, action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            Label(title, systemImage: symbol)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 5)
-                .padding(.horizontal, 8)
-                .contentShape(Rectangle())
+            HStack(spacing: 8) {
+                Label(title, systemImage: symbol)
+                Spacer(minLength: 0)
+                // The update-ready dot: `h-[7px] w-[7px] rounded-full bg-primary ml-auto`.
+                if updateReady {
+                    Circle().fill(theme.primary).frame(width: 7, height: 7).accessibilityHidden(true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(
@@ -590,6 +603,7 @@ struct NativeSidebar: View {
                 .fill(
                     isActive ? Color(token: theme.glass.selection, opacity: theme.glass.selectionOpacity) : Color.clear)
         )
+        .accessibilityValue(updateReady ? model.strings.t("layout.updateReady") : "")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
