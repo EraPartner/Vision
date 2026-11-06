@@ -284,7 +284,12 @@ public struct SQLTimestamps: Sendable {
 
     // MARK: Date arithmetic
 
+    /// Counts beyond this many months or days leave the 1..9999 year range whatever the start,
+    /// so they fail as out of range before the arithmetic could overflow Int64.
+    static let maxShift: Int64 = 1_000_000_000
+
     public static func addMonths(_ date: CivilDate, _ months: Int64) throws -> CivilDate {
+        if months > maxShift || months < -maxShift { throw timeError("date out of range", "22008") }
         let zeroBased = date.year * 12 + (date.month - 1) + months
         let year = floorDiv(zeroBased, 12)
         let month = zeroBased - year * 12 + 1
@@ -293,6 +298,7 @@ public struct SQLTimestamps: Sendable {
     }
 
     public static func addDays(_ date: CivilDate, _ days: Int64) throws -> CivilDate {
+        if days > maxShift || days < -maxShift { throw timeError("date out of range", "22008") }
         let out = civilOfWall(wallMs(date.year, date.month, date.day) + days * dayMs)
         if out.year < 1 || out.year > 9999 { throw timeError("date out of range", "22008") }
         return out
@@ -307,7 +313,8 @@ public struct SQLTimestamps: Sendable {
         guard value.isFinite, value.rounded(.towardZero) == value else {
             throw timeError("\(what) count must be whole: \(SQLArguments.javaScriptText(value))", "22023")
         }
-        return Int64(value)
+        // Clamped so the conversion cannot trap; addMonths and addDays refuse anything this large.
+        return Int64(max(-1e15, min(1e15, value)))
     }
 
     // MARK: Intervals
@@ -503,7 +510,10 @@ public struct SQLTimestamps: Sendable {
             let days = try Self.wholeNumber(interval.days, "day")
             try step { try Self.addDays($0, days) }
         }
-        return Self.addMicros(Instant(ms: ms, us: instant.us), Int64(interval.micros))
+        // 1e18 microseconds is about 31,700 years: clamping keeps the sum in Int64 and still lands
+        // outside the timestamp range, which formatting refuses as PostgreSQL does.
+        let micros = interval.micros.isFinite ? max(-1e18, min(1e18, interval.micros.rounded(.towardZero))) : 1e18
+        return Self.addMicros(Instant(ms: ms, us: instant.us), Int64(micros))
     }
 
     // MARK: date_trunc

@@ -46,7 +46,8 @@ enum SQLArguments {
         case .integer(let number):
             return Int(number)
         case .real(let number) where number.isFinite && number.rounded(.towardZero) == number:
-            return Int(number)
+            // Clamped so the conversion cannot trap; every caller refuses a count this large.
+            return Int(exactly: number) ?? (number < 0 ? Int.min : Int.max)
         case .text(let text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.range(of: #"^-?\d+$"#, options: .regularExpression) != nil, let number = Int(trimmed) {
@@ -64,12 +65,43 @@ enum SQLArguments {
         throw SQLFunctionArgumentError("\(function): expected text, got \(value)")
     }
 
-    /// JavaScript's `String(number)` for the messages that quote one.
+    /// JavaScript's `String(number)` (Number::toString): the shortest round-trip digits, in
+    /// plain notation from 1e-6 up to 1e21 and in exponent notation outside it.
     static func javaScriptText(_ number: Double) -> String {
         if number.isNaN { return "NaN" }
         if number.isInfinite { return number < 0 ? "-Infinity" : "Infinity" }
-        if number.rounded(.towardZero) == number, abs(number) < 1e21 { return String(Int64(number)) }
-        return String(number)
+        if number == 0 { return "0" }
+        // Swift's description is also the shortest round-trip form: "123.45", "1.5e-07", "1e+20".
+        let text = String(describing: number.magnitude)
+        let parts = text.split(separator: "e", maxSplits: 1)
+        let mantissa = parts.first.map(String.init) ?? text
+        let exponent = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
+        let pieces = mantissa.split(separator: ".", omittingEmptySubsequences: false)
+        let whole = pieces.first.map(String.init) ?? ""
+        let fraction = pieces.count > 1 ? String(pieces[1]) : ""
+        // value = 0.digits × 10^n
+        var digits = Array(whole + fraction)
+        var n = whole.count + exponent
+        while digits.first == "0" {
+            digits.removeFirst()
+            n -= 1
+        }
+        while digits.last == "0" { digits.removeLast() }
+        let k = digits.count
+        let d = String(digits)
+        let body: String
+        if k <= n, n <= 21 {
+            body = d + String(repeating: "0", count: n - k)
+        } else if n > 0, n <= 21 {
+            body = String(digits[..<n]) + "." + String(digits[n...])
+        } else if n > -6, n <= 0 {
+            body = "0." + String(repeating: "0", count: -n) + d
+        } else {
+            let e = n - 1
+            let head = String(digits[0]) + (k > 1 ? "." + String(digits[1...]) : "")
+            body = head + "e" + (e < 0 ? "-" : "+") + String(abs(e))
+        }
+        return number < 0 ? "-" + body : body
     }
 
     static func output(_ value: ExactDecimal?) -> SQLValue {
