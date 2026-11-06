@@ -310,62 +310,55 @@ import Testing
 }
 
 @Suite struct DatabaseStatsTests {
-    @Test func theSchemaIsTheKyselyLedgerHeadAndRuntimeWrittenSettingsAreExcluded() {
-        #expect(DatabaseStatistics.sql.contains("COALESCE((SELECT max(name) FROM public.kysely_migration), '') AS value"))
-        #expect(!DatabaseStatistics.sql.contains("alembic_version"))
-        // Warmup records each daily job's last run as `daily_job_<name>` after the backend is ready.
-        #expect(DatabaseStatistics.sql.contains("AND key NOT LIKE 'daily\\_job\\_%'"))
-        #expect(DatabaseStatistics.sql.contains("'fx_full_history_repair_done', 'transfers_backfilled'"))
+    @Test func parsesTheSqliteHeader() throws {
+        let header = try DatabaseStatistics.parseHeader(sqliteDatabase(userVersion: 130, pages: 5))
+        #expect(header.pageSize == 4096)
+        #expect(header.journalMode == .wal)
+        #expect(header.pageCount == 5)
+        #expect(header.textEncoding == .utf8)
+        #expect(header.userVersion == 130)
+        #expect(DatabaseStatistics.sqliteVersionString(header.sqliteVersionNumber) == "3.43.2")
     }
 
-    @Test func parsesStatisticsRows() throws {
-        let stats = try DatabaseStatistics.parse(
-            "schema\t0130_head\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:accounts\t3\ntable:user_settings\t4\n")
-        #expect(stats.schema == "0130_head")
-        #expect(stats.tableCounts == ["accounts": 3, "user_settings": 4])
-        #expect(stats.stableImportantRowCounts == ["user_settings": 2])
-        #expect(stats.comparable.important["accounts"] == .int(3))
-    }
-
-    @Test func rejectsMissingOrInvalidRows() {
-        for output in [
-            "postgres_version_num\t180006\n", "schema\tx\npostgres_version_num\t170000\n",
-            "schema\tx\npostgres_version_num\t180006\ntable:Bad\t1\n",
-            "schema\tx\npostgres_version_num\t180006\ntable:a\t-1\n",
-            "schema\tx\npostgres_version_num\t180006\nstable:unknown\t1\n",
-        ] {
-            #expect(throws: NativeRuntimeError.self) { try DatabaseStatistics.parse(output) }
+    @Test func rejectsFilesThatAreNotSqlite() {
+        var badPageSize = [UInt8](sqliteDatabase(userVersion: 1))
+        badPageSize[16] = 0x03
+        badPageSize[17] = 0x00
+        for data in [Data("PGDMP".utf8), Data(sqliteDatabase(userVersion: 1).prefix(99)), Data(badPageSize)] {
+            #expect(throws: NativeRuntimeError.self) { try DatabaseStatistics.parseHeader(data) }
         }
     }
 
-    @Test func comparisonChecksSchemaTableSetAndEveryCount() throws {
-        let expected = try DatabaseStatistics.parse("schema\ts\npostgres_version_num\t180006\ntable:a\t1\ntable:b\t2\n")
-            .comparable
-        #expect(throws: Never.self) { try DatabaseStatistics.assertEqual(expected: expected, actual: expected) }
-        let cases: [(String, String)] = [
-            ("schema\tt\npostgres_version_num\t180006\ntable:a\t1\ntable:b\t2\n", "DATABASE_SCHEMA_MISMATCH"),
-            ("schema\ts\npostgres_version_num\t180006\ntable:a\t1\n", "DATABASE_TABLE_SET_MISMATCH"),
-            ("schema\ts\npostgres_version_num\t180006\ntable:a\t1\ntable:b\t3\n", "DATABASE_COUNT_MISMATCH"),
-        ]
-        for (output, code) in cases {
-            let actual = try DatabaseStatistics.parse(output).comparable
-            do {
-                try DatabaseStatistics.assertEqual(expected: expected, actual: actual)
-                Issue.record("expected \(code)")
-            } catch let error as NativeRuntimeError {
-                #expect(error.code == code)
-            }
-        }
+    @Test func fileStatsReportMissingEmptyAndUnsafePaths() throws {
+        let fileSystem = FakeFileSystem()
+        let path = "\(testUserData)/database/vision.sqlite3"
+        #expect(try DatabaseStatistics.readFileStats(path, fileSystem: fileSystem).exists == false)
+        fileSystem.addFile(path, Data())
+        let empty = try DatabaseStatistics.readFileStats(path, fileSystem: fileSystem)
+        #expect(empty.exists && empty.schemaVersion == 0)
+        fileSystem.addFile(path, sqliteDatabase(userVersion: 3, body: "x"))
+        fileSystem.addFile("\(path)-wal", "wal")
+        let stats = try DatabaseStatistics.readFileStats(path, fileSystem: fileSystem)
+        #expect(stats.schemaVersion == 3)
+        #expect(stats.walBytes == 3)
+        #expect(stats.sqliteVersion == "3.43.2")
+        #expect(DatabaseStatistics.describe(stats).contains("schema=3"))
     }
 
-    @Test func stableComparisonIgnoresRuntimeOwnedSettings() throws {
-        let expected = try DatabaseStatistics.parse(
-            "schema\ts\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:user_settings\t2\n"
-        ).comparable
-        let actual = try DatabaseStatistics.parse(
-            "schema\ts\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:user_settings\t4\n"
-        ).comparable
-        #expect(throws: Never.self) { try DatabaseStatistics.assertStableEqual(expected: expected, actual: actual) }
-        #expect(throws: NativeRuntimeError.self) { try DatabaseStatistics.assertEqual(expected: expected, actual: actual) }
+    @Test func stableComparisonIgnoresStartupWrittenSettings() throws {
+        let expected = ["accounts": 3, "user_settings": 1]
+        let actual = ["accounts": 3, "user_settings": 4]
+        #expect(!DatabaseStatistics.stableTables.contains("user_settings"))
+        #expect(throws: Never.self) {
+            try DatabaseStatistics.assertTableCountsEqual(
+                expected: expected, actual: actual, tables: DatabaseStatistics.stableTables)
+        }
+        do {
+            try DatabaseStatistics.assertTableCountsEqual(expected: expected, actual: actual)
+            Issue.record("expected DATABASE_COUNT_MISMATCH")
+        } catch let error as NativeRuntimeError {
+            #expect(error.code == "DATABASE_COUNT_MISMATCH")
+            #expect(error.message.contains("user_settings: expected 1, found 4"))
+        }
     }
 }
