@@ -1,6 +1,11 @@
 import Foundation
 import Observation
 
+/// The lookup details tab (`useTabParam(["fundamentals", "analyst", "news"])`).
+public enum ResearchLookupTab: String, CaseIterable, Sendable {
+    case fundamentals, analyst, news
+}
+
 public struct ResearchMarketLookupState: Equatable, Sendable {
     public let route: NativeRoute
     public var symbol: String? {
@@ -21,8 +26,8 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
             $0.range == "1mo"
         }!
     }
-    public var tab: String {
-        route.value("tab").flatMap { ["fundamentals", "analyst", "news"].contains($0) ? $0 : nil } ?? "fundamentals"
+    public var tab: ResearchLookupTab {
+        route.value("tab").flatMap(ResearchLookupTab.init(rawValue:)) ?? .fundamentals
     }
     public init(route: NativeRoute) { self.route = route }
     public func selecting(_ symbol: String) -> NativeRoute {
@@ -31,8 +36,8 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
     public func selectingRange(_ range: String) -> NativeRoute {
         range == "1mo" ? route.removing("range") : route.setting("range", to: range)
     }
-    public func selectingTab(_ tab: String) -> NativeRoute {
-        route.setting("tab", to: tab)
+    public func selectingTab(_ tab: ResearchLookupTab) -> NativeRoute {
+        route.setting("tab", to: tab.rawValue)
     }
     public static func historyDays(_ range: String) -> Int {
         ["1d": 1, "5d": 5, "1mo": 30, "3mo": 91, "6mo": 182, "1y": 365, "5y": 1825][range] ?? 0
@@ -123,7 +128,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
         return state.selecting(symbol)
     }
     public func selectRange(_ range: String) -> NativeRoute { state.selectingRange(range) }
-    public func selectTab(_ tab: String) -> NativeRoute { state.selectingTab(tab) }
+    public func selectTab(_ tab: ResearchLookupTab) -> NativeRoute { state.selectingTab(tab) }
     public func load(route: NativeRoute, force: Bool = false) async {
         isActive = true
         let old = state
@@ -282,7 +287,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
         defer { if stamp == detailRevision { isDetailFetching = false } }
         do {
             switch tab {
-            case "analyst":
+            case .analyst:
                 let data: ResearchSnapshot<ResearchAnalystData?> = try await cache.request(
                     key: "lookup-analyst:" + symbol, freshFor: 86_400, force: force
                 ) { try await service.researchAnalyst(symbol: symbol) }
@@ -295,7 +300,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
                 guard stamp == detailRevision else { return }
                 analyst = data
                 analystPresentation = result == .null ? nil : result
-            case "news":
+            case .news:
                 let data: ResearchSnapshot<ResearchNewsData> = try await cache.request(
                     key: "lookup-news:" + symbol, freshFor: 7200, force: force
                 ) { try await service.researchNews(symbol: symbol) }
@@ -308,7 +313,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
                 guard stamp == detailRevision else { return }
                 fundamentals = data
             }
-        } catch { if stamp == detailRevision { errors[tab] = error.localizedDescription } }
+        } catch { if stamp == detailRevision { errors[tab.rawValue] = error.localizedDescription } }
     }
     private static func validateAnalyst(_ result: TaxValue) throws {
         if result == .null { return }

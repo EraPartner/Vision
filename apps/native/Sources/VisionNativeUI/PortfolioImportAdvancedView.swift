@@ -90,10 +90,10 @@ struct PortfolioImportAdvancedView: View {
                     if let progress = model.progress {
                         if model.isBusy {
                             PortfolioImportProgressView(progress: progress, strings: strings)
-                        } else if progress.phase == "complete" {
+                        } else if progress.phase == .complete {
                             Label(strings.t("importPage.complete"), systemImage: "checkmark.circle").foregroundStyle(
                                 theme.success)
-                        } else if progress.phase == "error" {
+                        } else if progress.phase == .error {
                             Label(strings.t("importPage.failed"), systemImage: "xmark.circle").foregroundStyle(
                                 theme.destructive)
                         }

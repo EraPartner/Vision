@@ -483,7 +483,7 @@ struct ResearchChartBuilderTests {
         let transport = ChartTestTransport()
         var state = chartTestState()
         state.indicators = [.init(id: "indicator", type: "sma", period: 1, seriesId: "price")]
-        state.oscillator = "rsi"
+        state.oscillator = .rsi
         let store = ChartTestStore(data: try ResearchChartLayoutCodec.save(.init(draft: state)))
         let model = chartTestModel(transport, store: store)
         await model.load(route: chartTestRoute)

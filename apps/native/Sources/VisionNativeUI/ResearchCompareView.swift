@@ -49,12 +49,12 @@ public struct ResearchCompareView: View {
                     VisionSegmentedControl(
                         selection: Binding(get: { model.state.tab }, set: { replace(model.selectTab($0)) }),
                         options: [
-                            VisionSegmentOption(value: "performance", title: strings.t("research.compare.tabPerformance")),
+                            VisionSegmentOption(value: ResearchCompareTab.performance, title: strings.t("research.compare.tabPerformance")),
                             VisionSegmentOption(
-                                value: "fundamentals", title: strings.t("research.compare.tabFundamentals")),
+                                value: ResearchCompareTab.fundamentals, title: strings.t("research.compare.tabFundamentals")),
                         ]
                     ).accessibilityLabel(strings.t("research.compare.title")).frame(maxWidth: 440)
-                    if model.state.tab == "fundamentals" {
+                    if model.state.tab == .fundamentals {
                         ResearchCompareFundamentalsView(model: model, shell: shell)
                     } else {
                         performance

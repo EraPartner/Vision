@@ -86,20 +86,20 @@ public struct ResearchMarketLookupView: View {
                                 selection: Binding(
                                     get: { model.state.tab }, set: { shell.replace(with: model.selectTab($0).string) }),
                                 options: [
-                                    VisionSegmentOption(value: "fundamentals", title: strings.t("market.fundamentals")),
-                                    VisionSegmentOption(value: "analyst", title: strings.t("market.analystRatings")),
-                                    VisionSegmentOption(value: "news", title: strings.t("market.latestNews")),
+                                    VisionSegmentOption(value: ResearchLookupTab.fundamentals, title: strings.t("market.fundamentals")),
+                                    VisionSegmentOption(value: ResearchLookupTab.analyst, title: strings.t("market.analystRatings")),
+                                    VisionSegmentOption(value: ResearchLookupTab.news, title: strings.t("market.latestNews")),
                                 ]
                             ).accessibilityLabel(strings.t("research.details")).frame(maxWidth: 500)
                             if model.isDetailFetching
-                                && (model.state.tab == "analyst"
+                                && (model.state.tab == .analyst
                                     ? model.analyst == nil
-                                    : model.state.tab == "news" ? model.news == nil : model.fundamentals == nil)
+                                    : model.state.tab == .news ? model.news == nil : model.fundamentals == nil)
                             {
                                 ProgressView().frame(maxWidth: .infinity).frame(height: 180)
-                            } else if model.state.tab == "analyst" {
+                            } else if model.state.tab == .analyst {
                                 ResearchMarketAnalystView(model: model, shell: shell)
-                            } else if model.state.tab == "news" {
+                            } else if model.state.tab == .news {
                                 ResearchMarketNewsView(snapshot: model.news, shell: shell)
                             } else {
                                 ResearchMarketFundamentalsView(snapshot: model.fundamentals, shell: shell)

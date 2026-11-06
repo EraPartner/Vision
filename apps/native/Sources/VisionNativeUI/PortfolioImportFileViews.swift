@@ -107,14 +107,14 @@ struct PortfolioImportProgressView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                if progress.phase == "complete" {
+                if progress.phase == .complete {
                     Image(systemName: "checkmark.circle").foregroundStyle(theme.success)
-                } else if progress.phase == "error" {
+                } else if progress.phase == .error {
                     Image(systemName: "xmark.circle").foregroundStyle(theme.destructive)
                 } else {
                     ProgressView().controlSize(.small)
                 }
-                Text(progress.labelKey.map { strings.t($0) } ?? progress.phase.capitalized)
+                Text(progress.labelKey.map { strings.t($0) } ?? progress.phase.rawValue.capitalized)
                 Spacer()
                 Text("\(Int(progress.percent))%").monospacedDigit()
             }

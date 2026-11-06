@@ -12,13 +12,13 @@ struct ResearchCompareTests {
             ))
         let state = ResearchCompareURLState(route: route)
         #expect(state.symbols == ["AAPL", "MSFT", "ASML.AS", "BTC-USD", "^GSPC", "EURUSD=X"])
-        #expect(state.range == "1y" && state.tab == "performance" && state.sort == nil)
+        #expect(state.range == "1y" && state.tab == .performance && state.sort == nil)
         #expect(state.adding("NEXT", to: route) == route)
         let removed = state.removing("MSFT", from: route)
         #expect(ResearchCompareURLState(route: removed).symbols == ["AAPL", "ASML.AS", "BTC-USD", "^GSPC", "EURUSD=X"])
         #expect(removed.value("keep") == "yes")
         #expect(state.settingRange("1y", in: route).value("range") == nil)
-        #expect(state.settingTab("performance", in: route).value("tab") == "performance")
+        #expect(state.settingTab(.performance, in: route).value("tab") == "performance")
         for symbol in ["AAPL", "BRK.B", "BTC-USD", "^GSPC", "EURUSD=X", "GC=F", "ABC/DEF", "\u{FEFF} aapl \u{FEFF}"] {
             #expect(ResearchCompareURLState.normalizeSymbol(symbol) != nil)
         }
@@ -53,7 +53,7 @@ struct ResearchCompareTests {
             submitted["series"]?.arrayValue?.first?["points"]?.arrayValue?.first?["close"]
                 == .number(Decimal(string: "10.1234567890123456789")!))
         #expect(submitted["series"]?.arrayValue?.first?["points"]?.arrayValue?.first?["time"] == .number(1000))
-        await model.load(route: model.selectTab("performance"))
+        await model.load(route: model.selectTab(.performance))
         await model.load(route: model.toggleSort("pe"))
         #expect(await transport.chartReads == 1)
         #expect(await transport.scorecardReads == 1)

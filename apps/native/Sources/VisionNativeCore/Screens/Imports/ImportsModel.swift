@@ -615,7 +615,7 @@ public final class ImportsModel {
             case .completed(let result):
                 if custom {
                     progress = ImportProgress(
-                        phase: "complete", current: result.total, total: result.total, imported: result.imported,
+                        phase: .complete, current: result.total, total: result.total, imported: result.imported,
                         duplicates: result.duplicates, errors: result.errors, percent: 100)
                 }
                 post(
@@ -631,7 +631,7 @@ public final class ImportsModel {
             streamTask = nil
             isImporting = false
             post(.error, "importPage.toast.serverError", detail: ImportErrorText.text(error, strings: strings))
-            if progress != nil { progress?.phase = "error" }
+            if progress != nil { progress?.phase = .error }
             importDidEnd()
         }
     }

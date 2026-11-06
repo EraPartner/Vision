@@ -18,7 +18,7 @@ struct ResearchChartBuilderChart: View {
     let marks: [ResearchChartBuilderMark]
     let logLeft: Bool
     let rebased: Bool
-    let oscillator: String?
+    let oscillator: ResearchChartOscillator?
     let shell: NativeShellModel
     @State private var selected: Int?
     /// Range compare on the price chart (`scrubbable`); the oscillator only highlights.
@@ -27,7 +27,7 @@ struct ResearchChartBuilderChart: View {
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     private var hasRight: Bool { marks.contains { $0.axis == "right" } }
-    private var references: [Double] { oscillator == "rsi" ? [70, 30] : oscillator == "macd" ? [0] : [] }
+    private var references: [Double] { oscillator == .rsi ? [70, 30] : oscillator == .macd ? [0] : [] }
     private var height: CGFloat { oscillator == nil ? 400 : 160 }
     var body: some View {
         let settings = shell.settings
@@ -335,10 +335,10 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
 }
 
 private enum ResearchChartBuilderChartText {
-    static func tick(_ value: Double, left: Bool, rebased: Bool, oscillator: String?, settings: NativeAppSettings)
+    static func tick(_ value: Double, left: Bool, rebased: Bool, oscillator: ResearchChartOscillator?, settings: NativeAppSettings)
         -> String
     {
-        if oscillator != nil { return ResearchCompareStyle.fixed(Decimal(value), digits: oscillator == "rsi" ? 0 : 2) }
+        if oscillator != nil { return ResearchCompareStyle.fixed(Decimal(value), digits: oscillator == .rsi ? 0 : 2) }
         return Decimal(value).formatted(
             Decimal.FormatStyle(locale: settings.numberFormat.locale).precision(
                 .fractionLength(0...(left && rebased ? 0 : 3))))
@@ -361,11 +361,11 @@ final class ResearchChartBuilderGeometryCache {
     private var rows: [AnalysisRow]?
     private var marks: [ResearchChartBuilderMark] = []
     private var logLeft = false
-    private var oscillator: String?
+    private var oscillator: ResearchChartOscillator?
     private var snapshot: Snapshot?
 
     func snapshot(
-        rows: [AnalysisRow], marks: [ResearchChartBuilderMark], logLeft: Bool, oscillator: String?,
+        rows: [AnalysisRow], marks: [ResearchChartBuilderMark], logLeft: Bool, oscillator: ResearchChartOscillator?,
         references: [Double]
     ) -> Snapshot {
         if let snapshot, let cached = self.rows, cached == rows, self.marks == marks, self.logLeft == logLeft,
@@ -405,7 +405,7 @@ final class ResearchChartBuilderGeometryCache {
     }
 
     private func axis(
-        _ name: String, rows: [AnalysisRow], marks: [ResearchChartBuilderMark], logLeft: Bool, oscillator: String?,
+        _ name: String, rows: [AnalysisRow], marks: [ResearchChartBuilderMark], logLeft: Bool, oscillator: ResearchChartOscillator?,
         references: [Double]
     ) -> ResearchChartBuilderAxisGeometry {
         let values = marks.filter { $0.axis == name }.flatMap { mark in
@@ -416,6 +416,6 @@ final class ResearchChartBuilderGeometryCache {
         }
         return .init(
             values: values + (name == "left" && oscillator != nil ? references : []),
-            requestsLog: name == "left" && logLeft, fixed: oscillator == "rsi" ? 0...100 : nil)
+            requestsLog: name == "left" && logLeft, fixed: oscillator == .rsi ? 0...100 : nil)
     }
 }

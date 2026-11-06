@@ -1,13 +1,17 @@
 import Foundation
 
+/// The compare page tab (`useTabParam(["performance", "fundamentals"])`).
+public enum ResearchCompareTab: String, CaseIterable, Sendable {
+    case performance, fundamentals
+}
+
 /// Exact repeated-symbol and default-query rules of researchCompareUrlState/useTabParam.
 public struct ResearchCompareURLState: Equatable, Sendable {
     public static let maximumSymbols = 6
     public static let ranges = ["1mo", "3mo", "6mo", "1y", "5y"]
-    public static let tabs = ["performance", "fundamentals"]
     public let symbols: [String]
     public let range: String
-    public let tab: String
+    public let tab: ResearchCompareTab
     public let sort: String?
     public init(route: NativeRoute) {
         var symbols: [String] = []
@@ -20,8 +24,7 @@ public struct ResearchCompareURLState: Equatable, Sendable {
         self.symbols = symbols
         let range = route.value("range") ?? ""
         self.range = Self.ranges.contains(range) ? range : "1y"
-        let tab = route.value("tab") ?? ""
-        self.tab = Self.tabs.contains(tab) ? tab : "performance"
+        tab = route.value("tab").flatMap(ResearchCompareTab.init(rawValue:)) ?? .performance
         sort = route.value("sort").flatMap { ResearchCompareMetric.keys.contains($0) ? $0 : nil }
     }
     public static func normalizeSymbol(_ raw: String) -> String? {
@@ -52,7 +55,9 @@ public struct ResearchCompareURLState: Equatable, Sendable {
     public func settingRange(_ range: String, in route: NativeRoute) -> NativeRoute {
         range == "1y" ? route.removing("range") : route.setting("range", to: range)
     }
-    public func settingTab(_ tab: String, in route: NativeRoute) -> NativeRoute { route.setting("tab", to: tab) }
+    public func settingTab(_ tab: ResearchCompareTab, in route: NativeRoute) -> NativeRoute {
+        route.setting("tab", to: tab.rawValue)
+    }
     public func togglingSort(_ key: String, in route: NativeRoute) -> NativeRoute {
         sort == key ? route.removing("sort") : route.setting("sort", to: key)
     }

@@ -264,7 +264,7 @@ public final class PortfolioImportParserModel {
             outcomeUncertain = false
             if !result.requiresReview {
                 self.file = nil
-                progress = ImportProgress(phase: "complete", percent: 100)
+                progress = ImportProgress(phase: .complete, percent: 100)
             }
             notice = result.requiresReview ? nil : "portfolioImport.toast.importSuccess"
             if submittedNavigation == navigationRevision { didImport?(result) }

@@ -252,8 +252,9 @@ public enum ResearchPresentation {
                 seriesId: try item.required("seriesId").string(min: 1, max: 128))
         }
         let rebase = try root.required("rebase").bool()
-        let oscillator = try root.required("oscillator").string()
-        guard ["none", "rsi", "macd"].contains(oscillator) else { throw root.field("oscillator").fail("is not an oscillator") }
+        guard let oscillator = ResearchChartOscillator(rawValue: try root.required("oscillator").string()) else {
+            throw root.field("oscillator").fail("is not an oscillator")
+        }
         let oscillatorField = try root.required("oscillatorSeriesId")
         let oscillatorSeriesId = try oscillatorField.isNull ? nil : oscillatorField.string(min: 1, max: 128)
         let ids = Set(series.map(\.id))
@@ -266,7 +267,7 @@ public enum ResearchPresentation {
     }
 
     static func chartPresentation(
-        series: [ChartSeries], indicators: [ChartIndicator], rebase: Bool, oscillator: String,
+        series: [ChartSeries], indicators: [ChartIndicator], rebase: Bool, oscillator: ResearchChartOscillator,
         oscillatorSeriesId: String?  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     ) -> TaxValue {
         var pointsBySeries: [String: [PresentationPoint]] = [:]
@@ -347,19 +348,19 @@ public enum ResearchPresentation {
         ])
     }
 
-    static func chartOscillatorPresentation(_ series: [ChartSeries], oscillator: String, oscillatorSeriesId: String?)  // lint:allow raw-id macro data series code of the research provider, not a stored entity
+    static func chartOscillatorPresentation(_ series: [ChartSeries], oscillator: ResearchChartOscillator, oscillatorSeriesId: String?)  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         -> [TaxValue]
     {
         let sourceID = oscillatorSeriesId ?? series.first?.id
         let source = series.first { $0.id == sourceID }
-        let pts = oscillator == "none" ? [] : source?.points ?? []
+        let pts = oscillator == .off ? [] : source?.points ?? []
         // The source keeps raw-close coercion here, separate from the rebased indicator inputs.
         let closes = pts.map { $0.close.coerced }
         var rows: [[String: RowCell]] = pts.map { _ in [:] }
-        if oscillator == "rsi" {
+        if oscillator == .rsi {
             let values = ResearchMath.rsi(closes, 14)
             for index in rows.indices { rows[index]["rsi"] = cell(values[index]) }
-        } else if oscillator == "macd" {
+        } else if oscillator == .macd {
             let values = ResearchMath.macd(closes)
             for index in rows.indices {
                 rows[index]["macd"] = cell(values.macd[index])

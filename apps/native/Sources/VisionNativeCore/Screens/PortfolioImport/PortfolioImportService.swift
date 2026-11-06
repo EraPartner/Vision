@@ -249,13 +249,13 @@ public enum PortfolioImportStreamEvents {
             payload["requires_review"] = .bool(true)
             payload["status"] = .string("review_required")
             let result = try payload.decode(PortfolioImportOutcome.self)
-            return .finished(result, ImportProgress(phase: "review_required", percent: 70))
+            return .finished(result, ImportProgress(phase: .reviewRequired, percent: 70))
         case "complete":
             let result = try payload.decode(PortfolioImportOutcome.self)
             return .finished(
                 result,
                 ImportProgress(
-                    phase: "complete", imported: result.imported, duplicates: result.duplicates, errors: result.errors,
+                    phase: .complete, imported: result.imported, duplicates: result.duplicates, errors: result.errors,
                     percent: 100))
         default: return nil
         }

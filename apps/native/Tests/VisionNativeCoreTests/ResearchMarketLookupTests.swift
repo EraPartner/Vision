@@ -18,9 +18,9 @@ struct ResearchMarketLookupTests {
         #expect(state.mappingInvestmentId == 2)
         #expect(state.rawInvestmentId == "02")
         #expect(state.range.range == "1mo")
-        #expect(state.tab == "fundamentals")
-        #expect(state.selectingTab("fundamentals").value("tab") == "fundamentals")
-        #expect(state.selectingTab("fundamentals").value("future") == "keep")
+        #expect(state.tab == .fundamentals)
+        #expect(state.selectingTab(.fundamentals).value("tab") == "fundamentals")
+        #expect(state.selectingTab(.fundamentals).value("future") == "keep")
         #expect(state.selecting("OTHER").value("future") == "keep")
         #expect(state.selecting("OTHER").value("investmentId") == nil)
         #expect(state.selectingRange("1mo").value("range") == nil)
@@ -103,18 +103,18 @@ struct ResearchMarketLookupTests {
         await action.begin(notes: "Initial")
         action.investment.name = "Edited"
         action.trade.amount = "123"
-        action.step = "transaction"
+        action.step = .transaction
         action.close()
         action.configure(quote: try lookupQuote("SYNTH", price: 20), holding: holding, numberFormat: .us)
         await action.begin(notes: "Fresh")
         #expect(action.investment.name == "Edited")
         #expect(action.trade.amount == "123")
         #expect(action.trade.price == "10")
-        #expect(action.step == "transaction")
+        #expect(action.step == .transaction)
         #expect(action.isDirty)
         action.configure(quote: try lookupQuote("OTHER", price: 30), holding: nil, numberFormat: .us)
         #expect(!action.isDirty)
-        #expect(action.step == "choose")
+        #expect(action.step == .choose)
         #expect(!action.isPresented)
     }
     @Test func recordBusyGatePreventsDuplicatePostAndPreservesSummaryCurrencyAndExplicitUnassignedBroker() async throws
@@ -126,7 +126,7 @@ struct ResearchMarketLookupTests {
             holding: try lookupHolding(currency: "EUR").decode(PortfolioHolding.self), numberFormat: .us)
         action.brokerContext = { _ in .init(accounts: [], preferredBrokerId: 42) }
         await action.begin(notes: "Initial")
-        action.step = "transaction"
+        action.step = .transaction
         action.trade.amount = "20"
         action.trade.units = "2"
         action.trade.broker = .unassigned
@@ -176,7 +176,7 @@ struct ResearchMarketLookupTests {
         await model.action.begin(notes: "Initial")
         model.action.investment.name = "Keep investment draft"
         model.action.trade.units = "2"
-        model.action.step = "transaction"
+        model.action.step = .transaction
         model.configure(settings: .init(defaultCurrency: "USD", numberFormat: .us))
         #expect(model.quote?.price == 10)
         #expect(model.chart == initialChart)
@@ -185,7 +185,7 @@ struct ResearchMarketLookupTests {
         #expect(model.action.trade.price == "10")
         await model.load(route: route)
         #expect(model.action.holding?.currency == CurrencyCode(rawValue: "USD"))
-        #expect(model.action.step == "transaction")
+        #expect(model.action.step == .transaction)
         #expect(model.action.isDirty)
         #expect((await transport.requests).filter { $0.url.path == "/api/market/quote" }.count == 1)
         model.didDisappear()
@@ -197,7 +197,7 @@ struct ResearchMarketLookupTests {
         action.configure(
             quote: quote, holding: try lookupHolding(currency: "EUR").decode(PortfolioHolding.self), numberFormat: .us)
         await action.begin(notes: "Initial")
-        action.step = "transaction"
+        action.step = .transaction
         action.trade.units = "2"
         action.trade.amount = "20"
         action.investment.name = "Keep both drafts"
@@ -250,7 +250,7 @@ struct ResearchMarketLookupTests {
         await action.recordTransaction()
         #expect(action.errorKey == "addPortTxn.error.invalidNumber")
         #expect(await transport.tradeWrites.isEmpty)
-        action.step = "new"
+        action.step = .new
         action.investment.currentPrice = "garbage"
         await action.createInvestment()
         #expect(await transport.investmentWrites.last?["current_price"] == nil)
