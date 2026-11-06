@@ -1,11 +1,21 @@
 import Foundation
+import VisionNativeCore
 
-/// The browser slices an ISO timestamp before binding datetime-local; edits then interpret
-/// that prefix in the host timezone. Keep that existing behavior rather than shifting it.
+/// The "accessed at" field shows the stored instant as local wall-clock time, like the web
+/// app's `isoToDateTimeLocal` (ADR-264). Showing the UTC slice as local moved the instant by
+/// the UTC offset on every edit.
 enum ResearchDossierDateDisplay {
-    static func localPrefix(_ value: String?) -> String { String((value ?? "").prefix(16)) }
+    /// `isoToDateTimeLocal`: "YYYY-MM-DDTHH:mm" in `timeZone`; empty for a missing or
+    /// malformed value.
+    static func localText(_ value: String?, timeZone: TimeZone = .current) -> String {
+        guard let value, !value.isEmpty, let instant = VisionFormat.parseTimestamp(value, timeZone: timeZone) else {
+            return ""
+        }
+        return localValue(instant, timeZone: timeZone)
+    }
     static func localDate(_ value: String?, timeZone: TimeZone = .current) -> Date? {
-        formatter(timeZone).date(from: localPrefix(value))
+        guard let value, !value.isEmpty else { return nil }
+        return VisionFormat.parseTimestamp(value, timeZone: timeZone)
     }
     static func localValue(_ date: Date, timeZone: TimeZone = .current) -> String {
         formatter(timeZone).string(from: date)

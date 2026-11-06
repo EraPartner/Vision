@@ -264,9 +264,10 @@ public struct CSVParserDraft: Equatable, Sendable {
     }
 }
 
-/// The Bank source select's value: a built-in adapter, a saved parser (`saved:<id>`) or Custom
-/// or other.
+/// The Bank source select's value: Detect automatically (ADR-268), a built-in adapter, a saved
+/// parser (`saved:<id>`) or Custom or other.
 public enum ImportSource: Hashable, Sendable {
+    case auto
     case adapter(String)
     case saved(CustomParserConfigID)
     case custom
@@ -274,6 +275,7 @@ public enum ImportSource: Hashable, Sendable {
     /// The web select's value string.
     public var value: String {
         switch self {
+        case .auto: return "auto"
         case .adapter(let key): return key
         case .saved(let id): return "saved:\(id.rawValue)"
         case .custom: return "custom"
@@ -282,7 +284,7 @@ public enum ImportSource: Hashable, Sendable {
 
     public var isCustomLike: Bool {
         switch self {
-        case .adapter: return false
+        case .auto, .adapter: return false
         case .saved, .custom: return true
         }
     }

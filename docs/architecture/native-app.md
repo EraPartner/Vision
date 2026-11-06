@@ -748,7 +748,11 @@ when a group's payee or category changes, then reloads the preview; Commit and D
 route with `/import` (`NativeShellModel.replace(with:)`) and the commit hands its receipt to
 `ImportsModel.showCommitReceipt`. One `ImportNoticeCenter` stacks the toasts of both pages. `ImportsModel` loads the built-in adapters once, the saved
 parsers (one-minute stale time) and the history pages (ten per page, 30-second stale time), each
-with one request in flight. A built-in bank streams `POST /api/import/csv/stream` through
+with one request in flight. The Bank source starts on Detect automatically (ADR-268):
+`BankImportDetector` ports `bankImportDetection.ts`, reading the file's first 64 KiB against the
+built-in signatures and each saved parser's header row, and the card uses a single recognised
+source and waits for a choice on none or an ambiguous fit. A built-in bank streams
+`POST /api/import/csv/stream` through
 `APIClient.streamEvents`: a hand-written `multipart/form-data` body (`MultipartFormData`), the
 response read as Server-Sent Events (`ServerSentEventParser`, the web's `readSseFrames`) over the
 `APIStreamTransport` seam, and Cancel cancels the task, which closes the connection. A custom or
@@ -883,7 +887,12 @@ are reflected. A replaced currency request cannot publish an older answer.
 
 `InsightTimelineChart` uses Swift Charts for line, grouped-bar, and stacked-area layouts. Negative
 bank balances use lines instead of a misleading positive stack, as on the web. Hover, arrow keys,
-Home/End, Escape, and drag/Shift-arrow range comparisons display the original decimal values.
+Home/End and Escape display the original decimal values. Range compare (`scrub.ts`) runs on the
+charts the web makes scrubbable: bank history, the cash-flow forecast, net worth, the portfolio
+value charts and the research price, compare, forecast, chart-builder and watchlist charts.
+`ChartScrub` ports the gesture (drag, or click, move, click; a pinned range until the next click,
+Escape or focus loss; Shift+arrow from the keyboard; dropped on a new timeline), `ChartScrubView`
+the per-series rows, and `ChartRangeCompareLayer` the tinted band, value dots and Δ readout.
 The bank history and forecast share the selected date and range. The net sparkline scrubs the
 summary amount and returns to the latest month after release. Category slices navigate with
 `category_id`, `uncategorised`, or the remaining `category_ids`; recent rows use the native `id`
@@ -918,8 +927,8 @@ Insights uses the native implementation below, and the shared report sheet is na
 
 ### Insights, saved charts, and the report handoff (phase 3g part B)
 
-`/statistics` draws `StatisticsView` with the six existing tab ids. `StatisticsModel` reads
-`?window=all` or the local first day 23 months ago through today, resolves the statistics exclusion
+`/statistics` draws `StatisticsView` with the six existing tab ids. `StatisticsModel` opens on All
+time (ADR-266) or, with `?window=24m`, the local first day 23 months ago through today; it resolves the statistics exclusion
 scope, and fetches monthly, category, payee, and payee-by-year aggregates in parallel. Tab changes
 reuse the snapshot. Each chart can independently use the filtered or unfiltered snapshot, while
 the payee details keep their server-filtered, alias-aware population. A changed currency, window,
@@ -1044,7 +1053,10 @@ Swift members when ordinary camelization would collide.
 Ticker queries are restricted to Yahoo-provider identities, including the existing configured-id
 or symbol fallback. Polling stops while hidden, inactive or offline; reduced motion and hover stop
 animation. News displays six articles and validates external HTTP(S) links. Exposure imports retain
-the existing typed server contract and 1 MB limit. The five asset pages reuse guarded histories,
+the existing typed server contract and 1 MB limit, and report holdings that kept a classification
+set by hand. `PortfolioClassificationModel` drives the Classify holdings sheet (ADR-267) from the
+exposure card or a holding's row menu: search, multi-select with bulk sector and country, and one
+`savePortfolioExposureClassifications` write of the changed rows. The five asset pages reuse guarded histories,
 price disclosures and native forms while retaining their distinct layouts.
 
 `RebalanceModel` sends targets and reserve floor to the existing TypeScript operations. It first
@@ -1117,7 +1129,9 @@ Home, Insights, transaction or account view after cash/ledger writes, including 
 from 30 years back through one year ahead. `TaxScreens.loadRoute` reads the authoritative live
 profile before adopting or replacing the URL, preserving unrelated parameters and an already
 viewed fallback year. It retires prior year reads before awaiting that probe, including when the
-new probe fails.
+new probe fails. Before that probe, and once after the first settings load, the live household
+advances to the current calendar year like the web `_advanceLiveYear`: the old live year is
+archived as its snapshot when none exists, and a saved profile of the new year becomes live.
 
 `PortfolioTaxView` reuses `TaxScreens` for the shared profile, historical year/status actions and
 native CSV, with the seven configurable Portfolio Tax widgets, recorded/manual costs and PIT budget.

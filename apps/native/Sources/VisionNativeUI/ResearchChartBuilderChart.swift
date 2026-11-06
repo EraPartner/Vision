@@ -10,6 +10,8 @@ struct ResearchChartBuilderMark: Identifiable, Equatable {
     var dashed = false
     var width: CGFloat = 1.5
     var opacity: Double = 0.18
+    /// The one security's price: it leads the range-compare readout and tints its band.
+    var primary = false
 }
 struct ResearchChartBuilderChart: View {
     let rows: [AnalysisRow]
@@ -19,6 +21,8 @@ struct ResearchChartBuilderChart: View {
     let oscillator: String?
     let shell: NativeShellModel
     @State private var selected: Int?
+    /// Range compare on the price chart (`scrubbable`); the oscillator only highlights.
+    @State private var scrub = ChartScrub()
     @State private var geometryCache = ResearchChartBuilderGeometryCache()
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
@@ -33,7 +37,7 @@ struct ResearchChartBuilderChart: View {
         let referenceLines = references
         let kind = oscillator
         let isRebased = rebased
-        let cursor = selected
+        let cursor = scrub.range == nil ? selected : nil
         // The axes and times only change with the rows and marks, not with the pointer.
         let geometryNow = geometryCache.snapshot(
             rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: referenceLines)
@@ -117,35 +121,52 @@ struct ResearchChartBuilderChart: View {
                                 style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
                     }.allowsHitTesting(false).accessibilityHidden(true)
-                    Rectangle().fill(.clear).contentShape(Rectangle()).frame(width: plot.width, height: plot.height)
-                        .offset(x: plot.minX, y: plot.minY)
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let point): select(point.x, plot: plot, times: geometryNow.times)
-                            case .ended: selected = nil
-                            }
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 0).onChanged { value in
-                                focused = true
-                                select(value.location.x, plot: plot, times: geometryNow.times)
-                            })
+                    ChartRangeCompareLayer(
+                        scrub: $scrub, plot: plot,
+                        view: oscillator == nil
+                            ? ChartScrubView(scrub, count: rows.count, series: geometryNow.scrubSeries) : nil,
+                        indexAt: { nearest($0, plot: plot, times: geometryNow.times) },
+                        xOf: { index in
+                            rows.indices.contains(index) ? xPosition(rows[index], plot: plot).map { $0 - plot.minX } : nil
+                        },
+                        yOf: { row, value in
+                            let axis = marks.first { $0.id == row.key }?.axis == "right" ? right : left
+                            return axis.fraction(value).map { plot.height - CGFloat($0) * plot.height }
+                        },
+                        colorOf: { key in marks.first { $0.id == key }?.color ?? theme.primary },
+                        titleOf: { index in
+                            guard rows.indices.contains(index), let milliseconds = rows[index]["time"]?.decimalValue
+                            else { return "" }
+                            return VisionFormat.appDate(
+                                ResearchMarketDisplay.date(milliseconds), format: settings.dateFormat, timeZone: .current)
+                        },
+                        deltaOf: { row in
+                            ChartScrubDelta.text(
+                                start: row.start, end: row.end, formatValue: { value($0) },
+                                formatPercent: {
+                                    VisionFormat.percent(Decimal($0), digits: 1, locale: settings.numberFormat.locale)
+                                })
+                        },
+                        onHover: { index in if selected != index { selected = index } },
+                        onPress: { focused = true },
+                        scrubbable: oscillator == nil)
                 }
             }.frame(height: height).focusable().focused($focused).focusEffectDisabled()
-                .onKeyPress(.leftArrow) {
-                    move(-1)
-                    return .handled
-                }.onKeyPress(.rightArrow) {
-                    move(1)
-                    return .handled
+                .onKeyPress(phases: .down) { press in
+                    if oscillator != nil, press.modifiers.contains(.shift) { return .ignored }
+                    return ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: rows.count)
                 }
-                .onKeyPress(.escape) {
-                    selected = nil
-                    return .handled
-                }.onChange(of: focused) { _, value in if !value { selected = nil } }
-                .onChange(of: rows) { _, _ in selected = nil }.accessibilityLabel(
+                .onChange(of: focused) { _, value in
+                    if !value {
+                        selected = nil
+                        scrub.clear()
+                    }
+                }
+                .onChange(of: rows) { _, _ in selected = nil }
+                .onChange(of: geometryNow.timeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
+                .accessibilityLabel(
                     shell.strings.t(oscillator == nil ? "research.builder.chartHelp" : "research.builder.oscillator"))
-            if let selected, rows.indices.contains(selected) { tooltip(rows[selected]) }
+            if scrub.range == nil, let selected, rows.indices.contains(selected) { tooltip(rows[selected]) }
         }
     }
     private func time(_ row: AnalysisRow?) -> Double? {
@@ -155,17 +176,15 @@ struct ResearchChartBuilderChart: View {
         guard let value = time(row), let first = time(rows.first), let last = time(rows.last) else { return nil }
         return plot.minX + CGFloat(last == first ? 0.5 : (value - first) / (last - first)) * plot.width
     }
-    private func select(_ localX: CGFloat, plot: CGRect, times: [Double]) {
-        guard let first = time(rows.first), let last = time(rows.last) else {
-            selected = nil
-            return
-        }
+    private func nearest(_ localX: CGFloat, plot: CGRect, times: [Double]) -> Int? {
+        guard let first = time(rows.first), let last = time(rows.last) else { return nil }
         let target = first + Double(min(max(localX / plot.width, 0), 1)) * (last - first)
-        let nearest = times.indices.min { abs(times[$0] - target) < abs(times[$1] - target) }
-        if nearest != selected { selected = nearest }
+        return times.indices.min { abs(times[$0] - target) < abs(times[$1] - target) }
     }
-    private func move(_ step: Int) {
-        if !rows.isEmpty { selected = min(max((selected ?? (step > 0 ? -1 : rows.count)) + step, 0), rows.count - 1) }
+    /// The tooltip's number: up to two fraction digits in the number-format locale.
+    private func value(_ number: Double) -> String {
+        Decimal(number).formatted(
+            Decimal.FormatStyle(locale: shell.settings.numberFormat.locale).precision(.fractionLength(0...2)))
     }
     private func tooltip(_ row: AnalysisRow) -> some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -334,6 +353,9 @@ final class ResearchChartBuilderGeometryCache {
         let right: ResearchChartBuilderAxisGeometry
         /// One time per row (the first row's time when a row has none), for the nearest-row search.
         let times: [Double]
+        /// The marks as range-compare series over the rows.
+        let scrubSeries: [ChartScrubSeries]
+        let timeline: String
     }
 
     private var rows: [AnalysisRow]?
@@ -358,13 +380,23 @@ final class ResearchChartBuilderGeometryCache {
         let made = Snapshot(
             left: axis("left", rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: references),
             right: axis("right", rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: references),
-            times: Self.times(rows))
+            times: Self.times(rows), scrubSeries: Self.scrubSeries(rows, marks: marks),
+            timeline: ChartScrub.timeline(count: rows.count, first: rows.first.flatMap(Self.time), last: rows.last.flatMap(Self.time)))
         snapshot = made
         return made
     }
 
     private static func time(_ row: AnalysisRow) -> Double? {
         row["time"]?.decimalValue.map { NSDecimalNumber(decimal: $0).doubleValue }
+    }
+
+    private static func scrubSeries(_ rows: [AnalysisRow], marks: [ResearchChartBuilderMark]) -> [ChartScrubSeries] {
+        marks.map { mark in
+            let values = rows.map { row in row[mark.id]?.decimalValue.map { NSDecimalNumber(decimal: $0).doubleValue } }
+            return ChartScrubSeries(key: mark.id, label: mark.label, primary: mark.primary) { index in
+                values.indices.contains(index) ? values[index] : nil
+            }
+        }
     }
 
     private static func times(_ rows: [AnalysisRow]) -> [Double] {

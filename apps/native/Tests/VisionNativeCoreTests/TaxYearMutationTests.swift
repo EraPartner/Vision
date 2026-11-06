@@ -40,6 +40,46 @@ struct TaxYearMutationTests {
         #expect(patch.settings[TaxYearMutation.metadataKey]?["2023"] == fixture.metadata["2023"])
     }
 
+    /// `_advanceLiveYear` (#404): a new calendar year archives the old live year and the live
+    /// household moves forward; a saved profile of the new year becomes the live household.
+    @Test func advancingTheLiveYearArchivesItAndMovesTheLiveHouseholdForward() throws {
+        var fixture = try MutationFixture(year: 2025)
+        fixture.metadata["2025"] = nil
+        let patch = try #require(
+            try TaxYearMutation.advanceLiveYear(overview: fixture.overview(), to: 2026, at: mutationTimestamp))
+        let live = try #require(patch.settings[TaxYearMutation.householdKey])
+        #expect(live["taxYear"] == .number(2026))
+        #expect(live["futureInput"] == fixture.live["futureInput"])
+        #expect(live["profileConfigured"] == .bool(true))
+        let archived = try #require(patch.settings[TaxYearMutation.snapshotsKey]?["2025"])
+        #expect(archived["taxYear"] == .number(2025))
+        #expect(archived["partners"] == fixture.live["partners"])
+        #expect(patch.settings[TaxYearMutation.snapshotsKey]?["2026"] == nil)
+        #expect(patch.settings[TaxYearMutation.snapshotsKey]?["2023"] == fixture.snapshots["2023"])
+        let history = patch.settings[TaxYearMutation.metadataKey]?["2025"]?["history"]?.arrayValue
+        #expect(history?.map { $0["kind"] } == [.string("created")])
+        #expect(history?.first?["at"] == .string("2026-10-13T12:00:00.000Z"))
+        #expect(patch.settings[TaxYearMutation.metadataKey]?["2023"] == fixture.metadata["2023"])
+
+        var saved = try MutationFixture(year: 2025)
+        var next = saved.live
+        next["taxYear"] = .number(2026)
+        next["futureInput"] = .string("saved 2026 profile")
+        saved.snapshots["2026"] = next
+        let adopted = try #require(try TaxYearMutation.advanceLiveYear(overview: saved.overview(), to: 2026))
+        #expect(adopted.settings[TaxYearMutation.householdKey]?["futureInput"] == .string("saved 2026 profile"))
+        #expect(adopted.settings[TaxYearMutation.snapshotsKey]?["2026"] == next)
+    }
+
+    @Test func theLiveYearNeverMovesBackwardsOrFromUnreadableValues() throws {
+        let fixture = try MutationFixture(year: 2025)
+        #expect(try TaxYearMutation.advanceLiveYear(overview: fixture.overview(), to: 2025) == nil)
+        #expect(try TaxYearMutation.advanceLiveYear(overview: fixture.overview(), to: 2024) == nil)
+        #expect(try TaxYearMutation.advanceLiveYear(overview: fixture.overview(invalid: true), to: 2026) == nil)
+        // Only the live-year overview carries the live household to advance.
+        #expect(try TaxYearMutation.advanceLiveYear(overview: MutationFixture(year: 2024).overview(), to: 2026) == nil)
+    }
+
     /// A past year that would only use a live estimate cannot be filed.
     @Test func anEstimateOnlyHistoricalYearCannotBeFiled() throws {
         let fixture = try MutationFixture(year: 2024)

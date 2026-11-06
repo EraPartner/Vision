@@ -164,6 +164,8 @@ public struct ChartSeriesPlot: Sendable {
     public let drawn: [InsightChartSeries]
     /// Every point of every line, for the value domain.
     public let values: [Double]
+    /// Each line's id, label and value at every key position, for range compare.
+    private let lines: [(id: String, label: String, values: [Double?])]
 
     public static let empty = ChartSeriesPlot(series: [])
 
@@ -171,9 +173,33 @@ public struct ChartSeriesPlot: Sendable {
         let coordinates = series.map { line in
             line.points.map { NSDecimalNumber(decimal: $0.value).doubleValue }
         }
-        layout = ChartKeyLayout(series: series)
+        let layout = ChartKeyLayout(series: series)
+        self.layout = layout
         values = coordinates.flatMap { $0 }
         drawn = ChartDecimation.thin(series, coordinates: coordinates, shared: shared, maxPoints: maxPoints)
+        lines = zip(series, coordinates).map { line, coordinate in
+            var values = [Double?](repeating: nil, count: layout.keys.count)
+            for (point, value) in zip(line.points, coordinate) {
+                if let position = layout.index[point.key] { values[position] = value }
+            }
+            return (line.id, line.label, values)
+        }
+    }
+
+    /// The lines as range-compare series over the key positions; `primary` names the chart's
+    /// main line, which leads the readout and tints the band.
+    public func scrubSeries(primary: String? = nil) -> [ChartScrubSeries] {
+        lines.map { line in
+            let values = line.values
+            return ChartScrubSeries(key: line.id, label: line.label, primary: line.id == primary) { index in
+                values.indices.contains(index) ? values[index] : nil
+            }
+        }
+    }
+
+    /// The timeline key range compare drops its range on.
+    public var scrubTimeline: String {
+        "\(layout.keys.count):\(layout.keys.first ?? ""):\(layout.keys.last ?? "")"
     }
 }
 

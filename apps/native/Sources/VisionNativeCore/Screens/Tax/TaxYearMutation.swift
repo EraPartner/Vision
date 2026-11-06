@@ -142,6 +142,51 @@ public enum TaxYearMutation {
             settings: [householdKey: live, snapshotsKey: snapshots, metadataKey: metas], records: records)
     }
 
+    /// `_advanceLiveYear` (belgianTaxStore): moves the live household forward to `year`, the
+    /// current income year, when it is older. The old live year is archived as its snapshot
+    /// when none exists (history "created"), and the live household becomes the saved
+    /// snapshot of `year`, or the old live household moved to `year`. `nil` when the live
+    /// year is not older, the overview is not the live year, or stored values are unreadable.
+    public static func advanceLiveYear(
+        overview: OpenAPI.BelgianTaxOverview, to year: Int, at: Date = Date()
+    ) throws -> TaxSettingsPatch? {
+        guard !overview.storedValueInvalid, overview.year == overview.liveYear, year > overview.liveYear else {
+            return nil
+        }
+        let records = overview.records
+        var live =
+            try storedObject(key: householdKey, records: records)
+            ?? TaxValue(encoding: overview.liveHousehold)
+        live["profileConfigured"] = .bool(overview.liveHousehold.profileConfigured)
+        var snapshots =
+            try storedObject(key: snapshotsKey, records: records)
+            ?? TaxValue(encoding: overview.householdSnapshots)
+        var metas = try storedObject(key: metadataKey, records: records) ?? .object([:])
+        let liveYear = String(overview.liveYear)
+        if snapshots[liveYear] == nil {
+            var archived = live
+            archived["taxYear"] = .number(Decimal(overview.liveYear))
+            snapshots[liveYear] = archived
+            var meta = metas[liveYear] ?? .object([:])
+            guard meta.objectValue != nil else { throw APIError.invalidRequest("Invalid tax year metadata") }
+            var history: [TaxValue] = []
+            if let stored = meta["history"] {
+                guard let entries = stored.arrayValue else {
+                    throw APIError.invalidRequest("Invalid tax snapshot history")
+                }
+                history = entries
+            }
+            history.append(.object(["at": .string(timestamp(at)), "kind": .string("created")]))
+            meta["history"] = .array(Array(history.suffix(200)))
+            metas[liveYear] = meta
+        }
+        var next = snapshots[String(year)] ?? live
+        next["taxYear"] = .number(Decimal(year))
+        if next["profileConfigured"] == nil { next["profileConfigured"] = live["profileConfigured"] }
+        return try TaxSettingsPatch(
+            settings: [householdKey: next, snapshotsKey: snapshots, metadataKey: metas], records: records)
+    }
+
     private static func storedObject(key: String, records: [OpenAPI.Setting]) throws -> TaxValue? {
         guard let record = records.first(where: { $0.key == key }) else { return nil }
         if record.value == .null { return nil }

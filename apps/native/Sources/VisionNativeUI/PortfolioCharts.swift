@@ -15,8 +15,11 @@ struct PortfolioSeriesChart: View {
     /// The web's `xTickPattern`: day ticks ("d MMM") for 1M/3M/6M, month ticks ("MMM yy") otherwise.
     var dayTicks = false
     var colors: [String: Color] = [:]
+    /// The chart's main line (`primary`): it leads the range-compare readout and tints its band.
+    var primary: String?
     @State private var selected: String?
-    @State private var rangeStart: String?
+    /// Range compare (`scrubbable`): drag, or click, move, click.
+    @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     /// The sorted keys and their positions, the thinned lines and the value coordinates,
@@ -77,12 +80,8 @@ struct PortfolioSeriesChart: View {
                         }
                     }
                 }
-                if let selected, let x = index[selected] {
+                if scrub.range == nil, let selected, let x = index[selected] {
                     RuleMark(x: .value(title, x)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
-                }
-                if let selected, let rangeStart, let a = index[selected], let b = index[rangeStart] {
-                    RectangleMark(xStart: .value(title, min(a, b)), xEnd: .value(title, max(a, b)))
-                        .foregroundStyle(theme.primary.opacity(0.08))
                 }
             }
             .chartXScale(domain: 0...max(keys.count - 1, 1))
@@ -100,38 +99,36 @@ struct PortfolioSeriesChart: View {
             .visionChartYAxis(domain: domain) { format(Decimal($0), axis: true) }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let location):
-                                // Scrolling re-reports a parked pointer every frame: write on change only.
-                                let hovered = key(location.x, proxy: proxy, geometry: geometry)
-                                if selected != hovered { selected = hovered }
-                            case .ended: if rangeStart == nil, selected != nil { selected = nil }
-                            }
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 0).onChanged { value in
-                                focused = true
-                                if rangeStart == nil {
-                                    rangeStart = key(value.startLocation.x, proxy: proxy, geometry: geometry)
-                                }
-                                let dragged = key(value.location.x, proxy: proxy, geometry: geometry)
-                                if selected != dragged { selected = dragged }
-                            })
+                    let series = plot.scrubSeries(primary: primary)
+                    ChartRangeCompareLayer(
+                        scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
+                        view: ChartScrubView(scrub, count: keys.count, series: series),
+                        indexAt: { position(at: $0, proxy: proxy) },
+                        xOf: { proxy.position(forX: Double($0)) },
+                        yOf: { _, value in proxy.position(forY: value) },
+                        colorOf: { key in series.firstIndex { $0.key == key }.map { lineColor(self.series[$0]) } ?? theme.primary },
+                        titleOf: { keys.indices.contains($0) ? dateLabel(keys[$0]) : "" },
+                        deltaOf: { row in
+                            ChartScrubDelta.text(
+                                start: row.start, end: row.end, formatValue: { format(Decimal($0)) },
+                                formatPercent: percent ? nil : { scrubPercent($0) })
+                        },
+                        onHover: { hovered in
+                            let key = hovered.flatMap { keys.indices.contains($0) ? keys[$0] : nil }
+                            if selected != key { selected = key }
+                        },
+                        onPress: { focused = true })
                 }
             }
             .frame(height: height).focusable().focused($focused).focusEffectDisabled()
             .accessibilityLabel(title)
             .onKeyPress(phases: .down, action: moveSelection)
-            .onChange(of: series) { _, _ in
-                selected = nil
-                rangeStart = nil
-            }
+            .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
+            .onChange(of: series) { _, _ in selected = nil }
             .onChange(of: focused) { _, focused in
                 if !focused {
                     selected = nil
-                    rangeStart = nil
+                    scrub.clear()
                 }
             }
             ChartLegendRow(
@@ -140,21 +137,15 @@ struct PortfolioSeriesChart: View {
                         id: line.id, label: line.label,
                         color: colors[line.id] ?? Color(token: palette[index % palette.count]), dashed: line.dashed)
                 })
-            if let selected, keys.contains(selected) {
+            if scrub.range == nil, let selected, keys.contains(selected) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(rangeStart.map { "\(dateLabel($0)) – \(dateLabel(selected))" } ?? dateLabel(selected))
-                        .font(.caption.weight(.medium))
+                    Text(dateLabel(selected)).font(.caption.weight(.medium))
                     ForEach(series) { line in
                         if let value = line.points.first(where: { $0.key == selected })?.value {
                             HStack {
                                 Text(line.label).foregroundStyle(theme.secondaryLabel)
                                 Spacer()
                                 Text(format(value)).monospacedDigit()
-                                if let rangeStart, let start = line.points.first(where: { $0.key == rangeStart })?.value
-                                {
-                                    Text("Δ").accessibilityHidden(true)
-                                    Text(format(value - start, signed: true)).monospacedDigit()
-                                }
                             }.font(.caption)
                         }
                     }
@@ -221,40 +212,29 @@ struct PortfolioSeriesChart: View {
         }
         return formatter.string(from: date)
     }
-    private func key(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
-        guard let anchor = proxy.plotFrame else { return nil }
-        let frame = geometry[anchor]
-        guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self) else {
-            return nil
-        }
+    /// The nearest key position to a plot x.
+    private func position(at x: CGFloat, proxy: ChartProxy) -> Int? {
         let keys = self.keys
-        guard !keys.isEmpty else { return nil }
-        return keys[min(max(Int(position.rounded()), 0), keys.count - 1)]
+        guard !keys.isEmpty, let position = proxy.value(atX: x, as: Double.self) else { return nil }
+        return min(max(Int(position.rounded()), 0), keys.count - 1)
     }
+    private func scrubPercent(_ value: Double) -> String {
+        VisionFormat.percent(Decimal(value), digits: 1, locale: shell.settings.numberFormat.locale)
+    }
+    /// The shared chart key map: ←/→, Home/End, Shift+←/→ range compare, Escape.
     private func moveSelection(_ press: KeyPress) -> KeyPress.Result {
-        guard !keys.isEmpty else { return .ignored }
-        let current = selected.flatMap(keys.firstIndex) ?? keys.count - 1
-        let next: Int
-        if press.key == .leftArrow {
-            next = max(0, current - 1)
-        } else if press.key == .rightArrow {
-            next = min(keys.count - 1, current + 1)
-        } else if press.characters == "\u{F729}" {
-            next = 0
-        } else if press.characters == "\u{F72B}" {
-            next = keys.count - 1
-        } else if press.key == .escape {
+        let keys = self.keys
+        if press.key == .escape {
+            guard selected != nil || scrub.scrubbing else { return .ignored }
             selected = nil
-            rangeStart = nil
+            scrub.clear()
             return .handled
-        } else {
-            return .ignored
         }
-        if press.modifiers.contains(.shift), rangeStart == nil {
-            rangeStart = keys[current]
-        } else if !press.modifiers.contains(.shift) {
-            rangeStart = nil
-        }
+        guard let chartKey = press.chartKey,
+            let next = scrub.key(
+                chartKey, shift: press.modifiers.contains(.shift), index: selected.flatMap(keys.firstIndex),
+                count: keys.count)
+        else { return .ignored }
         selected = keys[next]
         return .handled
     }

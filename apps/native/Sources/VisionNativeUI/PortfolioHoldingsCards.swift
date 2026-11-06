@@ -23,6 +23,10 @@ struct PortfolioHoldingActionsMenu: View {
                         editing.beginAddTransaction(investment: investment, bookingCurrency: holding.currency)
                     }
                 }
+                Button(strings.t("portfolio.classify.menu"), systemImage: "tag") {
+                    Task { await editing.classification.open(investmentIds: [holding.id]) }
+                }
+                Divider()
                 Button(strings.t("portfolio.archiveInvestment"), systemImage: "archivebox") {
                     editing.confirmArchive(investment: investment)
                 }

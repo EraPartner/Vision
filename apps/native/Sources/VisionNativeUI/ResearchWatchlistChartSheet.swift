@@ -148,6 +148,8 @@ private struct ResearchWatchlistPriceChart: View {
     let shell: NativeShellModel
     let close: () -> Void
     @State private var selected: Int?
+    /// Range compare (`scrubbable`) over the points with a close.
+    @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @State private var plotCache = ChartLinePlotCache()
     @State private var labelMemo = ChartLabelMemo()
@@ -176,28 +178,56 @@ private struct ResearchWatchlistPriceChart: View {
                 }
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
-                        Rectangle().fill(.clear).contentShape(Rectangle()).onContinuousHover { phase in
-                            switch phase {
-                            case .active(let location):
-                                guard let frame = proxy.plotFrame,
-                                    let date: Date = proxy.value(atX: location.x - geometry[frame].origin.x)
-                                else { return }
-                                let nearest = plot.nearestCloseIndex(to: date)
-                                if nearest != selected { selected = nearest }
-                            case .ended: if !focused { selected = nil }
-                            }
-                        }.onTapGesture { focused = true }
+                        let marks = plot.closeMarks
+                        ChartRangeCompareLayer(
+                            scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
+                            view: ChartScrubView(
+                                scrub, count: marks.count,
+                                series: [
+                                    ChartScrubSeries(key: "close") { marks.indices.contains($0) ? marks[$0].close : nil }
+                                ]),
+                            indexAt: { x in proxy.value(atX: x, as: Date.self).flatMap { plot.nearestCloseIndex(to: $0) } },
+                            xOf: { marks.indices.contains($0) ? proxy.position(forX: marks[$0].time) : nil },
+                            yOf: { _, value in proxy.position(forY: value) },
+                            colorOf: { _ in theme.primary },
+                            titleOf: { index in
+                                marks.indices.contains(index)
+                                    ? VisionFormat.appDate(
+                                        marks[index].time, format: shell.settings.dateFormat, timeZone: .current) : ""
+                            },
+                            deltaOf: { row in
+                                ChartScrubDelta.text(
+                                    start: row.start, end: row.end,
+                                    formatValue: {
+                                        ResearchWatchlistUI.money(Decimal($0), currency: item.currency, shell: shell)
+                                    },
+                                    formatPercent: {
+                                        VisionFormat.percent(
+                                            Decimal($0), digits: 1, locale: shell.settings.numberFormat.locale)
+                                    })
+                            },
+                            onHover: { index in
+                                // A focused chart keeps its keyboard highlight when the pointer leaves.
+                                if index == nil, focused { return }
+                                if selected != index { selected = index }
+                            },
+                            onPress: { focused = true })
                     }
                 }
                 .frame(height: 320).focusable().focused($focused).focusEffectDisabled()
                 .accessibilityLabel(shell.strings.t("watchlist.openChart") + ": " + item.name)
-                .onKeyPress(.leftArrow) { move(-1) }.onKeyPress(.rightArrow) { move(1) }
-                .onKeyPress(.escape) {
-                    close()
-                    return .handled
+                .onKeyPress(phases: .down) { press in
+                    // A range claims Escape ahead of the dialog, so the next Escape closes it.
+                    if press.key == .escape, !scrub.scrubbing {
+                        close()
+                        return .handled
+                    }
+                    return ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: priceMarks.count)
                 }
                 .onChange(of: points) { _, _ in selected = nil }
-            if let selected, plot.closeMarks.indices.contains(selected),
+                .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
+                .onChange(of: focused) { _, focused in if !focused { scrub.clear() } }
+            if scrub.range == nil, let selected, plot.closeMarks.indices.contains(selected),
                 let close = points[plot.closeMarks[selected].offset].close
             {
                 HStack {
@@ -275,17 +305,11 @@ private struct ResearchWatchlistPriceChart: View {
                         ).font(.caption2)
                     }
             }
-            if let selected, plot.closeMarks.indices.contains(selected) {
+            if scrub.range == nil, let selected, plot.closeMarks.indices.contains(selected) {
                 RuleMark(x: .value(dateTitle, plot.closeMarks[selected].time)).foregroundStyle(
                     theme.secondaryLabel.opacity(0.5))
             }
         }
-    }
-    private func move(_ delta: Int) -> KeyPress.Result {
-        let count = priceMarks.count
-        guard count > 0 else { return .ignored }
-        selected = max(0, min(count - 1, (selected ?? (delta > 0 ? -1 : count)) + delta))
-        return .handled
     }
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
 }

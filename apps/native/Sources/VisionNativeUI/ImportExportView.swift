@@ -228,10 +228,12 @@ struct ImportBankCard: View {
     private static let loadingTag = ImportSource.adapter("\u{0}loading")
     private static let noneTag = ImportSource.adapter("\u{0}none")
 
-    /// The Select items: banks, saved parsers, then Other (custom), with the disabled Loading and
-    /// No banks rows.
+    /// The Select items: Detect automatically, banks, saved parsers, then Other (custom), with the
+    /// disabled Loading and No banks rows.
     private var bankSourceEntries: [VisionSelectEntry<ImportSource>] {
-        var entries: [VisionSelectEntry<ImportSource>] = []
+        var entries: [VisionSelectEntry<ImportSource>] = [
+            .option(VisionSelectOption(value: .auto, title: strings.t("importPage.autoDetect")))
+        ]
         if model.isLoadingAdapters {
             entries.append(
                 .option(VisionSelectOption(value: Self.loadingTag, title: strings.t("importPage.loading"), isDisabled: true)))
@@ -259,10 +261,16 @@ struct ImportBankCard: View {
             Text(strings.t("importPage.bankSource"))
                 .font(.body.weight(.medium))
             VisionSelect(
-                selection: Binding(get: { model.source }, set: { model.selectSource($0) }),
+                selection: Binding(get: { model.selection }, set: { model.selectSource($0) }),
                 entries: bankSourceEntries, placeholder: strings.t("importPage.bankSourcePlaceholder"),
                 accessibilityLabel: strings.t("importPage.bankSource"), expands: true
             )
+            if let status = model.detectionStatus(strings) {
+                Text(status)
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
             Text(strings.t("importPage.bankHint"))
                 .font(.footnote)
                 .foregroundStyle(theme.secondaryLabel)

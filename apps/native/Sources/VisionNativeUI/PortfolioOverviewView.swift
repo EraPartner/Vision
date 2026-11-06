@@ -194,7 +194,7 @@ public struct PortfolioOverviewView: View {
                         ]
                     }, title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
                     height: 200, dayTicks: PortfolioChartTicks.usesDayTicks(model.period),
-                    colors: ["value": theme.primary, "invested": theme.secondaryLabel])
+                    colors: ["value": theme.primary, "invested": theme.secondaryLabel], primary: "value")
                 if data.snapshots.last?.isProvisional == true {
                     // `<p role="note">`: the lead sentence in the foreground colour, then the
                     // explanation.

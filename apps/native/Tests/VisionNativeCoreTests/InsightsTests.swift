@@ -866,6 +866,20 @@ struct StatisticsModelTests {
         #expect(model.pivotPage == 0)
         #expect(model.pivotPageCount == max(1, (model.pivotAllPeriods.count + 11) / 12))
     }
+    /// ADR-266: Insights opens on All time; `?window=24m` picks the rolling window and old
+    /// `?window=all` links still open All time.
+    @Test func insightsOpensOnAllTimeAndKeepsTheRollingWindowAsAnOption() async {
+        #expect(StatisticsWindow(routeValue: nil) == .all)
+        #expect(StatisticsWindow(routeValue: "all") == .all)
+        #expect(StatisticsWindow(routeValue: "24m") == .rolling24)
+        #expect(StatisticsWindow.all.routeValue == nil)
+        #expect(StatisticsWindow.rolling24.routeValue == "24m")
+        let model = StatisticsModel(service: HomeFixtureService(), now: { PlannedFixture.today })
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
+        #expect(model.window == .all)
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics?window=24m")!)
+        #expect(model.window == .rolling24)
+    }
     @Test func periodLabelsMatchTheWebMonthPatterns() {
         let english = Locale(identifier: "en_US")
         #expect(StatisticsPeriodFormat.label("2026-03", locale: english) == "Mar 2026")

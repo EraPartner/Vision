@@ -4,6 +4,15 @@ public enum StatisticsWindow: String, Sendable, CaseIterable {
     case rolling24 = "24m"
     case all
 
+    /// `?window=`: All time is the default (ADR-266); only `24m` picks the rolling window, so
+    /// older `?window=all` links still open All time.
+    public init(routeValue: String?) {
+        self = routeValue == Self.rolling24.rawValue ? .rolling24 : .all
+    }
+
+    /// The `?window=` value for this window; `nil` (no parameter) for the default.
+    public var routeValue: String? { self == .rolling24 ? rawValue : nil }
+
     public func queryItems(now: Date, calendar: Calendar, includeAllTime: Bool = false) -> [URLQueryItem] {
         if self == .all { return includeAllTime ? [URLQueryItem(name: "all_time", value: "true")] : [] }
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now

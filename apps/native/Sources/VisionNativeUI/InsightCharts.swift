@@ -22,11 +22,14 @@ struct InsightTimelineChart: View {
     var areas = false
     var stackedBars = false
     var stackedAreas = true
-    var rangeComparison = true
+    /// `scrubbable`: range compare (drag, or click, move, click), on the charts the web makes
+    /// scrubbable.
+    var rangeComparison = false
     var height: CGFloat = 240
     var customColors: [String: Color] = [:]
     var areaSeries: Set<String>? = nil
-    var rangePercent = false
+    /// The chart's main line (`primary`): it leads the range-compare readout and tints its band.
+    var primary: String? = nil
     var formatPeriod: ((String) -> String)? = nil
     var formatTick: ((String) -> String)? = nil
     /// Legend position. `nil` follows the web: above the plot when there is more than one series.
@@ -40,8 +43,11 @@ struct InsightTimelineChart: View {
     /// A bare `Sparkline`: no axes or legend, a smoothed line over a flat 15 % fill, the value
     /// range padded by 10 % and not niced.
     var sparkline = false
+    /// The highlighted point, and while a range is compared its moving end.
     @Binding var selection: String?
+    /// The compared range's anchor, mirrored from `scrub` for print reports.
     @Binding var rangeStart: String?
+    @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     /// The sorted keys and their positions and the lines thinned for drawing, rebuilt only when
@@ -257,16 +263,9 @@ struct InsightTimelineChart: View {
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         .accessibilityHidden(true)
                 }
-                if let selection, let x = index[selection] {
+                if scrub.range == nil, let selection, let x = index[selection] {
                     RuleMark(x: .value(title, Double(x))).foregroundStyle(
                         theme.secondaryLabel.opacity(0.5))
-                }
-                if let rangeStart, let selection, let a = index[rangeStart], let b = index[selection] {
-                    RectangleMark(
-                        xStart: .value(title, Double(min(a, b))),
-                        xEnd: .value(title, Double(max(a, b)))
-                    )
-                    .foregroundStyle(theme.primary.opacity(0.08))
                 }
             }
             .chartForegroundStyleScale(
@@ -289,30 +288,36 @@ struct InsightTimelineChart: View {
             .visionChartYAxis(domain: domain, hidden: sparkline, label: yLabel)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let location):
-                                // Scrolling re-reports a parked pointer every frame: write on change only.
-                                let hovered = key(at: location.x, proxy: proxy, geometry: geometry)
-                                if selection != hovered { selection = hovered }
-                            case .ended: if rangeStart == nil, selection != nil { selection = nil }
-                            }
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { drag in
-                                    focused = true
-                                    if rangeComparison && rangeStart == nil {
-                                        rangeStart = key(at: drag.startLocation.x, proxy: proxy, geometry: geometry)
-                                    }
-                                    selection = key(at: drag.location.x, proxy: proxy, geometry: geometry)
-                                }.onEnded { _ in
-                                    if !rangeComparison {
-                                        selection = nil
-                                        rangeStart = nil
-                                    }
+                    let scrubSeries = plot.scrubSeries(primary: primary)
+                    ChartRangeCompareLayer(
+                        scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
+                        view: rangeComparison ? ChartScrubView(scrub, count: keys.count, series: scrubSeries) : nil,
+                        indexAt: { x in
+                            let keys = self.keys
+                            guard !keys.isEmpty, let position = proxy.value(atX: x, as: Double.self) else { return nil }
+                            return min(max(Int(position.rounded()), 0), keys.count - 1)
+                        },
+                        xOf: { proxy.position(forX: Double($0)) },
+                        yOf: { _, value in proxy.position(forY: value) },
+                        colorOf: { key in series.firstIndex { $0.id == key }.map(seriesColor(at:)) ?? theme.primary },
+                        titleOf: { keys.indices.contains($0) ? periodLabel(keys[$0]) : "" },
+                        deltaOf: { row in
+                            ChartScrubDelta.text(
+                                start: row.start, end: row.end,
+                                formatValue: { MoneyText.text(Decimal($0), currency: currency, settings: settings) },
+                                formatPercent: {
+                                    VisionFormat.percent(Decimal($0), digits: 1, locale: settings.numberFormat.locale)
                                 })
+                        },
+                        onHover: { position in
+                            // A compared range keeps its end; the hover readout waits for it to clear.
+                            guard scrub.range == nil else { return }
+                            let hovered = position.flatMap { keys.indices.contains($0) ? keys[$0] : nil }
+                            if position == nil, scrub.scrubbing { return }
+                            if selection != hovered { selection = hovered }
+                        },
+                        onPress: { focused = true },
+                        scrubbable: rangeComparison)
                 }
             }
             .frame(height: height)
@@ -321,17 +326,21 @@ struct InsightTimelineChart: View {
             .onChange(of: focused) { _, value in
                 if !value {
                     selection = nil
-                    rangeStart = nil
+                    scrub.clear()
                 }
+            }
+            .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
+            .onChange(of: scrub) { _, scrub in mirror(scrub) }
+            .onChange(of: rangeStart) { _, start in
+                // The owner dropped the range (a new period or filter).
+                if start == nil, scrub.range != nil { scrub.clear() }
             }
             .accessibilityLabel(title)
             if placement == .bottomLeading { ChartLegendRow(items: legendItems) }
             if placement == .bottomCenter { ChartLegendRow(items: legendItems, centered: true) }
-            if let selection {
+            if scrub.range == nil, let selection {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(rangeStart.map { "\(periodLabel($0)) – \(periodLabel(selection))" } ?? periodLabel(selection))
-                        .font(
-                            .caption.weight(.medium))
+                    Text(periodLabel(selection)).font(.caption.weight(.medium))
                     ForEach(series) { line in
                         if let value = line.points.first(where: { $0.key == selection })?.value {
                             HStack {
@@ -340,24 +349,6 @@ struct InsightTimelineChart: View {
                                 MoneyText(
                                     amount: value, currency: currency, settings: settings, signed: false,
                                     colored: false)
-                                if let rangeStart,
-                                    let start = line.points.first(where: { $0.key == rangeStart })?.value
-                                {
-                                    Text("Δ").accessibilityHidden(true)
-                                    if rangePercent {
-                                        Text(MoneyText.text(value - start, currency: currency, settings: settings))
-                                            .monospacedDigit().foregroundStyle(value < start ? theme.loss : theme.gain)
-                                    } else {
-                                        MoneyText(amount: value - start, currency: currency, settings: settings)
-                                    }
-                                    if rangePercent, start != 0 {
-                                        Text(
-                                            ((value - start) > 0 ? "+" : "")
-                                                + VisionFormat.percent(
-                                                    (value - start) / abs(start) * 100,
-                                                    locale: settings.numberFormat.locale))
-                                    }
-                                }
                             }.font(.caption)
                         }
                     }
@@ -469,40 +460,32 @@ struct InsightTimelineChart: View {
         let palette = colors
         return palette[(Self.methodColorIndex[id] ?? index) % palette.count]
     }
-    private func key(at x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
-        guard let plot = proxy.plotFrame else { return nil }
-        let frame = geometry[plot]
-        guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self) else {
-            return nil
-        }
+    /// Mirrors the compared range into the owner's bindings: the anchor as `rangeStart`, the
+    /// moving end as `selection`.
+    private func mirror(_ scrub: ChartScrub) {
         let keys = self.keys
-        guard !keys.isEmpty else { return nil }
-        return keys[min(max(Int(position.rounded()), 0), keys.count - 1)]
+        func key(_ position: Int?) -> String? { position.flatMap { keys.indices.contains($0) ? keys[$0] : nil } }
+        guard scrub.range != nil else {
+            if rangeStart != nil { rangeStart = nil }
+            return
+        }
+        let anchor = key(scrub.anchor)
+        let head = key(scrub.head)
+        if rangeStart != anchor { rangeStart = anchor }
+        if selection != head { selection = head }
     }
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
-        guard !keys.isEmpty else { return .ignored }
-        let current = selection.flatMap(keys.firstIndex) ?? keys.count - 1
-        let next: Int
-        if press.key == .leftArrow {
-            next = max(0, current - 1)
-        } else if press.key == .rightArrow {
-            next = min(keys.count - 1, current + 1)
-        } else if press.characters == "\u{F729}" {
-            next = 0
-        } else if press.characters == "\u{F72B}" {
-            next = keys.count - 1
-        } else if press.key == .escape {
+        let keys = self.keys
+        if press.key == .escape {
+            guard selection != nil || scrub.scrubbing else { return .ignored }
             selection = nil
-            rangeStart = nil
+            scrub.clear()
             return .handled
-        } else {
-            return .ignored
         }
-        if rangeComparison, press.modifiers.contains(.shift), rangeStart == nil {
-            rangeStart = keys[current]
-        } else if !press.modifiers.contains(.shift) {
-            rangeStart = nil
-        }
+        guard let chartKey = press.chartKey else { return .ignored }
+        let shift = rangeComparison && press.modifiers.contains(.shift)
+        let current = selection.flatMap(keys.firstIndex)
+        guard let next = scrub.key(chartKey, shift: shift, index: current, count: keys.count) else { return .ignored }
         selection = keys[next]
         return .handled
     }

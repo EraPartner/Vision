@@ -6,6 +6,8 @@ struct ResearchCompareChartView: View {
     let data: ResearchComparePresentation
     let shell: NativeShellModel
     @State private var selected: Int?
+    /// Range compare (`scrubbable`): drag, or click, move, click.
+    @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @State private var plotCache = ComparePlotCache()
     @Environment(\.visionTheme) private var theme
@@ -33,7 +35,7 @@ struct ResearchCompareChartView: View {
                     theme.secondaryLabel.opacity(0.5)
                 )
                 .annotation(position: .leading) { Text("100").font(.caption) }
-                if let selected, plot.times.indices.contains(selected) {
+                if scrub.range == nil, let selected, plot.times.indices.contains(selected) {
                     RuleMark(x: .value(dateTitle, plot.times[selected])).foregroundStyle(
                         theme.secondaryLabel.opacity(0.5))
                 }
@@ -58,45 +60,50 @@ struct ResearchCompareChartView: View {
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onContinuousHover { phase in
-                            switch phase {
-                            case .active(let point): select(point.x, proxy: proxy, geometry: geometry, plot: plot)
-                            case .ended: selected = nil
+                    ChartRangeCompareLayer(
+                        scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
+                        view: ChartScrubView(scrub, count: plot.times.count, series: plot.scrubSeries),
+                        indexAt: { x in
+                            proxy.value(atX: x, as: Date.self).flatMap {
+                                ChartLinePlot.nearest(in: plot.times, ascending: plot.ascending, to: $0)
                             }
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 0).onChanged { value in
-                                focused = true
-                                select(value.location.x, proxy: proxy, geometry: geometry, plot: plot)
-                            })
+                        },
+                        xOf: { plot.times.indices.contains($0) ? proxy.position(forX: plot.times[$0]) : nil },
+                        yOf: { _, value in proxy.position(forY: value) },
+                        colorOf: { key in
+                            ResearchCompareStyle.color(data.symbols.firstIndex(of: key) ?? 0, palette: theme.palette)
+                        },
+                        titleOf: rowTitle,
+                        deltaOf: { row in
+                            ChartScrubDelta.text(
+                                start: row.start, end: row.end,
+                                formatValue: { ResearchCompareStyle.fixed(Decimal($0)) },
+                                formatPercent: {
+                                    VisionFormat.percent(
+                                        Decimal($0), digits: 1, locale: shell.settings.numberFormat.locale)
+                                })
+                        },
+                        onHover: { index in if selected != index { selected = index } },
+                        onPress: { focused = true })
                 }
             }
             .frame(height: 340).focusable().focused($focused).focusEffectDisabled()
-            .onKeyPress(.leftArrow) {
-                move(-1)
-                return .handled
+            .onKeyPress(phases: .down) { press in
+                ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: data.rows.count)
             }
-            .onKeyPress(.rightArrow) {
-                move(1)
-                return .handled
+            .onChange(of: focused) { _, value in
+                if !value {
+                    selected = nil
+                    scrub.clear()
+                }
             }
-            .onKeyPress(.escape) {
-                selected = nil
-                return .handled
-            }
-            .onChange(of: focused) { _, value in if !value { selected = nil } }
             .onChange(of: data.raw) { _, _ in selected = nil }
+            .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
             .accessibilityLabel(shell.strings.t("research.compare.rebased"))
-            if let selected, data.rows.indices.contains(selected) {
-                let row = data.rows[selected]
+            if scrub.range == nil, let selected, data.rows.indices.contains(selected) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(
-                        ResearchCompareStyle.dateLabel(row.time, settings: shell.settings) + " "
-                            + VisionFormat.time(
-                                ResearchCompareStyle.date(row.time), locale: shell.settings.numberFormat.locale,
-                                timeZone: .current)
-                    ).font(.caption.weight(.medium))
+                    let row = data.rows[selected]
+                    Text(rowTitle(selected)).font(.caption.weight(.medium))
                     ForEach(Array(data.symbols.enumerated()), id: \.element) { index, symbol in
                         HStack {
                             Circle().fill(ResearchCompareStyle.color(index, palette: theme.palette)).frame(
@@ -112,17 +119,12 @@ struct ResearchCompareChartView: View {
             }
         }
     }
-    private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy, plot: ComparePlot) {
-        guard let frame = proxy.plotFrame, let date: Date = proxy.value(atX: x - geometry[frame].origin.x) else {
-            selected = nil
-            return
-        }
-        let nearest = ChartLinePlot.nearest(in: plot.times, ascending: plot.ascending, to: date)
-        if nearest != selected { selected = nearest }
-    }
-    private func move(_ step: Int) {
-        guard !data.rows.isEmpty else { return }
-        selected = min(max((selected ?? (step > 0 ? -1 : data.rows.count)) + step, 0), data.rows.count - 1)
+    private func rowTitle(_ index: Int) -> String {
+        guard data.rows.indices.contains(index) else { return "" }
+        let time = data.rows[index].time
+        return ResearchCompareStyle.dateLabel(time, settings: shell.settings) + " "
+            + VisionFormat.time(
+                ResearchCompareStyle.date(time), locale: shell.settings.numberFormat.locale, timeZone: .current)
     }
 }
 
@@ -145,6 +147,9 @@ struct ComparePlot {
     let ascending: Bool
     /// Every rebased value, for the value domain.
     let values: [Double]
+    /// One range-compare series per symbol over the rows.
+    let scrubSeries: [ChartScrubSeries]
+    let scrubTimeline: String
 
     init(data: ResearchComparePresentation) {
         let times = data.rows.map { ResearchCompareStyle.date($0.time) }
@@ -161,6 +166,12 @@ struct ComparePlot {
         // The web LineChart's value domain: every rebased value of every row.
         let values = data.rows.flatMap { row in row.values.values.map { NSDecimalNumber(decimal: $0).doubleValue } }
         self.lines = lines
+        scrubSeries = data.symbols.map { symbol in
+            let values = data.rows.map { row in row.values[symbol].map { NSDecimalNumber(decimal: $0).doubleValue } }
+            return ChartScrubSeries(key: symbol, label: symbol) { values.indices.contains($0) ? values[$0] : nil }
+        }
+        scrubTimeline = ChartScrub.timeline(
+            count: times.count, first: times.first?.timeIntervalSince1970, last: times.last?.timeIntervalSince1970)
         self.times = times
         ascending = ChartLinePlot.isAscending(times)
         self.values = values

@@ -211,13 +211,17 @@ public struct ResearchChartBuilderView: View {
             })
     }
     private var priceMarks: [ResearchChartBuilderMark] {
+        // Overlaid securities are peers; one security has a main line, its price.
+        let prices = model.state.series.filter { $0.field == "price" }
+        let primaryId = prices.count == 1 ? prices.first?.id : nil
         var marks = model.state.series.enumerated().map { index, series in
             ResearchChartBuilderMark(
                 id: series.id,
                 label: series.label + (series.field == "volume" ? " " + strings.t("research.builder.volume") : ""),
                 kind: series.type == "candlestick" && series.field != "price" ? "line" : series.type, axis: series.axis,
                 color: ResearchCompareStyle.color(index, palette: theme.palette),
-                opacity: series.field == "volume" ? 0.4 : series.type == "bar" ? 0.5 : 0.18)
+                opacity: series.field == "volume" ? 0.4 : series.type == "bar" ? 0.5 : 0.18,
+                primary: series.id == primaryId)
         }
         for (index, indicator) in model.state.indicators.enumerated() {
             let color = ResearchCompareStyle.color(model.state.series.count + index, palette: theme.palette)

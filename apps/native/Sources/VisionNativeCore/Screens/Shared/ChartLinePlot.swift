@@ -39,6 +39,8 @@ public struct ChartLinePlot: Sendable {
     public let closes: [Double]
     /// The points with a volume.
     public let bars: [Bar]
+    /// The close of every point of the full series, for range compare.
+    public let closeAt: [Double?]
     /// `times` ascend, so the point nearest a time can be found by bisection.
     private let ascending: Bool
     private let closesAscending: Bool
@@ -61,6 +63,9 @@ public struct ChartLinePlot: Sendable {
             }
         }
         self.times = times
+        var closeAt = [Double?](repeating: nil, count: points.count)
+        for mark in drawable { closeAt[mark.offset] = mark.close }
+        self.closeAt = closeAt
         closeMarks = drawable
         let closeValues = drawable.map(\.close)
         closes = closeValues
@@ -71,6 +76,20 @@ public struct ChartLinePlot: Sendable {
         let timesOfCloses = drawable.map(\.time)
         closeTimes = timesOfCloses
         closesAscending = Self.isAscending(timesOfCloses)
+    }
+
+    /// The closes as the one range-compare series of a price chart.
+    public func scrubSeries(key: String = "close", label: String? = nil) -> [ChartScrubSeries] {
+        let closes = closeAt
+        return [
+            ChartScrubSeries(key: key, label: label) { index in closes.indices.contains(index) ? closes[index] : nil }
+        ]
+    }
+
+    /// The timeline key range compare drops its range on.
+    public var scrubTimeline: String {
+        ChartScrub.timeline(
+            count: times.count, first: times.first?.timeIntervalSince1970, last: times.last?.timeIntervalSince1970)
     }
 
     public static func isAscending(_ times: [Date]) -> Bool {

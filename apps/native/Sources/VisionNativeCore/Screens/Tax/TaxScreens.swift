@@ -24,9 +24,13 @@ public final class TaxScreens {
     @ObservationIgnored private var revision = UUID()
     @ObservationIgnored private var routeRevision = UUID()
     @ObservationIgnored private var isOpeningProfile = false
+    @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored private var advanceTask: Task<Void, Never>?
+    @ObservationIgnored private var liveYearAdvanced = false
 
-    public init(client: APIClient) {
+    public init(client: APIClient, now: @escaping @Sendable () -> Date = { Date() }) {
         self.client = client
+        self.now = now
         let overview = TaxOverviewModel(service: client)
         let dashboard = TaxDashboardModel(service: client)
         self.overview = overview
@@ -50,11 +54,45 @@ public final class TaxScreens {
         deductions.invalidate()
     }
 
+    /// The live household is the current income year (BelgianTaxProfileProvider): once per
+    /// session, a new calendar year archives the previous one and saves the advanced live
+    /// household. Concurrent callers share one attempt; a failure is retried on the next call.
+    public func advanceLiveYearIfNeeded() async {
+        if liveYearAdvanced { return }
+        if let advanceTask {
+            await advanceTask.value
+            return
+        }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let source = try await client.taxOverview(year: nil)
+                let year = Calendar.current.component(.year, from: now())
+                if let patch = try TaxYearMutation.advanceLiveYear(overview: source, to: year, at: now()) {
+                    try await client.saveTaxSettings(patch)
+                    // Retire reads of the old live year without cancelling a pending route load.
+                    revision = UUID()
+                    overview.invalidate()
+                    widgets.invalidate()
+                    deductions.invalidate()
+                }
+                liveYearAdvanced = true
+            } catch {
+                // Pages still load the stored live year; the next tax page visit retries.
+            }
+        }
+        advanceTask = task
+        await task.value
+        advanceTask = nil
+    }
+
     /// Adopt and mirror the URL after the live household and stored snapshot years are known.
     public func loadRoute(route: NativeRoute, currency: CurrencyCode, force: Bool = false) async -> NativeRoute? {
         let token = UUID()
         routeRevision = token
         routeLoadError = nil
+        await advanceLiveYearIfNeeded()
+        guard token == routeRevision, !Task.isCancelled else { return nil }
         let fallbackYear = overview.overview?.year
         // Retire the prior route's reads before waiting for the live-year authority request.
         // That probe may fail, and an older historical response must still remain obsolete.

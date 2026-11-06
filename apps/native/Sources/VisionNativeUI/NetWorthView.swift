@@ -323,12 +323,12 @@ public struct NetWorthView: View {
             }
             InsightTimelineChart(
                 series: series, currency: currency, settings: settings, title: strings.t("networth.overTime"),
-                areas: true, stackedAreas: false, height: 380,
+                areas: true, stackedAreas: false, rangeComparison: true, height: 380,
                 customColors: [
                     "netWorth": theme.primary, "liquid": Color(token: theme.palette.chart2),
                     "investments": Color(token: theme.palette.chart4), "liabilities": theme.loss,
                 ],
-                areaSeries: ["netWorth"], rangePercent: true,
+                areaSeries: ["netWorth"], primary: "netWorth",
                 formatPeriod: { VisionFormat.appDate($0, format: settings.dateFormat) }, formatTick: tick,
                 legend: .bottomLeading, legendOrder: ["netWorth", "liquid", "investments", "liabilities"],
                 yAxis: .full,
