@@ -216,6 +216,11 @@ private struct ResearchWatchlistPriceChart: View {
                 }
                 .frame(height: 320).focusable().focused($focused).focusEffectDisabled()
                 .accessibilityLabel(shell.strings.t("watchlist.openChart") + ": " + item.name)
+                .chartAccessibilitySummary { strings in
+                    ChartAccessibility.series(
+                        strings, kind: .area, categoryCount: points.count,
+                        seriesLabels: [strings.t("watchlistChart.priceLabel")])
+                }
                 .onKeyPress(phases: .down) { press in
                     // A range claims Escape ahead of the dialog, so the next Escape closes it.
                     if press.key == .escape, !scrub.scrubbing {

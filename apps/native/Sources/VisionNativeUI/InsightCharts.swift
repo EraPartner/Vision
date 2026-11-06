@@ -337,9 +337,14 @@ struct InsightTimelineChart: View {
             }
             .accessibilityLabel(title)
             .chartAccessibilitySummary { strings in
-                ChartAccessibility.series(
-                    strings, kind: stackedBars ? .stackedBar : bars ? .bar : areas ? .area : .line,
-                    categoryCount: keys.count, seriesLabels: series.map(\.label))
+                // A sparkline is the web `Sparkline`, which speaks its point count and value range.
+                sparkline
+                    ? ChartAccessibility.sparkline(
+                        strings,
+                        values: series.first?.points.map { NSDecimalNumber(decimal: $0.value).doubleValue } ?? [])
+                    : ChartAccessibility.series(
+                        strings, kind: stackedBars ? .stackedBar : bars ? .bar : areas ? .area : .line,
+                        categoryCount: keys.count, seriesLabels: series.map(\.label))
             }
             if placement == .bottomLeading { ChartLegendRow(items: legendItems) }
             if placement == .bottomCenter { ChartLegendRow(items: legendItems, centered: true) }

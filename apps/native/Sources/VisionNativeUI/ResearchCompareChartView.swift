@@ -100,6 +100,10 @@ struct ResearchCompareChartView: View {
             .onChange(of: data.raw) { _, _ in selected = nil }
             .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
             .accessibilityLabel(shell.strings.t("research.compare.rebased"))
+            .chartAccessibilitySummary { strings in
+                ChartAccessibility.series(
+                    strings, kind: .line, categoryCount: data.rows.count, seriesLabels: data.symbols)
+            }
             if scrub.range == nil, let selected, data.rows.indices.contains(selected) {
                 VStack(alignment: .leading, spacing: 5) {
                     let row = data.rows[selected]

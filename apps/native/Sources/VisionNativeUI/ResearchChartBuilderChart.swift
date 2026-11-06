@@ -166,6 +166,12 @@ struct ResearchChartBuilderChart: View {
                 .onChange(of: geometryNow.timeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
                 .accessibilityLabel(
                     shell.strings.t(oscillator == nil ? "research.builder.chartHelp" : "research.builder.oscillator"))
+                // The web draws the price as a `ComposedChart` and the oscillator as a `LineChart`.
+                .chartAccessibilitySummary { strings in
+                    ChartAccessibility.series(
+                        strings, kind: oscillator == nil ? .composed : .line, categoryCount: rows.count,
+                        seriesLabels: marks.map(\.label))
+                }
             if scrub.range == nil, let selected, rows.indices.contains(selected) { tooltip(rows[selected]) }
         }
     }

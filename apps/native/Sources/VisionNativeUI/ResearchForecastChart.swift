@@ -144,6 +144,10 @@ struct ResearchForecastChart: View {
                 }
                 .onChange(of: focused) { _, focused in if !focused { scrub.clear() } }
                 .accessibilityLabel(shell.strings.t("research.forecast.chartTitle"))
+                .chartAccessibilitySummary { strings in
+                    ChartAccessibility.series(
+                        strings, kind: .line, categoryCount: points.count, seriesLabels: series.map(label))
+                }
                 if scrub.range == nil, let index = selected, points.indices.contains(index) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(fullDate(points[index].date)).font(.caption.weight(.semibold))
