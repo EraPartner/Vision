@@ -1,14 +1,24 @@
 import Foundation
 import UniformTypeIdentifiers
 
+/// A bank-import batch as the review route, the import stream and the preview name it: a
+/// number. The batch endpoints and Import history carry the same BIGINT as text
+/// (`ImportBatchID`), so the two wire shapes are two types, as for portfolio imports.
+public enum ImportBatchNumericIDTag: IdentifierTag {}
+public typealias ImportBatchNumericID = IntIdentifier<ImportBatchNumericIDTag>
+
 extension StringIdentifier where Tag == ImportBatchIDTag {
     /// The batch a numeric route or stream event names; the API carries BIGINT ids as text.
     public init(numeric id: Int) {
         self.init(String(id))
     }
 
+    public init(numeric id: ImportBatchNumericID) {
+        self.init(String(id.rawValue))
+    }
+
     /// The batch id as a number, `nil` when it is not one.
-    public var numericValue: Int? { Int(rawValue) }
+    public var numericValue: ImportBatchNumericID? { Int(rawValue).map(ImportBatchNumericID.init(rawValue:)) }
 }
 
 /// The routes of the Import & export page and the Review import page.
@@ -19,20 +29,20 @@ public enum ImportRoutes {
     public static let reviewIsNative = true
 
     /// `/import/{batchId}/review`.
-    public static func reviewPath(_ batchId: Int) -> String {
+    public static func reviewPath(_ batchId: ImportBatchNumericID) -> String {
         "\(path)/\(batchId)/review"
     }
 
     /// The batch of a review path: a positive whole number, the only ids the preview query
     /// runs for (`Number(batchId)` must be finite); anything else is not a review route.
-    public static func reviewBatchId(forPath path: String) -> Int? {
+    public static func reviewBatchId(forPath path: String) -> ImportBatchNumericID? {
         let parts = path.split(separator: "/", omittingEmptySubsequences: false)
         guard parts.count == 4, parts[0].isEmpty, parts[1] == "import", parts[3] == "review" else { return nil }
         let raw = parts[2]
         guard !raw.isEmpty, raw.allSatisfy({ $0.isASCII && $0.isNumber }), let id = Int(raw), id > 0 else {
             return nil
         }
-        return id
+        return ImportBatchNumericID(rawValue: id)
     }
 }
 
@@ -371,9 +381,11 @@ public struct ImportCompletion: Equatable, Sendable {
     public let imported: Int
     public let duplicates: Int
     public let errors: Int
-    public let batchId: Int?
+    public let batchId: ImportBatchNumericID?
 
-    public init(total: Int, imported: Int, duplicates: Int, errors: Int, batchId: Int? = nil) {
+    public init(
+        total: Int, imported: Int, duplicates: Int, errors: Int, batchId: ImportBatchNumericID? = nil
+    ) {
         self.total = total
         self.imported = imported
         self.duplicates = duplicates
@@ -385,7 +397,7 @@ public struct ImportCompletion: Equatable, Sendable {
 /// How an import ended: committed, or parked for review (HTTP 202 / `review_required`).
 public enum ImportOutcome: Equatable, Sendable {
     case completed(ImportCompletion)
-    case reviewRequired(batchId: Int)
+    case reviewRequired(batchId: ImportBatchNumericID)
 }
 
 /// The stream's `error` event (`extractErrorDetail`): its `detail`, or "Import failed".
@@ -463,7 +475,7 @@ extension OpenAPI.ImportBatch {
     }
 
     /// The batch id as a number (BIGINT arrives as a string).
-    public var numericId: Int? { id.numericValue }
+    public var numericId: ImportBatchNumericID? { id.numericValue }
 
     /// Resume review: only a parked batch.
     public var canResumeReview: Bool { status == .awaitingReview }

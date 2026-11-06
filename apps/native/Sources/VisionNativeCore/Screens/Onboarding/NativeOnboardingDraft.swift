@@ -25,9 +25,9 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
         }
     }
     public struct Review: Codable, Equatable, Sendable {
-        public var batchId: Int
+        public var batchId: ImportBatchNumericID
         public var rows: Int
-        public init(batchId: Int, rows: Int) {
+        public init(batchId: ImportBatchNumericID, rows: Int) {
             self.batchId = batchId
             self.rows = rows
         }

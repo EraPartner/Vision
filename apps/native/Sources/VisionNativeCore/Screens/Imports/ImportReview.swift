@@ -7,9 +7,9 @@ public protocol ImportReviewService: Sendable {
     /// `getImportPreview(batchId)`.
     func importPreview(batchId: ImportBatchID) async throws -> ImportPreview
     /// `overrideImportRow(batchId, rowId, recipientId)`; `nil` clears the override.
-    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws
+    func overrideImportRow(batchId: ImportBatchID, rowId: ImportStagingRowID, recipientId: RecipientID?) async throws
     /// `overrideImportRowCategory(batchId, rowId, categoryId)`; `nil` clears the override.
-    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: ImportStagingRowID, categoryId: CategoryID?) async throws
     /// `updateRecipient(recipientId, { default_category_id })`.
     func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws
     /// `commitImportBatch(batchId)`.
@@ -26,11 +26,11 @@ extension APIClient: ImportReviewService {
         try await send(ImportPreviewRequest(batchId: batchId))
     }
 
-    public func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {
+    public func overrideImportRow(batchId: ImportBatchID, rowId: ImportStagingRowID, recipientId: RecipientID?) async throws {
         _ = try await send(ImportRowOverrideRequest(batchId: batchId, rowId: rowId, recipientId: recipientId))
     }
 
-    public func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {
+    public func overrideImportRowCategory(batchId: ImportBatchID, rowId: ImportStagingRowID, categoryId: CategoryID?) async throws {
         _ = try await send(ImportRowCategoryOverrideRequest(batchId: batchId, rowId: rowId, categoryId: categoryId))
     }
 
@@ -55,10 +55,15 @@ extension APIClient: ImportReviewService {
 
 // MARK: - Wire types
 
+/// A staged import row as the preview and the override paths carry it: BIGSERIAL as text
+/// (the generated `ImportRowID` is the numeric shape other payloads use).
+public enum ImportStagingRowIDTag: IdentifierTag {}
+public typealias ImportStagingRowID = StringIdentifier<ImportStagingRowIDTag>
+
 /// One staged row of the preview (`ImportStagingRowSchema`): the BIGSERIAL id and the
 /// NUMERIC amount arrive as text.
 public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
-    public let id: String
+    public let id: ImportStagingRowID
     public let rowIndex: Int
     public let recipientRaw: String?
     /// The amount as the backend writes it (`"-4.50"`).
@@ -79,7 +84,7 @@ public struct ImportStagingRow: Decodable, Equatable, Sendable, Identifiable {
     public let alreadyImported: Bool?
 
     public init(
-        id: String, rowIndex: Int = 0, recipientRaw: String? = nil, amount: String? = nil,
+        id: ImportStagingRowID, rowIndex: Int = 0, recipientRaw: String? = nil, amount: String? = nil,
         currency: CurrencyCode? = nil, txDate: String? = nil, memo: String? = nil, bankAccount: String? = nil,
         matchSource: String? = nil, matchSimilarity: Double? = nil, matchedPatternId: RecipientPatternID? = nil,
         userOverrideRecipientId: RecipientID? = nil, overrideCategoryId: CategoryID? = nil,
@@ -205,14 +210,14 @@ public struct ImportPreviewGroup: Decodable, Equatable, Sendable {
 /// `GET /api/import/batches/:id/preview` (`ImportPreviewSchema`).
 public struct ImportPreview: Decodable, Equatable, Sendable {
     /// The batch as the preview answers it (a number).
-    public let batchId: Int
+    public let batchId: ImportBatchNumericID
     public let groups: [ImportPreviewGroup]
     /// Rows per match kind (`exact`, `fuzzy`, `pattern`, `new`, `unresolved`).
     public let totals: [String: Int]
     /// Rows commit settles as duplicates (`already_imported`); absent on older servers.
     public let alreadyImported: Int?
 
-    public init(batchId: Int, groups: [ImportPreviewGroup], totals: [String: Int], alreadyImported: Int? = nil) {
+    public init(batchId: ImportBatchNumericID, groups: [ImportPreviewGroup], totals: [String: Int], alreadyImported: Int? = nil) {
         self.batchId = batchId
         self.groups = groups
         self.totals = totals
@@ -326,17 +331,17 @@ public struct ImportRowOverrideRequest: APIOperation {
     public static let pathTemplate = "/api/import/batches/{id}/rows/{rowId}/override"
 
     public let batchId: ImportBatchID
-    public let rowId: String
+    public let rowId: ImportStagingRowID
     public let recipientId: RecipientID?
 
-    public init(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) {
+    public init(batchId: ImportBatchID, rowId: ImportStagingRowID, recipientId: RecipientID?) {
         self.batchId = batchId
         self.rowId = rowId
         self.recipientId = recipientId
     }
 
     public var path: String {
-        "/api/import/batches/\(APIPath.segment(batchId.rawValue))/rows/\(APIPath.segment(rowId))/override"
+        "/api/import/batches/\(APIPath.segment(batchId.rawValue))/rows/\(APIPath.segment(rowId.rawValue))/override"
     }
 
     public func encodedBody() throws -> Data? {
@@ -353,17 +358,17 @@ public struct ImportRowCategoryOverrideRequest: APIOperation {
     public static let pathTemplate = "/api/import/batches/{id}/rows/{rowId}/category-override"
 
     public let batchId: ImportBatchID
-    public let rowId: String
+    public let rowId: ImportStagingRowID
     public let categoryId: CategoryID?
 
-    public init(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) {
+    public init(batchId: ImportBatchID, rowId: ImportStagingRowID, categoryId: CategoryID?) {
         self.batchId = batchId
         self.rowId = rowId
         self.categoryId = categoryId
     }
 
     public var path: String {
-        "/api/import/batches/\(APIPath.segment(batchId.rawValue))/rows/\(APIPath.segment(rowId))/category-override"
+        "/api/import/batches/\(APIPath.segment(batchId.rawValue))/rows/\(APIPath.segment(rowId.rawValue))/category-override"
     }
 
     public func encodedBody() throws -> Data? {
@@ -531,7 +536,7 @@ public final class ImportReviewModel {
 
     /// The page showed for a batch: the preview, the accounts and the picker lists load.
     /// Another batch starts from a clean page.
-    public func appear(batchId rawBatchId: Int) async {
+    public func appear(batchId rawBatchId: ImportBatchNumericID) async {
         let batchId = ImportBatchID(numeric: rawBatchId)
         if self.batchId != batchId {
             self.batchId = batchId
@@ -652,7 +657,9 @@ public final class ImportReviewModel {
 
     /// `updateRows`: every row's override settles, the persisted preview is read again, then
     /// the first failure is reported.
-    private func updateRows(_ rowIds: [String], _ write: @escaping @Sendable (String) async throws -> Void) async throws {
+    private func updateRows(
+        _ rowIds: [ImportStagingRowID], _ write: @escaping @Sendable (ImportStagingRowID) async throws -> Void
+    ) async throws {
         var failure: (any Error)?
         await withTaskGroup(of: (any Error)?.self) { tasks in
             for rowId in rowIds {
@@ -725,7 +732,7 @@ public final class ImportReviewModel {
         let service = service
         let rowIds = group.rows.map(\.id)
         do {
-            try await edit("recipient:" + rowIds.joined(separator: ",")) { [weak self] in
+            try await edit("recipient:" + rowIds.map(\.rawValue).joined(separator: ",")) { [weak self] in
                 try await self?.updateRows(rowIds) {
                     try await service.overrideImportRow(batchId: batchId, rowId: $0, recipientId: recipientId)
                 }
@@ -755,7 +762,7 @@ public final class ImportReviewModel {
         let service = service
         let rowIds = group.rows.map(\.id)
         do {
-            try await edit("category:" + rowIds.joined(separator: ",")) { [weak self] in
+            try await edit("category:" + rowIds.map(\.rawValue).joined(separator: ",")) { [weak self] in
                 try await self?.updateRows(rowIds) {
                     try await service.overrideImportRowCategory(batchId: batchId, rowId: $0, categoryId: categoryId)
                 }

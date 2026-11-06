@@ -81,7 +81,7 @@ struct NativeNavigationParameterTests {
             let imported = try #require(NativeNavigationLocation("/import/\(value)/review?flag"))
             let portfolio = try #require(NativeNavigationLocation("/portfolio/import/\(value)/review?flag"))
             #expect(account.match?.screen == .accountDetail(id: AccountID(rawValue: expected)))
-            #expect(imported.match?.screen == .importReview(batchId: expected))
+            #expect(imported.match?.screen == .importReview(batchId: ImportBatchNumericID(rawValue: expected)))
             #expect(imported.match?.supportedBatchId == expected)
             #expect(portfolio.match?.supportedBatchId == expected)
             #expect(account.raw == "/accounts/\(value)?q=a+b&flag")
@@ -94,7 +94,7 @@ struct NativeNavigationParameterTests {
         for (value, expected) in [("2147483648", 2_147_483_648), ("9007199254740991.1", 9_007_199_254_740_991)] {
             #expect(try #require(NativeNavigationLocation("/accounts/\(value)")).match?.screen == .accountDetail(id: 0))
             let imported = try #require(NativeNavigationLocation("/import/\(value)/review"))
-            #expect(imported.match?.screen == .importReview(batchId: expected))
+            #expect(imported.match?.screen == .importReview(batchId: ImportBatchNumericID(rawValue: expected)))
             #expect(imported.match?.supportedBatchId == expected)
             #expect(try #require(NativeNavigationLocation("/portfolio/import/\(value)/review"))
                 .match?.supportedBatchId == expected)

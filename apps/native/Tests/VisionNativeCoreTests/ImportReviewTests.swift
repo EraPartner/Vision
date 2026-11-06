@@ -90,12 +90,12 @@ actor FakeImportReviewService: ImportReviewService {
         return answer
     }
 
-    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {
+    func overrideImportRow(batchId: ImportBatchID, rowId: ImportStagingRowID, recipientId: RecipientID?) async throws {
         recipientOverrides.append("\(rowId):\(recipientId.map { String($0.rawValue) } ?? "null")")
-        if overrideFailsFor == rowId { throw APIError.network("offline") }
+        if overrideFailsFor == rowId.rawValue { throw APIError.network("offline") }
     }
 
-    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: ImportStagingRowID, categoryId: CategoryID?) async throws {
         categoryOverrides.append("\(rowId):\(categoryId.map { String($0.rawValue) } ?? "null")")
         if categoryFails { throw APIError.network("offline") }
     }
@@ -125,7 +125,7 @@ enum ReviewFixture {
         similarity: Double? = nil
     ) -> ImportStagingRow {
         ImportStagingRow(
-            id: id, recipientRaw: payee, amount: amount, currency: .eur, txDate: date, memo: "memo \(id)",
+            id: ImportStagingRowID(id), recipientRaw: payee, amount: amount, currency: .eur, txDate: date, memo: "memo \(id)",
             bankAccount: account, matchSource: source, matchSimilarity: similarity)
     }
 

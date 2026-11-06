@@ -165,7 +165,7 @@ public enum ImportStreamEvents {
         let imported: Int
         let duplicates: Int
         let errors: Int
-        let batchId: Int?
+        let batchId: ImportBatchNumericID?
         let requiresReview: Bool?
 
         enum CodingKeys: String, CodingKey {
@@ -178,7 +178,7 @@ public enum ImportStreamEvents {
 
     /// `reviewRequiredSchema`: only `batch_id` is read.
     struct ReviewRequiredEvent: Decodable {
-        let batchId: Int
+        let batchId: ImportBatchNumericID
 
         enum CodingKeys: String, CodingKey {
             case batchId = "batch_id"
@@ -237,7 +237,7 @@ public struct ImportCsvResponse: Decodable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.requiresReview) {
             _ = try container.decode(Bool.self, forKey: .requiresReview)
-            outcome = .reviewRequired(batchId: try container.decode(Int.self, forKey: .batchId))
+            outcome = .reviewRequired(batchId: try container.decode(ImportBatchNumericID.self, forKey: .batchId))
             return
         }
         outcome = .completed(
@@ -246,6 +246,6 @@ public struct ImportCsvResponse: Decodable, Equatable, Sendable {
                 imported: try container.decode(Int.self, forKey: .imported),
                 duplicates: try container.decode(Int.self, forKey: .duplicates),
                 errors: try container.decode(Int.self, forKey: .errors),
-                batchId: try container.decodeIfPresent(Int.self, forKey: .batchId)))
+                batchId: try container.decodeIfPresent(ImportBatchNumericID.self, forKey: .batchId)))
     }
 }

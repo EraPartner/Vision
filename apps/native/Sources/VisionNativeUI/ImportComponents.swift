@@ -464,7 +464,7 @@ struct FlowLayout: Layout {
 struct ImportHistoryCard: View {
     let model: ImportsModel
     let strings: any Localizing
-    let resumeReview: (Int) -> Void
+    let resumeReview: (ImportBatchNumericID) -> Void
     @Environment(\.visionTheme) var theme
 
     var body: some View {

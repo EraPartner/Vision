@@ -10,11 +10,11 @@ public struct ImportReviewView: View {
 
     private let model: ImportReviewModel
     private let toasts: ImportNoticeCenter
-    private let batchId: Int
+    private let batchId: ImportBatchNumericID
     private let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
 
-    public init(model: ImportReviewModel, toasts: ImportNoticeCenter, batchId: Int, shell: NativeShellModel) {
+    public init(model: ImportReviewModel, toasts: ImportNoticeCenter, batchId: ImportBatchNumericID, shell: NativeShellModel) {
         self.model = model
         self.toasts = toasts
         self.batchId = batchId
