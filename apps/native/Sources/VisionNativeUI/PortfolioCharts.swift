@@ -239,3 +239,71 @@ struct PortfolioSeriesChart: View {
         return .handled
     }
 }
+
+struct PortfolioCard<Content: View, Accessory: View>: View {
+    let title: String
+    var description: String? = nil
+    /// `CardTitle` default (type-title-2) rather than `variant="sm"` (type-title-3).
+    var large = false
+    /// The trailing header control (the web `CardHeader` row's right side).
+    @ViewBuilder var accessory: () -> Accessory
+    @ViewBuilder var content: () -> Content
+    @Environment(\.visionTheme) private var theme
+
+    init(
+        title: String, description: String? = nil, large: Bool = false,
+        @ViewBuilder accessory: @escaping () -> Accessory, @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.description = description
+        self.large = large
+        self.accessory = accessory
+        self.content = content
+    }
+
+    var body: some View {
+        AdminCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(large ? .visionCardTitle : Font.visionTitle3)
+                            .accessibilityAddTraits(.isHeader)
+                        if let description { Text(description).foregroundStyle(theme.secondaryLabel) }
+                    }
+                    Spacer(minLength: 0)
+                    accessory()
+                }
+                content()
+            }
+        }
+    }
+}
+
+extension PortfolioCard where Accessory == EmptyView {
+    init(
+        title: String, description: String? = nil, large: Bool = false, @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(title: title, description: description, large: large, accessory: { EmptyView() }, content: content)
+    }
+}
+
+struct PortfolioInlineDisclosure: View {
+    let label: String
+    let explanation: String
+    @State private var open = false
+    var body: some View {
+        Button(label) { open = true }.buttonStyle(.plain).visionTooltip(explanation)
+            .accessibilityLabel(label == "ⓘ" ? explanation : label + ". " + explanation)
+            .popover(isPresented: $open) { Text(explanation).padding(16).frame(maxWidth: 320) }
+    }
+}
+
+enum PortfolioChartTicks {
+    /// The web `xTickPattern`: day ticks for 1M, 3M and 6M, month ticks for longer periods.
+    static func usesDayTicks(_ period: PortfolioPeriod) -> Bool {
+        switch period {
+        case .oneMonth, .threeMonths, .sixMonths: return true
+        case .oneYear, .threeYears, .all: return false
+        }
+    }
+}
