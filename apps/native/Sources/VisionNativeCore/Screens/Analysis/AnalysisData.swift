@@ -14,7 +14,7 @@ public struct AnalysisUnit: Codable, Equatable, Sendable {
     public let currency: String?
     public let currencyColumn: String?
     public let instrumentColumn: String?
-    public let instrumentId: String?
+    public let instrumentId: String?  // lint:allow raw-id analysis unit instrument key, an unbranded string in packages/types
     public let percentageBasis: String?
     public init(from decoder: any Decoder) throws {
         let raw = try TaxValue(from: decoder)
@@ -67,7 +67,7 @@ public struct AnalysisDataset: Decodable, Equatable, Sendable, Identifiable {
     public let joins: [Join]
     public struct Join: Decodable, Equatable, Sendable, Identifiable {
         public let id: String
-        public let datasetId: String
+        public let datasetId: String  // lint:allow raw-id analysis dataset catalog key (a fixed code), not a stored entity
         public let cardinality: String
         public let duplicationSafe: Bool
     }
@@ -78,10 +78,10 @@ public struct AnalysisCatalog: Decodable, Equatable, Sendable {
 }
 
 public struct AnalysisFilter: Codable, Equatable, Sendable {
-    public var fieldId: String
+    public var fieldId: String  // lint:allow raw-id analysis dataset field catalog key (a fixed code), not a stored entity
     public var `operator`: String
     public var value: TaxValue?
-    public init(fieldId: String, operator: String = "eq", value: TaxValue? = nil) {
+    public init(fieldId: String, operator: String = "eq", value: TaxValue? = nil) {  // lint:allow raw-id analysis dataset field catalog key (a fixed code), not a stored entity
         self.fieldId = fieldId
         self.operator = `operator`
         self.value = value
@@ -96,7 +96,7 @@ public struct AnalysisOrder: Codable, Equatable, Sendable {
     }
 }
 public struct AnalysisPlan: Codable, Equatable, Sendable {
-    public var datasetId: String
+    public var datasetId: String  // lint:allow raw-id analysis dataset catalog key (a fixed code), not a stored entity
     public var fields: [String]
     public var filters: [AnalysisFilter]
     public var groups: [String]
@@ -111,7 +111,7 @@ public struct AnalysisPlan: Codable, Equatable, Sendable {
     public var range: String?
     public var costBasisMethod: String?
     public init(
-        datasetId: String = "cash-flows", fields: [String] = [], filters: [AnalysisFilter] = [], groups: [String] = [],
+        datasetId: String = "cash-flows", fields: [String] = [], filters: [AnalysisFilter] = [], groups: [String] = [],  // lint:allow raw-id analysis dataset catalog key (a fixed code), not a stored entity
         measures: [String] = [], joins: [String] = [], orderBy: [AnalysisOrder] = [], limit: Int = 500
     ) {
         self.datasetId = datasetId
@@ -185,7 +185,7 @@ public struct AnalysisWindow: Codable, Equatable, Sendable {
 }
 public struct AnalysisResult: Codable, Equatable, Sendable {
     public let raw: TaxValue
-    public let requestId: String?
+    public let requestId: String?  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
     public let startedAt: String
     public let completedAt: String
     public let executor: String
@@ -285,7 +285,7 @@ public struct AnalysisExtensionOutput: Decodable, Equatable, Sendable {
 public struct AnalysisSaved: Decodable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
     public let id: SavedAnalysisID
-    public let definitionId: String
+    public let definitionId: String  // lint:allow raw-id analysis definition key, an unbranded string in packages/types
     public let name: String
     public let workspace: AnalysisWorkspace
     public let version: Int
@@ -373,7 +373,7 @@ public struct AnalysisExportContext: Codable, Equatable, Sendable {
     public var name: String
     public var timezone: String
     public var workspace: AnalysisWorkspace
-    public var definitionId: String?
+    public var definitionId: String?  // lint:allow raw-id analysis definition key, an unbranded string in packages/types
     public var definitionVersion: Int?
     public var datasetIds: [String]
     public var sourceReferences: [String]

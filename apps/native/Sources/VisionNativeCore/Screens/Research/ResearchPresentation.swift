@@ -226,7 +226,7 @@ public enum ResearchPresentation {
         var id: String
         var type: String
         var period: Int
-        var seriesId: String
+        var seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     }
 
     private static func chart(_ root: Reader) throws -> TaxValue {
@@ -267,7 +267,7 @@ public enum ResearchPresentation {
 
     static func chartPresentation(
         series: [ChartSeries], indicators: [ChartIndicator], rebase: Bool, oscillator: String,
-        oscillatorSeriesId: String?
+        oscillatorSeriesId: String?  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     ) -> TaxValue {
         var pointsBySeries: [String: [PresentationPoint]] = [:]
         for entry in series { pointsBySeries[entry.id] = entry.points }
@@ -347,7 +347,7 @@ public enum ResearchPresentation {
         ])
     }
 
-    static func chartOscillatorPresentation(_ series: [ChartSeries], oscillator: String, oscillatorSeriesId: String?)
+    static func chartOscillatorPresentation(_ series: [ChartSeries], oscillator: String, oscillatorSeriesId: String?)  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         -> [TaxValue]
     {
         let sourceID = oscillatorSeriesId ?? series.first?.id

@@ -9,7 +9,7 @@ public struct NativeNavigationLocation: Equatable, Sendable {
 
         /// The supported preview identifier used by native import consumers. The
         /// original matched parameter remains available for the staged error context.
-        public var supportedBatchId: Int? {
+        public var supportedBatchId: Int? {  // lint:allow raw-id route batch number shared by the bank and portfolio import reviews
             parameters["batchId"].flatMap {
                 NativeNavigationIdentifier($0).positiveInteger(upTo: 9_007_199_254_740_991)
             }

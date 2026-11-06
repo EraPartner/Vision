@@ -111,17 +111,17 @@ public final class SplitDialogModel {
         splitType = type
     }
 
-    public func setRecipient(_ entryId: Int, to recipientId: RecipientID?) {
+    public func setRecipient(_ entryId: Int, to recipientId: RecipientID?) {  // lint:allow raw-id local key of an unsaved split entry, not a stored entity
         guard let index = entries.firstIndex(where: { $0.id == entryId }) else { return }
         entries[index].recipientId = recipientId
     }
 
-    public func setAmount(_ entryId: Int, to text: String) {
+    public func setAmount(_ entryId: Int, to text: String) {  // lint:allow raw-id local key of an unsaved split entry, not a stored entity
         guard let index = entries.firstIndex(where: { $0.id == entryId }) else { return }
         entries[index].amount = text
     }
 
-    public func setNote(_ entryId: Int, to text: String) {
+    public func setNote(_ entryId: Int, to text: String) {  // lint:allow raw-id local key of an unsaved split entry, not a stored entity
         guard let index = entries.firstIndex(where: { $0.id == entryId }) else { return }
         entries[index].note = text
     }
@@ -133,7 +133,7 @@ public final class SplitDialogModel {
     }
 
     /// Remove entry, shown with two or more cards.
-    public func removeEntry(_ entryId: Int) {
+    public func removeEntry(_ entryId: Int) {  // lint:allow raw-id local key of an unsaved split entry, not a stored entity
         guard entries.count > 1 else { return }
         entries.removeAll { $0.id == entryId }
     }
@@ -169,7 +169,7 @@ public final class SplitDialogModel {
     }
 
     /// The share Others pay all gives a card, while it has a person.
-    public func fullShare(for entryId: Int) -> Decimal? {
+    public func fullShare(for entryId: Int) -> Decimal? {  // lint:allow raw-id local key of an unsaved split entry, not a stored entity
         guard splitType == .full, let index = validEntries.firstIndex(where: { $0.id == entryId }) else { return nil }
         let shares = fullShares
         return index < shares.count ? shares[index] : 0

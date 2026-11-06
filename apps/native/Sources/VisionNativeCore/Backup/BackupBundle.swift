@@ -81,7 +81,7 @@ public enum BackupBundle {
         return String(underscored.prefix(19))
     }
 
-    public static func fileName(deviceId: String, date: Date) -> String {
+    public static func fileName(deviceId: String, date: Date) -> String {  // lint:allow raw-id backup device identifier, not an API entity
         "vision_backup_\(deviceId)_\(fileTimestamp(date)).visionbak"
     }
 
@@ -97,7 +97,7 @@ public enum BackupBundle {
 
     /// `JSON.stringify(metadata, null, 2)` with Electron's field order.
     public static func metadataJSON(
-        database: BundleDatabaseInfo, appVersion: String, deviceId: String, createdAt: String
+        database: BundleDatabaseInfo, appVersion: String, deviceId: String, createdAt: String  // lint:allow raw-id backup device identifier, not an API entity
     ) -> String {
         """
         {
@@ -131,7 +131,7 @@ public enum BackupBundle {
     /// so an interrupted backup never leaves a truncated file at the restorable name.
     public static func create(
         destinationDirectory: String,
-        deviceId: String,
+        deviceId: String,  // lint:allow raw-id backup device identifier, not an API entity
         appVersion: String?,
         databasePath: String,
         database: BundleDatabaseInfo,

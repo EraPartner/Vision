@@ -4,7 +4,7 @@ import Foundation
 public struct RuntimeNames: Sendable, Equatable {
     public let id: String
 
-    public init(runtimeId: String) throws {
+    public init(runtimeId: String) throws {  // lint:allow raw-id runtime directory name of the app variant, not an API entity
         id = try RuntimeNames.normalize(runtimeId)
     }
 

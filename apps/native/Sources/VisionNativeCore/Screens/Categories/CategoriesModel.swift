@@ -113,7 +113,7 @@ public final class CategoriesModel {
     public internal(set) var isTogglingStatus = false
     public internal(set) var notice: ScreenNotice?
     /// The Undo of the status toast: the notice it belongs to, the node and the status Undo restores.
-    @ObservationIgnored private(set) var pendingUndo: (noticeID: Int, node: OpenAPI.CategoryNode, restore: Bool)?
+    @ObservationIgnored private(set) var pendingUndo: (noticeID: Int, node: OpenAPI.CategoryNode, restore: Bool)?  // lint:allow raw-id local notice counter, not an API entity
 
     @ObservationIgnored let service: any CategoriesService
     @ObservationIgnored weak var shell: NativeShellModel?

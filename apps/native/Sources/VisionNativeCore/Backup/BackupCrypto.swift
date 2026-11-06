@@ -232,7 +232,7 @@ public enum BackupRetention {
     /// beyond the grace window; removes `*.partial` leftovers beyond the window too.
     @discardableResult
     public static func cleanup(
-        directory: String, deviceId: String, now: Date, keep: Int = BackupRetention.keep,
+        directory: String, deviceId: String, now: Date, keep: Int = BackupRetention.keep,  // lint:allow raw-id backup device identifier, not an API entity
         graceMilliseconds: Int = BackupRetention.graceMilliseconds
     ) -> Int {
         let prefix = "vision_backup_\(deviceId)_"

@@ -4,7 +4,7 @@ import VisionNativeCore
 struct AIInvestigationAnswerView: View {
     let answer: AIAnswer
     let shell: NativeShellModel
-    @State private var selectedEvidenceID: String?
+    @State private var selectedEvidenceID: String?  // lint:allow raw-id view selection key, not an API entity
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var selectedEvidence: AIEvidence? {

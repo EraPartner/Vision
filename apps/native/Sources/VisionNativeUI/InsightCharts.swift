@@ -496,7 +496,7 @@ struct HomeCategoryChart: View {
     let strings: any Localizing
     let navigate: (String) -> Void
     @State private var selectedCount: Int?
-    @State private var selectedId: String?
+    @State private var selectedId: String?  // lint:allow raw-id view selection key of chart series, not an API entity
     @Environment(\.visionTheme) private var theme
 
     private var selected: HomeCategorySlice? { slices.first { $0.id == selectedId } }

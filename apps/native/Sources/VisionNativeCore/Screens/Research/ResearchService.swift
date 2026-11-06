@@ -29,7 +29,7 @@ public protocol ResearchService: Sendable {
 }
 public struct ResearchRequest<Operation: APIOperation, Value: Decodable & Sendable>: APIOperation {
     public typealias Response = Value
-    public static var operationId: String { Operation.operationId }
+    public static var operationId: String { Operation.operationId }  // lint:allow raw-id OpenAPI operation name, not an entity id
     public static var method: HTTPMethod { Operation.method }
     public static var pathTemplate: String { Operation.pathTemplate }
     public let path: String

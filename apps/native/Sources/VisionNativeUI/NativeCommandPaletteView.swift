@@ -6,7 +6,7 @@ import VisionNativeCore
 public struct NativeCommandPaletteView: View {
     let model: NativeCommandPaletteModel
     let shell: NativeShellModel
-    @State private var selectedID: String?
+    @State private var selectedID: String?  // lint:allow raw-id view selection key of mixed kinds, not an API entity
     @State private var selectionWasMoved = false
     @FocusState private var searchFocused: Bool
     /// The list's natural height, so the panel fits its content up to `CommandList`'s `max-h-[320px]`.

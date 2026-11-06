@@ -17,7 +17,7 @@ struct AnalysisResultCharts: View {
         let value = spec["kind"]?.stringValue ?? ""
         return ["bar", "line", "stacked-bar", "scatter", "waterfall"].contains(value) ? value : "bar"
     }
-    private var xID: String { spec["x"]?.stringValue ?? "" }
+    private var xID: String { spec["x"]?.stringValue ?? "" }  // lint:allow raw-id analysis chart column key, not an API entity
     private var yIDs: [String] {
         let values = spec["y"]?.arrayValue?.compactMap(\.stringValue) ?? spec["y"]?.stringValue.map { [$0] } ?? []
         return values.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }

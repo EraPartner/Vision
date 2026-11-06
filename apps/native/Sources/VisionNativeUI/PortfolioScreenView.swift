@@ -7,7 +7,7 @@ struct PortfolioScreenView: View {
     let shell: NativeShellModel
     var assetClass: String? = nil
     @State private var connectivity = PortfolioConnectivity()
-    private var guardId: String {
+    private var guardId: String {  // lint:allow raw-id leave-guard route key, not an API entity
         assetClass.map { NativeScreen.portfolioHoldings(assetClass: $0).path } ?? "/portfolio"
     }
     var body: some View {

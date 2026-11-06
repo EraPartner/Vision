@@ -266,7 +266,7 @@ public enum AnalysisInterchange {
         var name: String
         var timezone: String
         var workspace: String
-        var definitionId: String?
+        var definitionId: String?  // lint:allow raw-id analysis definition key, an unbranded string in packages/types
         var definitionVersion: Double?
         var datasetIds: [String]
         var sourceReferences: [String]

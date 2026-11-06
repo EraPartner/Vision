@@ -4,7 +4,7 @@ public struct ResearchMeta: Equatable, Sendable {
     public let raw: JSONValue?
     public let provider: String?
     public let source: String
-    public let requestId: String?
+    public let requestId: String?  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
     public init(raw: JSONValue? = nil) {
         self.raw = raw
         provider = raw?["provider"]?.stringValue
@@ -354,7 +354,7 @@ public struct ResearchWatchlistItem: Codable, Equatable, Sendable, Identifiable 
     public let addedPrice: Decimal?
     public let currency: CurrencyCode
     public let notes: String?
-    public let priceProviderId: String?
+    public let priceProviderId: String?  // lint:allow raw-id provider symbol, not a Vision entity (UNTYPED_IDS)
     public let createdAt: String
     public let updatedAt: String
 
