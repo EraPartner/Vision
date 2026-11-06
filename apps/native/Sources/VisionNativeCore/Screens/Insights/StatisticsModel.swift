@@ -9,7 +9,7 @@ public final class StatisticsModel {
     public private(set) var error: String?
     public private(set) var isFetching = false
     public private(set) var exclusions = InsightExclusions()
-    public private(set) var window: StatisticsWindow = .rolling24
+    public private(set) var window: StatisticsWindow = .all
     public private(set) var tab: StatisticsTab = .overview
     public var printLocalState = NativeStatisticsPrintLocalState()
     public var graphExclusions: [String: Bool] = [:]
@@ -85,7 +85,7 @@ public final class StatisticsModel {
     }
     func matchesPrintRoute(_ route: NativeRoute, currency: CurrencyCode) -> Bool {
         self.currency == currency
-            && window == (route.value("window") == "all" ? .all : .rolling24)
+            && window == StatisticsWindow(routeValue: route.value("window"))
             && tab == (StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview)
     }
     public var isLoading: Bool { filtered == nil && error == nil }
@@ -103,7 +103,7 @@ public final class StatisticsModel {
         InsightWidget.statistics.first { $0.id == id }.map { widgets.isVisible($0, page: "statistics") } ?? false
     }
     public func appear(settings: NativeAppSettings, route: NativeRoute, force: Bool = false) async {
-        let nextWindow: StatisticsWindow = route.value("window") == "all" ? .all : .rolling24
+        let nextWindow = StatisticsWindow(routeValue: route.value("window"))
         tab = StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview
         let nextDay = StatisticsWindow.day(now(), calendar: calendar)
         let changed = currency != LedgerCurrency.display(settings) || window != nextWindow || day != nextDay

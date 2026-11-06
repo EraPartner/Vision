@@ -918,8 +918,8 @@ Insights uses the native implementation below, and the shared report sheet is na
 
 ### Insights, saved charts, and the report handoff (phase 3g part B)
 
-`/statistics` draws `StatisticsView` with the six existing tab ids. `StatisticsModel` reads
-`?window=all` or the local first day 23 months ago through today, resolves the statistics exclusion
+`/statistics` draws `StatisticsView` with the six existing tab ids. `StatisticsModel` opens on All
+time (ADR-266) or, with `?window=24m`, the local first day 23 months ago through today; it resolves the statistics exclusion
 scope, and fetches monthly, category, payee, and payee-by-year aggregates in parallel. Tab changes
 reuse the snapshot. Each chart can independently use the filtered or unfiltered snapshot, while
 the payee details keep their server-filtered, alias-aware population. A changed currency, window,

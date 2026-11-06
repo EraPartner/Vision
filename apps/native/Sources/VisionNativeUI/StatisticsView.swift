@@ -79,7 +79,7 @@ public struct StatisticsView: View {
                         selection: Binding(
                             get: { model.window },
                             set: { value in
-                                shell.replaceQuery("window", with: value == .all ? "all" : nil)
+                                shell.replaceQuery("window", with: value.routeValue)
                             }),
                         options: [
                             VisionSegmentOption(
