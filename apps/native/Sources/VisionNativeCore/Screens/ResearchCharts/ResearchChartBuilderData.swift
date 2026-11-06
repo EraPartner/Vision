@@ -88,6 +88,12 @@ public enum ResearchChartField: String, CaseIterable, Sendable {
 public enum ResearchChartSeriesKind: String, CaseIterable, Sendable {
     case line, area, candlestick, bar
 }
+/// A chart indicator (`"sma" | "ema" | "bollinger"`).
+public enum ResearchChartIndicatorKind: String, CaseIterable, Sendable {
+    case sma, ema, bollinger
+    /// The short name the builder shows: Bollinger bands read as `BB`.
+    public var label: String { self == .bollinger ? "BB" : rawValue.uppercased() }
+}
 /// The value axis a series is drawn against (`"left" | "right"`).
 public enum ResearchChartAxis: String, CaseIterable, Sendable {
     case left, right
@@ -140,10 +146,10 @@ public struct ResearchChartBuilderSeries: Codable, Equatable, Sendable, Identifi
 }
 public struct ResearchChartBuilderIndicator: Codable, Equatable, Sendable, Identifiable {
     public var id: String
-    public var type: String
+    public var type: ResearchChartIndicatorKind
     public var period: Int
     public var seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
-    public init(id: String, type: String, period: Int, seriesId: String) {  // lint:allow raw-id macro data series code of the research provider, not a stored entity
+    public init(id: String, type: ResearchChartIndicatorKind, period: Int, seriesId: String) {  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         self.id = id
         self.type = type
         self.period = period
@@ -151,13 +157,13 @@ public struct ResearchChartBuilderIndicator: Codable, Equatable, Sendable, Ident
     }
     public var raw: TaxValue {
         .object([
-            "id": .string(id), "type": .string(type), "period": .number(Decimal(period)), "seriesId": .string(seriesId),
+            "id": .string(id), "type": .string(type.rawValue), "period": .number(Decimal(period)), "seriesId": .string(seriesId),
         ])
     }
     public init(raw: TaxValue) throws {
         try ResearchChartValidation.keys(raw, required: ["id", "type", "period", "seriesId"])
         id = try ResearchChartValidation.string(raw["id"], min: 1, max: 128)
-        type = try ResearchChartValidation.choice(raw["type"], ["sma", "ema", "bollinger"])
+        type = try ResearchChartValidation.option(raw["type"], ResearchChartIndicatorKind.self)
         period = try ResearchDecode.count(raw["period"])
         guard (1...500).contains(period) else { throw ResearchDecode.failure("Invalid chart indicator period") }
         seriesId = try ResearchChartValidation.string(raw["seriesId"], min: 1, max: 128)

@@ -226,10 +226,10 @@ public struct ResearchChartBuilderView: View {
         for (index, indicator) in model.state.indicators.enumerated() {
             let color = ResearchCompareStyle.color(model.state.series.count + index, palette: theme.palette)
             let label =
-                (indicator.type == "bollinger" ? "BB" : indicator.type.uppercased()) + "(" + String(indicator.period)
+                indicator.type.label + "(" + String(indicator.period)
                 + ")"
             marks.append(.init(id: indicator.id, label: label, kind: .line, axis: .left, color: color))
-            if indicator.type == "bollinger" {
+            if indicator.type == .bollinger {
                 marks.append(
                     .init(
                         id: indicator.id + "_u", label: label + " ↑", kind: .line, axis: .left, color: color,

@@ -332,21 +332,21 @@ struct TaxPITBreakdownView: View {
     }
 
     private var strings: any Localizing { shell.strings }
-    private var rows: [(String, Decimal?, String)] {
+    private var rows: [(String, Decimal?, TaxBreakdownTone)] {
         let c = overview.calculation
         return [
-            ("taxableIncome", c.taxableIncome, "base"),
-            ("bracket1", c.federalPITBracket1, "tax"), ("bracket2", c.federalPITBracket2, "tax"),
-            ("bracket3", c.federalPITBracket3, "tax"), ("bracket4", c.federalPITBracket4, "tax"),
-            ("federalBefore", c.federalPITBeforeExemption, "total"),
-            ("personalExemptionBenefit", c.personalExemptionBenefit, "reduction"),
-            ("federalTaxCredits", c.federalTaxCredits, "reduction"),
-            ("federalAfter", c.federalPITAfterReductions, "total"),
-            ("communalSurcharge", c.communalSurcharge, "tax"),
-            ("specialSS", c.specialSocialSecurityContribution, "tax"), ("totalPIT", c.totalPIT, "grand"),
-            ("portfolioTaxesYear", portfolioTaxes, "tax"), ("totalTaxInclPortfolio", totalIncludingPortfolio, "grand"),
-            ("propertyTaxEstimate", c.propertyTaxEstimate, "tax"),
-            ("totalWithPropertyEstimate", totalIncludingProperty, "grand"),
+            ("taxableIncome", c.taxableIncome, .base),
+            ("bracket1", c.federalPITBracket1, .tax), ("bracket2", c.federalPITBracket2, .tax),
+            ("bracket3", c.federalPITBracket3, .tax), ("bracket4", c.federalPITBracket4, .tax),
+            ("federalBefore", c.federalPITBeforeExemption, .total),
+            ("personalExemptionBenefit", c.personalExemptionBenefit, .reduction),
+            ("federalTaxCredits", c.federalTaxCredits, .reduction),
+            ("federalAfter", c.federalPITAfterReductions, .total),
+            ("communalSurcharge", c.communalSurcharge, .tax),
+            ("specialSS", c.specialSocialSecurityContribution, .tax), ("totalPIT", c.totalPIT, .grand),
+            ("portfolioTaxesYear", portfolioTaxes, .tax), ("totalTaxInclPortfolio", totalIncludingPortfolio, .grand),
+            ("propertyTaxEstimate", c.propertyTaxEstimate, .tax),
+            ("totalWithPropertyEstimate", totalIncludingProperty, .grand),
         ]
     }
     var body: some View {
@@ -372,9 +372,9 @@ struct TaxPITBreakdownView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             TaxMoneyRow(
                                 title: strings.t("tax.pit.row." + key, ["year": String(overview.year)]),
-                                amount: amount, shell: shell, signed: tone == "reduction",
-                                strong: tone == "grand" || tone == "total",
-                                tone: tone == "reduction" ? theme.gain : tone == "tax" ? theme.loss : nil)
+                                amount: amount, shell: shell, signed: tone == .reduction,
+                                strong: tone == .grand || tone == .total,
+                                tone: tone == .reduction ? theme.gain : tone == .tax ? theme.loss : nil)
                             if key.hasPrefix("bracket"), let index = key.last {
                                 VisionBadge(
                                     text: strings.t("tax.pit.bracketRange" + String(index)), tone: .outline, small: true
@@ -570,17 +570,17 @@ struct TaxHouseholdBreakdownView: View {
                 "to": TaxYearPresentation.partner(to.rawValue, overview: overview, strings: strings),
             ])
     }
-    private func amount(_ value: Decimal?, tone: String = "base") -> some View {
+    private func amount(_ value: Decimal?, tone: TaxBreakdownTone = .base) -> some View {
         Text(
             value.map {
                 MoneyText.text(
-                    tone == "reduction" ? -$0 : $0,
+                    tone == .reduction ? -$0 : $0,
                     currency: shell.settings.portfolioCurrency, settings: shell.settings,
-                    signed: tone == "reduction" || tone == "adjustment")
+                    signed: tone == .reduction || tone == .adjustment)
             } ?? "—"
         )
-        .monospacedDigit().foregroundStyle(tone == "reduction" ? theme.gain : theme.foreground)
-        .fontWeight(tone == "total" ? .semibold : .regular)
+        .monospacedDigit().foregroundStyle(tone == .reduction ? theme.gain : theme.foreground)
+        .fontWeight(tone == .total ? .semibold : .regular)
     }
 }
 
@@ -588,7 +588,7 @@ extension TaxPITBreakdownView {
     /// This is called only for the frozen, expanded print disclosure.
     @MainActor func printTable(width: CGFloat) -> NSView {
         let printedRows: [[NativeTaxPrintCell]] = rows.map { key, amount, tone in
-            let strong = tone == "grand" || tone == "total"
+            let strong = tone == .grand || tone == .total
             let detail =
                 key.hasPrefix("bracket") ? key.last.map { strings.t("tax.pit.bracketRange" + String($0)) } : nil
             let label = NativeTaxPrintCell(
@@ -597,10 +597,10 @@ extension TaxPITBreakdownView {
                 amount.map {
                     MoneyText.text(
                         $0, currency: shell.settings.portfolioCurrency, settings: shell.settings,
-                        signed: tone == "reduction")
+                        signed: tone == .reduction)
                 } ?? "—"
             let numeric = NativeTaxPrintCell(
-                text: value, strong: strong, tone: tone == "reduction" ? .gain : tone == "tax" ? .loss : .normal)
+                text: value, strong: strong, tone: tone == .reduction ? .gain : tone == .tax ? .loss : .normal)
             return [label, numeric]
         }
         return NativeTaxPrintTable.make(
@@ -655,14 +655,14 @@ extension TaxHouseholdBreakdownView {
             columns: columns, rows: printedRows, shell: shell, width: width, footer: footer)
     }
 
-    private func printAmount(_ value: Decimal?, tone: String = "base") -> NativeTaxPrintCell {
+    private func printAmount(_ value: Decimal?, tone: TaxBreakdownTone = .base) -> NativeTaxPrintCell {
         let text =
             value.map {
                 MoneyText.text(
-                    tone == "reduction" ? -$0 : $0, currency: shell.settings.portfolioCurrency,
-                    settings: shell.settings, signed: tone == "reduction" || tone == "adjustment")
+                    tone == .reduction ? -$0 : $0, currency: shell.settings.portfolioCurrency,
+                    settings: shell.settings, signed: tone == .reduction || tone == .adjustment)
             } ?? "—"
-        return .init(text: text, strong: tone == "total", tone: tone == "reduction" ? .gain : .normal)
+        return .init(text: text, strong: tone == .total, tone: tone == .reduction ? .gain : .normal)
     }
 }
 

@@ -218,13 +218,13 @@ public enum ResearchPresentation {
 
     struct ChartSeries {
         var id: String
-        var field: String
-        var type: String
+        var field: ResearchChartField
+        var type: ResearchChartSeriesKind
         var points: [PresentationPoint]
     }
     struct ChartIndicator {
         var id: String
-        var type: String
+        var type: ResearchChartIndicatorKind
         var period: Int
         var seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     }
@@ -232,10 +232,10 @@ public enum ResearchPresentation {
     private static func chart(_ root: Reader) throws -> TaxValue {
         let series = try root.required("series").array(max: 5).map { item -> ChartSeries in
             guard item.object != nil else { throw item.fail("must be an object") }
-            let field = try item.required("field").string()
-            guard ["price", "volume"].contains(field) else { throw item.field("field").fail("is not a series field") }
-            let type = try item.required("type").string()
-            guard ["line", "area", "candlestick", "bar"].contains(type) else {
+            guard let field = ResearchChartField(rawValue: try item.required("field").string()) else {
+                throw item.field("field").fail("is not a series field")
+            }
+            guard let type = ResearchChartSeriesKind(rawValue: try item.required("type").string()) else {
                 throw item.field("type").fail("is not a series type")
             }
             return ChartSeries(
@@ -244,8 +244,9 @@ public enum ResearchPresentation {
         }
         let indicators = try root.required("indicators").array(max: 20).map { item -> ChartIndicator in
             guard item.object != nil else { throw item.fail("must be an object") }
-            let type = try item.required("type").string()
-            guard ["sma", "ema", "bollinger"].contains(type) else { throw item.field("type").fail("is not an indicator") }
+            guard let type = ResearchChartIndicatorKind(rawValue: try item.required("type").string()) else {
+                throw item.field("type").fail("is not an indicator")
+            }
             return ChartIndicator(
                 id: try item.required("id").string(min: 1, max: 128), type: type,
                 period: try item.required("period").integer(min: 1, max: 500),
@@ -293,7 +294,7 @@ public enum ResearchPresentation {
             for entry in series {
                 let point = byTime[entry.id]?[time]
                 let f = factor[entry.id] ?? 1
-                if entry.field == "volume" {
+                if entry.field == .volume {
                     // `p ? p.volume : null`; an undefined volume leaves the property out.
                     if let point {
                         cells[entry.id] = point.volume.cell
@@ -313,7 +314,7 @@ public enum ResearchPresentation {
             }
             return (time, cells)
         }
-        for entry in series where entry.type == "candlestick" {
+        for entry in series where entry.type == .candlestick {
             var previous: Double?
             for index in rows.indices {
                 let close = rows[index].cells[entry.id]?.value
@@ -332,9 +333,9 @@ public enum ResearchPresentation {
                 for index in rows.indices { rows[index].cells[key] = lookup[rows[index].time] ?? RowCell.null }
             }
             switch indicator.type {
-            case "sma": assign(indicator.id, ResearchMath.sma(closes, indicator.period))
-            case "ema": assign(indicator.id, ResearchMath.ema(closes, indicator.period))
-            default:
+            case .sma: assign(indicator.id, ResearchMath.sma(closes, indicator.period))
+            case .ema: assign(indicator.id, ResearchMath.ema(closes, indicator.period))
+            case .bollinger:
                 let bands = ResearchMath.bollinger(closes, indicator.period, 2)
                 assign(indicator.id, bands.middle)
                 assign(indicator.id + "_u", bands.upper)

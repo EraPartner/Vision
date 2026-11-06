@@ -65,9 +65,22 @@ public struct TaxDashboardCurrentInputs: Decodable, Sendable {
     public let isDisabled: Bool
     public let isSpouseDisabled: Bool
 }
+/// How a tax breakdown row's amount reads. The household rows carry
+/// `"base" | "reduction" | "adjustment" | "total"`; the PIT table adds `tax` and `grand`. A value
+/// this client does not name decodes unchanged and reads like `base`.
+public struct TaxBreakdownTone: RawRepresentable, Hashable, Sendable, Codable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public static let base = Self(rawValue: "base")
+    public static let reduction = Self(rawValue: "reduction")
+    public static let adjustment = Self(rawValue: "adjustment")
+    public static let total = Self(rawValue: "total")
+    public static let tax = Self(rawValue: "tax")
+    public static let grand = Self(rawValue: "grand")
+}
 public struct TaxDashboardHouseholdRow: Decodable, Sendable, Identifiable {
     public let key: String
-    public let tone: String
+    public let tone: TaxBreakdownTone
     public let partnerAmounts: [String: Decimal]
     public let household: Decimal
     public var id: String { key }
