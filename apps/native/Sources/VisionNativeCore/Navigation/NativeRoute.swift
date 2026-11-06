@@ -145,7 +145,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     /// `/import`, Import & export (phase 3d).
     case importExport
     /// `/import/:batchId/review`, Review import (phase 3d part B; `ImportRoutes.reviewIsNative`).
-    case importReview(batchId: Int)
+    case importReview(batchId: ImportBatchNumericID)
     /// `/transactions` (phase 3e).
     case transactions
     /// `/owes`, Who owes you.

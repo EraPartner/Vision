@@ -190,7 +190,7 @@ public final class ImportsModel {
     /// finished after the user left `/import`, nothing navigates away from where they are: the
     /// card resets, Import history goes stale and a toast offers Resume review (the batch is
     /// also resumable from Import history).
-    private func requestReview(_ batchId: Int) {
+    private func requestReview(_ batchId: ImportBatchNumericID) {
         let path = ImportRoutes.reviewPath(batchId)
         guard isVisible else {
             resetCard(keepingProgress: false)

@@ -128,9 +128,9 @@ extension StaticImportService: ImportReviewService {
         return Self.preview
     }
 
-    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {}
+    func overrideImportRow(batchId: ImportBatchID, rowId: ImportStagingRowID, recipientId: RecipientID?) async throws {}
 
-    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {}
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: ImportStagingRowID, categoryId: CategoryID?) async throws {}
 
     func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {}
 
@@ -1456,7 +1456,7 @@ actor StaticAccountsService: AccountsService {
         #expect(layOutImports(loading).fittingSize.height > 0)
     }
 
-    func layOutReview(_ shell: NativeShellModel, batchId: Int = 13) -> NSHostingView<some View> {
+    func layOutReview(_ shell: NativeShellModel, batchId: ImportBatchNumericID = 13) -> NSHostingView<some View> {
         layOut(
             ImportReviewView(model: shell.imports.review, toasts: shell.imports.toasts, batchId: batchId, shell: shell)
                 .environment(\.visionTheme, VisionTheme(selection: shell.theme)))

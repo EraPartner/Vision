@@ -64,7 +64,7 @@ public struct NativeNavigationLocation: Equatable, Sendable {
             let value = parameter(2)
             let screen = ImportRoutes.reviewIsNative
                 ? NativeNavigationIdentifier(value).positiveInteger(upTo: 9_007_199_254_740_991)
-                    .map { NativeScreen.importReview(batchId: $0) }
+                    .map { NativeScreen.importReview(batchId: ImportBatchNumericID(rawValue: $0)) }
                 : nil
             return Match(screen: screen, parameters: ["batchId": value])
         }
