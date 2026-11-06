@@ -29,11 +29,9 @@ public final class NetWorthModel {
     public var rangeStart: String?
     public var isLoading: Bool { isFetching && data == nil }
     public var hasMore: Bool { tableOffset < tableTotal }
-    public var tableKeys: [String] {
-        ["date", "liquid"]
-            + (tableSnapshots.contains { abs($0.liabilities) > Decimal.literal("0.005") } ? ["liabilities"] : [])
-            + ["investments", "netWorth", "change"]
-    }
+    public var tableColumns: [NetWorthColumn] { NetWorthColumn.table(tableSnapshots) }
+    /// The columns as the table query's string keys.
+    public var tableKeys: [String] { tableColumns.map(\.rawValue) }
     /// The table rows before search and filters; rebuilt only when the snapshots change.
     public var allTableRows: [NetWorthTableRow] {
         let snapshots = tableSnapshots

@@ -342,22 +342,12 @@ public struct NetWorthView: View {
         return seriesMemo.output(for: input) { makeSeries(display) }
     }
     private func makeSeries(_ display: [OpenAPI.NetWorthSnapshot]) -> [InsightChartSeries] {
-        let keys =
-            ["liquid", "investments"]
-            + (display.contains { abs($0.liabilities) > Decimal.literal("0.005") }
-                ? ["liabilities"] : []) + ["netWorth"]
-        return keys.map { key in
+        NetWorthColumn.series(display).map { column in
             InsightChartSeries(
-                id: key, label: strings.t(key == "netWorth" ? "networth.seriesTotal" : "networth." + key),
+                id: column.rawValue, label: strings.t(column.seriesLabelKey),
                 points: display.map { snapshot in
-                    let value: Decimal
-                    switch key {
-                    case "liquid": value = snapshot.liquid
-                    case "investments": value = snapshot.investments
-                    case "liabilities": value = snapshot.liabilities
-                    default: value = snapshot.netWorth
-                    }
-                    return InsightChartPoint(key: snapshot.date.description, value: value)
+                    InsightChartPoint(
+                        key: snapshot.date.description, value: column.amount(snapshot) ?? snapshot.netWorth)
                 })
         }
     }
@@ -388,25 +378,24 @@ public struct NetWorthView: View {
         }
     }
     private var columns: [LocalDataColumn<NetWorthTableRow>] {
-        model.tableKeys.map { key in
+        model.tableColumns.map { column in
             LocalDataColumn(
-                key: key, title: strings.t(key == "netWorth" ? "networth.title" : "networth." + key), width: 170,
-                minWidth: 100, flexible: key == "date", alignment: key == "date" ? .leading : .trailing
+                key: column.rawValue, title: strings.t(column.titleKey), width: 170,
+                minWidth: 100, flexible: column.isLeading, alignment: column.isLeading ? .leading : .trailing
             ) { row in
-                if key == "date" {
+                if column == .date {
                     return AnyView(Text(VisionFormat.appDate(row.snapshot.date, format: settings.dateFormat)))
                 }
-                if case .number(let value) = row.rawValue(key) {
-                    if key == "change" {
+                if case .number(let value) = row.rawValue(column) {
+                    if column == .change {
                         return AnyView(
                             Text(MoneyText.text(value, currency: currency, settings: settings)).monospacedDigit()
                                 .foregroundStyle(value < 0 ? theme.loss : theme.gain))
                     }
                     return AnyView(
                         MoneyText(
-                            amount: value, currency: currency, settings: settings, signed: key == "change",
-                            colored: key == "change"
-                        ).fontWeight(key == "netWorth" ? .bold : .regular))
+                            amount: value, currency: currency, settings: settings, signed: false, colored: false
+                        ).fontWeight(column == .netWorth ? .bold : .regular))
                 }
                 return AnyView(Text("—"))
             }

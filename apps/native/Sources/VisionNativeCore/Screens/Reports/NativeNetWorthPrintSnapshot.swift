@@ -39,7 +39,7 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
     public let accountDifference: Decimal?
     public let accountsError: String?
     public let tableRows: [NetWorthTableRow]
-    public let tableKeys: [String]
+    public let tableColumns: [NetWorthColumn]
     public let tableQuery: LocalTableQuery
     public let tableLoadedCount: Int
     public let tableTotal: Int
@@ -95,22 +95,11 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
                 cash: $0.cash, holdings: $0.holdings, total: $0.total)
         }
         let total = model.accountRows == nil ? nil : model.accountsTotal
-        let keys =
-            ["liquid", "investments"]
-            + (display.contains { abs($0.liabilities) > Decimal.literal("0.005") } ? ["liabilities"] : [])
-            + ["netWorth"]
-        let series = keys.map { key in
+        let series = NetWorthColumn.series(display).map { column in
             InsightChartSeries(
-                id: key, label: strings.t(key == "netWorth" ? "networth.seriesTotal" : "networth." + key),
+                id: column.rawValue, label: strings.t(column.seriesLabelKey),
                 points: display.map { row in
-                    let value: Decimal
-                    switch key {
-                    case "liquid": value = row.liquid
-                    case "investments": value = row.investments
-                    case "liabilities": value = row.liabilities
-                    default: value = row.netWorth
-                    }
-                    return InsightChartPoint(key: row.date.description, value: value)
+                    InsightChartPoint(key: row.date.description, value: column.amount(row) ?? row.netWorth)
                 })
         }
         let readouts = series.compactMap { line -> NativeNetWorthPrintReadout? in
@@ -129,7 +118,7 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
             accounts: accounts, accountTotal: total,
             accountDifference: total.map { NetWorthAccountRow.cents($0 - data.current.netWorth) },
             accountsError: model.accountsError, tableRows: model.tableRows,
-            tableKeys: model.tableKeys, tableQuery: model.tableQuery,
+            tableColumns: model.tableColumns, tableQuery: model.tableQuery,
             tableLoadedCount: model.tableSnapshots.count, tableTotal: model.tableTotal,
             tableHasMore: model.hasMore, tableFetchingMore: model.isFetchingMore,
             tableError: model.tableError, pricesError: model.pricesError,
