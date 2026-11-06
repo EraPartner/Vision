@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// What the aurora layers should be doing (`resolveAuroraMode`, shaderAuroraMode.ts).
 public enum AuroraPlayback: Sendable, Equatable {
@@ -7,7 +8,8 @@ public enum AuroraPlayback: Sendable, Equatable {
     /// One held frame: Reduce Motion and static atmosphere (a large display).
     case held
     /// Paused on the last rendered frame: the window is not key, occluded, minimised or the
-    /// app is hidden (`fx-idle-atmosphere`).
+    /// app is hidden (`fx-idle-atmosphere`), or a modal covers it (`fx-modal-open`; the caller
+    /// folds `VisionModalRegistry.isOpen` into `windowIsLive`).
     case paused
 
     /// Static outranks the idle pause, as on the web: a held frame costs nothing while the
@@ -22,6 +24,50 @@ public enum AuroraPlayback: Sendable, Equatable {
     public static func windowIsLive(isKey: Bool, isOnScreen: Bool, isMiniaturized: Bool, appIsHidden: Bool) -> Bool {
         isKey && isOnScreen && !isMiniaturized && !appIsHidden
     }
+}
+
+/// `fx-modal-open` (VisualEffectsController.tsx): an in-window dialog, alert or sheet is up.
+/// The aurora, the ticker tape and loading shimmers hold behind it, so the frosted overlay and
+/// the glass under it blur once instead of on every drift step (ADR-255). The presenters count
+/// themselves in and out; the system sheets and alerts take key status from the window, which
+/// the window-liveness pause already covers.
+@MainActor @Observable public final class VisionModalRegistry {
+    public static let shared = VisionModalRegistry()
+
+    public private(set) var openCount = 0
+
+    public init() {}
+
+    public var isOpen: Bool { openCount > 0 }
+
+    public func opened() { openCount += 1 }
+
+    public func closed() { openCount = max(0, openCount - 1) }
+}
+
+/// The shader aurora's clock (ShaderAurora.tsx): it advances only while the loop runs, so a
+/// pause (window idle, modal open) resumes where it stopped instead of jumping ahead, and a long
+/// gap between two frames (a stalled main thread) counts as one `maxStep`.
+public struct AuroraShaderClock: Sendable, Equatable {
+    /// `MAX_FRAME_STEP_MS`.
+    public static let maxStep = 0.1
+    /// `FRAME_MIN_MS` 48: about 20 fps; every shader frame damages the whole window.
+    public static let framesPerSecond = 20
+
+    public private(set) var seconds: Double = 0
+    private var lastFrameAt: Double?
+
+    public init() {}
+
+    /// A drawn frame at `now` (seconds on any monotonic scale); returns the shader time.
+    public mutating func frame(at now: Double) -> Double {
+        if let lastFrameAt { seconds += min(max(0, now - lastFrameAt), Self.maxStep) }
+        lastFrameAt = now
+        return seconds
+    }
+
+    /// The loop stopped: the next frame starts a new step.
+    public mutating func stop() { lastFrameAt = nil }
 }
 
 /// The aurora blobs' drift (`aurora-drift-a-smooth` 64 s, `-b-smooth` 76 s: infinite
@@ -116,5 +162,17 @@ public struct AuroraBlobDrift: Sendable, Equatable {
     /// Scale and offset at eased progress `progress` (0 at rest, 1 at the end of a leg).
     public func pose(at progress: Double) -> (scale: Double, x: Double, y: Double) {
         (startScale + (endScale - startScale) * progress, offsetX * progress, offsetY * progress)
+    }
+
+    /// `closest-side ... transparent 72%`: where the gradient fades out, as a share of the radius.
+    public static let fadeEnd = 0.72
+
+    /// The blob as the shader aurora draws it (auroraBlobs.ts): its centre, in canvas points from
+    /// the top-left corner, and its fade-out radius, at eased drift `progress`. Without a drift
+    /// (`nil`) the CSS blob has no transform at all, so its scale is 1, not `startScale`.
+    public func circle(progress: Double?) -> (x: Double, y: Double, radius: Double) {
+        guard let progress else { return (centerX, centerY, diameter / 2 * Self.fadeEnd) }
+        let pose = pose(at: progress)
+        return (centerX + pose.x, centerY + pose.y, diameter / 2 * Self.fadeEnd * pose.scale)
     }
 }

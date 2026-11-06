@@ -73,4 +73,37 @@ import Testing
         #expect(close(AuroraBlobDrift.first(width: 600, height: 400).diameter, 544))
         #expect(close(AuroraBlobDrift.second(width: 600, height: 400).diameter, 480))
     }
+
+    @Test func theShaderClockOnlyRunsWhileLoopingAndCapsALongGap() {
+        var clock = AuroraShaderClock()
+        #expect(clock.frame(at: 10) == 0)
+        #expect(abs(clock.frame(at: 10.05) - 0.05) < 1e-9)
+        // A stalled main thread counts as one step.
+        #expect(abs(clock.frame(at: 12) - 0.15) < 1e-9)
+        clock.stop()
+        // Resumes where it stopped after a pause.
+        #expect(abs(clock.frame(at: 60) - 0.15) < 1e-9)
+        #expect(abs(clock.frame(at: 60.05) - 0.2) < 1e-9)
+    }
+
+    @MainActor @Test func theModalRegistryCountsNestedModals() {
+        let registry = VisionModalRegistry()
+        registry.opened()
+        registry.opened()
+        registry.closed()
+        #expect(registry.isOpen)
+        registry.closed()
+        registry.closed()
+        #expect(!registry.isOpen && registry.openCount == 0)
+    }
+
+    @Test func theShaderBlobsRestUnscaledAndDriftAlongTheSameLeg() {
+        let second = AuroraBlobDrift.second(width: 1000, height: 800)
+        let rest = second.circle(progress: nil)
+        #expect(abs(rest.radius - 240 * 0.72) < 1e-9)
+        #expect(abs(rest.x - second.centerX) < 1e-9 && abs(rest.y - second.centerY) < 1e-9)
+        let end = second.circle(progress: 1)
+        #expect(abs(end.radius - 240 * 0.72 * 0.96) < 1e-9)
+        #expect(abs(end.x - (second.centerX - 110)) < 1e-9 && abs(end.y - (second.centerY - 56)) < 1e-9)
+    }
 }

@@ -1659,6 +1659,37 @@ Statistics/Tax chart views use it in place of ad hoc chips. The Sankey layout of
 is `SankeyLayout`, a port of the in-repo web layout that replaced d3-sankey
 ([[docs/adr/245-dependency-supply-chain|ADR-245]]).
 
+### Ported GPU and idle optimisations (port phase 3)
+
+The Swift shell follows the Electron work of [[docs/adr/255-cheaper-full-effects|ADR-255]] to
+[[docs/adr/261-ticker-and-settings-material-hosts-and-20-fps-aurora|ADR-261]] where it has a
+counterpart:
+
+- **Aurora.** The Metal shader draws at about 20 fps on a clock that only runs while it loops
+  (`AuroraShaderClock`). While it is live it also draws the two blobs (`AuroraBlobDrift.circle`),
+  and the Core Animation blob layers step aside. On the other tiers the layers' drift asks Core
+  Animation for 10 updates a second, or 30 with Full effects (the CSS `steps()` cadence). At rest a
+  blob has no transform, as with CSS `animation: none`.
+- **Modal pause.** `VisionModalPresenter` counts itself in `VisionModalRegistry` while its panel is
+  mounted (`fx-modal-open`). The aurora, the portfolio ticker and the background-query shimmer hold
+  until the last panel is gone. System sheets and alerts take key status from the window, which the
+  window-liveness pause already covers.
+- **Glass.** Cards and the sidebar rail draw no blurred backdrop, Full effects or not, because the
+  web filters them with `saturate()` alone and SwiftUI has no backdrop saturate. On the reduced
+  tier and under Reduce Transparency, cards and glass surfaces are an opaque `--card`.
+- **AI chat.** `AIChatStreamStore` buffers tokens and publishes them at most once a frame (16 ms).
+  `snapshot(id:)` includes the buffered tokens, and any other event publishes them first.
+- **Idle work.** The portfolio ticker also holds while the window is not live. The sidebar's
+  monitor badge reads every 5 minutes and whenever the app becomes active again. `UserPresence`
+  (fed by `UserPresenceMonitor`: input idle time every minute, screen lock and unlock, wake) marks
+  the user away after 5 minutes without input or while the screen is locked, and the interval polls
+  pause until they are back.
+
+Chromium-only items have no Swift counterpart: squircle clips, React memoisation, virtualizer
+estimates, chart entrance layers, `material-host` pseudo-elements and `backdrop-filter`
+declaration order. The same goes for ledger rows ignoring the pointer while scrolling, because the
+Swift rows carry no hover state.
+
 ## Install
 
 `install-native.sh` requires `xcodegen` and `xcodebuild`. It prepares the payload with the same

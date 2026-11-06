@@ -60,15 +60,18 @@ private final class BadgesTestClock: @unchecked Sendable {
         #expect(await service.reads.count == 3)
         clock.advance(1)
         await model.refresh()
-        // Needs-category is stale after 30 s; insights after 60 s; monitors every 60 s.
+        // Needs-category is stale after 30 s; insights after 60 s; monitors every 5 min (ADR-256 F3).
         #expect(await service.reads.filter { $0 == "needsCategory" }.count == 2)
         #expect(await service.reads.filter { $0 == "insights" }.count == 1)
         clock.advance(30)
         await model.refresh()
         #expect(await service.reads.filter { $0 == "insights" }.count == 2)
+        #expect(await service.reads.filter { $0 == "monitors" }.count == 1)
+        clock.advance(240)
+        await model.refresh()
         #expect(await service.reads.filter { $0 == "monitors" }.count == 2)
         await model.refresh(force: true)
-        #expect(await service.reads.count == 10)
+        #expect(await service.reads.count == 12)
     }
 
     @Test func aPendingProjectionShowsNoCountAndIsPolledEveryTwoSeconds() async {

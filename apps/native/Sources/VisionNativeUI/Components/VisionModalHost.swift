@@ -58,6 +58,8 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
 
     /// The panel is in the tree: from presentation until the exit motion ends.
     @State private var mounted = false
+    /// This presenter is counted in `VisionModalRegistry` (`fx-modal-open`).
+    @State private var registered = false
     /// The panel is at rest; `false` is the entering and leaving pose.
     @State private var shown = false
     @State private var contentDisablesDismissal = false
@@ -103,6 +105,16 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
             .accessibilityHidden(mounted)
             .overlay { if mounted { layer } }
             .onChange(of: isPresented, initial: true) { _, presented in sync(presented) }
+            .onChange(of: mounted, initial: true) { _, next in registerMounted(next) }
+            .onAppear { registerMounted(mounted) }
+            .onDisappear { registerMounted(false) }
+    }
+
+    /// `.modal-overlay` in the document: the aurora, ticker and shimmers hold while it is.
+    private func registerMounted(_ mounted: Bool) {
+        guard mounted != registered else { return }
+        registered = mounted
+        if mounted { VisionModalRegistry.shared.opened() } else { VisionModalRegistry.shared.closed() }
     }
 
     private var layer: some View {

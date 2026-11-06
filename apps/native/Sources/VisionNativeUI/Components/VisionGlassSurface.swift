@@ -26,6 +26,9 @@ public struct VisionGlassSurface: View {
 
     @Environment(\.visionTheme) private var theme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.visionVisualEffects) private var visualEffects
+    /// `prefers-reduced-transparency` or the reduced tier (`:root.fx-reduced .glass-*`): `--card`.
+    private var opaque: Bool { reduceTransparency || visualEffects == .reduced }
     @Environment(\.colorSchemeContrast) private var contrast
 
     public init(material: GlassMaterialSpec, cornerRadius: CGFloat = DesignTokens.Radius.card) {
@@ -58,7 +61,7 @@ public struct VisionGlassSurface: View {
 
     @ViewBuilder
     private func base(_ shape: RoundedRectangle, recipe: GlassAppearance) -> some View {
-        if reduceTransparency {
+        if opaque {
             shape.fill(Color(token: theme.palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity))
         } else {
             shape

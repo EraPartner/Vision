@@ -38,9 +38,10 @@ public struct AnalysisMonitorsView: View {
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task { await model.load() }
-        // The poll idles while the app is inactive or hidden, like the other screens' refetches.
-        .task(id: scenePhase == .active) {
-            guard scenePhase == .active else { return }
+        // The poll idles while the app is inactive or hidden, or the user is away (ADR-256 F5),
+        // like the other screens' refetches.
+        .task(id: scenePhase == .active && !UserPresence.shared.isAway) {
+            guard scenePhase == .active, !UserPresence.shared.isAway else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { break }
                 await model.poll()

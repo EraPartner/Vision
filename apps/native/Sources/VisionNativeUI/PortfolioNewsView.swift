@@ -7,7 +7,7 @@ struct PortfolioNewsView: View {
     @State private var visible = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.visionTheme) private var theme
-    private var polling: Bool { visible && scenePhase == .active && model.isOnline }
+    private var polling: Bool { visible && scenePhase == .active && model.isOnline && !UserPresence.shared.isAway }
 
     var body: some View {
         PortfolioCard(title: shell.strings.t("newsFeed.title")) {

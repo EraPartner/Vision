@@ -40,6 +40,8 @@ struct AuroraCanvas: View {
     /// Key, on screen and the app shown: the aurora pauses on its last frame otherwise, as the
     /// web pauses when `document.hidden || !document.hasFocus()` (`fx-idle-atmosphere`).
     @State private var windowLive = true
+    /// The shader program is compiled and drawing (`fx-webgl-live`): it draws the blobs itself.
+    @State private var shaderLive = false
 
     /// tokens.css `--aurora-*-alpha` and `--grain-alpha` (light, dark): `DesignTokens.Atmosphere`.
     private var alphas: (primary: Double, accent: Double, wash: Double, grain: Double) {
@@ -57,6 +59,13 @@ struct AuroraCanvas: View {
             EmptyView()
         } else {
             let enhanced = visualEffects == .enhanced
+            // `fx-modal-open` holds the drift and the shader as `fx-idle-atmosphere` does.
+            let live = windowLive && !VisionModalRegistry.shared.isOpen
+            // Enhanced without Full effects keeps the blobs at rest (21775a26); static
+            // atmosphere and reduced motion hold.
+            let drift = (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion
+            // One animator (ADR-255): while the shader draws the blobs, the layers step aside.
+            let shaderBlobs = enhanced && shaderLive
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
                     wash(proxy.size)
@@ -64,19 +73,23 @@ struct AuroraCanvas: View {
                         size: proxy.size, first: wealth ? theme.accent : theme.primary,
                         second: wealth ? theme.primary : theme.accent,
                         firstAlpha: alphas.primary, secondAlpha: alphas.accent,
-                        // The shader takes over the motion on Enhanced, unless Full effects keep
-                        // the blobs drifting under it (index.css "Full effects": "also under the
-                        // live WebGL aurora"); static atmosphere and reduced motion hold.
-                        animated: (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion,
-                        running: windowLive
+                        animated: drift && !shaderBlobs, running: live && !shaderBlobs,
+                        frameRate: fullEffects ? 30 : 10
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
+                    .opacity(shaderBlobs ? 0 : 1)
                     if enhanced {
                         AuroraShaderView(
                             primary: theme.palette.primary, accent: theme.palette.accent,
-                            animated: !staticAtmosphere && !reduceMotion, live: windowLive
+                            blobs: AuroraShaderBlobs(
+                                first: wealth ? theme.palette.accent : theme.palette.primary,
+                                second: wealth ? theme.palette.primary : theme.palette.accent,
+                                firstAlpha: alphas.primary, secondAlpha: alphas.accent, drift: drift),
+                            noiseAlpha: theme.isDark ? 0.5 : 0.6,
+                            animated: !staticAtmosphere && !reduceMotion, live: live,
+                            onLive: { shaderLive = $0 }
                         )
-                        .opacity(theme.isDark ? 0.5 : 0.6)
+                        .onDisappear { shaderLive = false }
                     }
                     AuroraGrain().opacity(alphas.grain)
                 }
@@ -98,12 +111,13 @@ struct AuroraCanvas: View {
     }
 }
 
-/// `::before` / `::after`: radial blobs drifting with `aurora-drift-a-smooth` (64 s) and
-/// `aurora-drift-b-smooth` (76 s), infinite alternate on `--ease-in-out-quart`: the
-/// `:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas` path (index.css "Full effects").
-/// The caller turns `animated` off for static atmosphere, Reduce Motion and the Enhanced
-/// shader, which are the cases where the web rule does not apply. Core Animation plays the
-/// drift in the render server, as the browser compositor plays the CSS keyframes, so the app
+/// `::before` / `::after`: radial blobs drifting with `aurora-drift-a` (64 s) and
+/// `aurora-drift-b` (76 s), infinite alternate on `--ease-in-out-quart`. The CSS steps the drift
+/// (`steps(40)`: 10 changes a second, `steps(120)` with Full effects: 30), so every glass
+/// surface over it re-filters at that rate instead of on every vsync; `frameRate` asks Core
+/// Animation for the same cadence. The caller turns `animated` off for static atmosphere,
+/// Reduce Motion, Enhanced without Full effects and while the shader draws the blobs. Core
+/// Animation plays the drift in the render server, as the browser compositor plays the CSS keyframes, so the app
 /// does no per-frame work for it.
 private struct AuroraBlobs: NSViewRepresentable {
     let size: CGSize
@@ -114,6 +128,8 @@ private struct AuroraBlobs: NSViewRepresentable {
     let animated: Bool
     /// The window is live; the drift holds its position while it is not.
     let running: Bool
+    /// Drift updates a second (`steps(40)` or, with Full effects, `steps(120)`).
+    let frameRate: Float
 
     func makeNSView(context: Context) -> AuroraBlobLayerView { AuroraBlobLayerView() }
 
@@ -121,7 +137,8 @@ private struct AuroraBlobs: NSViewRepresentable {
         view.apply(
             AuroraBlobLayerView.State(
                 size: size, first: NSColor(first.opacity(firstAlpha)).cgColor,
-                second: NSColor(second.opacity(secondAlpha)).cgColor, animated: animated, running: running))
+                second: NSColor(second.opacity(secondAlpha)).cgColor, animated: animated, running: running,
+                frameRate: frameRate))
     }
 }
 
@@ -135,6 +152,7 @@ private struct AuroraBlobs: NSViewRepresentable {
         let second: CGColor
         let animated: Bool
         let running: Bool
+        let frameRate: Float
     }
 
     private static let driftKey = "aurora-drift"
@@ -177,7 +195,7 @@ private struct AuroraBlobs: NSViewRepresentable {
         firstBlob.colors = [next.first, next.first.copy(alpha: 0) ?? next.first]
         secondBlob.colors = [next.second, next.second.copy(alpha: 0) ?? next.second]
         if let previous, previous.size == next.size, previous.animated == next.animated,
-            previous.running == next.running
+            previous.running == next.running, previous.frameRate == next.frameRate
         {
             return
         }
@@ -187,19 +205,27 @@ private struct AuroraBlobs: NSViewRepresentable {
         let elapsed = next.animated ? clock.elapsed(at: now) : 0
         let width = Double(next.size.width)
         let height = Double(next.size.height)
-        install(firstBlob, AuroraBlobDrift.first(width: width, height: height), height, elapsed, moving, now)
-        install(secondBlob, AuroraBlobDrift.second(width: width, height: height), height, elapsed, moving, now)
+        let rate = next.frameRate
+        let first = AuroraBlobDrift.first(width: width, height: height)
+        let second = AuroraBlobDrift.second(width: width, height: height)
+        install(firstBlob, first, height, elapsed, moving, now, rate, next.animated)
+        install(secondBlob, second, height, elapsed, moving, now, rate, next.animated)
     }
 
     private func install(
         _ blob: CAGradientLayer, _ drift: AuroraBlobDrift, _ height: Double, _ elapsed: Double, _ moving: Bool,
-        _ now: CFTimeInterval
+        _ now: CFTimeInterval, _ frameRate: Float, _ animated: Bool
     ) {
         let curve = DesignTokens.Ease.inOutQuart
         blob.removeAnimation(forKey: Self.driftKey)
         blob.bounds = CGRect(x: 0, y: 0, width: drift.diameter, height: drift.diameter)
         // Canvas positions run top-down; the host layer's run bottom-up.
         blob.position = CGPoint(x: drift.centerX, y: height - drift.centerY)
+        // `animation: none` at rest: no transform at all, not the first keyframe's scale.
+        guard animated else {
+            blob.transform = CATransform3DIdentity
+            return
+        }
         let progress = AuroraDriftClock.progress(elapsed: elapsed, duration: drift.duration, curve: curve)
         blob.transform = Self.transform(drift.pose(at: progress))
         guard moving else { return }
@@ -214,6 +240,9 @@ private struct AuroraBlobs: NSViewRepresentable {
         // Started `elapsed` seconds ago, so the drift continues where the clock stands.
         animation.beginTime = blob.convertTime(now, from: nil) - elapsed
         animation.isRemovedOnCompletion = false
+        // The CSS `steps()` cadence: the glass over the blobs re-filters at this rate, not per vsync.
+        animation.preferredFrameRateRange = CAFrameRateRange(
+            minimum: frameRate, maximum: frameRate, preferred: frameRate)
         blob.add(animation, forKey: Self.driftKey)
     }
 
@@ -282,16 +311,31 @@ private struct AuroraGrain: View {
     }
 }
 
+/// What the shader draws of the two blobs (auroraBlobs.ts): colours (swapped under the wealth
+/// tint), token alphas and whether they drift.
+struct AuroraShaderBlobs: Equatable {
+    let first: HSLColor
+    let second: HSLColor
+    let firstAlpha: Double
+    let secondAlpha: Double
+    let drift: Bool
+}
+
 /// ShaderAurora: the same fbm fragment shader as the WebGL layer, compiled at runtime,
-/// drawn at a quarter resolution (at most 640 px wide) and about 30 fps; held on its
+/// drawn at a quarter resolution (at most 640 px wide) and about 20 fps (`FRAME_MIN_MS`); held on its
 /// first frame for reduced motion or a large display, and paused while the window is
 /// not key, occluded, minimised or its app hidden (`document.hidden || !hasFocus`).
 struct AuroraShaderView: NSViewRepresentable {
     let primary: HSLColor
     let accent: HSLColor
+    let blobs: AuroraShaderBlobs
+    /// The noise layer's opacity (0.6, dark 0.5); the blobs keep their token alphas.
+    let noiseAlpha: Double
     let animated: Bool
     /// The window is key, on screen and its app shown; the loop pauses on the last frame otherwise.
     let live: Bool
+    /// The program compiled and draws, or failed and the layer blobs stay the fallback.
+    let onLive: @MainActor (Bool) -> Void
 
     func makeCoordinator() -> AuroraRenderer { AuroraRenderer() }
 
@@ -303,7 +347,7 @@ struct AuroraShaderView: NSViewRepresentable {
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         view.layer?.isOpaque = false
         view.autoResizeDrawable = false
-        view.preferredFramesPerSecond = 30
+        view.preferredFramesPerSecond = AuroraShaderClock.framesPerSecond
         context.coordinator.attach(view)
         update(context.coordinator, view: view)
         // The runtime shader compile is not on the first frame's path (ADR-247): the CSS
@@ -312,7 +356,13 @@ struct AuroraShaderView: NSViewRepresentable {
         Task { @MainActor in
             await Task.yield()
             try? await Task.sleep(for: .milliseconds(400))
-            if renderer.prepare(device: device) { renderer.refreshPlayback() } else { view.isHidden = true }
+            if renderer.prepare(device: device) {
+                renderer.refreshPlayback()
+                renderer.onLive(true)
+            } else {
+                view.isHidden = true
+                renderer.onLive(false)
+            }
         }
         return view
     }
@@ -330,6 +380,10 @@ struct AuroraShaderView: NSViewRepresentable {
 
     private func update(_ renderer: AuroraRenderer, view: AuroraMTKView) {
         renderer.colors = (Self.rgb(primary), Self.rgb(accent))
+        renderer.blobs = blobs
+        renderer.blobColors = (Self.rgb(blobs.first), Self.rgb(blobs.second))
+        renderer.noiseAlpha = Float(noiseAlpha)
+        renderer.onLive = onLive
         renderer.animated = animated
         renderer.live = live
         renderer.refreshPlayback()
@@ -359,19 +413,30 @@ final class AuroraMTKView: MTKView {
     private struct Uniforms {
         var resolution: SIMD2<Float>
         var time: Float
-        var padding: Float = 0
+        var noiseAlpha: Float
         var first: SIMD4<Float>
         var second: SIMD4<Float>
+        /// Centre x, centre y (drawable pixels, bottom-up), fade-out radius and alpha.
+        var blobA: SIMD4<Float>
+        var blobB: SIMD4<Float>
+        var blobAColor: SIMD4<Float>
+        var blobBColor: SIMD4<Float>
     }
 
     var colors: (SIMD4<Float>, SIMD4<Float>) = (SIMD4(0.18, 0.65, 0.45, 1), SIMD4(0.85, 0.7, 0.4, 1))
     var animated = true
     var live = true
+    var blobs = AuroraShaderBlobs(
+        first: HSLColor(hue: 0, saturation: 0, lightness: 0), second: HSLColor(hue: 0, saturation: 0, lightness: 0),
+        firstAlpha: 0, secondAlpha: 0, drift: false)
+    var blobColors: (SIMD4<Float>, SIMD4<Float>) = (SIMD4(0, 0, 0, 1), SIMD4(0, 0, 0, 1))
+    var noiseAlpha: Float = 0.6
+    var onLive: @MainActor (Bool) -> Void = { _ in }
     private var hasDrawn = false
     private var queue: MTLCommandQueue?
     private var pipeline: MTLRenderPipelineState?
     private weak var view: AuroraMTKView?
-    private let start = CACurrentMediaTime()
+    private var clock = AuroraShaderClock()
 
     func prepare(device: MTLDevice) -> Bool {
         do {
@@ -399,6 +464,7 @@ final class AuroraMTKView: MTKView {
         guard let view else { return }
         let mode = AuroraPlayback.resolve(motionAllowed: animated, windowIsLive: live)
         let loop = mode == .loop
+        if !loop { clock.stop() }
         view.enableSetNeedsDisplay = !loop
         view.isPaused = !loop
         // A held frame is drawn once; a paused loop keeps its last frame (or draws its first).
@@ -416,9 +482,28 @@ final class AuroraMTKView: MTKView {
             let buffer = queue.makeCommandBuffer(), let encoder = buffer.makeRenderCommandEncoder(descriptor: pass)
         else { return }
         let size = view.drawableSize
+        let time = animated ? clock.frame(at: CACurrentMediaTime()) : 0
+        // The blobs drift on the shader's clock and rest on a held frame (auroraBlobs.ts).
+        let bounds = view.bounds.size
+        let scale = bounds.width > 0 ? Double(size.width / bounds.width) : 0
+        let width = Double(bounds.width)
+        let height = Double(bounds.height)
+        let curve = DesignTokens.Ease.inOutQuart
+        func circle(_ drift: AuroraBlobDrift, alpha: Double) -> SIMD4<Float> {
+            let progress =
+                blobs.drift && animated
+                ? AuroraDriftClock.progress(elapsed: time, duration: drift.duration, curve: curve) : nil
+            let blob = drift.circle(progress: progress)
+            return SIMD4(
+                Float(blob.x * scale), Float(Double(size.height) - blob.y * scale), Float(blob.radius * scale),
+                Float(alpha))
+        }
         var uniforms = Uniforms(
-            resolution: SIMD2(Float(size.width), Float(size.height)),
-            time: animated ? Float(CACurrentMediaTime() - start) : 0, first: colors.0, second: colors.1)
+            resolution: SIMD2(Float(size.width), Float(size.height)), time: Float(time), noiseAlpha: noiseAlpha,
+            first: colors.0, second: colors.1,
+            blobA: circle(AuroraBlobDrift.first(width: width, height: height), alpha: blobs.firstAlpha),
+            blobB: circle(AuroraBlobDrift.second(width: width, height: height), alpha: blobs.secondAlpha),
+            blobAColor: blobColors.0, blobBColor: blobColors.1)
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
@@ -436,9 +521,13 @@ final class AuroraMTKView: MTKView {
         struct AuroraUniforms {
             float2 res;
             float time;
-            float padding;
+            float noiseAlpha;
             float4 c1;
             float4 c2;
+            float4 blobA;
+            float4 blobB;
+            float4 blobACol;
+            float4 blobBCol;
         };
 
         vertex float4 auroraVertex(uint vid [[vertex_id]]) {
@@ -480,8 +569,14 @@ final class AuroraMTKView: MTKView {
             float m1 = smoothstep(0.34, 0.68, n1);
             float m2 = smoothstep(0.38, 0.72, n2);
             float3 col = u.c1.rgb * m1 + u.c2.rgb * m2;
-            float a = clamp(max(m1, m2), 0.0, 1.0) * 0.65;
-            return float4(col * a, a);
+            float a = clamp(max(m1, m2), 0.0, 1.0) * 0.65 * u.noiseAlpha;
+            float4 noiseLayer = float4(col * a, a);
+            // Same stacking as the CSS: ::before blob, the noise, then the ::after blob; each
+            // gradient linear in alpha from its colour at the centre to transparent at the radius.
+            float aa = u.blobA.w * clamp(1.0 - distance(coord, u.blobA.xy) / u.blobA.z, 0.0, 1.0);
+            float ab = u.blobB.w * clamp(1.0 - distance(coord, u.blobB.xy) / u.blobB.z, 0.0, 1.0);
+            float4 under = noiseLayer + float4(u.blobACol.rgb * aa, aa) * (1.0 - noiseLayer.a);
+            return float4(u.blobBCol.rgb * ab, ab) + under * (1.0 - ab);
         }
         """
 }

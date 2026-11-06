@@ -291,6 +291,8 @@ public struct ShellRootView: View {
         .onChange(of: model.settings.language) { _, _ in model.onboarding?.strings = model.strings }
         .onChange(of: scenePhase) { _, phase in model.settingsAI?.isForeground = phase == .active }
         .onDisappear { connectivity.stop() }
+        // Interval polls pause while the user is away (ADR-256 F5).
+        .task { await UserPresenceMonitor.run() }
         .disabled(model.isReloadingGraph)
         .allowsHitTesting(!model.isReloadingGraph)
         // Outermost, so the chrome the dialog and alert modifiers add (scrim, glass panel and
@@ -376,8 +378,9 @@ struct NativeSidebar: View {
         // re-reads any count that is no longer fresh.
         // It idles while the app is inactive or hidden (the web pauses refetch intervals while
         // the document is hidden) and re-reads whatever went stale when the app returns.
-        .task(id: scenePhase == .active) {
-            guard scenePhase == .active else { return }
+        // It also idles while the user is away (ADR-256 F5).
+        .task(id: scenePhase == .active && !UserPresence.shared.isAway) {
+            guard scenePhase == .active, !UserPresence.shared.isAway else { return }
             await model.sidebarBadges?.run()
         }
         .task(id: model.route.path) { await model.sidebarBadges?.refresh() }

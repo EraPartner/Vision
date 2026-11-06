@@ -24,7 +24,9 @@ struct AIChatScreenView: View {
         String(visible) + "|" + String(describing: scenePhase) + "|" + String(screens.isOnline)
             + "|" + String(screens.chat.statusPollInterval ?? -1)
     }
-    private var canPoll: Bool { visible && scenePhase == .active && screens.isOnline && shell.route.path == path }
+    private var canPoll: Bool {
+        visible && scenePhase == .active && screens.isOnline && shell.route.path == path && !UserPresence.shared.isAway
+    }
 
     var body: some View {
         AIChatView(model: screens.chat, investigation: screens.investigation, shell: shell)
