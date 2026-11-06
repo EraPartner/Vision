@@ -35,20 +35,59 @@ public enum NetWorthPeriod: String, CaseIterable, Sendable {
     }
 }
 
+/// A column of the net worth history table, and (bar `date` and `change`) a chart series. The raw
+/// value is the web app's column key, used by the table query and the series ids.
+public enum NetWorthColumn: String, CaseIterable, Sendable {
+    case date, liquid, investments, liabilities, netWorth, change
+
+    /// The localisation key of the table header.
+    public var titleKey: String { self == .netWorth ? "networth.title" : "networth." + rawValue }
+    /// The localisation key of the chart series label.
+    public var seriesLabelKey: String { self == .netWorth ? "networth.seriesTotal" : "networth." + rawValue }
+    public var isLeading: Bool { self == .date }
+
+    /// The snapshot's amount for a chart series; `nil` for `date` and `change`.
+    public func amount(_ snapshot: OpenAPI.NetWorthSnapshot) -> Decimal? {
+        switch self {
+        case .liquid: snapshot.liquid
+        case .investments: snapshot.investments
+        case .liabilities: snapshot.liabilities
+        case .netWorth: snapshot.netWorth
+        case .date, .change: nil
+        }
+    }
+
+    /// The liabilities column and series show only when some snapshot carries a debt.
+    public static func hasLiabilities(_ snapshots: [OpenAPI.NetWorthSnapshot]) -> Bool {
+        snapshots.contains { abs($0.liabilities) > Decimal.literal("0.005") }
+    }
+
+    /// The table columns, in the web app's order.
+    public static func table(_ snapshots: [OpenAPI.NetWorthSnapshot]) -> [NetWorthColumn] {
+        [.date, .liquid] + (hasLiabilities(snapshots) ? [.liabilities] : []) + [.investments, .netWorth, .change]
+    }
+
+    /// The chart series, in the web app's order.
+    public static func series(_ snapshots: [OpenAPI.NetWorthSnapshot]) -> [NetWorthColumn] {
+        [.liquid, .investments] + (hasLiabilities(snapshots) ? [.liabilities] : []) + [.netWorth]
+    }
+}
+
 public struct NetWorthTableRow: Identifiable, Equatable, Sendable {
     public let snapshot: OpenAPI.NetWorthSnapshot
     public let change: Decimal?
     public var id: String { snapshot.date.description }
-    public func rawValue(_ key: String) -> TableRawValue {
-        switch key {
-        case "date": .text(snapshot.date.description)
-        case "liquid": .number(snapshot.liquid)
-        case "liabilities": .number(snapshot.liabilities)
-        case "investments": .number(snapshot.investments)
-        case "netWorth": .number(snapshot.netWorth)
-        case "change": change.map(TableRawValue.number) ?? .none
-        default: .none
+    public func rawValue(_ column: NetWorthColumn) -> TableRawValue {
+        switch column {
+        case .date: .text(snapshot.date.description)
+        case .change: change.map(TableRawValue.number) ?? .none
+        case .liquid, .investments, .liabilities, .netWorth:
+            column.amount(snapshot).map(TableRawValue.number) ?? .none
         }
+    }
+    /// The table query's string column key.
+    public func rawValue(_ key: String) -> TableRawValue {
+        NetWorthColumn(rawValue: key).map(rawValue) ?? .none
     }
 }
 

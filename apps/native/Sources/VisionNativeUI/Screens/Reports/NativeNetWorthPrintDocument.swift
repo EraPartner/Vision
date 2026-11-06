@@ -115,20 +115,20 @@ private enum NativeNetWorthPrintTablePart {
     static let spacing: CGFloat = 8
 
     static func historyValue(
-        _ row: NetWorthTableRow, key: String, presentation: NativeNetWorthPrintPresentation
+        _ row: NetWorthTableRow, column: NetWorthColumn, presentation: NativeNetWorthPrintPresentation
     ) -> String {
-        if key == "date" { return presentation.date(row.snapshot.date) }
-        guard case .number(let value) = row.rawValue(key) else { return "—" }
-        return presentation.money(value, signed: key == "change")
+        if column == .date { return presentation.date(row.snapshot.date) }
+        guard case .number(let value) = row.rawValue(column) else { return "—" }
+        return presentation.money(value, signed: column == .change)
     }
 
     static func historyColumns(_ presentation: NativeNetWorthPrintPresentation, width: CGFloat) -> [CGFloat] {
         let snapshot = presentation.snapshot
-        let cells = snapshot.tableKeys.map { key in
-            [snapshot.strings.t(key == "netWorth" ? "networth.title" : "networth." + key)]
-                + snapshot.tableRows.map { historyValue($0, key: key, presentation: presentation) }
+        let cells = snapshot.tableColumns.map { column in
+            [snapshot.strings.t(column.titleKey)]
+                + snapshot.tableRows.map { historyValue($0, column: column, presentation: presentation) }
         }
-        return columns(width: width, cells: cells, minimums: snapshot.tableKeys.map { $0 == "date" ? 72 : 48 })
+        return columns(width: width, cells: cells, minimums: snapshot.tableColumns.map { $0.isLeading ? 72 : 48 })
     }
 
     static func accountColumns(_ presentation: NativeNetWorthPrintPresentation, width: CGFloat) -> [CGFloat] {
@@ -257,22 +257,24 @@ private struct NativeNetWorthPrintTablePartView: View {
 
     private func historyCells(row: NetWorthTableRow?) -> some View {
         HStack(alignment: .top, spacing: NativeNetWorthPrintTableLayout.spacing) {
-            ForEach(Array(snapshot.tableKeys.enumerated()), id: \.offset) { index, key in
+            ForEach(Array(snapshot.tableColumns.enumerated()), id: \.offset) { index, column in
                 Text(
-                    row.map { NativeNetWorthPrintTableLayout.historyValue($0, key: key, presentation: presentation) }
-                        ?? strings.t(key == "netWorth" ? "networth.title" : "networth." + key)
+                    row.map {
+                        NativeNetWorthPrintTableLayout.historyValue($0, column: column, presentation: presentation)
+                    }
+                        ?? strings.t(column.titleKey)
                 )
                 .font(.caption).monospacedDigit()
-                .fontWeight(row == nil ? .semibold : key == "netWorth" ? .bold : .regular)
-                .foregroundStyle(historyColor(row, key: key))
-                .frame(width: columns[index], alignment: key == "date" ? .leading : .trailing)
+                .fontWeight(row == nil ? .semibold : column == .netWorth ? .bold : .regular)
+                .foregroundStyle(historyColor(row, column: column))
+                .frame(width: columns[index], alignment: column.isLeading ? .leading : .trailing)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private func historyColor(_ row: NetWorthTableRow?, key: String) -> Color {
-        guard key == "change", let change = row?.change else { return theme.foreground }
+    private func historyColor(_ row: NetWorthTableRow?, column: NetWorthColumn) -> Color {
+        guard column == .change, let change = row?.change else { return theme.foreground }
         return change < 0 ? theme.loss : theme.gain
     }
 
@@ -496,7 +498,7 @@ public struct NativeNetWorthPrintSectionView: View {
                 ForEach(snapshot.series) { line in
                     ForEach(line.points) { point in
                         if let x = index[point.key] {
-                            if line.id == "netWorth" {
+                            if NetWorthColumn(rawValue: line.id) == .netWorth {
                                 AreaMark(
                                     x: .value("Date", x), y: .value(line.label, coordinate(point.value)),
                                     stacking: .unstacked
@@ -508,7 +510,8 @@ public struct NativeNetWorthPrintSectionView: View {
                                 series: .value("Series", line.id)
                             )
                             .foregroundStyle(by: .value("Series", line.label))
-                            .lineStyle(StrokeStyle(lineWidth: line.id == "netWorth" ? 2.5 : 1.5))
+                            .lineStyle(
+                                StrokeStyle(lineWidth: NetWorthColumn(rawValue: line.id) == .netWorth ? 2.5 : 1.5))
                         }
                     }
                 }
@@ -577,10 +580,10 @@ public struct NativeNetWorthPrintSectionView: View {
             AdminCard {
                 Text(strings.t("networth.dailyBreakdown")).font(.headline)
                 HStack {
-                    ForEach(snapshot.tableKeys, id: \.self) { key in
-                        Text(strings.t(key == "netWorth" ? "networth.title" : "networth." + key)).font(
+                    ForEach(snapshot.tableColumns, id: \.self) { column in
+                        Text(strings.t(column.titleKey)).font(
                             .caption.weight(.semibold)
-                        ).frame(maxWidth: .infinity, alignment: key == "date" ? .leading : .trailing)
+                        ).frame(maxWidth: .infinity, alignment: column.isLeading ? .leading : .trailing)
                     }
                 }
                 Divider()
@@ -589,11 +592,11 @@ public struct NativeNetWorthPrintSectionView: View {
                 }
                 ForEach(snapshot.tableRows) { row in
                     HStack {
-                        ForEach(snapshot.tableKeys, id: \.self) { key in
-                            Text(tableValue(row, key: key)).font(.caption).monospacedDigit()
-                                .fontWeight(key == "netWorth" ? .bold : .regular)
-                                .foregroundStyle(tableColor(row, key: key))
-                                .frame(maxWidth: .infinity, alignment: key == "date" ? .leading : .trailing)
+                        ForEach(snapshot.tableColumns, id: \.self) { column in
+                            Text(tableValue(row, column: column)).font(.caption).monospacedDigit()
+                                .fontWeight(column == .netWorth ? .bold : .regular)
+                                .foregroundStyle(tableColor(row, column: column))
+                                .frame(maxWidth: .infinity, alignment: column.isLeading ? .leading : .trailing)
                         }
                     }
                     Divider()
@@ -604,10 +607,8 @@ public struct NativeNetWorthPrintSectionView: View {
             if let error = snapshot.tableError { Text(verbatim: error).foregroundStyle(theme.destructive) }
         }
     }
-    private func tableValue(_ row: NetWorthTableRow, key: String) -> String {
-        if key == "date" { return presentation.date(row.snapshot.date) }
-        guard case .number(let value) = row.rawValue(key) else { return "—" }
-        return presentation.money(value, signed: key == "change")
+    private func tableValue(_ row: NetWorthTableRow, column: NetWorthColumn) -> String {
+        NativeNetWorthPrintTableLayout.historyValue(row, column: column, presentation: presentation)
     }
     private var tableFooter: String {
         var text =
@@ -620,8 +621,8 @@ public struct NativeNetWorthPrintSectionView: View {
         if snapshot.tableHasMore { text += " · " + strings.t("table.scrollForMore") }
         return text
     }
-    private func tableColor(_ row: NetWorthTableRow, key: String) -> Color {
-        guard key == "change", let change = row.change else { return theme.foreground }
+    private func tableColor(_ row: NetWorthTableRow, column: NetWorthColumn) -> Color {
+        guard column == .change, let change = row.change else { return theme.foreground }
         return change < 0 ? theme.loss : theme.gain
     }
     private func stat(_ key: String, value: String, symbol: String) -> some View {
@@ -631,10 +632,10 @@ public struct NativeNetWorthPrintSectionView: View {
         }
     }
     private func chartColor(_ id: String) -> Color {
-        switch id {
-        case "liquid": Color(token: theme.palette.chart2)
-        case "investments": Color(token: theme.palette.chart4)
-        case "liabilities": theme.loss
+        switch NetWorthColumn(rawValue: id) {
+        case .liquid: Color(token: theme.palette.chart2)
+        case .investments: Color(token: theme.palette.chart4)
+        case .liabilities: theme.loss
         default: theme.primary
         }
     }
