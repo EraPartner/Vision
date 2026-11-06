@@ -138,8 +138,13 @@ public actor RuntimeSupervisor: BackupSettingsStore {
             return url
         } catch {
             launchTask = nil
-            // The quit owns the phase (`stopping`, then `stopped`) and the processes.
-            if shutdownRequested { throw error }
+            // The quit owns the phase (`stopping`, then `stopped`) and the processes. A step
+            // that fails because the quit tore its work down (the staging generation it was
+            // verifying, say) reports the quit, not that consequence.
+            if shutdownRequested {
+                logger.log("log", "[runtime] launch interrupted by quit: \(error)")
+                throw Self.shuttingDownError
+            }
             let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             logger.log("error", "[runtime] launch failed: \(error)")
             enter(.failed(reason))
