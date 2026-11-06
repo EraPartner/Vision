@@ -14,11 +14,25 @@ import Observation
     @ObservationIgnored private var tasks: [AiConversationID: Task<AIChatComplete, Error>] = [:]
     @ObservationIgnored private var generations: [AiConversationID: UUID] = [:]
     @ObservationIgnored private var revisions: [AiConversationID: Int] = [:]
+    /// Tokens not yet published to observers (`scheduleEmit`, aiChatStreamStore.ts): the
+    /// transcript re-renders at most once a frame, not once per streamed token.
+    @ObservationIgnored private var pendingDrafts: [AiConversationID: String] = [:]
+    @ObservationIgnored private var flushTask: Task<Void, Never>?
+    /// The frame the token notifications coalesce to (`FALLBACK_FRAME_MS`).
+    static let frameInterval: Duration = .milliseconds(16)
     public init(service: any AIChatService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
         self.now = now
     }
-    public func snapshot(id: AiConversationID?) -> AIChatStreamSnapshot { id.flatMap { snapshots[$0] } ?? .init() }
+    /// The current state, pending tokens included: only the notification is deferred, so a read
+    /// never lags (`getState`).
+    public func snapshot(id: AiConversationID?) -> AIChatStreamSnapshot {
+        guard let id else { return .init() }
+        guard let pending = pendingDrafts[id] else { return snapshots[id] ?? .init() }
+        var current = snapshots[id] ?? .init()
+        current.assistantDraft += pending
+        return current
+    }
     public func revision(id: AiConversationID) -> Int { revisions[id] ?? 0 }
     public func cache(_ detail: AIChatConversationDetail, date: Date? = nil) {
         let id = detail.conversation.id
@@ -32,12 +46,14 @@ import Observation
         clear(id: id)
     }
     public func clear(id: AiConversationID) {
+        pendingDrafts[id] = nil
         generations[id] = UUID()
         tasks[id] = nil
         snapshots[id] = nil
         synchronizeActiveIDs()
     }
     public func stop(id: AiConversationID) {
+        flushDrafts()
         generations[id] = UUID()
         tasks[id]?.cancel()
         tasks[id] = nil
@@ -56,6 +72,29 @@ import Observation
             + snapshots.keys.filter { snapshots[$0]?.isStreaming == true && !continuing.contains($0) }.sorted()
     }
     private func touch(_ id: AiConversationID) { revisions[id, default: 0] += 1 }
+    /// Publishes the buffered tokens; any other change publishes them first, as a synchronous
+    /// `emit` delivers what a pending token frame would have.
+    private func flushDrafts() {
+        flushTask?.cancel()
+        flushTask = nil
+        guard !pendingDrafts.isEmpty else { return }
+        let pending = pendingDrafts
+        pendingDrafts = [:]
+        for (id, delta) in pending {
+            var current = snapshots[id] ?? .init()
+            current.assistantDraft += delta
+            snapshots[id] = current
+        }
+        synchronizeActiveIDs()
+    }
+    private func scheduleFlush() {
+        guard flushTask == nil else { return }
+        flushTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.frameInterval)
+            guard !Task.isCancelled else { return }
+            self?.flushDrafts()
+        }
+    }
     private func merge(_ message: AIChatMessage, id: AiConversationID) {
         guard var detail = details[id], !detail.messages.contains(where: { $0.id == message.id }) else { return }
         detail.messages.append(message)
@@ -64,6 +103,7 @@ import Observation
     public func send(_ request: AIChatSendRequest) async {
         let id = request.conversationID
         let generation = UUID()
+        flushDrafts()
         generations[id] = generation
         tasks[id]?.cancel()
         var initial = AIChatStreamSnapshot()
@@ -91,11 +131,13 @@ import Observation
         do {
             _ = try await task.value
             guard generations[id] == generation else { return }
+            flushDrafts()
             snapshots[id] = nil
             tasks[id] = nil
             synchronizeActiveIDs()
         } catch {
             guard generations[id] == generation else { return }
+            flushDrafts()
             tasks[id] = nil
             if Self.isAlreadyComplete(error) {
                 snapshots[id] = nil
@@ -124,13 +166,19 @@ import Observation
     }
     private func receive(_ event: AIChatEvent, id: AiConversationID, generation: UUID) async {
         guard generations[id] == generation else { return }
+        if case .token(let delta) = event {
+            pendingDrafts[id, default: ""] += delta
+            scheduleFlush()
+            return
+        }
+        flushDrafts()
         var current = snapshots[id] ?? .init()
         switch event {
         case .userMessage(let message):
             current.userMessage = message
             merge(message, id: id)
             touch(id)
-        case .token(let delta): current.assistantDraft += delta
+        case .token: return
         case .toolResult(let message):
             current.toolMessages.append(message)
             merge(message, id: id)

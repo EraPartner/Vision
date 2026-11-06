@@ -45,7 +45,6 @@ struct VibrancyBackground: NSViewRepresentable {
 struct SidebarGlassBackground: View {
     @Environment(\.visionTheme) var theme
     @Environment(\.visionVisualEffects) private var visualEffects
-    @Environment(\.visionFullEffects) private var fullEffects
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
@@ -57,14 +56,9 @@ struct SidebarGlassBackground: View {
                 VibrancyBackground(
                     material: .sidebar,
                     blendingMode: visualEffects == .enhanced ? .behindWindow : .withinWindow)
-                if fullEffects && visualEffects == .enhanced {
-                    // Full effects keep both blur passes under native vibrancy: the system
-                    // blur behind the window and the chrome's own `backdrop-filter: blur(24px)
-                    // saturate(...)` over it (index.css `html.electron-mac.vibrancy:not(.fx-full)`
-                    // drops the second pass only when Full effects are off; ADR-129, ADR-244).
-                    // The nearest system material to `Glass.chromeBlur` is regular.
-                    Rectangle().fill(.regularMaterial)
-                }
+                // No second blur pass over the vibrancy, Full effects or not: the desktop rail
+                // filters with saturate alone (`.app-sidebar.glass-chrome`, index.css phase D),
+                // which SwiftUI cannot apply to a backdrop.
                 LinearGradient(
                     colors: [
                         Color(token: glass.sidebarTop, opacity: glass.sidebarTopOpacity),

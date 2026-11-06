@@ -35,7 +35,8 @@ extension APIClient: NativeSidebarBadgeService {
 }
 
 /// `NavItemBadge`'s query policies: counts are fresh for 30 seconds (needs-category),
-/// the monitor inbox refetches every 60 seconds and a pending insight projection is
+/// the monitor inbox refetches every 5 minutes and when the app returns (`useMonitorInboxBadge`,
+/// ADR-256 F3; the monitors page keeps its own 60 second poll) and a pending insight projection is
 /// polled every 2 seconds. A failed read keeps the last count, as a React Query refetch
 /// keeps its data; a first failure shows no count.
 @MainActor @Observable public final class NativeSidebarBadgesModel {
@@ -53,7 +54,7 @@ extension APIClient: NativeSidebarBadgeService {
     static let needsCategoryFresh: TimeInterval = 30
     static let insightsFresh: TimeInterval = 60
     static let insightsPendingPoll: TimeInterval = 2
-    static let monitorsInterval: TimeInterval = 60
+    static let monitorsInterval: TimeInterval = 300
 
     public init(service: any NativeSidebarBadgeService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -86,8 +87,10 @@ extension APIClient: NativeSidebarBadgeService {
         }
     }
 
-    /// Runs for the sidebar's lifetime and ends when its task is cancelled.
+    /// Runs while the app is active and ends when its task is cancelled. Each start is the app
+    /// coming back, which re-reads the monitor inbox (`refetchOnWindowFocus`).
     public func run() async {
+        monitorsReadAt = nil
         while !Task.isCancelled {
             await refresh()
             let pause = insightsPending ? Self.insightsPendingPoll : min(Self.needsCategoryFresh, Self.monitorsInterval)

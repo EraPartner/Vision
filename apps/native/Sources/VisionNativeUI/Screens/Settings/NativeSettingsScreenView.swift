@@ -19,7 +19,8 @@ struct NativeSettingsScreenView: View {
     private var loadKey: String { section + "|" + String(model.isOnline) }
     private var pollKey: String {
         section + "|" + String(visible) + "|" + String(ai.isOnline) + "|"
-            + String(describing: scenePhase) + "|" + String(ai.statusPollInterval ?? -1)
+            + String(describing: scenePhase) + "|" + String(ai.statusPollInterval ?? -1) + "|"
+            + String(UserPresence.shared.isAway)
     }
 
     init(
@@ -62,11 +63,13 @@ struct NativeSettingsScreenView: View {
             }
         }
         .task(id: pollKey) {
-            while visible, section == "ai", scenePhase == .active, ai.isOnline,
+            while visible, section == "ai", scenePhase == .active, ai.isOnline, !UserPresence.shared.isAway,
                 let seconds = ai.statusPollInterval
             {
                 do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
-                guard !Task.isCancelled, visible, section == "ai", scenePhase == .active, ai.isOnline else { return }
+                guard !Task.isCancelled, visible, section == "ai", scenePhase == .active, ai.isOnline,
+                    !UserPresence.shared.isAway
+                else { return }
                 await ai.pollStatus()
             }
         }

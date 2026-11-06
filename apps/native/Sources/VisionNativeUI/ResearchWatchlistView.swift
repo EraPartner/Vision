@@ -89,8 +89,8 @@ public struct ResearchWatchlistView: View {
                 model.clearNotice(id)
             }
         }
-        .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
+        .task(id: scenePhase == .active && !UserPresence.shared.isAway) {
+            guard scenePhase == .active, !UserPresence.shared.isAway else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { break }
                 if scenePhase == .active && model.isOnline { await model.poll() }

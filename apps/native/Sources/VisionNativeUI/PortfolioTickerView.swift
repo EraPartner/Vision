@@ -11,6 +11,8 @@ struct PortfolioTickerView: View {
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt: Date?
     @State private var overrides: [InvestmentID: Bool] = [:]
+    /// The window is key and shown (`fx-idle-atmosphere .ticker-track`, ADR-257 I3).
+    @State private var windowLive = true
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @Environment(\.visionTheme) private var theme
@@ -18,8 +20,14 @@ struct PortfolioTickerView: View {
         model.investments.filter { $0.isActive && $0.priceProvider == .yahoo && !symbol($0).isEmpty }
     }
     private var included: [PortfolioInvestment] { quotable.filter { overrides[$0.id] ?? ($0.showInTicker != false) } }
-    private var active: Bool { visible && scenePhase == .active && model.isOnline }
-    private var moving: Bool { active && !hovered && !reducedMotion }
+    private var active: Bool {
+        visible && scenePhase == .active && model.isOnline && !UserPresence.shared.isAway
+    }
+    /// The tape holds with the aurora: on an idle window and behind an open modal
+    /// (`fx-idle-atmosphere` and `fx-modal-open .ticker-track`, ADR-255, ADR-257), and resumes in place.
+    private var moving: Bool {
+        active && !hovered && !reducedMotion && windowLive && !VisionModalRegistry.shared.isOpen
+    }
     private var quoted: [(PortfolioInvestment, PortfolioQuote)] {
         included.compactMap { investment in
             guard let quote = model.quotes.first(where: { $0.symbol.uppercased() == symbol(investment) }),
@@ -68,6 +76,7 @@ struct PortfolioTickerView: View {
                 .popover(isPresented: $manager) { management }
             }
             .visionCardBackground()
+            .background { WindowLivenessProbe { windowLive = $0 } }
             .accessibilityLabel(shell.strings.t("portfolio.ticker.aria"))
             .onHover { hovered = $0 }
             .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }

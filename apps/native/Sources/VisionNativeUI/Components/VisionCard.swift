@@ -7,8 +7,8 @@ import VisionNativeCore
 /// embossed inset edge (a top highlight and, in light mode, a bottom hairline) and the soft
 /// drop shadow. Print reports keep a flat white card with a hairline.
 ///
-/// Full effects (`useFullEffects`, card.tsx) swap `glass-thin` for `glass-regular`: a system
-/// material backdrop under the 135 degree regular gradient. The premium frame (border, edge,
+/// Full effects (`useFullEffects`, card.tsx) swap `glass-thin` for `glass-regular`: the 135
+/// degree regular gradient, with no blurred backdrop (`.card-material`). The premium frame (border, edge,
 /// shadow) stays, as `.premium-frame` overrides the material's own.
 ///
 /// An interactive card (`premium-frame-interactive`, index.css) tints its frame with
@@ -24,6 +24,10 @@ struct VisionCardBackground: View {
     @Environment(\.visionTheme) private var theme
     @Environment(\.visionFullEffects) private var fullEffects
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.visionVisualEffects) private var visualEffects
+    /// `prefers-reduced-transparency` or the reduced tier: a fully opaque `--card` (ADR-257 I4), so
+    /// the compositor culls what lies under the card.
+    private var opaque: Bool { reduceTransparency || visualEffects == .reduced }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -93,12 +97,15 @@ struct VisionCardBackground: View {
     {
         let palette = theme.palette
         let dark = theme.isDark
-        let fillTop = Color(token: palette.glassSurface, opacity: dark ? 0.64 : 0.72)
-        let bottomAlpha = dark ? 0.78 : 0.56
+        let opaqueCard = Color(token: palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity)
+        let fillTop = opaque ? opaqueCard : Color(token: palette.glassSurface, opacity: dark ? 0.64 : 0.72)
+        let bottomAlpha = opaque ? 1 : dark ? 0.78 : 0.56
         let fillBottom =
-            dark
-            ? Color(token: palette.glassSurfaceDeep, opacity: bottomAlpha)
-            : Color(token: palette.glassSurface, opacity: bottomAlpha)
+            opaque
+            ? opaqueCard
+            : dark
+                ? Color(token: palette.glassSurfaceDeep, opacity: bottomAlpha)
+                : Color(token: palette.glassSurface, opacity: bottomAlpha)
         return VisionCardLayerStyle(
             cornerRadius: cornerRadius,
             fillTop: NSColor(fillTop).cgColor,
@@ -132,15 +139,16 @@ struct VisionCardBackground: View {
         if fullEffects {
             // card.tsx: `fullEffects ? "glass-regular" : "glass-thin"`. Reduce Transparency
             // replaces the backdrop and gradient with `--card` (index.css reduced-transparency).
-            if reduceTransparency {
+            if opaque {
                 shape.fill(Color(token: palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity))
             } else {
-                shape
-                    .fill(.regularMaterial)
-                    .overlay(
-                        shape.fill(
-                            GlassMaterialSpec.regular.appearance(isDark: theme.isDark).fill
-                                .linearGradient(selection: theme.selection)))
+                // `.card-material` (index.css, phase D): a card only sits over the canvas, whose
+                // soft gradients a blur returns unchanged, so the web filters it with saturate
+                // alone. SwiftUI has no backdrop saturate, and a system material would re-blur on
+                // every drift step, so the card draws the regular fill without a backdrop.
+                shape.fill(
+                    GlassMaterialSpec.regular.appearance(isDark: theme.isDark).fill
+                        .linearGradient(selection: theme.selection))
             }
         } else {
             shape.fill(

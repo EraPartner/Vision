@@ -122,8 +122,8 @@ public struct ResearchMarketLookupView: View {
                 model.action.clearNotice($0)
             }
         }
-        .task(id: scenePhase == .active && model.isOnline) {
-            guard scenePhase == .active, model.isOnline else { return }
+        .task(id: scenePhase == .active && model.isOnline && !UserPresence.shared.isAway) {
+            guard scenePhase == .active, model.isOnline, !UserPresence.shared.isAway else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
                 guard !Task.isCancelled else { return }

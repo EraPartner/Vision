@@ -11,7 +11,8 @@ public struct ResearchHomeView: View {
         self.model = model
         self.shell = shell
     }
-    private var polling: Bool { visible && scenePhase == .active && model.isOnline }
+    /// Quote and news polls run while the page is shown, the app active and the user present (ADR-256 F5).
+    private var polling: Bool { visible && scenePhase == .active && model.isOnline && !UserPresence.shared.isAway }
     private var locale: Locale { shell.settings.numberFormat.locale }
     public var body: some View {
         GeometryReader { geometry in

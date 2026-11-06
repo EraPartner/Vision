@@ -106,6 +106,19 @@ struct AIChatTests {
         #expect(store.snapshot(id: "a").assistantDraft == "retained partial")
         #expect(store.snapshot(id: "a").lastRequest?.message == "second")
     }
+    @Test func tokensReadAtOnceAndPublishTogetherOnTheNextFrame() async throws {
+        let service = ChatFixtureService()
+        let store = AIChatStreamStore(service: service)
+        let sending = Task { await store.send(.init(conversationID: "a", message: "question")) }
+        await service.waitForStream("a")
+        try await service.push("a", event: "token", raw: .string("one "))
+        try await service.push("a", event: "token", raw: .string("two"))
+        await waitUntil { store.snapshot(id: "a").assistantDraft == "one two" }
+        await waitUntil { store.snapshots["a"]?.assistantDraft == "one two" }
+        store.stop(id: "a")
+        await sending.value
+        #expect(store.snapshot(id: "a").assistantDraft == "one two")
+    }
     @Test func terminalLessEofIsInterruptedAndAlreadyCompleteReadsAuthoritativeConversation() async throws {
         let service = ChatFixtureService()
         let store = AIChatStreamStore(service: service)

@@ -52,7 +52,8 @@ struct CardSheen: View {
 
 /// BackgroundQueryIndicator: while a read is in flight behind a shown screen, a 2 pt
 /// primary/25 track with a primary → accent shimmer crossing it every 2.4 s (linear);
-/// Reduce Motion keeps the static track.
+/// Reduce Motion keeps the static track, as does an open modal (`fx-modal-open .animate-shimmer`:
+/// nothing re-renders under the frosted overlay).
 struct BackgroundQueryIndicator: View {
     let inspector: NativeAPIInspectorModel
     @Environment(\.visionTheme) private var theme
@@ -64,7 +65,7 @@ struct BackgroundQueryIndicator: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     theme.primary.opacity(0.25)
-                    if !reduceMotion {
+                    if !reduceMotion && !VisionModalRegistry.shared.isOpen {
                         LinearGradient(
                             stops: [
                                 .init(color: .clear, location: 0), .init(color: theme.primary, location: 0.45),

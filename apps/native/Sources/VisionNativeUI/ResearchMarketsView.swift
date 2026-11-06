@@ -13,7 +13,9 @@ public struct ResearchMarketsView: View {
         self.shell = shell
     }
     private var selection: String { model.region.rawValue + "|" + model.sector }
-    private var polling: String { visible && scenePhase == .active && model.isOnline ? selection : "paused" }
+    private var polling: String {
+        visible && scenePhase == .active && model.isOnline && !UserPresence.shared.isAway ? selection : "paused"
+    }
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
