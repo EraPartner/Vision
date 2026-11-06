@@ -748,7 +748,11 @@ when a group's payee or category changes, then reloads the preview; Commit and D
 route with `/import` (`NativeShellModel.replace(with:)`) and the commit hands its receipt to
 `ImportsModel.showCommitReceipt`. One `ImportNoticeCenter` stacks the toasts of both pages. `ImportsModel` loads the built-in adapters once, the saved
 parsers (one-minute stale time) and the history pages (ten per page, 30-second stale time), each
-with one request in flight. A built-in bank streams `POST /api/import/csv/stream` through
+with one request in flight. The Bank source starts on Detect automatically (ADR-268):
+`BankImportDetector` ports `bankImportDetection.ts`, reading the file's first 64 KiB against the
+built-in signatures and each saved parser's header row, and the card uses a single recognised
+source and waits for a choice on none or an ambiguous fit. A built-in bank streams
+`POST /api/import/csv/stream` through
 `APIClient.streamEvents`: a hand-written `multipart/form-data` body (`MultipartFormData`), the
 response read as Server-Sent Events (`ServerSentEventParser`, the web's `readSseFrames`) over the
 `APIStreamTransport` seam, and Cancel cancels the task, which closes the connection. A custom or

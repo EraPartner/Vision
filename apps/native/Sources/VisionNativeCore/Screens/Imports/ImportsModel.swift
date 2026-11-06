@@ -37,8 +37,11 @@ public final class ImportsModel {
     // MARK: Bank import card
 
     public private(set) var file: ImportFile?
-    /// The Bank source select; `nil` until one is chosen.
-    public private(set) var source: ImportSource?
+    /// The Bank source select's value (`bankSource`); starts on Detect automatically.
+    public private(set) var selection: ImportSource = .auto
+    /// What Detect automatically recognised in the current file (ADR-268); `nil` without a
+    /// file or while another source is chosen.
+    public private(set) var detection: BankImportDetection?
     /// The Parser name field (`customBank`).
     public var parserName = ""
     /// The custom CSV setup (`customConfig`).
@@ -254,9 +257,63 @@ public final class ImportsModel {
     private func setFile(_ next: ImportFile?) {
         file = next
         sampleRowsOverride = nil
+        detect()
     }
 
     // MARK: Bank source
+
+    /// The source the import runs with (`source`): the chosen one, or on Detect automatically
+    /// the one recognised source; `nil` while none is known.
+    public var source: ImportSource? {
+        guard selection == .auto else { return selection }
+        if case .detected(let detected) = detection { return detected }
+        return nil
+    }
+
+    /// Detect automatically reads the file's head against the built-in formats and the saved
+    /// parsers; a recognised saved parser loads its name and setup. Runs again when the file,
+    /// the saved parsers or the selection change.
+    private func detect() {
+        guard selection == .auto, let file else {
+            detection = nil
+            return
+        }
+        let result = BankImportDetector.detect(file.data, savedParsers: savedParsers ?? [])
+        detection = result
+        if case .detected(.saved(let id)) = result { loadSaved(id) }
+    }
+
+    private func loadSaved(_ id: CustomParserConfigID) {
+        guard let parser = savedParsers?.first(where: { $0.id == id }) else { return }
+        let loaded = CSVParserConfig(saved: parser.config)
+        config = loaded
+        parserName = parser.name
+        baseline = CSVParserDraft(name: parser.name, config: loaded)
+    }
+
+    /// The Detect automatically status line: the recognised source, the candidates, or none.
+    /// `nil` when the select is on another source or no file is chosen.
+    public func detectionStatus(_ strings: any Localizing) -> String? {
+        guard selection == .auto, file != nil, let detection else { return nil }
+        switch detection {
+        case .detected(let source):
+            return strings.t("importPage.detect.found", ["name": sourceLabel(source)])
+        case .ambiguous(let candidates):
+            return strings.t(
+                "importPage.detect.ambiguous", ["names": candidates.map(sourceLabel).joined(separator: ", ")])
+        case .none:
+            return strings.t("importPage.detect.none")
+        }
+    }
+
+    /// `sourceLabel`: a saved parser's or adapter's name, else its select value.
+    private func sourceLabel(_ source: ImportSource) -> String {
+        switch source {
+        case .saved(let id): return savedParsers?.first { $0.id == id }?.name ?? source.value
+        case .adapter(let key): return adapters?.first { $0.key == key }?.name ?? key
+        case .auto, .custom: return source.value
+        }
+    }
 
     public var isSaved: Bool {
         if case .saved = source { return true }
@@ -278,24 +335,20 @@ public final class ImportsModel {
     /// `handleBankChange`: a saved parser loads its name and setup, Custom starts blank, and
     /// any change clears the panel and leaves edit mode.
     public func selectSource(_ next: ImportSource?) {
-        source = next
+        selection = next ?? .auto
         progress = nil
         isEditingSaved = false
-        switch next {
+        switch selection {
         case .saved(let id):
-            if let parser = savedParsers?.first(where: { $0.id == id }) {
-                let loaded = CSVParserConfig(saved: parser.config)
-                config = loaded
-                parserName = parser.name
-                baseline = CSVParserDraft(name: parser.name, config: loaded)
-            }
+            loadSaved(id)
         case .custom:
             config = CSVParserConfig()
             parserName = ""
             baseline = CSVParserDraft()
-        case .adapter, nil:
+        case .auto, .adapter:
             break
         }
+        detect()
     }
 
     /// The bank name the import sends (`resolvedBank`).
@@ -304,7 +357,7 @@ public final class ImportsModel {
         case .saved: return selectedParser.map { $0.name.isEmpty ? "generic" : $0.name } ?? "generic"
         case .custom: return parserName.isEmpty ? "generic" : parserName
         case .adapter(let key): return key
-        case nil: return ""
+        case .auto, nil: return ""
         }
     }
 
@@ -346,8 +399,12 @@ public final class ImportsModel {
     }
 
     /// Edit: the saved parser opens in the editor.
+    /// Edit: the saved parser opens in the editor; a detected parser is pinned so a new file
+    /// cannot swap it mid-edit.
     public func startEditing() {
-        guard isSaved else { return }
+        guard isSaved, let source else { return }
+        selection = source
+        detection = nil
         isEditingSaved = true
     }
 
@@ -386,7 +443,9 @@ public final class ImportsModel {
                 let created = try await service.createCustomParser(name: name, config: saved)
                 storeParser(created)
                 post(.success, "importPage.customParser.saved")
-                source = .saved(created.id)
+                selection = .saved(created.id)
+                detection = nil
+                isEditingSaved = false
             }
             baseline = CSVParserDraft(name: name, config: saved)
             await loadParsers(force: true)
@@ -426,7 +485,8 @@ public final class ImportsModel {
             try await service.deleteCustomParser(id: parser.id)
             savedParsers?.removeAll { $0.id == parser.id }
             post(.success, "importPage.customParser.deleted")
-            source = nil
+            selection = .auto
+            detection = nil
             parserName = ""
             config = CSVParserConfig()
             baseline = CSVParserDraft()
@@ -596,8 +656,8 @@ public final class ImportsModel {
 
     /// The card after an import, a discard or leaving: no file, no source, a blank setup.
     private func resetCard(keepingProgress: Bool) {
+        selection = .auto
         setFile(nil)
-        source = nil
         parserName = ""
         config = CSVParserConfig()
         baseline = CSVParserDraft()
@@ -646,6 +706,7 @@ public final class ImportsModel {
             guard let list = try? await service.customParsers() else { return }
             self.savedParsers = list
             self.parsersFetchedAt = self.now()
+            self.detect()
         }
         parsersInFlight = task
         await task.value

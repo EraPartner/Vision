@@ -506,6 +506,10 @@ importPage.bankAccounts
 importPage.bankHint
 importPage.bankSource
 importPage.bankSourcePlaceholder
+importPage.autoDetect
+importPage.detect.found
+importPage.detect.ambiguous
+importPage.detect.none
 importPage.cancelBtn
 importPage.categories
 importPage.categoriesImport

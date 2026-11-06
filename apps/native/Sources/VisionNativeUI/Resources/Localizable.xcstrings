@@ -27343,6 +27343,24 @@
         }
       }
     },
+    "importPage.autoDetect": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detect automatically"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch herkennen"
+          }
+        }
+      }
+    },
     "importPage.bankAccount": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -28113,6 +28131,60 @@
           "stringUnit": {
             "state": "translated",
             "value": "Datumnotatie"
+          }
+        }
+      }
+    },
+    "importPage.detect.ambiguous": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file fits more than one format ({names}). Choose the right one above."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit bestand past bij meer dan één formaat ({names}). Kies hierboven het juiste."
+          }
+        }
+      }
+    },
+    "importPage.detect.found": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recognised as {name}."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herkend als {name}."
+          }
+        }
+      }
+    },
+    "importPage.detect.none": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision did not recognise this file. Choose your bank above, or set up a custom format."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision herkende dit bestand niet. Kies hierboven je bank of stel een aangepast formaat in."
           }
         }
       }
