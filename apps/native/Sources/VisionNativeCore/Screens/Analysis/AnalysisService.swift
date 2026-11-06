@@ -58,7 +58,7 @@ extension APIClient: AnalysisService {
         if let expected = input["requestId"]?.stringValue, result.requestId != expected {
             throw AnalysisDecode.failure("Analysis result belongs to a different request")
         }
-        if result.window.kind == "page", let expected = input["offset"]?.decimalValue,
+        if result.window.kind == .page, let expected = input["offset"]?.decimalValue,
             result.window.offset.map({ Decimal($0) }) != expected
         {
             throw AnalysisDecode.failure("Analysis result belongs to a different page")

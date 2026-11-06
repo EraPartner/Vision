@@ -19,7 +19,7 @@ struct ResearchChartBuilderSeriesView: View {
                         ).accessibilityHidden(true)
                         Text(series.macro?.title ?? series.symbol).font(.callout.weight(.medium)).lineLimit(2).visionTooltip(
                             series.macro?.title ?? series.symbol)
-                        if series.field == "volume" {
+                        if series.field == .volume {
                             Text(strings.t("research.builder.volume")).font(.caption).foregroundStyle(
                                 theme.secondaryLabel)
                         }
@@ -46,13 +46,13 @@ struct ResearchChartBuilderSeriesView: View {
             } label: {
                 Text(strings.t("research.builder.sourceHelp")).font(.callout)
             }
-            if model.state.series.contains(where: { $0.field == "price" }) {
+            if model.state.series.contains(where: { $0.field == .price }) {
                 ResearchChartBuilderIndicatorsView(model: model, shell: shell)
             }
         }.disabled(!model.isStorageLoaded || model.isStorageAction).zIndex(model.isSearchOpen ? 20 : 0)
     }
     @ViewBuilder private func seriesControls(_ series: ResearchChartBuilderSeries) -> some View {
-        if series.field != "volume" {
+        if series.field != .volume {
             VisionSelect(
                 selection: field(series, \.type), options: typeOptions(series),
                 accessibilityLabel: strings.t("customChart.chartType") + ": " + label(series)
@@ -61,8 +61,8 @@ struct ResearchChartBuilderSeriesView: View {
         VisionSelect(
             selection: field(series, \.axis),
             options: [
-                VisionSelectOption(value: "left", title: strings.t("research.builder.axisLeft")),
-                VisionSelectOption(value: "right", title: strings.t("research.builder.axisRight")),
+                VisionSelectOption(value: ResearchChartAxis.left, title: strings.t("research.builder.axisLeft")),
+                VisionSelectOption(value: ResearchChartAxis.right, title: strings.t("research.builder.axisRight")),
             ], accessibilityLabel: strings.t("research.builder.axisLabel") + ": " + label(series)
         ).frame(minWidth: 120)
         if let macro = series.macro {
@@ -75,14 +75,14 @@ struct ResearchChartBuilderSeriesView: View {
             ).frame(minWidth: 150)
         }
     }
-    private func typeOptions(_ series: ResearchChartBuilderSeries) -> [VisionSelectOption<String>] {
+    private func typeOptions(_ series: ResearchChartBuilderSeries) -> [VisionSelectOption<ResearchChartSeriesKind>] {
         var options = [
-            VisionSelectOption(value: "line", title: strings.t("research.builder.type.line")),
-            VisionSelectOption(value: "area", title: strings.t("research.builder.type.area")),
+            VisionSelectOption(value: ResearchChartSeriesKind.line, title: strings.t("research.builder.type.line")),
+            VisionSelectOption(value: ResearchChartSeriesKind.area, title: strings.t("research.builder.type.area")),
         ]
         if series.macro == nil {
             options.append(
-                VisionSelectOption(value: "candlestick", title: strings.t("research.builder.type.candlestick")))
+                VisionSelectOption(value: ResearchChartSeriesKind.candlestick, title: strings.t("research.builder.type.candlestick")))
         }
         return options
     }
@@ -94,16 +94,16 @@ struct ResearchChartBuilderSeriesView: View {
                     ? strings.t("research.builder.providerAuto") : provider.replacingOccurrences(of: "_", with: " "))
         }
     }
-    private func field(
-        _ series: ResearchChartBuilderSeries, _ path: WritableKeyPath<ResearchChartBuilderSeries, String>
-    ) -> Binding<String> {
+    private func field<Value>(
+        _ series: ResearchChartBuilderSeries, _ path: WritableKeyPath<ResearchChartBuilderSeries, Value>
+    ) -> Binding<Value> {
         .init(
             get: { model.state.series.first { $0.id == series.id }?[keyPath: path] ?? series[keyPath: path] },
             set: { value in model.updateSeries(id: series.id) { $0[keyPath: path] = value } })
     }
     private func label(_ series: ResearchChartBuilderSeries) -> String {
         (series.macro?.title ?? series.symbol)
-            + (series.field == "volume" ? " (" + strings.t("research.builder.volume") + ")" : "")
+            + (series.field == .volume ? " (" + strings.t("research.builder.volume") + ")" : "")
     }
 }
 

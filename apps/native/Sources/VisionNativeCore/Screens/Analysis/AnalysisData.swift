@@ -160,9 +160,13 @@ public struct AnalysisTemplate: Identifiable, Sendable {
                 orderBy: [.init(id: "month")])),
     ]
 }
+/// The result window's discriminant (`{ kind: "page" } | { kind: "truncated" }`).
+public enum AnalysisWindowKind: String, Sendable {
+    case page, truncated
+}
 public struct AnalysisWindow: Codable, Equatable, Sendable {
     public let raw: TaxValue
-    public let kind: String
+    public let kind: AnalysisWindowKind
     public let offset: Int?
     public let limit: Int?
     public let hasMore: Bool?
@@ -172,14 +176,15 @@ public struct AnalysisWindow: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let raw = try TaxValue(from: decoder)
         self.raw = raw
-        kind = try AnalysisDecode.string(raw["kind"])
+        let kindText = try AnalysisDecode.string(raw["kind"])
         returnedRows = try AnalysisDecode.count(raw["returnedRows"])
-        guard ["page", "truncated"].contains(kind) else { throw AnalysisDecode.failure("Unknown analysis window") }
-        offset = kind == "page" ? try AnalysisDecode.count(raw["offset"]) : nil
-        limit = kind == "page" ? try AnalysisDecode.count(raw["limit"]) : nil
-        hasMore = kind == "page" ? try AnalysisDecode.bool(raw["hasMore"]) : nil
-        enforcedLimit = kind == "truncated" ? try AnalysisDecode.count(raw["enforcedLimit"]) : nil
-        reason = kind == "truncated" ? try AnalysisDecode.string(raw["reason"]) : nil
+        guard let kind = AnalysisWindowKind(rawValue: kindText) else { throw AnalysisDecode.failure("Unknown analysis window") }
+        self.kind = kind
+        offset = kind == .page ? try AnalysisDecode.count(raw["offset"]) : nil
+        limit = kind == .page ? try AnalysisDecode.count(raw["limit"]) : nil
+        hasMore = kind == .page ? try AnalysisDecode.bool(raw["hasMore"]) : nil
+        enforcedLimit = kind == .truncated ? try AnalysisDecode.count(raw["enforcedLimit"]) : nil
+        reason = kind == .truncated ? try AnalysisDecode.string(raw["reason"]) : nil
     }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
 }

@@ -377,8 +377,8 @@ struct ResearchChartBuilderTests {
         #expect(await transport.chartReads == 1)
         let before = await transport.chartReads
         model.updateSeries(id: model.state.series[0].id) {
-            $0.axis = "right"
-            $0.type = "area"
+            $0.axis = .right
+            $0.type = .area
         }
         var state = model.state
         state.logLeft = true

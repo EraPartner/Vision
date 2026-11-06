@@ -80,16 +80,28 @@ public struct ResearchChartBuilderMacro: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
 }
+/// A chart series' value (`"price" | "volume"`).
+public enum ResearchChartField: String, CaseIterable, Sendable {
+    case price, volume
+}
+/// A chart series' mark (`"line" | "area" | "candlestick" | "bar"`).
+public enum ResearchChartSeriesKind: String, CaseIterable, Sendable {
+    case line, area, candlestick, bar
+}
+/// The value axis a series is drawn against (`"left" | "right"`).
+public enum ResearchChartAxis: String, CaseIterable, Sendable {
+    case left, right
+}
 public struct ResearchChartBuilderSeries: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var symbol: String
-    public var field: String
-    public var type: String
-    public var axis: String
+    public var field: ResearchChartField
+    public var type: ResearchChartSeriesKind
+    public var axis: ResearchChartAxis
     public var provider: String
     public var macro: ResearchChartBuilderMacro?
     public init(
-        id: String, symbol: String, field: String = "price", type: String = "line", axis: String = "left",
+        id: String, symbol: String, field: ResearchChartField = .price, type: ResearchChartSeriesKind = .line, axis: ResearchChartAxis = .left,
         provider: String = "", macro: ResearchChartBuilderMacro? = nil
     ) {
         self.id = id
@@ -106,8 +118,8 @@ public struct ResearchChartBuilderSeries: Codable, Equatable, Sendable, Identifi
     public var label: String { macro?.title ?? symbol }
     public var raw: TaxValue {
         var value: TaxValue = .object([
-            "id": .string(id), "symbol": .string(symbol), "field": .string(field), "type": .string(type),
-            "axis": .string(axis), "provider": .string(provider),
+            "id": .string(id), "symbol": .string(symbol), "field": .string(field.rawValue), "type": .string(type.rawValue),
+            "axis": .string(axis.rawValue), "provider": .string(provider),
         ])
         if let macro { value["macro"] = macro.raw }
         return value
@@ -117,9 +129,9 @@ public struct ResearchChartBuilderSeries: Codable, Equatable, Sendable, Identifi
             raw, required: ["id", "symbol", "field", "type", "axis", "provider"], optional: ["macro"])
         id = try ResearchChartValidation.string(raw["id"], min: 1, max: 128)
         symbol = try ResearchChartValidation.string(raw["symbol"], min: 1, max: 64)
-        field = try ResearchChartValidation.choice(raw["field"], ["price", "volume"])
-        type = try ResearchChartValidation.choice(raw["type"], ["line", "area", "candlestick", "bar"])
-        axis = try ResearchChartValidation.choice(raw["axis"], ["left", "right"])
+        field = try ResearchChartValidation.option(raw["field"], ResearchChartField.self)
+        type = try ResearchChartValidation.option(raw["type"], ResearchChartSeriesKind.self)
+        axis = try ResearchChartValidation.option(raw["axis"], ResearchChartAxis.self)
         provider = try ResearchChartValidation.string(raw["provider"], max: 64)
         macro = try raw["macro"].map { try ResearchChartBuilderMacro(raw: $0) }
     }
@@ -196,9 +208,7 @@ public struct ResearchChartBuilderState: Codable, Equatable, Sendable {
         rebase = try ResearchDecode.bool(raw["rebase"])
         series = try ResearchDecode.required(raw["series"], [ResearchChartBuilderSeries].self)
         indicators = try ResearchDecode.required(raw["indicators"], [ResearchChartBuilderIndicator].self)
-        oscillator = try ResearchChartOscillator(
-            rawValue: ResearchChartValidation.choice(raw["oscillator"], Set(ResearchChartOscillator.allCases.map(\.rawValue))))
-            ?? .off
+        oscillator = try ResearchChartValidation.option(raw["oscillator"], ResearchChartOscillator.self)
         oscillatorSeriesId = try ResearchDecode.optionalString(raw["oscillatorSeriesId"])
         guard series.count <= 5, indicators.count <= 20, Set(series.map(\.id)).count == series.count,
             Set(indicators.map(\.id)).count == indicators.count
@@ -330,5 +340,12 @@ public enum ResearchChartValidation {
         let text = try ResearchDecode.string(value)
         guard allowed.contains(text) else { throw ResearchDecode.failure("Invalid chart layout option") }
         return text
+    }
+    static func option<Option: RawRepresentable>(_ value: TaxValue?, _: Option.Type) throws -> Option
+    where Option.RawValue == String {
+        guard let option = Option(rawValue: try ResearchDecode.string(value)) else {
+            throw ResearchDecode.failure("Invalid chart layout option")
+        }
+        return option
     }
 }
