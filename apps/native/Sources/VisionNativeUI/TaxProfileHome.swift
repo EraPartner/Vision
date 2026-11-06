@@ -71,36 +71,37 @@ extension TaxProfileSheet {
             }
             number("tax.profile.field.cadastralIncome", path: path + ["cadastralIncome"])
             choice(
-                "tax.profile.field.regionLabel", path: path + ["region"], values: TaxProfileDraft.regions,
+                "tax.profile.field.regionLabel", path: path + ["region"], values: TaxRegion.allCases.map(\.rawValue),
                 prefix: "tax.profile.region.", suffix: ".label",
-                fallback: draft.get(["region"])?.stringValue ?? "flanders")
+                fallback: draft.get(["region"])?.stringValue ?? TaxRegion.flanders.rawValue)
         }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     var regionStep: some View {
         VStack(alignment: .leading, spacing: 18) {
             intro("region")
             field("tax.profile.field.regionLabel") {
-                ForEach(TaxProfileDraft.regions, id: \.self) { region in
+                ForEach(TaxRegion.allCases, id: \.self) { region in
                     Button {
                         model.edit {
-                            $0.set(["region"], .string(region))
+                            $0.set(["region"], .string(region.rawValue))
                             $0.set(
                                 ["communalSurchargePercent"],
-                                .number(region == "wallonia" ? Decimal.literal("7.5") : 7))
+                                .number(region == .wallonia ? Decimal.literal("7.5") : 7))
                         }
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
                             Image(
-                                systemName: draft.get(["region"])?.stringValue == region
+                                systemName: TaxRegion(rawValue: draft.get(["region"])?.stringValue ?? "") == region
                                     ? "largecircle.fill.circle" : "circle")
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(strings.t("tax.profile.region.\(region).label")).font(.callout.weight(.medium))
-                                Text(strings.t("tax.profile.region.\(region).desc")).font(.footnote)
+                                Text(strings.t("tax.profile.region.\(region.rawValue).label"))
+                                    .font(.callout.weight(.medium))
+                                Text(strings.t("tax.profile.region.\(region.rawValue).desc")).font(.footnote)
                                 Text(
                                     strings.t(
                                         "tax.profile.region.defaultSurcharge",
                                         [
-                                            "pct": region == "wallonia"
+                                            "pct": region == .wallonia
                                                 ? LocaleNumber.editable(
                                                     Decimal(string: "7.5"), format: settings.numberFormat) : "7"
                                         ])

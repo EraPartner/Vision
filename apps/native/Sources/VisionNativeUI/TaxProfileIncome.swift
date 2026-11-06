@@ -9,7 +9,7 @@ extension TaxProfileSheet {
             Text(strings.t("tax.household.activities.title", ["partner": label(model.partner)])).font(.headline)
             let activities = draft.get(partnerPath + ["activities"])?.arrayValue ?? []
             ForEach(TaxProfileRow.rows(activities)) { row in
-                activityRow(row.index, row.value, removable: model.partner == "B" || activities.count > 1)
+                activityRow(row.index, row.value, removable: model.partner == .b || activities.count > 1)
             }
             Button(strings.t("tax.household.activity.add")) { model.edit { $0.addActivity(partner: model.partner) } }
                 .buttonStyle(.visionOutline)
@@ -31,7 +31,7 @@ extension TaxProfileSheet {
     }
     func activityRow(_ index: Int, _ activity: TaxValue, removable: Bool) -> some View {
         let path = partnerPath + ["activities", String(index)]
-        let kind = activity["kind"]?.stringValue ?? "employee"
+        let kind = TaxActivityKind(activity["kind"]) ?? .employee
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(strings.t("tax.household.activity.kindLabel", ["n": String(index + 1)]))
@@ -42,8 +42,9 @@ extension TaxProfileSheet {
                         set: { value in
                             model.edit { $0.setActivityKind(partner: model.partner, index: index, kind: value) }
                         }),
-                    options: TaxProfileDraft.activityKinds.map { kind in
-                        VisionSelectOption(value: kind, title: strings.t("tax.household.activity.kind.\(kind)"))
+                    options: TaxActivityKind.allCases.map { kind in
+                        VisionSelectOption(
+                            value: kind, title: strings.t("tax.household.activity.kind.\(kind.rawValue)"))
                     },
                     accessibilityLabel: strings.t("tax.household.activity.kindLabel", ["n": String(index + 1)]))
                 if removable {
@@ -56,9 +57,9 @@ extension TaxProfileSheet {
                     .accessibilityLabel(strings.t("tax.household.activity.remove", ["n": String(index + 1)]))
                 }
             }
-            Text(strings.t("tax.household.activity.kind.\(kind).desc")).font(.footnote).foregroundStyle(
+            Text(strings.t("tax.household.activity.kind.\(kind.rawValue).desc")).font(.footnote).foregroundStyle(
                 theme.secondaryLabel)
-            if kind == "pension" {
+            if kind == .pension {
                 choice(
                     "tax.household.activity.pensionKind", path: path + ["pensionKind"],
                     values: ["other", "statutory_from_legal_age", "survivor_or_transition"],
@@ -72,9 +73,9 @@ extension TaxProfileSheet {
                 }
             }
             number(
-                kind == "net_professional_amount"
+                kind == .netProfessionalAmount
                     ? "tax.household.activity.netIncome" : "tax.profile.field.grossAnnualIncome",
-                path: path + [kind == "net_professional_amount" ? "netProfessionalIncome" : "grossIncome"])
+                path: path + [kind.incomeField])
             HStack(alignment: .top) {
                 date("tax.household.activity.startDate", path: path + ["startDate"])
                 date("tax.household.activity.endDate", path: path + ["endDate"])

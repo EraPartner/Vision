@@ -121,16 +121,16 @@ struct TaxProfileSheet: View {
         case .region: "mappin"
         }
     }
-    func label(_ id: String) -> String {
-        draft.partners.first { $0["id"]?.stringValue == id }?["displayName"]?.stringValue
+    func label(_ id: TaxPartnerID) -> String {
+        draft.partners.first { TaxPartnerID($0["id"]) == id }?["displayName"]?.stringValue
             .flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-            ?? strings.t("tax.household.partner.\(id)")
+            ?? strings.t("tax.household.partner.\(id.rawValue)")
     }
     @ViewBuilder var partnerPicker: some View {
         if draft.partners.count > 1 {
             VisionSegmentedControl(
                 selection: $model.selectedPartner,
-                options: draft.partners.compactMap { $0["id"]?.stringValue }.map { id in
+                options: draft.partners.compactMap { TaxPartnerID($0["id"]) }.map { id in
                     VisionSegmentOption(value: id, title: label(id))
                 }
             ).accessibilityLabel(strings.t("tax.household.partnerPicker"))

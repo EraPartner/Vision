@@ -67,7 +67,7 @@ struct TaxDeductionsView: View {
     @Environment(\.visionTheme) private var theme
     var strings: any Localizing { shell.strings }
     private var twoPartners: Bool {
-        household?["partners"]?.arrayValue?.contains { $0["id"]?.stringValue == "B" } ?? false
+        household?["partners"]?.arrayValue?.contains { TaxPartnerID($0["id"]) == .b } ?? false
     }
     private var currency: CurrencyCode { model.data?.currency ?? .eur }
 
@@ -126,12 +126,13 @@ struct TaxDeductionsView: View {
                 }
                 if twoPartners, let household, let mapping = group.mapping, !mapping.isHome {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(["A", "B"], id: \.self) { id in
+                        ForEach(TaxPartnerID.allCases, id: \.self) { id in
                             Text(
                                 strings.t(
                                     "tax.deductionCandidates.partnerShare",
                                     [
-                                        "partner": partnerName(id), "value": group.partnerShares?[id].map(money) ?? "—",
+                                        "partner": partnerName(id),
+                                        "value": group.partnerShares?[id.rawValue].map(money) ?? "—",
                                         "current": money(mapping.currentValue(in: household, partner: id)),
                                     ]))
                         }
@@ -172,17 +173,17 @@ struct TaxDeductionsView: View {
     func currentTotal(_ group: TaxDeductionGroup) -> Decimal {
         guard let household, let mapping = group.mapping else { return 0 }
         let first = mapping.currentValue(in: household)
-        return twoPartners && !mapping.isHome ? first + mapping.currentValue(in: household, partner: "B") : first
+        return twoPartners && !mapping.isHome ? first + mapping.currentValue(in: household, partner: .b) : first
     }
     private func hasAttribution(_ group: TaxDeductionGroup) -> Bool {
         !twoPartners || group.mapping?.isHome == true
             || (group.partnerShares?["A"] != nil && group.partnerShares?["B"] != nil)
     }
-    private func partnerName(_ id: String) -> String {
-        let name = household?["partners"]?.arrayValue?.first { $0["id"]?.stringValue == id }?["displayName"]?
+    private func partnerName(_ id: TaxPartnerID) -> String {
+        let name = household?["partners"]?.arrayValue?.first { TaxPartnerID($0["id"]) == id }?["displayName"]?
             .stringValue
         return name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
-            ?? strings.t("tax.household.partner." + id)
+            ?? strings.t("tax.household.partner." + id.rawValue)
     }
 }
 

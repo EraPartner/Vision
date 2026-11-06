@@ -335,9 +335,7 @@ struct TaxHistorySheet: View {
                 let activities = partner["activities"]?.arrayValue ?? []
                 let gross = activities.reduce(Decimal.zero) { total, activity in
                     total
-                        + (activity[
-                            activity["kind"]?.stringValue == "net_professional_amount"
-                                ? "netProfessionalIncome" : "grossIncome"]?.decimalValue ?? 0)
+                        + (activity[(TaxActivityKind(activity["kind"]) ?? .employee).incomeField]?.decimalValue ?? 0)
                 }
                 let id = partner["id"]?.stringValue ?? "A"
                 let name = partner["displayName"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)

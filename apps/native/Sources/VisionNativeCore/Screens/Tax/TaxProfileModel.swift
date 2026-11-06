@@ -6,7 +6,7 @@ import Observation
 public final class TaxProfileModel {
     public private(set) var draft = TaxProfileDraft(value: .object([:]))
     public var step: TaxProfileStep = .household
-    public var selectedPartner = "A"
+    public var selectedPartner = TaxPartnerID.a
     public var categorySearch = ""
     public private(set) var isPresented = false
     public private(set) var isSaving = false
@@ -24,8 +24,8 @@ public final class TaxProfileModel {
     public private(set) var isFiled = false
     public private(set) var filedOverride = false
     public var isLocked: Bool { isFiled && !filedOverride }
-    public var partner: String {
-        draft.partners.contains { $0["id"]?.stringValue == selectedPartner } ? selectedPartner : "A"
+    public var partner: TaxPartnerID {
+        draft.partners.contains { TaxPartnerID($0["id"]) == selectedPartner } ? selectedPartner : .a
     }
     public var assessment: OpenAPI.BelgianTaxAssessmentDecision? {
         preview?.result.assessment ?? (draft.value == initialValue ? initial?.result.assessment : nil)
@@ -82,7 +82,7 @@ public final class TaxProfileModel {
             isFiled = metadata[String(year)]?["filing"] != nil && metadata[String(year)]?["filing"] != .null
             filedOverride = false
             step = initialStep
-            selectedPartner = "A"
+            selectedPartner = .a
             categorySearch = ""
             hasPendingChanges = false
             error = nil

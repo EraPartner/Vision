@@ -84,10 +84,14 @@ extension TaxProfileSheet {
                 Text(strings.t("tax.household.event.kindLabel")).foregroundStyle(theme.foreground)
                 VisionSelect(
                     selection: Binding(
-                        get: { event["kind"]?.stringValue ?? "marriage" },
-                        set: { value in model.edit { $0.setEventKind(index: index, kind: value) } }),
-                    options: TaxProfileDraft.eventKinds.map { kind in
-                        VisionSelectOption(value: kind, title: strings.t("tax.household.event.kind.\(kind)"))
+                        get: { event["kind"]?.stringValue ?? TaxRelationshipEventKind.marriage.rawValue },
+                        set: { value in
+                            guard let kind = TaxRelationshipEventKind(rawValue: value) else { return }
+                            model.edit { $0.setEventKind(index: index, kind: kind) }
+                        }),
+                    options: TaxRelationshipEventKind.allCases.map { kind in
+                        VisionSelectOption(
+                            value: kind.rawValue, title: strings.t("tax.household.event.kind.\(kind.rawValue)"))
                     },
                     accessibilityLabel: strings.t("tax.household.event.kindLabel"))
                 Button {
@@ -109,7 +113,9 @@ extension TaxProfileSheet {
             }
         }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
-    func claimant(_ key: String, path: [String], fallback: String = "A", shown: String? = nil) -> some View {
+    func claimant(
+        _ key: String, path: [String], fallback: String = TaxPartnerID.a.rawValue, shown: String? = nil
+    ) -> some View {
         field(key) {
             VisionSelect(
                 selection: Binding(
@@ -117,10 +123,7 @@ extension TaxProfileSheet {
                     set: { value in
                         model.edit { $0.set(path, .string(value)) }
                     }),
-                options: [
-                    VisionSelectOption(value: "A", title: label("A")),
-                    VisionSelectOption(value: "B", title: label("B")),
-                ],
+                options: TaxPartnerID.allCases.map { VisionSelectOption(value: $0.rawValue, title: label($0)) },
                 accessibilityLabel: strings.t(key), expands: true)
         }
     }

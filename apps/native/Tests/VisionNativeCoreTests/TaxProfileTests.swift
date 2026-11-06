@@ -13,7 +13,7 @@ struct TaxProfileDraftTests {
         draft.set(["home", "mortgageSharePartnerB"], .number(50))
         draft.set(["relationship", "deathYearElection"], .string("joint"))
         draft.addEvent()
-        draft.setEventKind(index: 0, kind: "death")
+        draft.setEventKind(index: 0, kind: .death)
         draft.setHasPartner(false)
         #expect(draft.partners.count == 1)
         #expect(draft.get(["dependents", "claimantPartnerId"]) == .string("A"))
@@ -30,21 +30,21 @@ struct TaxProfileDraftTests {
         draft.set(
             ["partners", "0", "professionalExpenses", "remuneration"],
             .object(["method": .string("actual"), "actualAmount": .number(100)]))
-        draft.setActivityKind(partner: "A", index: 0, kind: "net_professional_amount")
+        draft.setActivityKind(partner: .a, index: 0, kind: .netProfessionalAmount)
         #expect(draft.get(["partners", "0", "activities", "0", "netProfessionalIncome"]) == .number(amount))
         #expect(draft.get(["partners", "0", "activities", "0", "grossIncome"]) == .number(0))
-        #expect(draft.expenseCategories("A").isEmpty)
+        #expect(draft.expenseCategories(.a).isEmpty)
         #expect(draft.get(["partners", "0", "professionalExpenses"]) == .object([:]))
-        draft.setActivityKind(partner: "A", index: 0, kind: "employee")
+        draft.setActivityKind(partner: .a, index: 0, kind: .employee)
         #expect(draft.get(["partners", "0", "activities", "0", "grossIncome"]) == .number(amount))
         #expect(draft.get(["partners", "0", "activities", "0", "netProfessionalIncome"]) == nil)
-        draft.removeActivity(partner: "A", index: 0)
+        draft.removeActivity(partner: .a, index: 0)
         #expect(draft.get(["partners", "0", "activities"])?.arrayValue?.count == 1)
     }
     @Test func activityAndEventIdentifiersStayUnique() throws {
         var draft = TaxProfileDraft(value: try profileHousehold())
-        draft.addActivity(partner: "A")
-        draft.addActivity(partner: "A")
+        draft.addActivity(partner: .a)
+        draft.addActivity(partner: .a)
         draft.setHasPartner(true)
         let ids = draft.partners.flatMap { $0["activities"]?.arrayValue ?? [] }.compactMap { $0["id"]?.stringValue }
         #expect(Set(ids).count == ids.count)
