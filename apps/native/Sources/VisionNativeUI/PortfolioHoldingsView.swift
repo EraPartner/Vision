@@ -6,41 +6,23 @@ public struct PortfolioHoldingsView: View {
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
-    let assetClass: OpenAPI.AssetClass
+    let page: PortfolioHoldingsPage
+    private var assetClass: OpenAPI.AssetClass { page.assetClass }
     @State private var query = LocalTableQuery()
-    @State private var optionalColumns = Set<String>()
+    @State private var optionalColumns = Set<HoldingColumn>()
     @Environment(\.visionTheme) private var theme
 
-    /// `assetClass` is the route's segment: "stocks" and "real-estate" name the stock and real estate classes.
     public init(
-        model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel, assetClass route: String
+        model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel, page: PortfolioHoldingsPage
     ) {
         self.model = model
         self.editing = editing
         self.shell = shell
-        switch route {
-        case "stocks": assetClass = .stock
-        case "real-estate": assetClass = .realEstate
-        default: assetClass = OpenAPI.AssetClass(rawValue: route)
-        }
+        self.page = page
     }
     private var strings: any Localizing { shell.strings }
-    private var prefix: String {
-        switch assetClass {
-        case .crypto: "crypto"
-        case .metals: "metals"
-        case .realEstate: "realestate"
-        case .savings, .bond: "savings"
-        default: "stocks"
-        }
-    }
-    private var classes: [OpenAPI.AssetClass] {
-        switch assetClass {
-        case .stock, .etf: [.stock, .etf]
-        case .savings, .bond: [.savings, .bond]
-        default: [assetClass]
-        }
-    }
+    private var prefix: String { page.stringsPrefix }
+    private var classes: [OpenAPI.AssetClass] { page.assetClasses }
     private var symbol: String {
         switch assetClass {
         case .crypto: "bitcoinsign.circle"
@@ -57,15 +39,6 @@ public struct PortfolioHoldingsView: View {
     private var totals: PortfolioHoldingTotals { model.holdingTotals(assetClasses: classes) }
     /// RealEstatePage: a property's rent without a stored rate makes the monthly rent unavailable.
     private var missingRentRate: Bool { isRealEstate && totals.monthlyRentRateMissing }
-    private var emptyKey: String {
-        switch prefix {
-        case "crypto": "noCrypto"
-        case "metals": "noMetals"
-        case "realestate": "noProperties"
-        case "savings": "noAccounts"
-        default: "noStocks"
-        }
-    }
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -97,8 +70,8 @@ public struct PortfolioHoldingsView: View {
                 } else if holdings.isEmpty {
                     AdminCard {
                         VisionEmptyState(
-                            symbol: symbol, title: strings.t(prefix + "." + emptyKey),
-                            description: strings.t(prefix + "." + emptyKey + "Desc")
+                            symbol: symbol, title: strings.t(page.emptyKey),
+                            description: strings.t(page.emptyKey + "Desc")
                         ) {
                             Button(strings.t("addInv.title")) {
                                 editing.beginAddInvestment(allowedAssetClasses: classes)
@@ -110,13 +83,13 @@ public struct PortfolioHoldingsView: View {
                     if isUnitBased { PortfolioStalePricesBanner(model: model, holdings: holdings, shell: shell) }
                     summary
                     if isUnitBased { holdingsTable } else { assetCards }
-                    Text(strings.t(prefix == "metals" ? "stocks.howItWorks" : prefix + ".howItWorks"))
+                    Text(strings.t(page.howItWorksKey))
                         .font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.settings.defaultCurrency.rawValue + String(shell.settingsRevision)) { await reload() }
-        .onChange(of: assetClass) { _, _ in
+        .onChange(of: page) { _, _ in
             query.clearAll()
             optionalColumns = []
         }
@@ -285,13 +258,13 @@ public struct PortfolioHoldingsView: View {
                     Spacer()
                     Menu {
                         ForEach(
-                            ["avgCost", "realized", "fx", "dividends"].filter {
-                                ($0 != "dividends" || assetClass != .crypto)
-                                    && ($0 != "fx" || holdings.contains { $0.originalCurrency != $0.currency })
+                            HoldingColumn.optional.filter {
+                                ($0 != .dividends || assetClass != .crypto)
+                                    && ($0 != .fx || holdings.contains { $0.originalCurrency != $0.currency })
                             }, id: \.self
                         ) { key in
                             Toggle(
-                                strings.t("portfolio." + (key == "fx" ? "fxPnl" : key)),
+                                strings.t(key.titleKey),
                                 isOn: Binding(
                                     get: { optionalColumns.contains(key) },
                                     set: { enabled in
@@ -313,7 +286,7 @@ public struct PortfolioHoldingsView: View {
                                         "price": strings.t("portfolio.price"), "freshness": freshness,
                                     ]))
                     }
-                    if optionalColumns.contains("fx") {
+                    if optionalColumns.contains(.fx) {
                         PortfolioPriceDisclosure(
                             label: strings.t("portfolio.fxPnl"), explanation: strings.t("portfolio.fxEffect"))
                     }
@@ -334,7 +307,7 @@ public struct PortfolioHoldingsView: View {
     private var tableColumns: [LocalDataColumn<PortfolioHolding>] {
         var result: [LocalDataColumn<PortfolioHolding>] = [
             LocalDataColumn(
-                key: "name", title: strings.t("portfolio.asset"), width: 250, minWidth: 200, flexible: true,
+                key: HoldingColumn.name.rawValue, title: strings.t(HoldingColumn.name.titleKey), width: 250, minWidth: 200, flexible: true,
                 cell: { holding in
                     AnyView(
                         HStack(spacing: 10) {
@@ -370,7 +343,7 @@ public struct PortfolioHoldingsView: View {
                         })
                 }),
             LocalDataColumn(
-                key: "units", title: strings.t("portfolio.units"), width: 130, minWidth: 90, alignment: .trailing,
+                key: HoldingColumn.units.rawValue, title: strings.t(HoldingColumn.units.titleKey), width: 130, minWidth: 90, alignment: .trailing,
                 cell: { h in
                     AnyView(
                         Text(
@@ -380,10 +353,10 @@ public struct PortfolioHoldingsView: View {
                         ).monospacedDigit())
                 }),
         ]
-        if optionalColumns.contains("avgCost") {
+        if optionalColumns.contains(.avgCost) {
             result.append(
                 LocalDataColumn(
-                    key: "avgCost", title: strings.t("portfolio.avgCost"), width: 155, minWidth: 110,
+                    key: HoldingColumn.avgCost.rawValue, title: strings.t(HoldingColumn.avgCost.titleKey), width: 155, minWidth: 110,
                     alignment: .trailing,
                     cell: { h in
                         return AnyView(
@@ -392,7 +365,7 @@ public struct PortfolioHoldingsView: View {
         }
         result.append(
             LocalDataColumn(
-                key: "price", title: strings.t("portfolio.price"), width: 150, minWidth: 120, alignment: .trailing,
+                key: HoldingColumn.price.rawValue, title: strings.t(HoldingColumn.price.titleKey), width: 150, minWidth: 120, alignment: .trailing,
                 cell: { h in
                     AnyView(
                         HStack {
@@ -402,14 +375,14 @@ public struct PortfolioHoldingsView: View {
                 }))
         result.append(
             LocalDataColumn(
-                key: "value", title: strings.t("portfolio.value"), width: 155, minWidth: 110, alignment: .trailing,
+                key: HoldingColumn.value.rawValue, title: strings.t(HoldingColumn.value.titleKey), width: 155, minWidth: 110, alignment: .trailing,
                 cell: { h in
                     AnyView(
                         Text(money(h.currentValue, currency: h.currency)).monospacedDigit())
                 }))
         result.append(
             LocalDataColumn(
-                key: "unrealized", title: strings.t("portfolio.unrealized"), width: 190, minWidth: 130,
+                key: HoldingColumn.unrealized.rawValue, title: strings.t(HoldingColumn.unrealized.titleKey), width: 190, minWidth: 130,
                 alignment: .trailing,
                 cell: { h in
                     AnyView(
@@ -426,13 +399,13 @@ public struct PortfolioHoldingsView: View {
                                     percent, digits: 2, locale: shell.settings.numberFormat.locale))
                         })
                 }))
-        if optionalColumns.contains("realized") {
-            result.append(amountColumn("realized", key: "portfolio.realized", pick: { $0.realizedGain }, signed: true))
+        if optionalColumns.contains(.realized) {
+            result.append(amountColumn(.realized, pick: { $0.realizedGain }, signed: true))
         }
-        if optionalColumns.contains("fx") {
+        if optionalColumns.contains(.fx) {
             result.append(
                 LocalDataColumn(
-                    key: "fx", title: strings.t("portfolio.fxPnl"), width: 160, minWidth: 120, alignment: .trailing,
+                    key: HoldingColumn.fx.rawValue, title: strings.t(HoldingColumn.fx.titleKey), width: 160, minWidth: 120, alignment: .trailing,
                     cell: { h in
                         AnyView(
                             VStack(alignment: .trailing) {
@@ -451,24 +424,24 @@ public struct PortfolioHoldingsView: View {
                             })
                     }))
         }
-        if optionalColumns.contains("dividends") {
-            result.append(amountColumn("dividends", key: "portfolio.dividends", pick: { $0.totalDividends }))
+        if optionalColumns.contains(.dividends) {
+            result.append(amountColumn(.dividends, pick: { $0.totalDividends }))
         }
         result.append(
             LocalDataColumn(
-                key: "actions", title: "", width: 40, minWidth: 40,
+                key: HoldingColumn.actions.rawValue, title: "", width: 40, minWidth: 40,
                 cell: { h in
                     AnyView(
                         PortfolioHoldingActionsMenu(
-                            holding: h, model: model, editing: editing, shell: shell, deletePrefix: prefix))
+                            holding: h, model: model, editing: editing, shell: shell, page: page))
                 }))
         return result
     }
     private func amountColumn(
-        _ key: String, key label: String, pick: @escaping (PortfolioHolding) -> Decimal, signed: Bool = false
+        _ column: HoldingColumn, pick: @escaping (PortfolioHolding) -> Decimal, signed: Bool = false
     ) -> LocalDataColumn<PortfolioHolding> {
         LocalDataColumn(
-            key: key, title: strings.t(label), width: 155, minWidth: 110, alignment: .trailing,
+            key: column.rawValue, title: strings.t(column.titleKey), width: 155, minWidth: 110, alignment: .trailing,
             cell: { h in
                 AnyView(
                     Text(money(pick(h), signed: signed)).monospacedDigit().foregroundStyle(
@@ -476,17 +449,17 @@ public struct PortfolioHoldingsView: View {
             })
     }
     private func rawValue(_ h: PortfolioHolding, _ key: String) -> TableRawValue {
-        switch key {
-        case "name": .text(h.name + " " + (h.symbol ?? ""))
-        case "units": .number(h.totalUnits)
-        case "price": .number(h.currentPrice)
-        case "avgCost": .number(h.avgCostBasis)
-        case "value": .number(h.currentValue)
-        case "unrealized": .number(h.unrealizedGain)
-        case "realized": .number(h.realizedGain)
-        case "fx": h.fxGain.map(TableRawValue.number) ?? .none
-        case "dividends": .number(h.totalDividends)
-        default: .none
+        switch HoldingColumn(rawValue: key) {
+        case .name: .text(h.name + " " + (h.symbol ?? ""))
+        case .units: .number(h.totalUnits)
+        case .price: .number(h.currentPrice)
+        case .avgCost: .number(h.avgCostBasis)
+        case .value: .number(h.currentValue)
+        case .unrealized: .number(h.unrealizedGain)
+        case .realized: .number(h.realizedGain)
+        case .fx: h.fxGain.map(TableRawValue.number) ?? .none
+        case .dividends: .number(h.totalDividends)
+        case .actions, nil: .none
         }
     }
     /// Lists up to this many rows show no search field or count footer.
@@ -500,6 +473,23 @@ public struct PortfolioHoldingsView: View {
             ForEach(holdings) { holding in
                 PortfolioAssetCard(holding: holding, model: model, editing: editing, shell: shell)
             }
+        }
+    }
+}
+
+/// The holdings table columns; the raw value is the web column key the table query stores.
+private enum HoldingColumn: String, CaseIterable, Hashable {
+    case name, units, avgCost, price, value, unrealized, realized, fx, dividends, actions
+
+    /// The columns the Columns menu toggles, in its order.
+    static let optional: [HoldingColumn] = [.avgCost, .realized, .fx, .dividends]
+
+    var titleKey: String {
+        switch self {
+        case .name: "portfolio.asset"
+        case .fx: "portfolio.fxPnl"
+        case .actions: ""
+        case .units, .avgCost, .price, .value, .unrealized, .realized, .dividends: "portfolio." + rawValue
         }
     }
 }

@@ -673,9 +673,9 @@ struct NativeScreenContainer: View {
             if let aiChat = model.aiChat { AIChatScreenView(screens: aiChat, shell: model) }
         case .portfolio:
             if let portfolio = model.portfolio { PortfolioScreenView(screens: portfolio, shell: model) }
-        case .portfolioHoldings(let assetClass):
+        case .portfolioHoldings(let page):
             if let portfolio = model.portfolio {
-                PortfolioScreenView(screens: portfolio, shell: model, assetClass: assetClass)
+                PortfolioScreenView(screens: portfolio, shell: model, page: page)
             }
         case .rebalance:
             if let portfolio = model.portfolio {
