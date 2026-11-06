@@ -678,12 +678,21 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     /// `prunePreviousDatabaseGenerations`: keeps the newest previous generations.
     private func prunePreviousDatabaseGenerations() throws {
         let prefix = "\(RuntimeConstants.databaseDirectoryName).previous-"
-        let generations = try fileSystem.contentsOfDirectory(layout.userDataDirectory)
-            .filter { $0.hasPrefix(prefix) }
-            .map { PathUtilities.join(layout.userDataDirectory, $0) }
-            .filter { fileSystem.info($0)?.kind == .directory }
-            .map { (path: $0, modified: fileSystem.modificationDate($0) ?? .distantPast) }
-            .sorted { $0.modified != $1.modified ? $0.modified > $1.modified : $0.path > $1.path }
+        struct Generation {
+            let path: String
+            let modified: Date
+        }
+        let root = layout.userDataDirectory
+        var generations: [Generation] = []
+        for name in try fileSystem.contentsOfDirectory(root) where name.hasPrefix(prefix) {
+            let path = PathUtilities.join(root, name)
+            guard fileSystem.info(path)?.kind == .directory else { continue }
+            generations.append(Generation(path: path, modified: fileSystem.modificationDate(path) ?? Date.distantPast))
+        }
+        generations.sort { lhs, rhs in
+            if lhs.modified != rhs.modified { return lhs.modified > rhs.modified }
+            return lhs.path > rhs.path
+        }
         for old in generations.dropFirst(RuntimeConstants.previousDatabaseGenerationsKept) {
             try fileSystem.remove(old.path)
         }
