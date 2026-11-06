@@ -103,7 +103,7 @@ import Testing
         #expect(throws: APIError.self) { try capture(screens, NativeRoute("/statistics")!) }
         let (loaded, _, route) = try await page()
         #expect(throws: APIError.self) { try capture(loaded, NativeRoute("/statistics?tab=yearly&window=all")!) }
-        #expect(throws: APIError.self) { try capture(loaded, NativeRoute("/statistics?tab=overview")!) }
+        #expect(throws: APIError.self) { try capture(loaded, NativeRoute("/statistics?tab=overview&window=24m")!) }
         #expect(throws: APIError.self) { try capture(loaded, NativeRoute("/tax")!) }
         #expect(throws: APIError.self) {
             try NativeStatisticsPrintSnapshot(

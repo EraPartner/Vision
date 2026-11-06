@@ -69,7 +69,8 @@ struct PortfolioClassificationChangesTests {
         #expect(codes.contains("BE") && codes.contains("US"))
         #expect(codes.isDisjoint(with: ["AA", "QM", "XA", "ZZ", "EU", "UN"]))
         #expect(options.first { $0.code == "BE" }?.name == "Belgium")
-        #expect(options.map(\.name) == options.map(\.name).sorted { $0.compare($1) == .orderedAscending })
+        let locale = Locale(identifier: "en_US")
+        #expect(options.map(\.name) == options.map(\.name).sorted { $0.compare($1, locale: locale) == .orderedAscending })
     }
 }
 
