@@ -160,7 +160,7 @@ public struct ResearchChartBuilderView: View {
         ForEach(ResearchChartBuilderPreset.allCases, id: \.self) { name in
             Button(strings.t("research.builder.preset." + name.rawValue)) { model.preset(name) }
                 .buttonStyle(.vision(.outline, size: .sm))
-                .disabled(!model.state.series.contains { $0.field == "price" })
+                .disabled(!model.state.series.contains { $0.field == .price })
         }
     }
     private var storageKey: String {
@@ -212,15 +212,15 @@ public struct ResearchChartBuilderView: View {
     }
     private var priceMarks: [ResearchChartBuilderMark] {
         // Overlaid securities are peers; one security has a main line, its price.
-        let prices = model.state.series.filter { $0.field == "price" }
+        let prices = model.state.series.filter { $0.field == .price }
         let primaryId = prices.count == 1 ? prices.first?.id : nil
         var marks = model.state.series.enumerated().map { index, series in
             ResearchChartBuilderMark(
                 id: series.id,
-                label: series.label + (series.field == "volume" ? " " + strings.t("research.builder.volume") : ""),
-                kind: series.type == "candlestick" && series.field != "price" ? "line" : series.type, axis: series.axis,
+                label: series.label + (series.field == .volume ? " " + strings.t("research.builder.volume") : ""),
+                kind: series.type == .candlestick && series.field != .price ? .line : series.type, axis: series.axis,
                 color: ResearchCompareStyle.color(index, palette: theme.palette),
-                opacity: series.field == "volume" ? 0.4 : series.type == "bar" ? 0.5 : 0.18,
+                opacity: series.field == .volume ? 0.4 : series.type == .bar ? 0.5 : 0.18,
                 primary: series.id == primaryId)
         }
         for (index, indicator) in model.state.indicators.enumerated() {
@@ -228,15 +228,15 @@ public struct ResearchChartBuilderView: View {
             let label =
                 (indicator.type == "bollinger" ? "BB" : indicator.type.uppercased()) + "(" + String(indicator.period)
                 + ")"
-            marks.append(.init(id: indicator.id, label: label, kind: "line", axis: "left", color: color))
+            marks.append(.init(id: indicator.id, label: label, kind: .line, axis: .left, color: color))
             if indicator.type == "bollinger" {
                 marks.append(
                     .init(
-                        id: indicator.id + "_u", label: label + " ↑", kind: "line", axis: "left", color: color,
+                        id: indicator.id + "_u", label: label + " ↑", kind: .line, axis: .left, color: color,
                         dashed: true, width: 1))
                 marks.append(
                     .init(
-                        id: indicator.id + "_l", label: label + " ↓", kind: "line", axis: "left", color: color,
+                        id: indicator.id + "_l", label: label + " ↓", kind: .line, axis: .left, color: color,
                         dashed: true, width: 1))
             }
         }
@@ -244,11 +244,11 @@ public struct ResearchChartBuilderView: View {
     }
     private var oscillatorMarks: [ResearchChartBuilderMark] {
         model.state.oscillator == .rsi
-            ? [.init(id: "rsi", label: "RSI(14)", kind: "line", axis: "left", color: theme.primary)]
+            ? [.init(id: "rsi", label: "RSI(14)", kind: .line, axis: .left, color: theme.primary)]
             : [
-                .init(id: "macd", label: "MACD", kind: "line", axis: "left", color: theme.primary),
+                .init(id: "macd", label: "MACD", kind: .line, axis: .left, color: theme.primary),
                 .init(
-                    id: "signal", label: "Signal", kind: "line", axis: "left",
+                    id: "signal", label: "Signal", kind: .line, axis: .left,
                     color: Color(token: theme.palette.accent), dashed: true),
             ]
     }

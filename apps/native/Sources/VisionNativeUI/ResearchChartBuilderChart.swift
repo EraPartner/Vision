@@ -4,8 +4,8 @@ import VisionNativeCore
 struct ResearchChartBuilderMark: Identifiable, Equatable {
     let id: String
     let label: String
-    let kind: String
-    let axis: String
+    let kind: ResearchChartSeriesKind
+    let axis: ResearchChartAxis
     let color: Color
     var dashed = false
     var width: CGFloat = 1.5
@@ -26,7 +26,7 @@ struct ResearchChartBuilderChart: View {
     @State private var geometryCache = ResearchChartBuilderGeometryCache()
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    private var hasRight: Bool { marks.contains { $0.axis == "right" } }
+    private var hasRight: Bool { marks.contains { $0.axis == .right } }
     private var references: [Double] { oscillator == .rsi ? [70, 30] : oscillator == .macd ? [0] : [] }
     private var height: CGFloat { oscillator == nil ? 400 : 160 }
     var body: some View {
@@ -130,7 +130,7 @@ struct ResearchChartBuilderChart: View {
                             rows.indices.contains(index) ? xPosition(rows[index], plot: plot).map { $0 - plot.minX } : nil
                         },
                         yOf: { row, value in
-                            let axis = marks.first { $0.id == row.key }?.axis == "right" ? right : left
+                            let axis = marks.first { $0.id == row.key }?.axis == .right ? right : left
                             return axis.fraction(value).map { plot.height - CGFloat($0) * plot.height }
                         },
                         colorOf: { key in marks.first { $0.id == key }?.color ?? theme.primary },
@@ -244,8 +244,8 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
                     plot.maxY - CGFloat($0) * plot.height
                 }
             }
-            for mark in marks.filter({ $0.kind == "bar" }) {
-                let axis = mark.axis == "right" ? right : left
+            for mark in marks.filter({ $0.kind == .bar }) {
+                let axis = mark.axis == .right ? right : left
                 let baseline =
                     axis.fraction(max(0, axis.lower)).map { plot.maxY - CGFloat($0) * plot.height } ?? plot.maxY
                 for row in rows {
@@ -258,8 +258,8 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
                     }
                 }
             }
-            for mark in marks.filter({ $0.kind == "area" }) {
-                let axis = mark.axis == "right" ? right : left
+            for mark in marks.filter({ $0.kind == .area }) {
+                let axis = mark.axis == .right ? right : left
                 for segment in segments(mark.id, axis: axis, x: x, y: y) {
                     guard let start = segment.first, let end = segment.last else { continue }
                     var area = path(segment)
@@ -270,8 +270,8 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
                     context.stroke(path(segment), with: .color(mark.color), lineWidth: mark.width)
                 }
             }
-            for mark in marks.filter({ $0.kind == "candlestick" }) {
-                let axis = mark.axis == "right" ? right : left
+            for mark in marks.filter({ $0.kind == .candlestick }) {
+                let axis = mark.axis == .right ? right : left
                 for row in rows {
                     guard let open = row[mark.id + "_o"]?.decimalValue, let close = row[mark.id]?.decimalValue,
                         let high = y(row[mark.id + "_h"]?.decimalValue, axis),
@@ -289,8 +289,8 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
                         with: .color(color))
                 }
             }
-            for mark in marks.filter({ $0.kind == "line" }) {
-                let axis = mark.axis == "right" ? right : left
+            for mark in marks.filter({ $0.kind == .line }) {
+                let axis = mark.axis == .right ? right : left
                 for segment in segments(mark.id, axis: axis, x: x, y: y) {
                     context.stroke(
                         path(segment), with: .color(mark.color),
@@ -378,8 +378,8 @@ final class ResearchChartBuilderGeometryCache {
         self.logLeft = logLeft
         self.oscillator = oscillator
         let made = Snapshot(
-            left: axis("left", rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: references),
-            right: axis("right", rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: references),
+            left: axis(.left, rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: references),
+            right: axis(.right, rows: rows, marks: marks, logLeft: logLeft, oscillator: oscillator, references: references),
             times: Self.times(rows), scrubSeries: Self.scrubSeries(rows, marks: marks),
             timeline: ChartScrub.timeline(count: rows.count, first: rows.first.flatMap(Self.time), last: rows.last.flatMap(Self.time)))
         snapshot = made
@@ -405,17 +405,17 @@ final class ResearchChartBuilderGeometryCache {
     }
 
     private func axis(
-        _ name: String, rows: [AnalysisRow], marks: [ResearchChartBuilderMark], logLeft: Bool, oscillator: ResearchChartOscillator?,
+        _ name: ResearchChartAxis, rows: [AnalysisRow], marks: [ResearchChartBuilderMark], logLeft: Bool, oscillator: ResearchChartOscillator?,
         references: [Double]
     ) -> ResearchChartBuilderAxisGeometry {
         let values = marks.filter { $0.axis == name }.flatMap { mark in
             rows.flatMap { row -> [Double] in
-                let keys = mark.kind == "candlestick" ? [mark.id + "_h", mark.id + "_l"] : [mark.id]
+                let keys = mark.kind == .candlestick ? [mark.id + "_h", mark.id + "_l"] : [mark.id]
                 return keys.compactMap { row[$0]?.decimalValue }.map { NSDecimalNumber(decimal: $0).doubleValue }
             }
         }
         return .init(
-            values: values + (name == "left" && oscillator != nil ? references : []),
-            requestsLog: name == "left" && logLeft, fixed: oscillator == .rsi ? 0...100 : nil)
+            values: values + (name == .left && oscillator != nil ? references : []),
+            requestsLog: name == .left && logLeft, fixed: oscillator == .rsi ? 0...100 : nil)
     }
 }

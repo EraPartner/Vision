@@ -269,7 +269,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         self.state = state
     }
     public func addIndicator(type: String) {
-        guard state.indicators.count < 20, let base = state.series.first(where: { $0.field == "price" }) else { return }
+        guard state.indicators.count < 20, let base = state.series.first(where: { $0.field == .price }) else { return }
         var state = state
         state.indicators.append(
             .init(
@@ -297,20 +297,20 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         self.state = state
     }
     public func preset(_ preset: ResearchChartBuilderPreset) {
-        guard let primary = state.series.first(where: { $0.field == "price" }) else { return }
+        guard let primary = state.series.first(where: { $0.field == .price }) else { return }
         var next = state
-        let priceOnly = state.series.filter { $0.field == "price" }
+        let priceOnly = state.series.filter { $0.field == .price }
         switch preset {
         case .priceVolume:
             guard let base = priceOnly.first(where: { $0.macro == nil }) else { return }
             next.series =
                 priceOnly.map {
                     var series = $0
-                    series.type = "line"
+                    series.type = .line
                     return series
                 } + [
                     .init(
-                        id: makeID(), symbol: base.symbol, field: "volume", type: "bar", axis: "right",
+                        id: makeID(), symbol: base.symbol, field: .volume, type: .bar, axis: .right,
                         provider: base.provider)
                 ]
             next.indicators = []
@@ -318,7 +318,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         case .sma, .bollinger:
             next.series = priceOnly.map {
                 var series = $0
-                series.type = "line"
+                series.type = .line
                 return series
             }
             next.oscillator = .off
@@ -335,8 +335,8 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
             next.rebase = true
             next.series = priceOnly.map {
                 var series = $0
-                series.type = "line"
-                series.axis = "left"
+                series.type = .line
+                series.axis = .left
                 return series
             }
         case .unknown: return
@@ -668,7 +668,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
             "series": .array(
                 state.series.map { series in
                     .object([
-                        "id": .string(series.id), "field": .string(series.field), "type": .string(series.type),
+                        "id": .string(series.id), "field": .string(series.field.rawValue), "type": .string(series.type.rawValue),
                         "points": .array((snapshots[series.fetchKey]?.data.points ?? []).map(\.raw)),
                     ])
                 }), "indicators": .array(state.indicators.map(\.raw)), "rebase": .bool(state.rebase),

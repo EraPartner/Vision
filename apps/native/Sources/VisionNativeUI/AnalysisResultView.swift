@@ -58,7 +58,7 @@ public struct AnalysisResultView: View {
                         HStack {
                             Text(
                                 strings.t(
-                                    result.window.kind == "truncated"
+                                    result.window.kind == .truncated
                                         ? "analysis.truncated"
                                         : result.window.hasMore == true ? "analysis.moreRows" : "analysis.completeRows")
                             )
@@ -72,7 +72,7 @@ public struct AnalysisResultView: View {
                                 Task { _ = await model.run(offset: model.offset + model.plan.limit) }
                             }
                             .disabled(
-                                result.window.kind != "page" || result.window.hasMore != true
+                                result.window.kind != .page || result.window.hasMore != true
                                     || model.activeRequest != nil)
                         }.buttonStyle(.visionOutline).controlSize(.small)
                         DisclosureGroup(strings.t("analysis.generatedSql"), isExpanded: $sqlExpanded) {
