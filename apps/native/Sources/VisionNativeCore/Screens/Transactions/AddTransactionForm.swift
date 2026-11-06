@@ -50,6 +50,7 @@ public enum AddTransactionDateChoice: String, CaseIterable, Sendable {
 /// focuses the first one with an error.
 public enum AddTransactionField: String, CaseIterable, Sendable {
     case amount
+    case currency
     case recipient
     case account
     case toAccount
@@ -291,6 +292,10 @@ public final class AddTransactionModel {
         } else {
             errors[.amount] = "addTxn.invalidAmount"
         }
+        // `optionalCurrencyCode`: empty falls back to the default; anything else must be a code.
+        if !normalizedCodeText.isEmpty, CurrencyCode(rawValue: normalizedCodeText) == nil {
+            errors[.currency] = "validation.currencyCode"
+        }
         if draft.kind != .transfer && draft.recipientId == nil {
             errors[.recipient] = "validation.required"
         }
@@ -357,7 +362,12 @@ public final class AddTransactionModel {
 
     /// `form.currency || defaultCurrency`; `nil` when the typed text is not a currency code.
     var currencyOrDefault: CurrencyCode? {
-        draft.currencyText.isEmpty ? defaultCurrency : CurrencyCode(rawValue: draft.currencyText)
+        normalizedCodeText.isEmpty ? defaultCurrency : CurrencyCode(rawValue: normalizedCodeText)
+    }
+
+    /// The currency field as `optionalCurrencyCode` reads it: trimmed and upper-cased.
+    private var normalizedCodeText: String {
+        draft.currencyText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     }
 
     /// The 409 answer: the duplicate prompt shows.

@@ -5329,6 +5329,24 @@
         }
       }
     },
+    "addRec.notesPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Additional notes…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aanvullende notities…"
+          }
+        }
+      }
+    },
     "addTxn.addAnyway": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -19797,6 +19815,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Geen"
+          }
+        }
+      }
+    },
+    "common.optional": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optioneel"
           }
         }
       }
@@ -49713,6 +49749,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deze aanpassing vereist een expliciet beleid voor bevestigde tijdelijke opbrengstwaarden met nulkosten."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.choice.keepBoth": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep both"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beide behouden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.choice.sameTransaction": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same transaction"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dezelfde transactie"
           }
         }
       }
@@ -82851,6 +82923,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alle geplande betalingen"
+          }
+        }
+      }
+    },
+    "validation.currencyCode": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a three-letter currency code, such as EUR."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voer een valutacode van drie letters in, zoals EUR."
           }
         }
       }

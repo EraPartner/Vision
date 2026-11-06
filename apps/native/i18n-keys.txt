@@ -4709,3 +4709,10 @@ chart.aria.seriesOther
 chart.aria.sparklineEmpty
 chart.aria.sparklineOne
 chart.aria.sparklineOther
+
+# Parity sweep (2026-11-06): keys native code used without listing them, and new placeholders/badges
+addRec.notesPlaceholder
+common.optional
+portfolioImport.session.choice.keepBoth
+portfolioImport.session.choice.sameTransaction
+validation.currencyCode
