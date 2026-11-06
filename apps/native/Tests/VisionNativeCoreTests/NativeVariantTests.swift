@@ -2,24 +2,21 @@ import Foundation
 import Testing
 @testable import VisionNativeCore
 
-// The Demo variant (phase 1e): its own identity, port, directory and Keychain service.
+// The Demo variant (phase 1e): its own identity, directory and Keychain service.
 
 @Suite struct NativeVariantTests {
     @Test func eachVariantHasItsOwnIdentity() {
         #expect(NativeVariant.standard.appName == "Vision Native")
         #expect(NativeVariant.standard.runtimeId == "vision_native")
-        #expect(NativeVariant.standard.postgresPort == 54331)
         #expect(NativeVariant.standard.backupPassphraseService == KeychainPassphraseStore.standardService)
         #expect(NativeVariant.demo.appName == "Vision Native Demo")
         #expect(NativeVariant.demo.runtimeId == "vision_native_demo")
-        #expect(NativeVariant.demo.postgresPort == 54332)
         #expect(NativeVariant.demo.backupPassphraseService == "com.vaultvoyager.vision-native-demo.backup-passphrase")
         #expect(
             NativeVariant.demo.userDataDirectory(homeDirectory: testHome)
                 == "\(testHome)/Library/Application Support/Vision Native Demo")
-        // Never an Electron port, runtime id or directory.
+        // Never an Electron runtime id or directory.
         for variant in NativeVariant.allCases {
-            #expect(![54329, 54330].contains(variant.postgresPort))
             #expect(!["vision", "vision_demo"].contains(variant.runtimeId))
             #expect(!VisionNativeIdentity.foreignUserDataNames.contains(variant.userDataName))
         }
@@ -52,10 +49,7 @@ import Testing
     @Test func theSupervisorConfigurationFollowsTheVariant() {
         let demo = SupervisorConfiguration(
             environment: [:], homeDirectory: testHome, resourcesDirectory: nil, variant: .demo)
-        #expect(demo.postgresPort == 54332)
-        let pinned = SupervisorConfiguration(
-            environment: [:], homeDirectory: testHome, resourcesDirectory: nil, postgresPort: 60000, variant: .demo)
-        #expect(pinned.postgresPort == 60000)
-        #expect(SupervisorConfiguration(environment: [:], homeDirectory: testHome, resourcesDirectory: nil).postgresPort == 54331)
+        #expect(demo.variant == .demo)
+        #expect(SupervisorConfiguration(environment: [:], homeDirectory: testHome, resourcesDirectory: nil).variant == .standard)
     }
 }

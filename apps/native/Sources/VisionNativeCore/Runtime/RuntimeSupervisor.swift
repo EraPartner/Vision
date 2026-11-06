@@ -7,6 +7,8 @@ public enum RuntimePhase: Sendable, Equatable {
     case preparingDatabase
     case seedingDemo
     case startingBackend
+    /// The backend backs the database up before it applies pending migrations (ADR-242/263).
+    case backingUpDatabase
     case waitingForReadiness
     case running(URL)
     case stopping
@@ -21,17 +23,10 @@ public struct SupervisorConfiguration: Sendable {
     public var homeDirectory: String
     /// `Bundle.main.resourcePath`.
     public var resourcesDirectory: String?
-    public var postgresPort: Int
     /// Vision Native or Vision Native Demo: the data directory and runtime id.
     public var variant: NativeVariant
-    /// ADR-242: runs after PostgreSQL is ready and before the backend, which migrates at
-    /// boot, is spawned, only when an existing database is behind the packaged migration
-    /// chain (`backupBeforeMigrations` in `main.ts`). A thrown error fails the launch, so no
-    /// migration runs without the backup it was meant to take. `nil` (the default, and for
-    /// the synthetic Demo database) takes no backup.
-    public var beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)?
-    /// `HEALTH_POLL_BUILD_ATTEMPTS`: a cold start may initialize PostgreSQL, seed the
-    /// Demo and run migrations, so the first navigation waits up to about 3 minutes.
+    /// `HEALTH_POLL_BUILD_ATTEMPTS`: a cold start may seed the Demo, back the database up
+    /// and run migrations, so the first navigation waits up to about 3 minutes.
     public var readinessAttempts: Int
     /// Whether `VISION_NATIVE_RUNTIME_DIR` is honoured (Debug builds only, like the
     /// backend URL override).
@@ -41,18 +36,14 @@ public struct SupervisorConfiguration: Sendable {
         environment: [String: String],
         homeDirectory: String,
         resourcesDirectory: String?,
-        postgresPort: Int? = nil,
         readinessAttempts: Int = 600,
         allowPayloadOverride: Bool = false,
-        variant: NativeVariant = .standard,
-        beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)? = nil
+        variant: NativeVariant = .standard
     ) {
         self.environment = environment
         self.homeDirectory = homeDirectory
         self.resourcesDirectory = resourcesDirectory
-        self.postgresPort = postgresPort ?? variant.postgresPort
         self.variant = variant
-        self.beforeMigrations = beforeMigrations
         self.readinessAttempts = readinessAttempts
         self.allowPayloadOverride = allowPayloadOverride
     }
@@ -64,8 +55,8 @@ public struct SupervisorConfiguration: Sendable {
 ///     idle → locatingPayload → preparingDatabase → seedingDemo → startingBackend
 ///          → waitingForReadiness → running(url) → stopping → stopped
 ///
-/// Any step can end in `failed(reason)`; the backend it started is then stopped and
-/// PostgreSQL keeps running, and `launch()` may be called again (Retry). A quit during a
+/// Any step can end in `failed(reason)`; the backend it started is then stopped, and
+/// `launch()` may be called again (Retry). A quit during a
 /// launch does not wait for it: the launch is cancelled and stops at its next phase.
 public actor RuntimeSupervisor: BackupSettingsStore {
     private let configuration: SupervisorConfiguration
@@ -91,7 +82,6 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         self.logger = logger
     }
 
-    /// The live supervisor for the app.
     /// The live supervisor for the app. `main.log` is rotated only once the
     /// single-instance lock is held, so a second instance never renames it.
     public static func live(
@@ -99,15 +89,13 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path,
         resourcesDirectory: String? = Bundle.main.resourcePath,
         allowPayloadOverride: Bool,
-        variant: NativeVariant = .standard,
-        beforeMigrations: (@Sendable (PendingMigrations, NativeRuntime) async throws -> Void)? = nil
+        variant: NativeVariant = .standard
     ) -> RuntimeSupervisor {
         let userData = variant.userDataDirectory(homeDirectory: homeDirectory)
         return RuntimeSupervisor(
             configuration: SupervisorConfiguration(
                 environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory,
-                allowPayloadOverride: allowPayloadOverride, variant: variant,
-                beforeMigrations: beforeMigrations),
+                allowPayloadOverride: allowPayloadOverride, variant: variant),
             dependencies: .live(),
             instanceLock: FileInstanceLock(),
             logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"), rotate: false)
@@ -150,8 +138,13 @@ public actor RuntimeSupervisor: BackupSettingsStore {
             return url
         } catch {
             launchTask = nil
-            // The quit owns the phase (`stopping`, then `stopped`) and the processes.
-            if shutdownRequested { throw error }
+            // The quit owns the phase (`stopping`, then `stopped`) and the processes. A step
+            // that fails because the quit tore its work down (the staging generation it was
+            // verifying, say) reports the quit, not that consequence.
+            if shutdownRequested {
+                logger.log("log", "[runtime] launch interrupted by quit: \(error)")
+                throw Self.shuttingDownError
+            }
             let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             logger.log("error", "[runtime] launch failed: \(error)")
             enter(.failed(reason))
@@ -159,15 +152,15 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         }
     }
 
-    /// A failed launch stops the backend it started and keeps PostgreSQL running, so a
-    /// Retry starts from a clean backend and a quit does not leave one behind.
+    /// A failed launch stops the backend it started, so a Retry starts from a clean backend
+    /// and a quit does not leave one behind.
     private func performLaunch() async throws -> URL {
         do {
             return try await launchSteps()
         } catch {
             if !shutdownRequested, let runtime {
                 do {
-                    try await runtime.stop(keepPostgres: true)
+                    try await runtime.stop()
                 } catch {
                     logger.log("warn", "[runtime] could not stop the backend after a failed launch: \(error)")
                 }
@@ -204,7 +197,6 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         let log = logger
         let runtime = try NativeRuntime(
             layout: layout,
-            postgresPort: configuration.postgresPort,
             runtimeRoot: payload.runtimeDirectory,
             appPort: appPort,
             inheritedEnvironment: configuration.environment,
@@ -228,21 +220,28 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         {
             logger.log("warn", warning)
         }
+        // ADR-242/263: the backend backs the database up into
+        // <userData>/database/pre-migration-backups before it applies pending migrations,
+        // some of which delete data. The splash says so while it runs.
+        let schemaUpgrade = await runtime.pendingSchemaUpgrade()
+        if let schemaUpgrade {
+            logger.log(
+                "log",
+                "[pre-migration-backup] database at schema \(schemaUpgrade.databaseVersion), this build ships \(schemaUpgrade.packagedVersion); the backend backs it up before migrating"
+            )
+        }
         do {
             try enterLaunchPhase(.startingBackend)
             let started: BackendStartResult
-            var beforeMigrations: (@Sendable (PendingMigrations) async throws -> Void)?
-            if let hook = configuration.beforeMigrations {
-                beforeMigrations = { pending in try await hook(pending, runtime) }
-            }
             do {
-                started = try await runtime.start(beforeMigrations: beforeMigrations)
+                started = try await runtime.start()
             } catch let error as NativeRuntimeError where error.code == "PORT_COLLISION" {
                 let repicked = await repickAppPort(layout)
                 await runtime.setAppPort(repicked)
-                started = try await runtime.start(beforeMigrations: beforeMigrations)
+                started = try await runtime.start()
             }
             logger.log("log", "[runtime] backend \(started)")
+            if schemaUpgrade != nil { try enterLaunchPhase(.backingUpDatabase) }
             if prepared.switchToken != nil {
                 try await runtime.waitUntilReady(detailed: true)
                 try checkShutdown()
@@ -284,8 +283,10 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         for attempt in 0..<configuration.readinessAttempts {
             try checkShutdown()
             // The backend exited during startup: show why instead of polling until the timeout.
+            // The error carries the backend's own code (`BackendStartupError`), so the shell
+            // can explain a failed pre-migration backup.
             if let runtime, let failure = await runtime.backendStartupFailure() {
-                throw NativeRuntimeError("BACKEND_EXITED", failure)
+                throw NativeRuntimeError(failure.code ?? "BACKEND_EXITED", failure.message)
             }
             if let response = try? await dependencies.http.get(url, timeout: 2),
                 HealthReadiness.navigationReadiness(status: response.status, body: response.body) == true
@@ -397,8 +398,8 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     // MARK: - Quit
 
     /// The `will-quit` service shutdown; the quit-time backup runs before it
-    /// (`ShellController.prepareForQuit`). It stops the backend and
-    /// PostgreSQL unless "keep services running on quit" is enabled. Like Electron it
+    /// (`ShellController.prepareForQuit`). It stops the backend unless "keep services
+    /// running on quit" is enabled. Like Electron it
     /// does not wait for a launch in progress: the launch is cancelled (which ends its
     /// running tool), the runtime refuses to spawn anything further, and a Demo staging
     /// database without a persisted switch plan is dropped. The caller bounds it with the
@@ -421,7 +422,6 @@ public actor RuntimeSupervisor: BackupSettingsStore {
             do {
                 try await runtime.stopBackend()
                 await runtime.discardStagingRestore()
-                try await runtime.stopPostgres()
             } catch {
                 logger.log("error", "runtime shutdown failed: \(error)")
             }

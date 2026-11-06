@@ -6,7 +6,7 @@ import Testing
     @Test func safeEnvironmentCarriesOnlyAllowlistedKeysPlusOverrides() {
         let environment = ChildEnvironment.safe(
             inherited: [
-                "PATH": "/opt/homebrew/opt/postgresql@18/bin:/usr/bin:/usr/local/postgresql@18/bin/",
+                "PATH": "/usr/bin:/custom/bin",
                 "HOME": "/Users/demo",
                 "VISION_TEST_SECRET": "must-not-leak",
                 "OPENAI_API_KEY": "host-key",
@@ -17,14 +17,37 @@ import Testing
         #expect(environment["VISION_TEST_SECRET"] == nil)
         #expect(environment["OPENAI_API_KEY"] == nil)
         #expect(environment["SKIPPED"] == nil)
-        #expect(environment["PATH"] == "/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")
+        #expect(environment["PATH"] == "/usr/bin:/custom/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")
     }
 
-    @Test func managedPostgresUsesThePortableLocale() {
-        let environment = ChildEnvironment.managedPostgres(inherited: ["LANG": "x", "LC_ALL": "x", "LC_CTYPE": "x"])
-        #expect(environment["LANG"] == "C")
-        #expect(environment["LC_ALL"] == "C")
-        #expect(environment["LC_CTYPE"] == "C")
+    @Test func theDatabaseToolRunsTheBackendAsBunWithoutDotenv() throws {
+        let layout = try RuntimeLayout(userDataDirectory: testUserData)
+        let environment = ChildEnvironment.databaseTool(
+            inherited: ["PATH": "/usr/bin", "HOME": testHome, "FRED_API_KEY": "host"], layout: layout,
+            runtimeRoot: testRuntimeRoot)
+        #expect(environment["BUN_BE_BUN"] == "1")
+        #expect(environment["VISION_SKIP_DOTENV"] == "1")
+        #expect(environment["NODE_ENV"] == "production")
+        #expect(environment["VISION_RUNTIME_ROOT"] == testRuntimeRoot)
+        #expect(environment["VISION_DATABASE_PATH"] == layout.database)
+        #expect(environment["HOME"] == testHome)
+        #expect(environment["FRED_API_KEY"] == nil)
+    }
+
+    @Test func theBackendGetsTheMacsTimeZoneUnlessRuntimeEnvPinsOne() throws {
+        let layout = try RuntimeLayout(userDataDirectory: testUserData)
+        let system = ChildEnvironment.backend(
+            inherited: [:], runtimeEnvironment: [:], port: 1, layout: layout, runtimeRoot: "/r",
+            timeZone: "Europe/Helsinki")
+        #expect(system["APP_TIMEZONE"] == "Europe/Helsinki")
+        let pinned = ChildEnvironment.backend(
+            inherited: [:], runtimeEnvironment: ["APP_TIMEZONE": "Europe/Brussels"], port: 1, layout: layout,
+            runtimeRoot: "/r", timeZone: "Europe/Helsinki")
+        #expect(pinned["APP_TIMEZONE"] == "Europe/Brussels")
+        let unknown = ChildEnvironment.backend(
+            inherited: [:], runtimeEnvironment: [:], port: 1, layout: layout, runtimeRoot: "/r", timeZone: nil)
+        #expect(unknown["APP_TIMEZONE"] == nil)
+        #expect(ChildEnvironment.systemTimeZone(TimeZone(identifier: "Europe/Helsinki")!) == "Europe/Helsinki")
     }
 
     @Test func backendEnvironmentPinsDataMigrationsAndLoopback() throws {
@@ -33,6 +56,7 @@ import Testing
             inherited: ["PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "leak"],
             runtimeEnvironment: [
                 "DATABASE_URL": "postgresql://vision_native_app:x@127.0.0.1:54331/vision_native",
+                "VISION_POSTGRES_ADMIN_PASSWORD": "retired",
                 "FRED_API_KEY": "kept",
                 "OPENAI_API_ENABLED": "true",
                 "OPENAI_API_KEY": "synthetic-key",
@@ -52,7 +76,10 @@ import Testing
         #expect(environment["ATTACHMENTS_DIR"] == layout.attachments)
         #expect(environment["OLLAMA_URL"] == "http://127.0.0.1:11434")
         #expect(environment["FRED_API_KEY"] == "kept")
-        #expect(environment["DATABASE_URL"]?.hasPrefix("postgresql://vision_native_app") == true)
+        #expect(environment["VISION_DATABASE_PATH"] == layout.database)
+        // The database server's settings are retired: they never reach the backend.
+        #expect(environment["DATABASE_URL"] == nil)
+        #expect(environment["VISION_POSTGRES_ADMIN_PASSWORD"] == nil)
         #expect(environment["AWS_SECRET_ACCESS_KEY"] == nil)
         // The migrations run in the backend from the payload; no tool paths are passed.
         for removed in [
@@ -81,29 +108,11 @@ import Testing
 }
 
 @Suite struct EnvFileTests {
-    private let names = try! RuntimeNames(runtimeId: VisionNativeIdentity.runtimeId)
-
-    @Test func runtimeNamesDeriveDistinctRoles() throws {
-        #expect(names.database == "vision_native")
-        #expect(names.adminRole == "vision_native_admin")
-        #expect(names.ownerRole == "vision_native_owner")
-        #expect(names.appRole == "vision_native_app")
+    @Test func runtimeNamesNormalizeTheRuntimeId() throws {
+        let names = try RuntimeNames(runtimeId: VisionNativeIdentity.runtimeId)
+        #expect(names.id == "vision_native")
         #expect(try RuntimeNames.normalize("Vision-Demo") == "vision_demo")
         #expect(throws: NativeRuntimeError.self) { try RuntimeNames.normalize("1vision") }
-    }
-
-    @Test func generatedEnvironmentIsLoopbackOnlyAndSeparatesRoles() throws {
-        let contents = RuntimeEnvFile.render(names: names, postgresPort: 54331, random: FakeRandom())
-        let config = try RuntimeEnvFile.databaseConfig(contents)
-        #expect(contents.hasPrefix("# Auto-generated by Vision native runtime."))
-        #expect(config.host == "127.0.0.1")
-        #expect(config.port == 54331)
-        #expect(config.database == "vision_native")
-        #expect(config.appRole == "vision_native_app")
-        #expect(config.ownerRole == "vision_native_owner")
-        #expect(config.adminRole == "vision_native_admin")
-        #expect(config.appPassword != config.ownerPassword)
-        #expect(config.analysisPassword == config.appPassword)
     }
 
     @Test func parsingSkipsCommentsBlankLinesAndInvalidKeys() {
@@ -112,130 +121,47 @@ import Testing
     }
 
     @Test func retiredKeysAreStrippedLineByLine() {
-        let contents = "A=1\nOPENAI_API_KEY=sk-x\n  AI_REFERENCE_MAPPING_KEY = y\nOPENAI_API_ENABLED=true\nB=2"
+        let contents =
+            "A=1\nOPENAI_API_KEY=sk-x\n  AI_REFERENCE_MAPPING_KEY = y\nOPENAI_API_ENABLED=true\n"
+            + "DATABASE_URL=postgresql://x\nVISION_POSTGRES_ADMIN_ROLE=admin\nB=2"
         #expect(RuntimeEnvFile.stripRetired(contents) == "A=1\nB=2")
         // Nothing to remove: the text is returned unchanged.
         #expect(RuntimeEnvFile.stripRetired("A=1\r\nB=2\n") == "A=1\r\nB=2\n")
     }
 
-    @Test func olderFilesGainAClusterAdministrator() throws {
-        let legacy =
-            "DATABASE_URL=postgresql://vision_native_app:\(String(repeating: "a", count: 64))@127.0.0.1:54331/vision_native\n"
-            + "DATABASE_URL_MIGRATIONS=postgresql://vision_native_owner:\(String(repeating: "b", count: 64))@127.0.0.1:54331/vision_native"
-        let upgraded = RuntimeEnvFile.ensureAdmin(legacy, names: names, random: FakeRandom())
-        #expect(upgraded.contains("\nVISION_POSTGRES_ADMIN_ROLE=vision_native_admin\n"))
-        #expect(RuntimeEnvFile.ensureAdmin(upgraded, names: names, random: FakeRandom()) == upgraded)
-        #expect(try RuntimeEnvFile.databaseConfig(upgraded).adminRole == "vision_native_admin")
+    @Test func onlyTheMarketDataKeysAreImported() throws {
+        let additions = try RuntimeEnvFile.validateApplicationEnvironment([
+            "FRED_API_KEY": "fred", "TWELVE_DATA_API_KEY": "twelve", "OPENAI_API_KEY": "no", "FMP_API_KEY": "",
+            "PATH": "/bin",
+        ])
+        #expect(additions.map(\.0) == ["TWELVE_DATA_API_KEY", "FRED_API_KEY"])
+        let contents = RuntimeEnvFile.importing(additions, into: RuntimeEnvFile.header + "FRED_API_KEY=old\nX=1")
+        #expect(contents == RuntimeEnvFile.header + "FRED_API_KEY=fred\nX=1\nTWELVE_DATA_API_KEY=twelve\n")
+        #expect(throws: NativeRuntimeError.self) {
+            try RuntimeEnvFile.validateApplicationEnvironment(["FRED_API_KEY": "a\nDATABASE_URL=x"])
+        }
     }
 
-    @Test func foreignTargetsAndWeakSecretsAreRejected() {
-        let good = RuntimeEnvFile.render(names: names, postgresPort: 54331, random: FakeRandom())
-        let variants = [
-            good.replacingOccurrences(of: "@127.0.0.1:54331/vision_native\nDATABASE_URL_MIGRATIONS", with: "@10.0.0.1:54331/vision_native\nDATABASE_URL_MIGRATIONS"),
-            good.replacingOccurrences(of: "54331/vision_native\nDATABASE_URL_MIGRATIONS", with: "54332/vision_native\nDATABASE_URL_MIGRATIONS"),
-            good + "DATABASE_URL_ANALYSIS=postgresql://other:x@127.0.0.1:54331/vision_native\n",
-            good.replacingOccurrences(of: "VISION_POSTGRES_ADMIN_ROLE=vision_native_admin", with: "VISION_POSTGRES_ADMIN_ROLE=vision_native_app"),
-            good.replacingOccurrences(of: "VISION_POSTGRES_ADMIN_PASSWORD=", with: "VISION_POSTGRES_ADMIN_PASSWORD=short"),
-            "DATABASE_URL=nonsense\n",
-        ]
-        for variant in variants {
-            #expect(throws: NativeRuntimeError.self) { try RuntimeEnvFile.databaseConfig(variant) }
-        }
+    @Test func importingWritesTheRuntimeEnvPrivately() async throws {
+        let harness = try Harness()
+        let runtime = try harness.makeRuntime()
+        try await runtime.ensureLayout()
+        let imported = try await runtime.importApplicationEnvironment(["FINNHUB_API_KEY": "abc", "HOME": "/x"])
+        #expect(imported == ["FINNHUB_API_KEY"])
+        #expect(harness.fileSystem.text(harness.layout.env) == RuntimeEnvFile.header + "FINNHUB_API_KEY=abc\n")
+        #expect(try harness.fileSystem.mode(harness.layout.env) == 0o600)
     }
 }
 
-@Suite struct PostgresSQLTests {
-    @Test func versionParsingAcceptsMajor18AndRejectsOthers() throws {
-        #expect(PostgresSQL.parseMajor("pg_dump (PostgreSQL) 18.6") == 18)
-        #expect(PostgresSQL.parseMajor("postgres (PostgreSQL) 18.1") == 18)
-        #expect(PostgresSQL.parseMajor("PostgreSQL 18") == 18)
-        #expect(PostgresSQL.parseMajor("nothing") == nil)
-        #expect(PostgresSQL.parseVersionNumber("pg_dump (PostgreSQL) 18.6") == 180_006)
-        #expect(try PostgresSQL.assertMajor18("pg_dump", "pg_dump (PostgreSQL) 18.6") == 18)
-        #expect(throws: NativeRuntimeError("POSTGRES_WRONG_VERSION", "pg_dump must be PostgreSQL 18; found major 17")) {
-            try PostgresSQL.assertMajor18("pg_dump", "pg_dump (PostgreSQL) 17.5")
+@Suite struct RuntimeLogAndSwitchTests {
+    @Test func thePackagedMigrationVersionIsTheHighestNumberedMigration() throws {
+        let fileSystem = FakeFileSystem()
+        let directory = "/runtime/db/migrations"
+        #expect(try MigrationLedger.packagedVersion(migrationsDirectory: directory, fileSystem: fileSystem) == 0)
+        for name in ["0001_baseline.sql", "0003_holdings.sql", "0004_x.down.sql", "0002_b.sql", "0009.sql", "notes.md"] {
+            fileSystem.addFile("\(directory)/\(name)", "--\n")
         }
-    }
-
-    @Test func serverDisablesUnixSocketsAndBindsOnlyLoopback() {
-        #expect(
-            PostgresSQL.serverArguments(dataDirectory: "/private/path with spaces/data", port: 54331)
-                == ["-D", "/private/path with spaces/data", "-h", "127.0.0.1", "-p", "54331", "-k", ""])
-    }
-
-    @Test func managedConfigurationMatchesElectron() {
-        #expect(
-            PostgresSQL.visionConf(port: 54331)
-                == "listen_addresses = '127.0.0.1'\nport = 54331\nunix_socket_directories = ''\npassword_encryption = 'scram-sha-256'\nshared_preload_libraries = 'pg_stat_statements'\nlogging_collector = off\nmax_connections = 40\nio_workers = 1\npg_stat_statements.max = 1000\n"
-        )
-        #expect(PostgresSQL.includesVisionConf("a\n  include = 'vision.conf'  \n"))
-        #expect(!PostgresSQL.includesVisionConf("#include = 'vision.conf'\n"))
-    }
-
-    private static let secret = String(repeating: "c", count: 64)
-
-    private func config(appRole: String = "vision_native_app", appPassword: String = PostgresSQLTests.secret, analysis: String = PostgresSQLTests.secret)
-        -> DatabaseConfig
-    {
-        DatabaseConfig(
-            database: "vision_native", adminRole: "vision_native_admin", adminPassword: Self.secret,
-            appRole: appRole, appPassword: appPassword, ownerRole: "vision_native_owner",
-            ownerPassword: Self.secret, host: "127.0.0.1", port: 54331, environment: [:], analysisPassword: analysis)
-    }
-
-    @Test func bootstrapIsOneLeastPrivilegeSession() throws {
-        let secret = Self.secret
-        let sql = try PostgresSQL.bootstrapSQL(config(analysis: "a'b\\c"))
-        let lines = sql.components(separatedBy: "\n")
-        // Roles are created once and their attributes and passwords are reset every launch.
-        #expect(
-            lines.contains(
-                "SELECT 'CREATE ROLE vision_native_owner NOLOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'vision_native_owner') \\gexec"
-            ))
-        #expect(
-            lines.contains(
-                "ALTER ROLE \"vision_native_owner\" WITH LOGIN PASSWORD '\(secret)' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;"
-            ))
-        #expect(
-            lines.contains(
-                "ALTER ROLE \"vision_native_app\" WITH LOGIN PASSWORD '\(secret)' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;"
-            ))
-        #expect(
-            lines.contains(
-                "ALTER ROLE vision_analysis_executor WITH LOGIN PASSWORD E'a''b\\\\c' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;"
-            ))
-        #expect(lines.contains("ALTER ROLE vision_analysis_executor SET default_transaction_read_only = on;"))
-        #expect(lines.contains("ALTER ROLE vision_analysis_executor SET search_path = vision_analysis, pg_catalog;"))
-        // The database belongs to the migration owner, and the extensions follow the
-        // connection to it.
-        #expect(lines.contains("ALTER DATABASE \"vision_native\" OWNER TO \"vision_native_owner\";"))
-        let connect = try #require(lines.firstIndex(of: "\\connect vision_native"))
-        #expect(
-            Array(lines[(connect + 1)...]) == [
-                "CREATE EXTENSION IF NOT EXISTS pg_trgm;", "CREATE EXTENSION IF NOT EXISTS pgcrypto;",
-                "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
-            ])
-        #expect(!sql.replacingOccurrences(of: "NOSUPERUSER", with: "").contains("SUPERUSER"))
-    }
-
-    @Test func bootstrapRejectsUnsafeRolesAndSecrets() {
-        #expect(throws: NativeRuntimeError.self) { _ = try PostgresSQL.bootstrapSQL(config(appRole: "Bad-Role")) }
-        #expect(throws: NativeRuntimeError.self) { _ = try PostgresSQL.bootstrapSQL(config(appPassword: "x'; DROP")) }
-        #expect(
-            PostgresSQL.createExtensions
-                == "CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
-        )
-    }
-
-    @Test func theMigrationLedgerSQLAndNamesAreContracts() {
-        #expect(MigrationLedger.ledgerExistsSQL == "SELECT to_regclass('public.kysely_migration') IS NOT NULL;")
-        #expect(MigrationLedger.headSQL == "SELECT max(name) FROM public.kysely_migration;")
-        #expect(MigrationLedger.appliedSQL == "SELECT name FROM public.kysely_migration ORDER BY name;")
-        #expect(MigrationLedger.numericPrefix("0004_remove_audit_history") == 4)
-        #expect(MigrationLedger.numericPrefix("0004") == nil)
-        let error = MigrationLedger.preBaselineBackupError()
-        #expect(error.code == "BACKUP_PRE_BASELINE")
-        #expect(error.message.hasPrefix("BACKUP_PRE_BASELINE: This backup was taken before Vision switched"))
+        #expect(try MigrationLedger.packagedVersion(migrationsDirectory: directory, fileSystem: fileSystem) == 3)
     }
 
     @Test func theBackendsStartupErrorIsReadFromItsLog() {
@@ -246,15 +172,16 @@ import Testing
             "",
         ].joined(separator: "\n")
         #expect(BackendLog.lastStartupError(log) == "new")
+        #expect(BackendLog.lastStartupFailure(log) == BackendStartupFailure(message: "new"))
         #expect(BackendLog.lastStartupError("2026-10-19T09:21:00.000Z [INFO] ready\n") == nil)
         #expect(BackendLog.lastStartupError("[ERROR] Failed to start application {broken") == nil)
-    }
-
-    @Test func materializedViewOwnershipIsLimitedToRuntimeManagedViews() throws {
         #expect(
-            try PostgresSQL.materializedViewOwnership(appRole: "vision_native_app")
-                == "ALTER MATERIALIZED VIEW IF EXISTS \"public\".\"mv_monthly_summary\" OWNER TO \"vision_native_app\";\nALTER MATERIALIZED VIEW IF EXISTS \"public\".\"mv_category_totals\" OWNER TO \"vision_native_app\";"
-        )
+            BackendLog.lastStartupFailure(
+                #"[ERROR] Failed to start application {"error":"disk full","code":"PRE_MIGRATION_BACKUP_FAILED"}"#)
+                == BackendStartupFailure(message: "disk full", code: BackendStartupFailure.preMigrationBackupFailedCode))
+        #expect(
+            BackendLog.lastStartupFailure(#"[ERROR] Failed to start application {"error":"x","code":""}"#)
+                == BackendStartupFailure(message: "x"))
     }
 
     @Test func switchRecoveryClassifiesEveryInterruptionPoint() {
@@ -323,10 +250,8 @@ import Testing
         #expect(!AppSettings.keepServicesFromSettings(["keepServicesOnQuit": .string("true")]))
     }
 
-    @Test func diagnosticsRedactDatabasePasswords() {
-        #expect(
-            redactDiagnostics("url postgresql://vision_native_app:secret@127.0.0.1:54331/db \u{1B}[31mred\u{1B}[0m")
-                == "url postgresql://vision_native_app:***@127.0.0.1:54331/db red")
+    @Test func diagnosticsDropColourCodes() {
+        #expect(redactDiagnostics("plain \u{1B}[31mred\u{1B}[0m \u{1B}[1;32mbold\u{1B}[0m") == "plain red bold")
     }
 }
 
@@ -370,8 +295,9 @@ import Testing
         #expect(layout.env == "\(testUserData)/native/vision_native/runtime.env")
         #expect(layout.state == "\(testUserData)/native/vision_native/runtime-state.json")
         #expect(layout.pid == "\(testUserData)/native/vision_native/backend.pid.json")
-        #expect(layout.postgresPid == "\(testUserData)/native/vision_native/postgres.pid.json")
-        #expect(layout.postgresData == "\(testUserData)/native/vision_native/postgres/data")
+        // The database lives beside the runtime directory: the whole directory is one generation.
+        #expect(layout.databaseDirectory == "\(testUserData)/database")
+        #expect(layout.database == "\(testUserData)/database/vision.sqlite3")
         #expect(layout.backendLog == "\(testUserData)/native/vision_native/logs/backend.log")
         #expect(layout.settings == "\(testUserData)/settings.json")
         #expect(VisionNativeIdentity.userDataDirectory(homeDirectory: testHome) == testUserData)
@@ -384,62 +310,55 @@ import Testing
 }
 
 @Suite struct DatabaseStatsTests {
-    @Test func theSchemaIsTheKyselyLedgerHeadAndRuntimeWrittenSettingsAreExcluded() {
-        #expect(DatabaseStatistics.sql.contains("COALESCE((SELECT max(name) FROM public.kysely_migration), '') AS value"))
-        #expect(!DatabaseStatistics.sql.contains("alembic_version"))
-        // Warmup records each daily job's last run as `daily_job_<name>` after the backend is ready.
-        #expect(DatabaseStatistics.sql.contains("AND key NOT LIKE 'daily\\_job\\_%'"))
-        #expect(DatabaseStatistics.sql.contains("'fx_full_history_repair_done', 'transfers_backfilled'"))
+    @Test func parsesTheSqliteHeader() throws {
+        let header = try DatabaseStatistics.parseHeader(sqliteDatabase(userVersion: 130, pages: 5))
+        #expect(header.pageSize == 4096)
+        #expect(header.journalMode == .wal)
+        #expect(header.pageCount == 5)
+        #expect(header.textEncoding == .utf8)
+        #expect(header.userVersion == 130)
+        #expect(DatabaseStatistics.sqliteVersionString(header.sqliteVersionNumber) == "3.43.2")
     }
 
-    @Test func parsesStatisticsRows() throws {
-        let stats = try DatabaseStatistics.parse(
-            "schema\t0130_head\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:accounts\t3\ntable:user_settings\t4\n")
-        #expect(stats.schema == "0130_head")
-        #expect(stats.tableCounts == ["accounts": 3, "user_settings": 4])
-        #expect(stats.stableImportantRowCounts == ["user_settings": 2])
-        #expect(stats.comparable.important["accounts"] == .int(3))
-    }
-
-    @Test func rejectsMissingOrInvalidRows() {
-        for output in [
-            "postgres_version_num\t180006\n", "schema\tx\npostgres_version_num\t170000\n",
-            "schema\tx\npostgres_version_num\t180006\ntable:Bad\t1\n",
-            "schema\tx\npostgres_version_num\t180006\ntable:a\t-1\n",
-            "schema\tx\npostgres_version_num\t180006\nstable:unknown\t1\n",
-        ] {
-            #expect(throws: NativeRuntimeError.self) { try DatabaseStatistics.parse(output) }
+    @Test func rejectsFilesThatAreNotSqlite() {
+        var badPageSize = [UInt8](sqliteDatabase(userVersion: 1))
+        badPageSize[16] = 0x03
+        badPageSize[17] = 0x00
+        for data in [Data("PGDMP".utf8), Data(sqliteDatabase(userVersion: 1).prefix(99)), Data(badPageSize)] {
+            #expect(throws: NativeRuntimeError.self) { try DatabaseStatistics.parseHeader(data) }
         }
     }
 
-    @Test func comparisonChecksSchemaTableSetAndEveryCount() throws {
-        let expected = try DatabaseStatistics.parse("schema\ts\npostgres_version_num\t180006\ntable:a\t1\ntable:b\t2\n")
-            .comparable
-        #expect(throws: Never.self) { try DatabaseStatistics.assertEqual(expected: expected, actual: expected) }
-        let cases: [(String, String)] = [
-            ("schema\tt\npostgres_version_num\t180006\ntable:a\t1\ntable:b\t2\n", "DATABASE_SCHEMA_MISMATCH"),
-            ("schema\ts\npostgres_version_num\t180006\ntable:a\t1\n", "DATABASE_TABLE_SET_MISMATCH"),
-            ("schema\ts\npostgres_version_num\t180006\ntable:a\t1\ntable:b\t3\n", "DATABASE_COUNT_MISMATCH"),
-        ]
-        for (output, code) in cases {
-            let actual = try DatabaseStatistics.parse(output).comparable
-            do {
-                try DatabaseStatistics.assertEqual(expected: expected, actual: actual)
-                Issue.record("expected \(code)")
-            } catch let error as NativeRuntimeError {
-                #expect(error.code == code)
-            }
-        }
+    @Test func fileStatsReportMissingEmptyAndUnsafePaths() throws {
+        let fileSystem = FakeFileSystem()
+        let path = "\(testUserData)/database/vision.sqlite3"
+        #expect(try DatabaseStatistics.readFileStats(path, fileSystem: fileSystem).exists == false)
+        fileSystem.addFile(path, Data())
+        let empty = try DatabaseStatistics.readFileStats(path, fileSystem: fileSystem)
+        #expect(empty.exists && empty.schemaVersion == 0)
+        fileSystem.addFile(path, sqliteDatabase(userVersion: 3, body: "x"))
+        fileSystem.addFile("\(path)-wal", "wal")
+        let stats = try DatabaseStatistics.readFileStats(path, fileSystem: fileSystem)
+        #expect(stats.schemaVersion == 3)
+        #expect(stats.walBytes == 3)
+        #expect(stats.sqliteVersion == "3.43.2")
+        #expect(DatabaseStatistics.describe(stats).contains("schema=3"))
     }
 
-    @Test func stableComparisonIgnoresRuntimeOwnedSettings() throws {
-        let expected = try DatabaseStatistics.parse(
-            "schema\ts\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:user_settings\t2\n"
-        ).comparable
-        let actual = try DatabaseStatistics.parse(
-            "schema\ts\npostgres_version_num\t180006\nstable:user_settings\t2\ntable:user_settings\t4\n"
-        ).comparable
-        #expect(throws: Never.self) { try DatabaseStatistics.assertStableEqual(expected: expected, actual: actual) }
-        #expect(throws: NativeRuntimeError.self) { try DatabaseStatistics.assertEqual(expected: expected, actual: actual) }
+    @Test func stableComparisonIgnoresStartupWrittenSettings() throws {
+        let expected = ["accounts": 3, "user_settings": 1]
+        let actual = ["accounts": 3, "user_settings": 4]
+        #expect(!DatabaseStatistics.stableTables.contains("user_settings"))
+        #expect(throws: Never.self) {
+            try DatabaseStatistics.assertTableCountsEqual(
+                expected: expected, actual: actual, tables: DatabaseStatistics.stableTables)
+        }
+        do {
+            try DatabaseStatistics.assertTableCountsEqual(expected: expected, actual: actual)
+            Issue.record("expected DATABASE_COUNT_MISMATCH")
+        } catch let error as NativeRuntimeError {
+            #expect(error.code == "DATABASE_COUNT_MISMATCH")
+            #expect(error.message.contains("user_settings: expected 1, found 4"))
+        }
     }
 }

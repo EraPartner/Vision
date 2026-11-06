@@ -12,8 +12,7 @@ private actor FakeSnapshotRuntime: SnapshotRuntime {
         self.startFailure = startFailure
     }
 
-    func stop(keepPostgres: Bool) async throws {
-        #expect(keepPostgres)
+    func stop() async throws {
         running = false
         events.append("stop")
     }

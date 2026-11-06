@@ -165,69 +165,32 @@ final class StringBox: @unchecked Sendable {
 }
 
 @Suite struct BackupSchemaTests {
-    @Test func migrationNamesNeedANumberAndAnUnderscore() {
-        #expect(BackupRestore.revisionNumericPrefix("0130_b") == 130)
-        #expect(BackupRestore.revisionNumericPrefix("0004_remove_audit_history") == 4)
-        #expect(BackupRestore.revisionNumericPrefix("0130") == nil)
-        #expect(BackupRestore.revisionNumericPrefix("abc") == nil)
-        #expect(BackupRestore.revisionNumericPrefix("") == nil)
-    }
-
     @Test func refusesANewerSchemaOnly() throws {
-        try BackupRestore.assertSchemaCompatible("0130_a", current: "0130_b")
-        try BackupRestore.assertSchemaCompatible("0129_a", current: "0130_b")
-        try BackupRestore.assertSchemaCompatible("fixture_schema", current: "0130_b")
-        try BackupRestore.assertSchemaCompatible("0131_a", current: "")
+        try BackupRestore.assertSchemaCompatible(3, current: 3)
+        try BackupRestore.assertSchemaCompatible(2, current: 3)
+        // An install without migrations (version 0) cannot judge, so it does not refuse.
+        try BackupRestore.assertSchemaCompatible(4, current: 0)
         #expect(
             throws: BackupFailure(
-                "BUNDLE_SCHEMA_NEWER: This bundle was created on schema revision \"0131_a\" but this Vision install is at \"0130_b\". Update Vision to a newer version and retry."
+                "BUNDLE_SCHEMA_NEWER: This bundle was created on schema version 4 but this Vision install is at 3. Update Vision to a newer version and retry."
             )
         ) {
-            try BackupRestore.assertSchemaCompatible("0131_a", current: "0130_b", noun: "bundle")
+            try BackupRestore.assertSchemaCompatible(4, current: 3, noun: "bundle")
         }
     }
 
-    @Test func readsTheKyselyLedgerOfAPlainDump() throws {
-        let directory = try makeBackupScratchDirectory()
-        defer { try? FileManager.default.removeItem(atPath: directory) }
-        // The highest name wins wherever it sits, rows of other tables are not ledger rows,
-        // and the dump is scanned to its end (no trailing newline, CRLF line endings).
-        try writeBytes(
-            directory + "/copy.sql",
-            Array(
-                ("SET x = 1;\r\nCOPY public.other (id, name) FROM stdin;\r\n1\t0999_not_a_migration\r\n\\.\r\n"
-                    + "COPY public.kysely_migration (name, \"timestamp\") FROM stdin;\r\n"
-                    + "0002_b\t2026-01-02\r\n0003_c\t2026-01-03\r\n0001_a\t2026-01-01\r\n\\.\r\n"
-                    + "COPY public.later (id) FROM stdin;\r\n7\r\n\\.").utf8))
-        try writeBytes(
-            directory + "/insert.sql",
-            Array(
-                ("-- dump\nINSERT INTO public.kysely_migration (name, timestamp) VALUES ('0042_x', '2026');\n"
-                    + "INSERT INTO kysely_migration VALUES ('0007_y', '2026');\n").utf8))
-        try writeBytes(directory + "/none.sql", Array("SELECT 1;\nCOPY public.t (a) FROM stdin;\n0500_z\n\\.\n".utf8))
-        try writeBytes(
-            directory + "/alembic.sql",
-            Array("COPY public.alembic_version (version_num) FROM stdin;\n0130_head\n\\.\n".utf8))
-        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/copy.sql") == "0003_c")
-        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/insert.sql") == "0042_x")
-        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/none.sql") == "")
-        #expect(try BackupRestore.readDumpSchemaLedger(directory + "/alembic.sql") == "")
-        #expect(throws: (any Error).self) { _ = try BackupRestore.readDumpSchemaLedger(directory + "/missing.sql") }
-    }
-
-    @Test func aDumpWithoutTheLedgerPredatesTheBaseline() throws {
-        #expect(try BackupRestore.assertPostBaselineBackup("0003_c") == "0003_c")
-        let error = #expect(throws: NativeRuntimeError.self) { _ = try BackupRestore.assertPostBaselineBackup("") }
-        #expect(error?.code == "BACKUP_PRE_BASELINE")
-        #expect(error?.message.hasPrefix("BACKUP_PRE_BASELINE: ") == true)
-    }
-
-    @Test func metadataValuesAreStringifiedLikeJavaScript() {
-        #expect(BackupRestore.javaScriptString(.string("0130")) == "0130")
-        #expect(BackupRestore.javaScriptString(.int(130)) == "130")
-        #expect(BackupRestore.javaScriptString(.double(130)) == "130")
-        #expect(BackupRestore.javaScriptString(.bool(true)) == "true")
-        #expect(BackupRestore.javaScriptString(.object([:])) == "[object Object]")
+    @Test func onlyWellFormedMetadataBecomesARestoreExpectation() {
+        let digest = String(repeating: "ab", count: 32)
+        let metadata: [String: JSONValue] = ["schemaVersion": .int(3), "databaseSha256": .string(digest)]
+        #expect(BackupRestore.metadataSchemaVersion(metadata) == 3)
+        #expect(BackupRestore.metadataSha256(metadata) == digest)
+        for invalid: JSONValue in [.int(0), .int(-1), .string("3"), .null, .double(2.5)] {
+            #expect(BackupRestore.metadataSchemaVersion(["schemaVersion": invalid]) == nil)
+        }
+        for invalid: JSONValue in [.string("abc"), .string(digest.uppercased() + "0"), .null, .int(1)] {
+            #expect(BackupRestore.metadataSha256(["databaseSha256": invalid]) == nil)
+        }
+        #expect(BackupRestore.metadataSchemaVersion([:]) == nil)
     }
 
     @Test func theAllowListResolvesPaths() {
@@ -247,10 +210,13 @@ final class StringBox: @unchecked Sendable {
     }
 
     @Test func restoreExtensionsAreTheBackupFormats() {
-        for name in ["a.visionbak", "a.VISIONBAK.ENC", "a.enc", "a.sql"] {
+        for name in ["a.visionbak", "a.VISIONBAK.ENC", "a.enc", "a.sqlite3", "a.sqlite3.enc"] {
             #expect(RestorePathAllowList.hasAllowedExtension("/b/" + name), Comment(rawValue: name))
         }
-        #expect(!RestorePathAllowList.hasAllowedExtension("/b/a.txt"))
+        // A plain SQL dump belongs to the database server Vision no longer runs.
+        for name in ["a.txt", "a.sql"] {
+            #expect(!RestorePathAllowList.hasAllowedExtension("/b/" + name), Comment(rawValue: name))
+        }
     }
 }
 

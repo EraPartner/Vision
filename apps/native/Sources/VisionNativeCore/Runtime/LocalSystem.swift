@@ -189,7 +189,8 @@ public struct FoundationProcessRunner: ProcessRunning {
             throw ProcessRunError(
                 executable: executable,
                 exitStatus: status,
-                message: trimmed.isEmpty ? "\(name) failed with exit status \(status)" : trimmed
+                message: trimmed.isEmpty ? "\(name) failed with exit status \(status)" : trimmed,
+                stdout: stdout
             )
         }
         return RunResult(stdout: stdout, stderr: stderr)
@@ -541,6 +542,65 @@ public struct LocalFileSystem: RuntimeFileSystem {
         } catch {
             throw FileSystemError.failed(path, error.localizedDescription)
         }
+    }
+}
+
+extension LocalFileSystem {
+    public func readHead(_ path: String, length: Int) throws -> Data {
+        let descriptor = Darwin.open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        if descriptor < 0 {
+            let code = errno
+            if code == ENOENT { throw FileSystemError.notFound(path) }
+            throw FileSystemError.failed(path, String(cString: strerror(code)))
+        }
+        defer { Darwin.close(descriptor) }
+        var buffer = [UInt8](repeating: 0, count: max(length, 0))
+        var total = 0
+        while total < buffer.count {
+            let count = buffer.withUnsafeMutableBytes { raw -> Int in
+                guard let base = raw.baseAddress else { return 0 }
+                return Darwin.pread(descriptor, base + total, raw.count - total, off_t(total))
+            }
+            if count < 0 {
+                if errno == EINTR { continue }
+                throw FileSystemError.failed(path, String(cString: strerror(errno)))
+            }
+            if count == 0 { break }
+            total += count
+        }
+        return Data(buffer.prefix(total))
+    }
+
+    public func copyFileDurably(_ source: String, _ destination: String, mode: Int) throws {
+        guard info(source)?.kind == .file else { throw FileSystemError.notFound(source) }
+        // FileManager refuses an existing destination, like COPYFILE_EXCL.
+        do {
+            try FileManager.default.copyItem(atPath: source, toPath: destination)
+        } catch {
+            throw FileSystemError.failed(destination, error.localizedDescription)
+        }
+        try setMode(destination, mode)
+        let descriptor = Darwin.open(destination, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+        guard descriptor >= 0 else { throw FileSystemError.failed(destination, String(cString: strerror(errno))) }
+        defer { Darwin.close(descriptor) }
+        guard Darwin.fsync(descriptor) == 0 else {
+            throw FileSystemError.failed(destination, String(cString: strerror(errno)))
+        }
+    }
+
+    public func syncDirectory(_ path: String) {
+        let descriptor = Darwin.open(path, O_RDONLY | O_CLOEXEC)
+        guard descriptor >= 0 else { return }
+        // Some file systems refuse fsync on a directory; the rename still happened.
+        _ = Darwin.fsync(descriptor)
+        Darwin.close(descriptor)
+    }
+
+    public func modificationDate(_ path: String) -> Date? {
+        var status = stat()
+        guard Darwin.lstat(path, &status) == 0 else { return nil }
+        let spec = status.st_mtimespec
+        return Date(timeIntervalSince1970: Double(spec.tv_sec) + Double(spec.tv_nsec) / 1_000_000_000)
     }
 }
 

@@ -35,11 +35,14 @@ public struct ProcessRunError: Error, Equatable, Sendable, LocalizedError {
     public let executable: String
     public let exitStatus: Int32?
     public let message: String
+    /// Output of the failed child, kept so a tool's JSON error survives (`error.stdout`).
+    public let stdout: String
 
-    public init(executable: String, exitStatus: Int32?, message: String) {
+    public init(executable: String, exitStatus: Int32?, message: String, stdout: String = "") {
         self.executable = executable
         self.exitStatus = exitStatus
         self.message = message
+        self.stdout = stdout
     }
 
     public var errorDescription: String? { message }
@@ -172,6 +175,17 @@ public protocol RuntimeFileSystem: Sendable {
     /// Byte count and lowercase hex SHA-256 of a file, streamed.
     func sha256(_ path: String) throws -> (bytes: Int, hex: String)
     func readNoFollow(_ path: String) throws -> NoFollowRead
+    /// Up to `length` leading bytes of a regular file, opened with `O_NOFOLLOW`; a shorter
+    /// file returns fewer bytes (`readFileHead`).
+    func readHead(_ path: String, length: Int) throws -> Data
+    /// `copyFile(source, destination, COPYFILE_EXCL)`, then `chmod` and `fsync`: a new file
+    /// that is durable before anything renames it.
+    func copyFileDurably(_ source: String, _ destination: String, mode: Int) throws
+    /// `fsync` on a directory so completed renames in it are durable; best effort where
+    /// the file system refuses it.
+    func syncDirectory(_ path: String)
+    /// The modification time, or `nil` when the path does not exist.
+    func modificationDate(_ path: String) -> Date?
 }
 
 extension RuntimeFileSystem {

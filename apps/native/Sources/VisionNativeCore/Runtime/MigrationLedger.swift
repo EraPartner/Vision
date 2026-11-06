@@ -1,67 +1,47 @@
 import Foundation
 
-/// The Kysely migration ledger (`public.kysely_migration`), ported from
-/// `packaging/electron/runtime/native.ts` (`SCHEMA_LEDGER_SQL`, `SCHEMA_HEAD_SQL`,
-/// `APPLIED_MIGRATIONS_SQL`, `migrationChainHead`, `preBaselineBackupError`).
+/// The migration version of a payload and of a database, ported from
+/// `packagedMigrationVersion` and `PendingSchemaUpgrade` in
+/// `packaging/electron/runtime/native.ts`.
 ///
-/// Migrations are TypeScript/Kysely. The backend applies `VISION_RUNTIME_ROOT/db/migrations`
-/// at boot; the schema version is the highest applied migration name. Names are zero-padded
-/// `NNNN_name`, so text ordering is migration order. These strings are persistence contracts
-/// (packaging/AGENTS.md): change them only together with the Electron runtime.
+/// Migrations are `db/migrations/NNNN_name.sql` files the backend applies in-process at boot
+/// (ADR-263). Their numbers are the schema version: the database records the latest applied
+/// one in its ledger and in the SQLite header's `user_version`. These names are persistence
+/// contracts (packaging/AGENTS.md): change them only together with the Electron runtime.
 public enum MigrationLedger {
-    /// Reports whether the ledger exists, so a missing table is not an error (`t` or `f`).
-    public static let ledgerExistsSQL = "SELECT to_regclass('public.kysely_migration') IS NOT NULL;"
-    public static let headSQL = "SELECT max(name) FROM public.kysely_migration;"
-    public static let appliedSQL = "SELECT name FROM public.kysely_migration ORDER BY name;"
-
-    /// `PRE_BASELINE_BACKUP_CODE`.
-    public static let preBaselineBackupCode = "BACKUP_PRE_BASELINE"
-    /// `PRE_BASELINE_BACKUP_MESSAGE`.
-    public static let preBaselineBackupMessage =
-        "This backup was taken before Vision switched to the TypeScript migration baseline. "
-        + "Only backups taken after that switch can be restored."
-
-    /// `preBaselineBackupError`: a backup without the Kysely ledger predates the squashed
-    /// TypeScript baseline and is refused.
-    public static func preBaselineBackupError() -> NativeRuntimeError {
-        NativeRuntimeError(preBaselineBackupCode, "\(preBaselineBackupCode): \(preBaselineBackupMessage)")
-    }
-
-    /// `^(\d+)_` of a migration name, as `revisionNumericPrefix` in `backup/restore.ts`.
-    public static func numericPrefix(_ name: String) -> Int? {
-        guard let groups = PathUtilities.firstMatchGroups(name, #"^(\d+)_"#), let digits = groups[1] else {
-            return nil
-        }
-        return Int(digits)
-    }
-
-    /// `migrationChainHead`: the highest `NNNN_name` migration in a `db/migrations` directory
-    /// (rollback files excluded), or "" when the directory is absent or holds none.
-    public static func chainHead(migrationsDirectory: String, fileSystem: any RuntimeFileSystem) throws -> String {
+    /// `packagedMigrationVersion`: the highest `NNNN_name.sql` version in a migrations
+    /// directory (rollback files excluded); 0 when the directory is absent or holds none.
+    public static func packagedVersion(migrationsDirectory: String, fileSystem: any RuntimeFileSystem) throws
+        -> Int
+    {
         let names: [String]
         do {
             names = try fileSystem.contentsOfDirectory(migrationsDirectory)
         } catch FileSystemError.notFound {
-            return ""
+            return 0
         }
-        return names
-            .filter { PathUtilities.fullMatch($0, #"\d{4}_[a-z0-9_]+\.sql"#) }
-            .filter { !$0.hasSuffix(".down.sql") }
-            .map { String($0.dropLast(".sql".count)) }
-            .max() ?? ""
+        var highest = 0
+        for name in names where !name.hasSuffix(".down.sql") {
+            guard let digits = PathUtilities.firstMatchGroups(name, #"^(\d{4})_[a-z0-9_]+\.sql$"#)?[1],
+                let version = Int(digits)
+            else { continue }
+            highest = max(highest, version)
+        }
+        return highest
     }
 }
 
-/// Migrations the packaged backend will apply to an existing database at boot
-/// (`PendingMigrations`).
-public struct PendingMigrations: Sendable, Equatable {
-    /// Highest migration recorded in the database's ledger.
-    public let appliedHead: String
-    /// Highest migration shipped with this install.
-    public let packagedHead: String
+/// A database the backend migrates forward at its next start (`PendingSchemaUpgrade`). The
+/// backend writes its own pre-migration copy to `database/pre-migration-backups` first, so
+/// the shell only reports it.
+public struct PendingSchemaUpgrade: Sendable, Equatable {
+    /// The schema version the live database records.
+    public let databaseVersion: Int
+    /// The newest migration this install ships.
+    public let packagedVersion: Int
 
-    public init(appliedHead: String, packagedHead: String) {
-        self.appliedHead = appliedHead
-        self.packagedHead = packagedHead
+    public init(databaseVersion: Int, packagedVersion: Int) {
+        self.databaseVersion = databaseVersion
+        self.packagedVersion = packagedVersion
     }
 }

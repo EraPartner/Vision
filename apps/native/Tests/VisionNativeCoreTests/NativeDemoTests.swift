@@ -2,43 +2,35 @@ import Foundation
 import Testing
 @testable import VisionNativeCore
 
-/// Records the calls Demo seeding makes, like the fake runtime in native-demo.test.ts.
+/// Records the calls Demo seeding makes, like the fake runtime in native-demo.test.ts. Its
+/// activation copies the seed over the live database in the harness's file system.
 final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
     let layout: RuntimeLayout
+    private let fileSystem: FakeFileSystem
     private let lock = NSLock()
     private var stateValue: [String: JSONValue]?
     private var recorded: [String] = []
-    var stats: DatabaseStats
-    var statsAfterStart: DatabaseStats?
-    private var statsReads = 0
+    /// What `verifyDatabaseFile` reports after the backend started; `nil` reports the seed.
+    var afterStart: (schemaVersion: Int, tableCounts: [String: Int]?)?
+    /// Written over the live database instead of the seed (a corrupt activation).
+    var activatedContent: Data?
     /// Replaces the default recovery, which clears both restore journals.
     var recoveryFailure: Error?
     let token = DatabaseSwitchToken(
-        version: 1, liveDatabase: "vision_native", previousDatabase: "vision_native_previous_aaaaaaaaaa",
-        activatedDatabase: "vision_native_restore_bbbbbbbbbb", activatedAt: "2026-10-12T00:00:00.000Z")
+        liveDirectory: "\(testUserData)/database", previousDirectory: "\(testUserData)/database.previous-1-aa",
+        activatedDirectory: "\(testUserData)/database.restore-1-aa", activatedAt: "2026-10-12T00:00:00.000Z")
 
-    init(layout: RuntimeLayout, state: [String: JSONValue]? = nil, stats: DatabaseStats) {
+    init(layout: RuntimeLayout, fileSystem: FakeFileSystem, state: [String: JSONValue]? = nil) {
         self.layout = layout
+        self.fileSystem = fileSystem
         stateValue = state
-        self.stats = stats
     }
 
-    var events: [String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return recorded
-    }
-
-    var state: [String: JSONValue]? {
-        lock.lock()
-        defer { lock.unlock() }
-        return stateValue
-    }
+    var events: [String] { lock.withLock { recorded } }
+    var state: [String: JSONValue]? { lock.withLock { stateValue } }
 
     private func record(_ event: String) {
-        lock.lock()
-        recorded.append(event)
-        lock.unlock()
+        lock.withLock { recorded.append(event) }
     }
 
     func ensureLayout() async throws { record("ensureLayout") }
@@ -54,8 +46,6 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
         record("writeState")
     }
 
-    func ensurePostgresReady() async throws { record("ensurePostgresReady") }
-
     func recoverInterruptedRestore() async throws {
         record("recoverInterruptedRestore")
         if let recoveryFailure { throw recoveryFailure }
@@ -66,75 +56,85 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
     }
 
     func rollbackDatabaseSwitch(_ token: JSONValue?) async throws {
-        record("rollback:\(token?["activatedDatabase"]?.stringValue ?? "-")")
+        record("rollback:\(token?["activatedDirectory"]?.stringValue.map(PathUtilities.basename) ?? "-")")
         lock.withLock { _ = stateValue?.removeValue(forKey: "pendingDatabaseSwitch") }
     }
 
-    func validateCustomDump(_ path: String) async throws { record("validate:\(PathUtilities.basename(path))") }
-
-    func activateRestoredDatabase(_ path: String, expectedSchemaHead: String) async throws -> DatabaseSwitchToken {
-        record("activate:\(expectedSchemaHead)")
-        return token
+    func activateRestoredDatabase(_ path: String, expectedSchemaVersion: Int?, expectedSha256: String?) async throws
+        -> DatabaseActivation
+    {
+        record("activate:\(PathUtilities.basename(path)):\(expectedSchemaVersion.map(String.init) ?? "-")")
+        let data = try activatedContent ?? fileSystem.readFile(path)
+        fileSystem.addFile(layout.database, data)
+        let report = DatabaseFileReport(
+            file: layout.database, bytes: data.count, sha256: sha256Hex(data), sqliteVersion: "3.43.2",
+            schemaVersion: expectedSchemaVersion ?? 0, pendingMigrations: 0)
+        return DatabaseActivation(switchToken: token, validation: report)
     }
 
-    func getDatabaseStats() async throws -> DatabaseStats {
-        let result: DatabaseStats = lock.withLock {
-            statsReads += 1
-            return statsReads > 1 ? (statsAfterStart ?? stats) : stats
-        }
-        record("stats")
-        return result
+    func verifyDatabaseFile(_ path: String) async throws -> DatabaseFileReport {
+        record("verify")
+        let data = try fileSystem.readFile(path)
+        let header = sqliteUserVersion(data) ?? 0
+        return DatabaseFileReport(
+            file: path, bytes: data.count, sha256: sha256Hex(data), sqliteVersion: "3.43.2",
+            schemaVersion: afterStart?.schemaVersion ?? header, pendingMigrations: 0,
+            tableCounts: afterStart.map { $0.tableCounts } ?? ["accounts": 3, "transactions": 40, "user_settings": 1])
     }
 
     func finalizeDatabaseSwitch(_ token: DatabaseSwitchToken) async throws { record("finalizeSwitch") }
-    func stop(keepPostgres: Bool) async throws { record("stop:\(keepPostgres)") }
-}
-
-private func seedStats(_ counts: [String: Int] = ["accounts": 3, "transactions": 40], schema: String = "0130_head")
-    -> DatabaseStats
-{
-    DatabaseStats(
-        schema: schema, postgresVersionNum: 180_006, tableCounts: counts, stableImportantRowCounts: ["user_settings": 0])
+    func stop() async throws { record("stop") }
 }
 
 private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790_000_000) }
 
+private func currentSeedMarker(_ seed: DemoSeed) -> JSONValue {
+    .object([
+        "logicalSha256": .string(seed.manifest.logicalSha256),
+        "databaseSha256": .string(seed.manifest.databaseSha256),
+        "schemaVersion": .int(seed.manifest.schemaVersion),
+    ])
+}
+
 @Suite struct DemoSeedManifestTests {
     @Test func validManifestIsAccepted() throws {
         let harness = try Harness()
-        harness.installSeed()
+        let data = harness.installSeed()
         let seed = try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
-        #expect(seed.manifest.schemaRevision == "0130_head")
-        #expect(seed.dumpPath == "\(testSeedRoot)/demo-seed.dump")
-        #expect(seed.manifest.database.tableCounts?["transactions"] == .int(40))
+        #expect(seed.databasePath == "\(testSeedRoot)/vision-demo.sqlite3")
+        #expect(seed.manifest.schemaVersion == 3)
+        #expect(seed.manifest.databaseSha256 == sha256Hex(data))
+        #expect(seed.manifest.databaseBytes == data.count)
+        #expect(seed.manifest.tableCounts["transactions"] == 40)
     }
 
     @Test func inconsistentOrIncompleteManifestsAreRejected() {
         let digest = JSONValue.string(String(repeating: "a", count: 64))
         let base: [String: JSONValue] = [
-            "version": .int(1), "logicalSha256": digest, "dumpSha256": digest, "schemaRevision": .string("0130_head"),
-            "database": .object(["schema": .string("0130_head"), "tableCounts": .object(["accounts": .int(1)])]),
+            "version": .int(2), "format": .string("sqlite"), "logicalSha256": digest, "databaseSha256": digest,
+            "databaseBytes": .int(4096), "schemaVersion": .int(3),
+            "database": .object(["tableCounts": .object(["accounts": .int(1)])]),
         ]
         #expect(throws: Never.self) { try NativeDemo.validateManifest(.object(base)) }
-        var wrongSchema = base
-        wrongSchema["database"] = .object([
-            "schema": .string("0129_old"), "tableCounts": .object(["accounts": .int(1)]),
-        ])
-        var noTables = base
-        noTables["database"] = .object(["schema": .string("0130_head"), "tableCounts": .object([:])])
-        var badDigest = base
-        badDigest["dumpSha256"] = .string("nope")
-        var wrongVersion = base
-        wrongVersion["version"] = .int(2)
-        for invalid in [wrongSchema, noTables, badDigest, wrongVersion] {
-            #expect(throws: NativeRuntimeError.self) { try NativeDemo.validateManifest(.object(invalid)) }
+        var changes: [(String, JSONValue)] = [
+            ("version", .int(1)), ("format", .string("postgres")), ("databaseSha256", .string("nope")),
+            ("databaseBytes", .int(0)), ("schemaVersion", .int(0)), ("schemaVersion", .string("0003_head")),
+            ("database", .object(["tableCounts": .object([:])])),
+            ("database", .object(["tableCounts": .object(["accounts": .int(-1)])])),
+        ]
+        changes.append(("logicalSha256", .null))
+        for (key, value) in changes {
+            var invalid = base
+            invalid[key] = value
+            let error = #expect(throws: NativeRuntimeError.self) { try NativeDemo.validateManifest(.object(invalid)) }
+            #expect(error?.code == "DEMO_SEED_MANIFEST_INVALID")
         }
     }
 
-    @Test func dumpChecksumIsVerified() throws {
+    @Test func databaseChecksumIsVerified() throws {
         let harness = try Harness()
         harness.installSeed()
-        harness.fileSystem.addFile("\(testSeedRoot)/demo-seed.dump", "PGDMP tampered")
+        harness.fileSystem.addFile("\(testSeedRoot)/vision-demo.sqlite3", sqliteDatabase(userVersion: 3, body: "x"))
         let error = #expect(throws: NativeRuntimeError.self) {
             try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
         }
@@ -148,7 +148,7 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
         }
         #expect(missing?.code == "DEMO_SEED_MISSING")
         harness.installSeed()
-        harness.fileSystem.addNode("\(testSeedRoot)/demo-seed.dump", .symlink("/elsewhere.dump"))
+        harness.fileSystem.addNode("\(testSeedRoot)/vision-demo.sqlite3", .symlink("/elsewhere.sqlite3"))
         let unsafe = #expect(throws: NativeRuntimeError.self) {
             try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
         }
@@ -160,108 +160,118 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
     @Test func currentSeedIsNotRestoredAgain() async throws {
         let harness = try Harness()
         harness.installSeed()
+        harness.installDatabase()
         let seed = try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
         let runtime = FakeDemoRuntime(
-            layout: harness.layout,
+            layout: harness.layout, fileSystem: harness.fileSystem,
             state: [
-                "activeRuntime": .string("native"),
-                "demoSeed": .object([
-                    "logicalSha256": .string(seed.manifest.logicalSha256),
-                    "schemaRevision": .string(seed.manifest.schemaRevision),
-                ]),
+                "activeRuntime": .string("native"), "demoSeed": currentSeedMarker(seed),
                 "demoSeedInProgress": .object([:]),
-            ],
-            stats: seedStats())
+            ])
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         #expect(prepared.status == .current)
         #expect(prepared.switchToken == nil)
-        #expect(!runtime.events.contains { $0.hasPrefix("activate") || $0.hasPrefix("validate") })
+        #expect(!runtime.events.contains { $0.hasPrefix("activate") })
         #expect(runtime.state?["demoSeedInProgress"] == nil)
         #expect(runtime.state?["activation"] == .string("demo-native"))
     }
 
-    @Test func newSeedIsRestoredVerifiedAndFinalized() async throws {
+    @Test func aCurrentMarkerWithoutADatabaseFileReseeds() async throws {
         let harness = try Harness()
         harness.installSeed()
-        let runtime = FakeDemoRuntime(layout: harness.layout, stats: seedStats())
+        let seed = try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
+        let runtime = FakeDemoRuntime(
+            layout: harness.layout, fileSystem: harness.fileSystem, state: ["demoSeed": currentSeedMarker(seed)])
+        let prepared = try await NativeDemo.prepare(
+            runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
+        #expect(prepared.status == .activated)
+    }
+
+    @Test func newSeedIsActivatedThenVerifiedAndFinalizedAfterStart() async throws {
+        let harness = try Harness()
+        harness.installSeed()
+        let runtime = FakeDemoRuntime(layout: harness.layout, fileSystem: harness.fileSystem)
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         #expect(prepared.status == .activated)
         #expect(prepared.switchToken == runtime.token)
-        #expect(runtime.state?["demoSeedInProgress"]?["schemaRevision"] == .string("0130_head"))
+        #expect(runtime.state?["demoSeedInProgress"]?["schemaVersion"] == .int(3))
+        #expect(runtime.state?["demoSeedInProgress"]?["databaseSha256"] == .string(prepared.manifest.databaseSha256))
         #expect(
             runtime.events == [
-                "ensureLayout", "discover", "ensurePostgresReady", "recoverInterruptedRestore", "writeState",
-                "validate:demo-seed.dump", "activate:0130_head", "stats",
+                "ensureLayout", "discover", "recoverInterruptedRestore", "writeState", "activate:vision-demo.sqlite3:3",
             ])
 
         let warning = try await NativeDemo.finalize(
             runtime: runtime, prepared: prepared, fileSystem: harness.fileSystem, now: fixedNow)
         #expect(warning == nil)
-        #expect(runtime.events.suffix(3) == ["stats", "finalizeSwitch", "writeState"])
+        #expect(runtime.events.suffix(3) == ["verify", "finalizeSwitch", "writeState"])
         #expect(runtime.state?["demoSeed"]?["logicalSha256"] == .string(prepared.manifest.logicalSha256))
+        #expect(runtime.state?["demoSeed"]?["appliedAt"] != nil)
         #expect(runtime.state?["demoSeedInProgress"] == nil)
     }
 
-    @Test func countMismatchRollsTheSwitchBack() async throws {
+    @Test func anActivatedDatabaseThatDiffersFromTheSeedIsRolledBack() async throws {
         let harness = try Harness()
         harness.installSeed()
-        let runtime = FakeDemoRuntime(
-            layout: harness.layout, stats: seedStats(["accounts": 3, "transactions": 39]))
+        let runtime = FakeDemoRuntime(layout: harness.layout, fileSystem: harness.fileSystem)
+        runtime.activatedContent = sqliteDatabase(userVersion: 3, body: "something else")
         let error = await #expect(throws: NativeRuntimeError.self) {
             try await NativeDemo.prepare(
                 runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         }
-        #expect(error?.code == "DATABASE_COUNT_MISMATCH")
-        #expect(runtime.events.last == "rollback:\(runtime.token.activatedDatabase)")
+        #expect(error?.code == "DEMO_SEED_CHECKSUM_MISMATCH")
+        #expect(runtime.events.last == "rollback:database.restore-1-aa")
     }
 
-    @Test func driftAfterStartFailsFinalization() async throws {
+    @Test func aMigratedSeedIsAcceptedWhileStableRowsStayTheSame() async throws {
         let harness = try Harness()
-        harness.installSeed()
-        let runtime = FakeDemoRuntime(layout: harness.layout, stats: seedStats())
-        runtime.statsAfterStart = seedStats(["accounts": 4, "transactions": 40])
+        harness.installSeed(schemaVersion: 2)
+        let runtime = FakeDemoRuntime(layout: harness.layout, fileSystem: harness.fileSystem)
+        // The backend migrated 2 → 3 and wrote its own settings rows on start.
+        runtime.afterStart = (3, ["accounts": 3, "transactions": 40, "user_settings": 7])
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
-        await #expect(throws: NativeRuntimeError.self) {
+        _ = try await NativeDemo.finalize(
+            runtime: runtime, prepared: prepared, fileSystem: harness.fileSystem, now: fixedNow)
+        #expect(runtime.events.contains("finalizeSwitch"))
+    }
+
+    @Test(arguments: [
+        (2, ["accounts": 3, "transactions": 40, "user_settings": 1], "DATABASE_SCHEMA_MISMATCH"),
+        (3, ["accounts": 4, "transactions": 40, "user_settings": 1], "DATABASE_COUNT_MISMATCH"),
+    ] as [(Int, [String: Int], String)])
+    func driftAfterStartFailsFinalization(_ schemaVersion: Int, _ counts: [String: Int], _ code: String)
+        async throws
+    {
+        let harness = try Harness()
+        harness.installSeed()
+        let runtime = FakeDemoRuntime(layout: harness.layout, fileSystem: harness.fileSystem)
+        runtime.afterStart = (schemaVersion, counts)
+        let prepared = try await NativeDemo.prepare(
+            runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
+        let error = await #expect(throws: NativeRuntimeError.self) {
             try await NativeDemo.finalize(
                 runtime: runtime, prepared: prepared, fileSystem: harness.fileSystem, now: fixedNow)
         }
+        #expect(error?.code == code)
         #expect(!runtime.events.contains("finalizeSwitch"))
-    }
-
-    @Test func interruptedRestoreIsRecoveredFirst() async throws {
-        let harness = try Harness()
-        harness.installSeed()
-        let pending = JSONValue.object(["liveDatabase": .string("vision_native"), "activatedDatabase": .string("x")])
-        let runtime = FakeDemoRuntime(
-            layout: harness.layout, state: ["pendingDatabaseSwitch": pending], stats: seedStats())
-        _ = try await NativeDemo.prepare(
-            runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
-        #expect(
-            Array(runtime.events.prefix(4)) == [
-                "ensureLayout", "discover", "ensurePostgresReady", "recoverInterruptedRestore",
-            ])
-        #expect(!runtime.events.contains("rollback:x"))
     }
 
     /// native-demo.test.ts: paired journals are recovered before a current seed is trusted.
     @Test func pairedRestoreJournalsAreRecoveredBeforeTrustingACurrentSeed() async throws {
         let harness = try Harness()
         harness.installSeed()
+        harness.installDatabase()
         let seed = try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
         let runtime = FakeDemoRuntime(
-            layout: harness.layout,
+            layout: harness.layout, fileSystem: harness.fileSystem,
             state: [
-                "pendingDatabaseSwitch": .object(["previousDatabase": .string("vision_native_previous")]),
+                "pendingDatabaseSwitch": .object(["previousDirectory": .string("database.previous")]),
                 "pendingAttachmentSwitch": .object(["previousDirectory": .string("attachments.previous")]),
-                "demoSeed": .object([
-                    "logicalSha256": .string(seed.manifest.logicalSha256),
-                    "schemaRevision": .string(seed.manifest.schemaRevision),
-                ]),
-            ],
-            stats: seedStats())
+                "demoSeed": currentSeedMarker(seed),
+            ])
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         #expect(prepared.status == .current)
@@ -269,9 +279,7 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
         #expect(runtime.state?["pendingAttachmentSwitch"] == nil)
         let events = runtime.events
         let recovered = try #require(events.firstIndex(of: "recoverInterruptedRestore"))
-        let ready = try #require(events.firstIndex(of: "ensurePostgresReady"))
         let firstWrite = try #require(events.firstIndex(of: "writeState"))
-        #expect(ready < recovered)
         #expect(firstWrite > recovered)
         #expect(!events.contains { $0.hasPrefix("rollback") || $0.hasPrefix("activate") })
     }
@@ -282,10 +290,10 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
         let harness = try Harness()
         harness.installSeed()
         let journals: [String: JSONValue] = [
-            "pendingDatabaseSwitch": .object(["previousDatabase": .string("vision_native_previous")]),
+            "pendingDatabaseSwitch": .object(["previousDirectory": .string("database.previous")]),
             "pendingAttachmentSwitch": .object(["previousDirectory": .string("attachments.previous")]),
         ]
-        let runtime = FakeDemoRuntime(layout: harness.layout, state: journals, stats: seedStats())
+        let runtime = FakeDemoRuntime(layout: harness.layout, fileSystem: harness.fileSystem, state: journals)
         runtime.recoveryFailure = NativeRuntimeError("SYNTHETIC", "Synthetic recovery failure")
         let error = await #expect(throws: NativeRuntimeError.self) {
             try await NativeDemo.prepare(
@@ -300,13 +308,14 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
     @Test func rollbackRestoresThePreviousSeedMarker() async throws {
         let harness = try Harness()
         harness.installSeed()
-        let previous = JSONValue.object(["logicalSha256": .string("old"), "schemaRevision": .string("0129_old")])
-        let runtime = FakeDemoRuntime(layout: harness.layout, state: ["demoSeed": previous], stats: seedStats())
+        let previous = JSONValue.object(["logicalSha256": .string("old"), "schemaVersion": .int(2)])
+        let runtime = FakeDemoRuntime(
+            layout: harness.layout, fileSystem: harness.fileSystem, state: ["demoSeed": previous])
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         try await NativeDemo.rollback(runtime: runtime, prepared: prepared, now: fixedNow)
-        #expect(runtime.events.contains("stop:true"))
-        #expect(runtime.events.contains("rollback:\(runtime.token.activatedDatabase)"))
+        #expect(runtime.events.contains("stop"))
+        #expect(runtime.events.contains("rollback:database.restore-1-aa"))
         #expect(runtime.state?["demoSeed"] == previous)
         #expect(runtime.state?["demoSeedInProgress"] == nil)
         #expect(runtime.state?["lastDemoSeedFailureAt"] != nil)
@@ -317,18 +326,12 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
     @Test func resetRequestForcesARestoreAndIsRemovedOnlyAfterFinalize() async throws {
         let harness = try Harness()
         harness.installSeed()
+        harness.installDatabase()
         let seed = try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
         try NativeDemo.requestReset(harness.layout, fileSystem: harness.fileSystem, now: fixedNow())
         #expect(try harness.fileSystem.mode(harness.layout.demoResetRequest) == 0o600)
         let runtime = FakeDemoRuntime(
-            layout: harness.layout,
-            state: [
-                "demoSeed": .object([
-                    "logicalSha256": .string(seed.manifest.logicalSha256),
-                    "schemaRevision": .string(seed.manifest.schemaRevision),
-                ])
-            ],
-            stats: seedStats())
+            layout: harness.layout, fileSystem: harness.fileSystem, state: ["demoSeed": currentSeedMarker(seed)])
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         #expect(prepared.status == .activated)
@@ -371,33 +374,32 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
 }
 
 @Suite struct DemoSeedRuntimeIntegrationTests {
-    @Test func nativeRuntimeSwapsInTheRestoredDatabaseAndKeepsThePrevious() async throws {
+    @Test func nativeRuntimeSwapsInTheSeedAndKeepsThePreviousGeneration() async throws {
         let harness = try Harness()
-        harness.installSeed()
+        let seedData = harness.installSeed()
+        let old = harness.installDatabase(body: "user data")
         let runtime = try harness.makeRuntime()
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
         let token = try #require(prepared.switchToken)
-        #expect(token.liveDatabase == "vision_native")
-        #expect(harness.databases.contains("vision_native"))
-        #expect(harness.databases.contains(token.previousDatabase))
-        #expect(!harness.databases.contains(token.activatedDatabase))
-        let pgRestore = try #require(harness.runner.calls(named: "pg_restore").last)
-        #expect(pgRestore.arguments.contains("--single-transaction"))
-        #expect(pgRestore.arguments.contains("vision_native_owner"))
+        #expect(token.liveDirectory == harness.layout.databaseDirectory)
+        #expect(try harness.fileSystem.readFile(harness.layout.database) == seedData)
+        #expect(try harness.fileSystem.readFile("\(token.previousDirectory)/vision.sqlite3") == old)
+        #expect(harness.toolCommands.first?.first == "verify")
         #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] != nil)
 
         _ = try await NativeDemo.finalize(
             runtime: runtime, prepared: prepared, fileSystem: harness.fileSystem, now: fixedNow)
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["pendingDatabaseSwitch"] == nil)
-        #expect(state["previousDatabase"] == .string(token.previousDatabase))
-        #expect(state["demoSeed"]?["schemaRevision"] == .string("0130_head"))
+        #expect(state["previousDatabase"] == .string(token.previousDirectory))
+        #expect(state["demoSeed"]?["schemaVersion"] == .int(3))
     }
 
     @Test func nativeRuntimeRollbackRestoresThePreviousDatabase() async throws {
         let harness = try Harness()
         harness.installSeed()
+        let old = harness.installDatabase(body: "user data")
         let runtime = try harness.makeRuntime()
         let prepared = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
@@ -405,8 +407,8 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
         try await NativeDemo.rollback(runtime: runtime, prepared: prepared, now: fixedNow)
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["pendingDatabaseSwitch"] == nil)
-        #expect(state["lastRollback"]?["restoredDatabase"] == .string(token.previousDatabase))
-        let failed = try #require(state["lastRollback"]?["preservedFailedDatabase"]?.stringValue)
-        #expect(harness.databases == ["vision_native", failed])
+        #expect(state["lastRollback"]?["restoredDatabase"] == .string(token.previousDirectory))
+        #expect(state["lastRollback"]?["preservedFailedDatabase"] != nil)
+        #expect(try harness.fileSystem.readFile(harness.layout.database) == old)
     }
 }

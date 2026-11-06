@@ -1,22 +1,24 @@
 import Foundation
 
-/// Vision Native's application-data layout. Below `native/<runtimeId>/` it is the same
-/// as `createNativeRuntime` in `packaging/electron/runtime/native.ts`, so a later phase
-/// can switch directories without converting files.
+/// Vision Native's application-data layout. Below the data directory it is the same as
+/// `createNativeRuntime` in `packaging/electron/runtime/native.ts` (`NativeRuntimePaths`),
+/// so a later phase can switch directories without converting files.
 ///
 ///     ~/Library/Application Support/Vision Native/
 ///       settings.json             appPort (the persisted random backend port)
 ///       vision-native.lock        single-instance lock (flock)
 ///       demo-reset-request.json   optional request to restore the canonical seed
 ///       logs/main.log             app lifecycle log (rotated at 2 MB)
+///       database/                 one database generation (ADR-263)
+///         vision.sqlite3          the backend's VISION_DATABASE_PATH, with -wal and -shm
+///         pre-migration-backups/  the backend's copy before it migrates
+///       database.previous-*/      earlier generations kept after a restore (3)
 ///       native/vision_native/
-///         runtime.env             generated credentials (0600)
+///         runtime.env             market-data keys (0600)
 ///         runtime-state.json      runtime marker
 ///         backend.pid.json        backend PID record
-///         postgres.pid.json       PostgreSQL PID record
 ///         raw-state.json          native-only mode's browser-storage equivalent (ADR-211)
-///         logs/backend.log, logs/postgres.log
-///         postgres/data/          PostgreSQL 18 cluster
+///         logs/backend.log
 ///         attachments/, cache/
 public struct RuntimeLayout: Sendable, Equatable {
     public let userDataDirectory: String
@@ -27,12 +29,12 @@ public struct RuntimeLayout: Sendable, Equatable {
     public let pid: String
     public let logs: String
     public let backendLog: String
-    public let postgresLog: String
-    public let postgresPid: String
-    public let postgresRoot: String
-    public let postgresData: String
     public let attachments: String
     public let cache: String
+    /// `<userData>/database`: one database generation.
+    public let databaseDirectory: String
+    /// `<userData>/database/vision.sqlite3`, the backend's `VISION_DATABASE_PATH`.
+    public let database: String
     public let settings: String
     public let appLog: String
     public let instanceLock: String
@@ -53,13 +55,11 @@ public struct RuntimeLayout: Sendable, Equatable {
         pid = PathUtilities.join(nativeRoot, "backend.pid.json")
         logs = PathUtilities.join(nativeRoot, "logs")
         backendLog = PathUtilities.join(nativeRoot, "logs", "backend.log")
-        postgresLog = PathUtilities.join(nativeRoot, "logs", "postgres.log")
-        postgresPid = PathUtilities.join(nativeRoot, "postgres.pid.json")
         rawState = PathUtilities.join(nativeRoot, "raw-state.json")
-        postgresRoot = PathUtilities.join(nativeRoot, "postgres")
-        postgresData = PathUtilities.join(nativeRoot, "postgres", "data")
         attachments = PathUtilities.join(nativeRoot, "attachments")
         cache = PathUtilities.join(nativeRoot, "cache")
+        databaseDirectory = PathUtilities.join(root, RuntimeConstants.databaseDirectoryName)
+        database = PathUtilities.join(databaseDirectory, RuntimeConstants.databaseFileName)
         settings = PathUtilities.join(root, "settings.json")
         appLog = PathUtilities.join(root, "logs", "main.log")
         instanceLock = PathUtilities.join(root, "vision-native.lock")

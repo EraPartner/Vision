@@ -90,6 +90,8 @@ public enum LaunchAppearance {
         switch phase {
         case .startingBackend:
             return "splash.startingServices"
+        case .backingUpDatabase:
+            return "splash.backingUp"
         case .waitingForReadiness, .running:
             return "splash.waitingApp"
         default:

@@ -4,7 +4,8 @@ import Foundation
 /// A bundle opened for restore (`OpenedBundle`). `cleanup()` removes its temporary directory.
 public struct OpenedBundle: Sendable {
     public let metadata: [String: JSONValue]
-    public let dbSqlPath: String
+    /// The extracted `db.sqlite3`.
+    public let databasePath: String
     public let attachmentsDirectory: String?
     public let frontendState: JSONValue?
     public let temporaryDirectory: String
@@ -14,19 +15,49 @@ public struct OpenedBundle: Sendable {
     }
 }
 
-/// Vision backup bundles (`packaging/electron/backup/bundle.ts`): a zip archive
+/// Facts about the snapshot that `metadata.json` records for restore checks
+/// (`BundleDatabaseInfo`).
+public struct BundleDatabaseInfo: Sendable, Equatable {
+    /// Latest migration version in the snapshot's ledger.
+    public let schemaVersion: Int
+    /// SQLite library version that wrote the snapshot.
+    public let sqliteVersion: String?
+    /// SHA-256 of `db.sqlite3`; restore refuses a member that does not match.
+    public let sha256: String?
+    public let bytes: Int?
+
+    public init(schemaVersion: Int, sqliteVersion: String?, sha256: String?, bytes: Int?) {
+        self.schemaVersion = schemaVersion
+        self.sqliteVersion = sqliteVersion
+        self.sha256 = sha256
+        self.bytes = bytes
+    }
+
+    public init(report: DatabaseFileReport) {
+        self.init(
+            schemaVersion: report.schemaVersion, sqliteVersion: report.sqliteVersion, sha256: report.sha256,
+            bytes: report.bytes)
+    }
+}
+
+/// Vision backup bundles (`packaging/electron/backup/bundle.ts`, format 2): a zip archive
 ///
-///     metadata.json        bundleVersion, schemaHead, appVersion, deviceId, createdAt, encrypted
-///     db.sql               pg_dump plain SQL
+///     metadata.json        bundle format, database schema version, app version, device id,
+///                          timestamps, database checksum
+///     db.sqlite3           a verified SQLite snapshot of the database (ADR-263)
 ///     attachments/         the attachments tree (when the runtime has one)
 ///     frontend-state.json  the localStorage snapshot { keys: { … } } (optional)
 ///
 /// named `vision_backup_<deviceId>_<YYYY-MM-DD_HH-MM-SS>.visionbak`, optionally encrypted
-/// with the v2 (GCM) format as `<name>.visionbak.enc`.
+/// with the v2 (GCM) format as `<name>.visionbak.enc`. Older bundle formats are refused
+/// (`BACKUP_FORMAT_UNSUPPORTED`).
 public enum BackupBundle {
     public static let encryptedMagicV1 = Array("VISIONBAK1".utf8)
     public static let encryptedMagicV2 = Array("VISIONBAK2".utf8)
-    public static let bundleVersion = 1
+    /// `BUNDLE_VERSION` (2: SQLite database).
+    public static let bundleVersion = 2
+    /// `BUNDLE_DATABASE_MEMBER`.
+    public static let databaseMember = "db.sqlite3"
     /// `MAX_RESTORE_BYTES`: 10 GiB of uncompressed output across all entries.
     public static let maximumRestoreBytes: UInt64 = 10 * 1024 * 1024 * 1024
     /// `MAX_RESTORE_ENTRIES`.
@@ -59,14 +90,23 @@ public enum BackupBundle {
         (try? JSONValue.string(value).compactJSONString()) ?? "\"\""
     }
 
+    private static func jsonStringOrNull(_ value: String?) -> String {
+        guard let value, !value.isEmpty else { return "null" }
+        return jsonString(value)
+    }
+
     /// `JSON.stringify(metadata, null, 2)` with Electron's field order.
     public static func metadataJSON(
-        schemaHead: String, appVersion: String, deviceId: String, createdAt: String
+        database: BundleDatabaseInfo, appVersion: String, deviceId: String, createdAt: String
     ) -> String {
         """
         {
           "bundleVersion": \(bundleVersion),
-          "schemaHead": \(jsonString(schemaHead)),
+          "database": "sqlite",
+          "schemaVersion": \(database.schemaVersion),
+          "sqliteVersion": \(jsonStringOrNull(database.sqliteVersion)),
+          "databaseSha256": \(jsonStringOrNull(database.sha256)),
+          "databaseBytes": \(database.bytes.map(String.init) ?? "null"),
           "appVersion": \(jsonString(appVersion)),
           "deviceId": \(jsonString(deviceId)),
           "createdAt": \(jsonString(createdAt)),
@@ -75,29 +115,45 @@ public enum BackupBundle {
         """
     }
 
+    /// `assertSqliteFile`: the member must start with the SQLite magic.
+    static func assertSqliteFile(_ path: String) throws {
+        guard let handle = FileHandle(forReadingAtPath: path) else {
+            throw BackupFailure("The backup database is not a SQLite database file.")
+        }
+        defer { try? handle.close() }
+        let head = (try? handle.read(upToCount: DatabaseStatistics.headerMagic.count)) ?? Data()
+        guard head == DatabaseStatistics.headerMagic else {
+            throw BackupFailure("The backup database is not a SQLite database file.")
+        }
+    }
+
     /// `createBundle`: writes `<name>.partial` and renames it once the archive is complete,
     /// so an interrupted backup never leaves a truncated file at the restorable name.
     public static func create(
         destinationDirectory: String,
         deviceId: String,
-        schemaHead: String?,
         appVersion: String?,
-        dbSqlPath: String,
+        databasePath: String,
+        database: BundleDatabaseInfo,
         attachmentsDirectory: String?,
         frontendState: JSONValue?,
         now: Date
     ) throws -> String {
+        guard database.schemaVersion >= 1 else {
+            throw BackupFailure("createBundle requires the database schema version")
+        }
+        try assertSqliteFile(databasePath)
         let bundlePath = PathUtilities.join(destinationDirectory, fileName(deviceId: deviceId, date: now))
         try BackupFiles.createDirectory(destinationDirectory, mode: 0o755)
         let partialPath = "\(bundlePath).partial"
         do {
             let writer = try ZipWriter(path: partialPath)
             let metadata = metadataJSON(
-                schemaHead: (schemaHead?.isEmpty == false ? schemaHead : nil) ?? "",
+                database: database,
                 appVersion: (appVersion?.isEmpty == false ? appVersion : nil) ?? "unknown",
                 deviceId: deviceId, createdAt: isoTimestamp(now))
             try writer.addData(name: "metadata.json", data: Data(metadata.utf8), modified: now)
-            try writer.addFile(name: "db.sql", path: dbSqlPath)
+            try writer.addFile(name: databaseMember, path: databasePath)
             if let attachmentsDirectory, BackupFiles.exists(attachmentsDirectory) {
                 try addTree(writer, root: attachmentsDirectory, prefix: "attachments")
             }
@@ -141,12 +197,29 @@ public enum BackupBundle {
         }
     }
 
-    /// `encryptBundle`: `<bundle>.enc` in the v2 format, then removes the plain bundle.
-    public static func encrypt(_ bundlePath: String, passphrase: String) throws -> String {
+    /// `encryptBundle`: `<destinationDirectory>/<bundle name>.enc` in the v2 format through a
+    /// `.partial` sidecar, so an interrupted write never leaves a truncated file at the
+    /// restorable name, then removes the plain bundle. Building the plain bundle in a private
+    /// staging directory and passing the backup folder as `destinationDirectory` keeps the
+    /// unencrypted archive out of that folder (for example iCloud Drive).
+    public static func encrypt(_ bundlePath: String, passphrase: String, destinationDirectory: String? = nil) throws
+        -> String
+    {
         guard !passphrase.isEmpty else { throw BackupFailure("encryptBundle requires a passphrase") }
-        let encryptedPath = "\(bundlePath).enc"
-        try EncryptedFile.encryptV2(
-            source: bundlePath, destination: encryptedPath, passphrase: passphrase, magic: encryptedMagicV2)
+        let directory = destinationDirectory ?? PathUtilities.dirname(bundlePath)
+        try BackupFiles.createDirectory(directory, mode: 0o755)
+        let encryptedPath = PathUtilities.join(directory, "\(PathUtilities.basename(bundlePath)).enc")
+        let partialPath = "\(encryptedPath).partial"
+        do {
+            try EncryptedFile.encryptV2(
+                source: bundlePath, destination: partialPath, passphrase: passphrase, magic: encryptedMagicV2)
+            guard rename(partialPath, encryptedPath) == 0 else {
+                throw BackupFailure("Could not rename the encrypted backup: \(String(cString: strerror(errno)))")
+            }
+        } catch {
+            BackupFiles.remove(partialPath)
+            throw error
+        }
         guard unlink(bundlePath) == 0 else {
             throw BackupFailure("Could not remove the unencrypted bundle: \(String(cString: strerror(errno)))")
         }
@@ -187,9 +260,16 @@ public enum BackupBundle {
             else {
                 throw BackupFailure("Bundle is missing metadata.json — file may be corrupt.")
             }
-            let dbSqlPath = PathUtilities.join(contents, "db.sql")
-            guard BackupFiles.exists(dbSqlPath) else {
-                throw BackupFailure("Bundle is missing db.sql — file may be corrupt.")
+            // db.sqlite3 is required. A bundle of an older format holds no SQLite database
+            // and is refused by its declared format.
+            let databasePath = PathUtilities.join(contents, databaseMember)
+            guard BackupFiles.exists(databasePath) else {
+                if let format = metadata["bundleVersion"]?.intValue, format < bundleVersion {
+                    throw NativeRuntimeError(
+                        "BACKUP_FORMAT_UNSUPPORTED",
+                        "This backup uses backup format \(format), which this version of Vision cannot restore.")
+                }
+                throw BackupFailure("Bundle is missing \(databaseMember) — file may be corrupt.")
             }
             let attachments = PathUtilities.join(contents, "attachments")
             var frontendState: JSONValue?
@@ -198,7 +278,7 @@ public enum BackupBundle {
                 frontendState = try? JSONValue.parse(data)
             }
             return OpenedBundle(
-                metadata: metadata, dbSqlPath: dbSqlPath,
+                metadata: metadata, databasePath: databasePath,
                 attachmentsDirectory: BackupFiles.exists(attachments) ? attachments : nil,
                 frontendState: frontendState, temporaryDirectory: temporary)
         } catch {

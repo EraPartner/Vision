@@ -61,11 +61,14 @@ public struct RestorePathAllowList: Sendable {
         return contains(resolved) ? resolved : nil
     }
 
-    /// `hasAllowedRestoreExt`: `.visionbak`, `.visionbak.enc`, `.enc` or `.sql`, any case.
+    /// `hasAllowedRestoreExt`: `.visionbak`, `.visionbak.enc`, `.sqlite3` or `.enc`, any case.
     public static func hasAllowedExtension(_ path: String) -> Bool {
         let lower = path.lowercased()
-        return [".visionbak.enc", ".visionbak", ".enc", ".sql"].contains { lower.hasSuffix($0) }
+        return allowedExtensions.contains { lower.hasSuffix(".\($0)") }
     }
+
+    /// The restore picker's file types (`backup:select-file`).
+    public static let allowedExtensions = ["visionbak.enc", "visionbak", "sqlite3", "enc"]
 }
 
 /// Runs blocking file and crypto work off the cooperative thread pool.
@@ -239,36 +242,24 @@ public actor BackupService {
         }
     }
 
-    /// `runBundleBackup`: dump and attachments into a private work directory, the bundle in
-    /// `destination`, v2 encryption when a passphrase is configured, then retention.
-    /// `backendStopped` (`BundleBackupOptions.backendStopped`): the caller guarantees no
-    /// backend is running while PostgreSQL is up, so the capture is already quiescent and
-    /// does not stop or restart the backend (the pre-migration backup at launch). `runtime`
-    /// overrides the provider's runtime for that launch-time call.
-    public func runBundleBackup(
-        destination: String, frontendStateJson: String?, backendStopped: Bool = false,
-        runtime explicitRuntime: (any BackupRuntime)? = nil
-    ) async throws -> JSONValue {
+    /// `runBundleBackup`: a verified database snapshot and the attachments into a private
+    /// work directory (captured while the backend is stopped, ADR-207), the bundle built there,
+    /// then either encrypted into `destination` (v2, when a passphrase is configured) or moved
+    /// there as is, then retention.
+    public func runBundleBackup(destination: String, frontendStateJson: String?) async throws -> JSONValue {
         guard !destination.isEmpty else { throw BackupFailure("No backup directory configured") }
-        let runtime: any BackupRuntime
-        if let explicitRuntime { runtime = explicitRuntime } else { runtime = try await requireRuntime() }
+        let runtime = try await requireRuntime()
         let deviceId = try await deviceId()
         let work = try BackupFiles.makeTemporaryDirectory(prefix: "vision_bak_", in: context.temporaryDirectory)
         defer { BackupFiles.remove(work) }
-        let dbSqlPath = PathUtilities.join(work, "db.sql")
+        let databasePath = PathUtilities.join(work, BackupBundle.databaseMember)
         let attachments = PathUtilities.join(work, "attachments")
-        // SQL, attachments and schema head come from one quiescent interval (ADR-207);
+        // The database snapshot and the attachments come from one quiescent interval;
         // compression and encryption follow the restart.
-        let capture = { @Sendable () async throws -> String in
-            try await runtime.dumpDatabase(to: dbSqlPath)
+        let report = try await withBackupSnapshot(runtime) { @Sendable () async throws -> DatabaseFileReport in
+            let report = try await runtime.snapshotDatabase(to: databasePath)
             try await runtime.exportAttachments(to: attachments)
-            return try await runtime.schemaHead()
-        }
-        let schemaHead: String
-        if backendStopped {
-            schemaHead = try await capture()
-        } else {
-            schemaHead = try await withBackupSnapshot(runtime, capture)
+            return report
         }
         var frontendState: JSONValue?
         if let frontendStateJson, !frontendStateJson.isEmpty {
@@ -278,16 +269,23 @@ public actor BackupService {
         let appVersion = context.appVersion
         let date = now()
         let state = frontendState
+        // With a passphrase the plain archive is built in the private work directory and
+        // only its encrypted form reaches `destination`.
+        let secret = await passphrase()
+        let bundleDirectory = secret == nil ? destination : work
         let bundlePath = try await runBlocking {
             try BackupBundle.create(
-                destinationDirectory: destination, deviceId: deviceId, schemaHead: schemaHead, appVersion: appVersion,
-                dbSqlPath: dbSqlPath, attachmentsDirectory: attachments, frontendState: state, now: date)
+                destinationDirectory: bundleDirectory, deviceId: deviceId, appVersion: appVersion,
+                databasePath: databasePath, database: BundleDatabaseInfo(report: report),
+                attachmentsDirectory: attachments, frontendState: state, now: date)
         }
         var finalPath = bundlePath
         var encrypted = false
         var warning: String?
-        if let secret = await passphrase() {
-            finalPath = try await runBlocking { try BackupBundle.encrypt(bundlePath, passphrase: secret) }
+        if let secret {
+            finalPath = try await runBlocking {
+                try BackupBundle.encrypt(bundlePath, passphrase: secret, destinationDirectory: destination)
+            }
             encrypted = true
         } else {
             warning = "Backup encryption skipped: no passphrase configured."
@@ -302,32 +300,6 @@ public actor BackupService {
         ]
         if let warning { result["warning"] = .string(warning) }
         return .object(result)
-    }
-
-    /// `backupBeforeMigrations` in `main.ts` (ADR-242): before the runtime spawns a backend
-    /// that will migrate an existing database, the same bundle backup as the in-app update
-    /// button goes to `<userData>/pre-update-backups`. PostgreSQL is up and no backend runs
-    /// yet. A failure is thrown so the start aborts (`app.preMigrationBackupFailed` in the
-    /// shell's string catalog wraps the message). Returns the saved file and whether it is
-    /// encrypted.
-    public func backupBeforeMigrations(
-        _ pending: PendingMigrations, runtime: any BackupRuntime
-    ) async throws -> (file: String, encrypted: Bool, warning: String?) {
-        logger.log(
-            "log",
-            "[pre-migration-backup] database at \(pending.appliedHead), this build ships \(pending.packagedHead); "
-                + "backing up before migrating")
-        let directory = PathUtilities.join(context.userDataDirectory, "pre-update-backups")
-        try BackupFiles.createDirectory(directory, mode: 0o700)
-        let result = try await runBundleBackup(
-            destination: directory, frontendStateJson: nil, backendStopped: true, runtime: runtime)
-        let file = result["file"]?.stringValue ?? ""
-        let encrypted = result["encrypted"] == .bool(true)
-        let warning = result["warning"]?.stringValue
-        logger.log(
-            "log", "[pre-migration-backup] saved \(PathUtilities.basename(file))\(encrypted ? " (encrypted)" : "")")
-        if let warning { logger.log("warn", "[pre-migration-backup] \(warning)") }
-        return (file, encrypted, warning)
     }
 
     /// The `will-quit` backup: when the effective settings (with the iCloud Drive default)
@@ -368,13 +340,13 @@ public actor BackupService {
             if path.hasSuffix(".visionbak") || path.hasSuffix(".visionbak.enc") {
                 return BackupBundle.isEncrypted(path)
             }
-            return LegacySQLBackup.isEncrypted(path)
+            return EncryptedBackupFile.isEncrypted(path)
         }
         return encrypted ?? false
     }
 
-    /// `backup:restore` for a picked path: the confirmation, then the bundle or legacy
-    /// restore. Errors resolve as `{ success: false, error: String(err) }`.
+    /// `backup:restore` for a picked path: the confirmation, then the bundle restore or,
+    /// for a bare (optionally encrypted) SQLite database file, `runRestore`. Errors resolve as `{ success: false, error: String(err) }`.
     public func restore(path: String, passphrase: String?, confirm: @Sendable () async -> Bool) async -> JSONValue {
         guard BackupFiles.exists(path) else {
             return .object(["success": .bool(false), "error": .string("Backup file not found")])
@@ -409,27 +381,7 @@ public actor BackupService {
     }
 
     private static let invalidPassphrasePattern =
-        #"bad decrypt|wrong final block|unable to authenticate|missing metadata\.json|missing db\.sql|end of central directory|not a zip file"#
-
-    /// The live database's revision, else the payload's migration chain head
-    /// (`getLocalMigrationChainHead`), else empty.
-    private func currentSchemaHead(_ runtime: any BackupRuntime) async -> String {
-        if let live = try? await runtime.schemaHead(), !live.isEmpty { return live }
-        return await runtime.migrationChainHead()
-    }
-
-    /// `assertBackupSchemaCompatible`, except that a numbered backup revision is refused
-    /// when this install's revision cannot be determined, instead of restoring unchecked.
-    private func checkSchema(_ candidate: String, runtime: any BackupRuntime, noun: String) async throws {
-        guard BackupRestore.revisionNumericPrefix(candidate) != nil else { return }
-        let current = await currentSchemaHead(runtime)
-        guard BackupRestore.revisionNumericPrefix(current) != nil else {
-            throw BackupFailure(
-                "SCHEMA_UNKNOWN: This \(noun) was created on schema revision \"\(candidate)\" but this Vision "
-                    + "install's schema revision could not be determined, so it was not restored.")
-        }
-        try BackupRestore.assertSchemaCompatible(candidate, current: current, noun: noun)
-    }
+        #"bad decrypt|wrong final block|unable to authenticate|missing metadata\.json|missing db\.sqlite3|end of central directory|not a zip file"#
 
     /// `runBundleRestore`.
     public func runBundleRestore(_ bundlePath: String, passphrase requested: String?) async throws -> JSONValue {
@@ -458,19 +410,18 @@ public actor BackupService {
         }
         defer { opened.cleanup() }
         let runtime = try await requireRuntime()
-        // metadata.json is untrusted bundle content; the dump's own migration ledger decides
-        // the schema revision and must agree with it.
-        let dbSqlPath = opened.dbSqlPath
-        let schemaHead = try BackupRestore.assertPostBaselineBackup(
-            try await runBlocking { try BackupRestore.readDumpSchemaLedger(dbSqlPath) })
-        if let raw = opened.metadata["schemaHead"], raw.isTruthy, BackupRestore.javaScriptString(raw) != schemaHead {
-            throw BackupFailure("Backup schema revision does not match its metadata; the bundle is corrupt.")
+        // metadata.json is untrusted bundle content. Activation verifies the database itself
+        // and refuses it unless it matches what the metadata recorded.
+        let declaredVersion = BackupRestore.metadataSchemaVersion(opened.metadata)
+        if let declaredVersion {
+            let current = await runtime.packagedMigrationVersion()
+            try BackupRestore.assertSchemaCompatible(declaredVersion, current: current, noun: "bundle")
         }
-        try await checkSchema(schemaHead, runtime: runtime, noun: "bundle")
         let logger = self.logger
         let warning = try await BackupRestore.restoreBundle(
-            runtime, dbSqlPath: opened.dbSqlPath, attachmentsDirectory: opened.attachmentsDirectory,
-            expectedSchemaHead: schemaHead, log: { logger.log("error", "[backup] \($0)") })
+            runtime, databasePath: opened.databasePath, attachmentsDirectory: opened.attachmentsDirectory,
+            expectedSchemaVersion: declaredVersion, expectedSha256: BackupRestore.metadataSha256(opened.metadata),
+            log: { logger.log("error", "[backup] \($0)") })
         var result: [String: JSONValue] = [
             "success": .bool(true), "file": .string(bundlePath), "frontendState": opened.frontendState ?? .null,
         ]
@@ -478,37 +429,48 @@ public actor BackupService {
         return .object(result)
     }
 
-    /// `runRestore`: a legacy `.sql` or `.sql.enc` dump.
-    public func runRestore(_ sqlPath: String, passphrase requested: String?) async throws -> JSONValue {
-        guard !sqlPath.isEmpty else { throw BackupFailure("No backup file specified") }
-        guard BackupFiles.exists(sqlPath) else { throw BackupFailure("File not found: \(sqlPath)") }
-        var source = sqlPath
+    /// `runRestore`: a bare Vision SQLite database file (for example a pre-migration copy the
+    /// backend wrote), optionally encrypted. Any other file is refused (`BACKUP_UNRECOGNIZED`).
+    public func runRestore(_ filePath: String, passphrase requested: String?) async throws -> JSONValue {
+        guard !filePath.isEmpty else { throw BackupFailure("No backup file specified") }
+        guard BackupFiles.exists(filePath) else { throw BackupFailure("File not found: \(filePath)") }
+        var source = filePath
         var temporary: String?
         defer { if let temporary { BackupFiles.remove(temporary) } }
-        if LegacySQLBackup.isEncrypted(sqlPath) {
+        if EncryptedBackupFile.isEncrypted(filePath) {
             var candidate: String?
             if let requested, !requested.isEmpty { candidate = requested } else { candidate = await passphrase() }
             guard let effective = candidate else { throw BackupFailure(BackupPassphrase.required) }
-            let directory = try BackupFiles.makeTemporaryDirectory(prefix: "vision_restore_", in: context.temporaryDirectory)
+            let directory = try BackupFiles.makeTemporaryDirectory(
+                prefix: "vision_restore_", in: context.temporaryDirectory)
             temporary = directory
             let destination = PathUtilities.join(
-                directory, "vision_restore_\(epochMilliseconds(now()))_\(ProcessInfo.processInfo.processIdentifier).sql")
+                directory,
+                "vision_restore_\(epochMilliseconds(now()))_\(ProcessInfo.processInfo.processIdentifier).sqlite3")
             try await runBlocking {
                 try EncryptedFile.decrypt(
-                    encryptedPath: sqlPath, destinationPath: destination, passphrase: effective,
-                    format: LegacySQLBackup.format)
+                    encryptedPath: filePath, destinationPath: destination, passphrase: effective,
+                    format: EncryptedBackupFile.format)
             }
             source = destination
         }
-        let runtime = try await requireRuntime()
         let restoreSource = source
-        let dumpHead = try BackupRestore.assertPostBaselineBackup(
-            try await runBlocking { try BackupRestore.readDumpSchemaLedger(restoreSource) })
-        try await checkSchema(dumpHead, runtime: runtime, noun: "backup")
+        let fileSystem = LocalFileSystem()
+        guard DatabaseStatistics.isDatabaseFile(restoreSource, fileSystem: fileSystem) else {
+            throw NativeRuntimeError(
+                "BACKUP_UNRECOGNIZED",
+                "This file is not a Vision backup. Choose a .visionbak backup or a Vision SQLite database file.")
+        }
+        let runtime = try await requireRuntime()
+        if let header = try? DatabaseStatistics.parseHeader(
+            try fileSystem.readHead(restoreSource, length: DatabaseStatistics.headerBytes))
+        {
+            let current = await runtime.packagedMigrationVersion()
+            try BackupRestore.assertSchemaCompatible(header.userVersion, current: current)
+        }
         let logger = self.logger
         try await BackupRestore.restoreDatabase(
-            runtime, source: source, format: .plain, expectedSchemaHead: dumpHead,
-            log: { logger.log("error", "[backup] \($0)") })
-        return .object(["success": .bool(true), "file": .string(sqlPath)])
+            runtime, source: restoreSource, log: { logger.log("error", "[backup] \($0)") })
+        return .object(["success": .bool(true), "file": .string(filePath)])
     }
 }

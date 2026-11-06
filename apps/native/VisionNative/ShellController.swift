@@ -1074,29 +1074,8 @@ final class ShellController: NSObject, NSWindowDelegate {
                 didEndSnapshot: { await maintenanceRelay.owner?.backupSnapshotDidEnd() }))
         super.init()
         backupMaintenance.owner = self
-        installPreMigrationBackup()
         launchModel.onRetry = { [weak self] in self?.launch() }
         launchModel.onOpenLogs = { [weak self] in _ = try? self?.openLogs() }
-    }
-
-    /// `backupBeforeMigrations` in `main.ts` (ADR-242): the supervisor calls this after PostgreSQL is up
-    /// and before a backend that will migrate an existing database starts. A failure aborts the launch
-    /// with the localized `app.preMigrationBackupFailed` message.
-    private func installPreMigrationBackup() {
-        let service = backupService
-        AppRuntime.preMigrationBackup.install { [weak self] pending, runtime in
-            do {
-                _ = try await service.backupBeforeMigrations(pending, runtime: runtime)
-            } catch {
-                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                AppRuntime.shellLogger.error(
-                    "[pre-migration-backup] failed: \(message, privacy: .public)")
-                let strings = await self?.strings
-                throw NativeRuntimeError(
-                    "PRE_MIGRATION_BACKUP_FAILED",
-                    strings?.t("app.preMigrationBackupFailed", ["error": message], fallback: message) ?? message)
-            }
-        }
     }
 
     /// `readSavedWindowBounds`: a synchronous read before the window exists.
@@ -1134,7 +1113,7 @@ final class ShellController: NSObject, NSWindowDelegate {
                     try? await Task.sleep(for: .milliseconds(200))
                 }
             }
-            let state = await ShellResolver.resolve()
+            let state = await ShellResolver.resolve(strings: self?.strings)
             statusTask.cancel()
             guard !Task.isCancelled else { return }
             self?.apply(state)
@@ -1929,9 +1908,11 @@ final class ShellController: NSObject, NSWindowDelegate {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        // Electron's filters, "Vision Backup" (visionbak, enc, sql) and "All Files", as a
-        // pop-up in the accessory view; NSOpenPanel has no filter menu of its own.
-        panel.allowedContentTypes = ["visionbak", "enc", "sql"].compactMap { UTType(filenameExtension: $0) }
+        // Electron's filters, "Vision Backup" (visionbak, visionbak.enc, sqlite3, enc) and
+        // "All Files", as a pop-up in the accessory view; NSOpenPanel has no filter menu of its
+        // own. A UTType takes the last extension only, so `enc` covers `visionbak.enc`.
+        panel.allowedContentTypes = RestorePathAllowList.allowedExtensions
+            .filter { !$0.contains(".") }.compactMap { UTType(filenameExtension: $0) }
         panel.accessoryView = allFilesAccessory(for: panel)
         panel.isAccessoryViewDisclosed = true
         guard await runPanel(panel) == .OK, let url = panel.url else { return nil }

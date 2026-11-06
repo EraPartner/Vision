@@ -3,14 +3,14 @@ import Foundation
 /// The runtime half a consistent backup capture drives (`SnapshotRuntime` in
 /// `packaging/electron/backup/quiescent-snapshot.ts`).
 public protocol SnapshotRuntime: Sendable {
-    func stop(keepPostgres: Bool) async throws
+    /// `stop()`: the backend, the only writer of the database file.
+    func stop() async throws
     /// `start()` then `waitUntilReady({ detailed: true })`.
     func startBackendAndWait() async throws
 }
 
-/// `captureQuiescentSnapshot` (ADR-207): the backend writer is stopped (PostgreSQL keeps
-/// running for the dump), so the SQL, the attachments and the schema head describe one
-/// application state. The backend restarts and must reach detailed readiness even when
+/// `captureQuiescentSnapshot` (ADR-207): the backend writer is stopped, so the database
+/// snapshot and the attachments describe one application state. The backend restarts and must reach detailed readiness even when
 /// the capture failed; a failed restart is the error then.
 public enum QuiescentSnapshot {
     public static func capture<T: Sendable>(
@@ -18,7 +18,7 @@ public enum QuiescentSnapshot {
     ) async throws -> T {
         let captured: Result<T, Error>
         do {
-            try await runtime.stop(keepPostgres: true)
+            try await runtime.stop()
             captured = .success(try await capture())
         } catch {
             captured = .failure(error)
@@ -33,7 +33,7 @@ public enum QuiescentSnapshot {
 struct BackupSnapshotRuntime: SnapshotRuntime {
     let runtime: any BackupRuntime
 
-    func stop(keepPostgres: Bool) async throws { try await runtime.stop(keepPostgres: keepPostgres) }
+    func stop() async throws { try await runtime.stop() }
     func startBackendAndWait() async throws { try await runtime.startBackendAndWait() }
 }
 

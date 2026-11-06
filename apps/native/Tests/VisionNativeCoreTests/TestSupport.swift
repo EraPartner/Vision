@@ -253,6 +253,42 @@ final class FakeFileSystem: RuntimeFileSystem, @unchecked Sendable {
         default: return .unsafe
         }
     }
+
+    func readHead(_ path: String, length: Int) throws -> Data {
+        switch node(path) {
+        case .file(let data, _)?: return data.prefix(length)
+        case nil: throw FileSystemError.notFound(path)
+        default: throw FileSystemError.failed(path, "not a regular file")
+        }
+    }
+
+    /// Copies a regular file; like `copyItem` it refuses an existing destination.
+    func copyFileDurably(_ source: String, _ destination: String, mode: Int) throws {
+        try locked { nodes in
+            guard case .file(let data, _)? = nodes[source] else { throw FileSystemError.notFound(source) }
+            guard nodes[destination] == nil else { throw FileSystemError.failed(destination, "exists") }
+            Self.makeParents(destination, &nodes)
+            nodes[destination] = .file(data, mode)
+        }
+    }
+
+    private var synced: [String] = []
+    /// Directories `syncDirectory` flushed, in order.
+    var syncedDirectories: [String] { lock.withLock { synced } }
+
+    func syncDirectory(_ path: String) {
+        lock.withLock { synced.append(path) }
+    }
+
+    private var modified: [String: Date] = [:]
+
+    func setModificationDate(_ path: String, _ date: Date) {
+        lock.withLock { modified[path] = date }
+    }
+
+    func modificationDate(_ path: String) -> Date? {
+        lock.withLock { nodes[path] == nil ? nil : modified[path] }
+    }
 }
 
 struct FakeProcessFailure: Error {}
@@ -502,7 +538,43 @@ func sha256Hex(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
-/// Fakes wired together like a Mac with a prepared payload and a working PostgreSQL.
+/// The bytes of a SQLite 3 database file: a valid 100-byte header (WAL mode, 4096-byte pages,
+/// UTF-8, `user_version` = `userVersion`, written by SQLite 3.43.2) followed by `body`, so
+/// two databases with different bodies hash differently.
+func sqliteDatabase(userVersion: Int, body: String = "", pages: Int = 2) -> Data {
+    var header = [UInt8](repeating: 0, count: DatabaseStatistics.headerBytes)
+    header.replaceSubrange(0..<16, with: [UInt8](DatabaseStatistics.headerMagic))
+    func put16(_ offset: Int, _ value: Int) {
+        header[offset] = UInt8((value >> 8) & 0xff)
+        header[offset + 1] = UInt8(value & 0xff)
+    }
+    func put32(_ offset: Int, _ value: UInt32) {
+        header[offset] = UInt8((value >> 24) & 0xff)
+        header[offset + 1] = UInt8((value >> 16) & 0xff)
+        header[offset + 2] = UInt8((value >> 8) & 0xff)
+        header[offset + 3] = UInt8(value & 0xff)
+    }
+    put16(16, 4096)
+    header[18] = 2
+    header[19] = 2
+    put32(24, 7)
+    put32(28, UInt32(pages))
+    put32(36, 1)
+    put32(44, 4)
+    put32(56, 1)
+    put32(60, UInt32(bitPattern: Int32(userVersion)))
+    put32(92, 7)
+    put32(96, 3_043_002)
+    return Data(header) + Data(body.utf8)
+}
+
+/// The `user_version` a fake database file carries; `nil` when it is not a SQLite file.
+func sqliteUserVersion(_ data: Data) -> Int? {
+    (try? DatabaseStatistics.parseHeader(data))?.userVersion
+}
+
+/// Fakes wired together like a Mac with a prepared payload: the packaged backend answers
+/// the database tool (`tools/db-file.js`) from the fake file system.
 final class Harness: @unchecked Sendable {
     let fileSystem = FakeFileSystem()
     let runner = FakeRunner()
@@ -515,19 +587,32 @@ final class Harness: @unchecked Sendable {
     let layout: RuntimeLayout
 
     private let lock = NSLock()
-    private var postgresRunningValue = false
-    var roles: Set<String> = []
-    var databases: Set<String> = []
-    var adminSQL: [String] = []
-    var psOutput: String? = nil
-    var reportedDataDirectory: String? = nil
-    var statsOutput = ""
-    /// The Kysely ledger of the fake database: `nil` has no `public.kysely_migration` table.
-    var ledger: [String]? = ["0001_baseline", "0130_head"]
+    private var psOutputValue: String?
+    private var tableCountsValue: [String: Int] = ["accounts": 3, "transactions": 40, "user_settings": 1]
+    private var toolFailures: [String: String] = [:]
+    private var toolCommandsValue: [[String]] = []
 
-    var postgresRunning: Bool {
-        get { lock.lock(); defer { lock.unlock() }; return postgresRunningValue }
-        set { lock.lock(); postgresRunningValue = newValue; lock.unlock() }
+    /// The newest migration the fake payload ships (`0003_head.sql`).
+    static let packagedSchemaVersion = 3
+
+    /// What `ps -o command=` prints for a PID; defaults to our backend.
+    var psOutput: String? {
+        get { lock.withLock { psOutputValue } }
+        set { lock.withLock { psOutputValue = newValue } }
+    }
+
+    /// Row counts the database tool reports for any verified file.
+    var tableCounts: [String: Int] {
+        get { lock.withLock { tableCountsValue } }
+        set { lock.withLock { tableCountsValue = newValue } }
+    }
+
+    /// The database tool commands run, without the tool path (`["verify", file]`).
+    var toolCommands: [[String]] { lock.withLock { toolCommandsValue } }
+
+    /// Makes the database tool print `{ ok: false, error }` and exit 1 for a command.
+    func failTool(_ command: String, _ message: String) {
+        lock.withLock { toolFailures[command] = message }
     }
 
     var dependencies: RuntimeDependencies {
@@ -540,13 +625,7 @@ final class Harness: @unchecked Sendable {
         layout = try RuntimeLayout(userDataDirectory: testUserData)
         if payload { installPayload() }
         runner.handler = { [unowned self] call in try self.respond(call) }
-        spawner.onSpawn = { [unowned self] spawn in
-            self.processes.add(spawn.pid)
-            if PathUtilities.basename(spawn.executable) == "postgres" {
-                self.postgresRunning = true
-                self.fileSystem.addFile(PathUtilities.join(self.layout.postgresData, "postmaster.pid"), "\(spawn.pid)\n")
-            }
-        }
+        spawner.onSpawn = { [unowned self] spawn in self.processes.add(spawn.pid) }
     }
 
     func makeRuntime(appPort: Int = 41_000, environment: [String: String] = ["PATH": "/usr/bin", "HOME": testHome])
@@ -557,21 +636,14 @@ final class Harness: @unchecked Sendable {
             dependencies: dependencies)
     }
 
-    func installPayload(postgresVersion: String = "18.6") {
+    func installPayload() {
         let fs = fileSystem
-        fs.addFile(
-            "\(testRuntimeRoot)/postgres/runtime.json",
-            """
-            {"version":1,"postgresMajor":18,"postgresVersion":"\(postgresVersion)","platform":"darwin","architecture":"\(RuntimeConstants.payloadArchitecture)","binRelative":"bin","sourceKind":"postgres-app"}
-            """)
-        for tool in RuntimeConstants.requiredPostgresTools {
-            fs.addFile("\(testRuntimeRoot)/postgres/root/bin/\(tool)", "#!/bin/sh\n", mode: 0o755)
-        }
         fs.addFile("\(testRuntimeRoot)/vision-backend", "binary", mode: 0o755)
         fs.addFile("\(testRuntimeRoot)/vision-apple-ai", "binary", mode: 0o755)
-        fs.addFile("\(testRuntimeRoot)/config/postgres/app-role-grants.sql.tpl", "-- grants\n")
+        fs.addFile("\(testRuntimeRoot)/\(RuntimeConstants.packagedDatabaseTool)", "// db-file\n")
+        fs.addFile("\(testRuntimeRoot)/\(RuntimeConstants.packagedAnalysisSandbox)", "// sandbox\n")
         fs.addFile("\(testRuntimeRoot)/db/migrations/0001_baseline.sql", "-- baseline\n")
-        fs.addFile("\(testRuntimeRoot)/db/migrations/0130_head.sql", "-- head\n")
+        fs.addFile("\(testRuntimeRoot)/db/migrations/0003_head.sql", "-- head\n")
         fs.addFile("\(testRuntimeRoot)/dist/index.html", "<html></html>")
         writeManifest()
     }
@@ -590,143 +662,96 @@ final class Harness: @unchecked Sendable {
         fs.addFile("\(testRuntimeRoot)/manifest.json", try! manifest.serialized())
     }
 
-    /// A seed manifest whose stats match `statsOutput`.
-    func installSeed(schema: String = "0130_head", tableCounts: [String: Int] = ["accounts": 3, "transactions": 40]) {
-        let dump = Data("PGDMP synthetic".utf8)
-        fileSystem.addFile("\(testSeedRoot)/demo-seed.dump", dump)
-        var important: [String: JSONValue] = [:]
-        for table in DatabaseStatistics.importantTables {
-            if let count = tableCounts[table] { important[table] = .int(count) }
-        }
-        let manifest = JSONValue.object([
-            "version": .int(1),
-            "logicalSha256": .string(String(repeating: "1", count: 64)),
-            "dumpSha256": .string(sha256Hex(dump)),
-            "schemaRevision": .string(schema),
-            "database": .object([
-                "schema": .string(schema),
-                "postgresVersionNum": .int(180_006),
-                "tableCount": .int(tableCounts.count),
-                "tableCounts": .object(tableCounts.mapValues { .int($0) }),
-                "importantRowCounts": .object(important),
-                "stableImportantRowCounts": .object(["user_settings": .int(0)]),
-            ]),
-        ])
-        fileSystem.addFile("\(testSeedRoot)/manifest.json", try! manifest.serialized())
-        statsOutput =
-            "schema\t\(schema)\npostgres_version_num\t180006\nstable:user_settings\t0\n"
-            + tableCounts.keys.sorted().map { "table:\($0)\t\(tableCounts[$0]!)" }.joined(separator: "\n")
+    /// A live database at `userVersion` in the database directory.
+    @discardableResult
+    func installDatabase(userVersion: Int = Harness.packagedSchemaVersion, body: String = "live") -> Data {
+        let data = sqliteDatabase(userVersion: userVersion, body: body)
+        fileSystem.addDirectory(layout.databaseDirectory, mode: 0o700)
+        fileSystem.addFile(layout.database, data, mode: 0o600)
+        return data
     }
 
-    private func argument(after flag: String, in arguments: [String]) -> String? {
-        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
-        return arguments[index + 1]
+    /// The packaged Demo seed database and its version 2 manifest.
+    @discardableResult
+    func installSeed(
+        schemaVersion: Int = Harness.packagedSchemaVersion, tableCounts: [String: Int]? = nil,
+        logicalSha256: String = String(repeating: "1", count: 64)
+    ) -> Data {
+        let data = sqliteDatabase(userVersion: schemaVersion, body: "demo seed")
+        fileSystem.addFile("\(testSeedRoot)/\(NativeDemo.seedDatabaseName)", data)
+        let counts = tableCounts ?? self.tableCounts
+        let manifest = JSONValue.object([
+            "version": .int(2),
+            "format": .string("sqlite"),
+            "logicalSha256": .string(logicalSha256),
+            "databaseSha256": .string(sha256Hex(data)),
+            "databaseBytes": .int(data.count),
+            "schemaVersion": .int(schemaVersion),
+            "database": .object(["tableCounts": .object(counts.mapValues { .int($0) })]),
+        ])
+        fileSystem.addFile("\(testSeedRoot)/\(NativeDemo.seedManifestName)", try! manifest.serialized())
+        return data
     }
 
     func respond(_ call: FakeRunner.Call) throws -> RunResult {
-        let arguments = call.arguments
-        if arguments == ["--version"] {
-            return RunResult(stdout: "\(call.name) (PostgreSQL) 18.6\n")
-        }
         switch call.name {
-        case "initdb":
-            let data = argument(after: "-D", in: arguments)!
-            fileSystem.addDirectory(data, mode: 0o700)
-            fileSystem.addFile("\(data)/PG_VERSION", "18\n")
-            fileSystem.addFile("\(data)/postgresql.conf", "# generated\n")
-            return RunResult()
-        case "pg_isready":
-            if postgresRunning { return RunResult(stdout: "accepting connections") }
-            throw FakeProcessFailure()
-        case "pg_ctl":
-            postgresRunning = false
-            try fileSystem.remove(PathUtilities.join(layout.postgresData, "postmaster.pid"))
-            return RunResult()
-        case "createdb":
-            lock.lock()
-            databases.insert(arguments.last!)
-            lock.unlock()
-            return RunResult()
-        case "pg_restore":
-            return RunResult()
         case "ps":
             return RunResult(stdout: psOutput ?? "\(testRuntimeRoot)/vision-backend\n")
-        case "psql":
-            return try respondPsql(arguments)
+        case "vision-backend":
+            return try respondDatabaseTool(call)
         default:
             return RunResult()
         }
     }
 
-    private func respondPsql(_ arguments: [String]) throws -> RunResult {
-        if let file = argument(after: "--file", in: arguments) {
-            let sql = fileSystem.text(file) ?? ""
-            lock.lock()
-            adminSQL.append(sql)
-            if let pattern = try? NSRegularExpression(pattern: #"CREATE ROLE "?([a-z_]+)"?"#) {
-                for match in pattern.matches(in: sql, range: NSRange(sql.startIndex..., in: sql)) {
-                    if let range = Range(match.range(at: 1), in: sql) { roles.insert(String(sql[range])) }
-                }
-            }
-            // `CREATE DATABASE <name> OWNER ...` runs through \gexec in the bootstrap session.
-            if let groups = PathUtilities.firstMatchGroups(sql, #"CREATE DATABASE ([a-z0-9_]+) OWNER"#), let name = groups[1] {
-                databases.insert(name)
-            }
-            lock.unlock()
+    private func toolLine(_ object: [String: JSONValue]) -> String {
+        // One line, as the tool prints it (`serialized()` pretty-prints).
+        String(decoding: try! JSONEncoder().encode(JSONValue.object(object)), as: UTF8.self)
+    }
+
+    private func report(_ path: String, counts: Bool) throws -> String {
+        let data = try fileSystem.readFile(path)
+        guard let version = sqliteUserVersion(data) else {
+            throw ProcessRunError(
+                executable: "vision-backend", exitStatus: 1, message: "exit 1",
+                stdout: toolLine(["ok": .bool(false), "error": .string("file is not a database")]))
+        }
+        var line: [String: JSONValue] = [
+            "ok": .bool(true),
+            "file": .string(path),
+            "bytes": .int(data.count),
+            "sha256": .string(sha256Hex(data)),
+            "sqliteVersion": .string("3.43.2"),
+            "schemaVersion": .int(version),
+            "pendingMigrations": .int(max(0, Self.packagedSchemaVersion - version)),
+        ]
+        if counts { line["tableCounts"] = .object(tableCounts.mapValues { .int($0) }) }
+        return "[logger] tool started\n" + toolLine(line) + "\n"
+    }
+
+    private func respondDatabaseTool(_ call: FakeRunner.Call) throws -> RunResult {
+        let command = Array(call.arguments.dropFirst())
+        lock.withLock { toolCommandsValue.append(command) }
+        guard call.arguments.first == "\(testRuntimeRoot)/\(RuntimeConstants.packagedDatabaseTool)",
+            call.options.environment["BUN_BE_BUN"] == "1", let verb = command.first
+        else { return RunResult() }
+        if let message = lock.withLock({ toolFailures[verb] }) {
+            throw ProcessRunError(
+                executable: call.executable, exitStatus: 1, message: "exit 1",
+                stdout: toolLine(["ok": .bool(false), "error": .string(message)]))
+        }
+        switch (verb, command.count) {
+        case ("verify", 2):
+            return RunResult(stdout: try report(command[1], counts: true))
+        case ("snapshot", 3):
+            try fileSystem.writeFile(command[2], try fileSystem.readFile(command[1]), mode: 0o600)
+            return RunResult(stdout: try report(command[2], counts: true))
+        case ("create", 2), ("create", 3):
+            try fileSystem.writeFile(
+                command[1], sqliteDatabase(userVersion: Self.packagedSchemaVersion, body: "created"), mode: 0o600)
+            return RunResult(stdout: try report(command[1], counts: true))
+        default:
             return RunResult()
         }
-        let command = argument(after: "--command", in: arguments) ?? ""
-        if command == PostgresSQL.inspectServerQuery {
-            return RunResult(stdout: "180006\n127.0.0.1\n\(reportedDataDirectory ?? layout.postgresData)\n")
-        }
-        if let groups = PathUtilities.firstMatchGroups(command, "rolname = '([a-z_]+)'"), let role = groups[1] {
-            lock.lock()
-            defer { lock.unlock() }
-            return RunResult(stdout: roles.contains(role) ? "1\n" : "")
-        }
-        if let groups = PathUtilities.firstMatchGroups(command, "datname = '([a-z0-9_]+)';"), let name = groups[1],
-            !command.contains("pg_terminate_backend")
-        {
-            lock.lock()
-            defer { lock.unlock() }
-            return RunResult(stdout: databases.contains(name) ? "1\n" : "")
-        }
-        if let groups = PathUtilities.firstMatchGroups(command, #"ALTER DATABASE "([a-z0-9_]+)" RENAME TO "([a-z0-9_]+)""#),
-            let from = groups[1], let to = groups[2]
-        {
-            lock.lock()
-            defer { lock.unlock() }
-            guard databases.remove(from) != nil else { throw FakeProcessFailure() }
-            databases.insert(to)
-            return RunResult()
-        }
-        if let groups = PathUtilities.firstMatchGroups(command, #"^DROP DATABASE "([a-z0-9_]+)";$"#), let name = groups[1] {
-            lock.lock()
-            defer { lock.unlock() }
-            databases.remove(name)
-            return RunResult()
-        }
-        if command == PostgresSQL.publicTableCountQuery {
-            return RunResult(stdout: "42\n")
-        }
-        if command == MigrationLedger.ledgerExistsSQL {
-            lock.lock()
-            defer { lock.unlock() }
-            return RunResult(stdout: ledger == nil ? "f\n" : "t\n")
-        }
-        if command == MigrationLedger.headSQL {
-            lock.lock()
-            defer { lock.unlock() }
-            return RunResult(stdout: "\(ledger?.max() ?? "")\n")
-        }
-        if command == MigrationLedger.appliedSQL {
-            lock.lock()
-            defer { lock.unlock() }
-            return RunResult(stdout: (ledger ?? []).sorted().map { "\($0)\n" }.joined())
-        }
-        if command == DatabaseStatistics.sql {
-            return RunResult(stdout: statsOutput)
-        }
-        return RunResult()
     }
 }

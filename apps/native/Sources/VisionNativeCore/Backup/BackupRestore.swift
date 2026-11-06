@@ -1,25 +1,27 @@
 import Foundation
 
 /// The runtime operations backup and restore drive (`NativeBackupRuntime` in
-/// `packaging/electron/backup/restore.ts`). `NativeRuntime` conforms; tests use a fake.
+/// `packaging/electron/backup/restore.ts` and `NativeRestoreRuntime` in
+/// `native-transport.ts`). `NativeRuntime` conforms; tests use a fake.
 public protocol BackupRuntime: Sendable {
-    /// `dumpDatabase(destination, { format: "plain" })`.
-    func dumpDatabase(to destination: String) async throws
+    /// `snapshotDatabase(destination)`: a verified consistent copy of the live database.
+    func snapshotDatabase(to destination: String) async throws -> DatabaseFileReport
     /// `exportAttachments(destination)`: a copy of the attachments tree (empty when none).
     func exportAttachments(to destination: String) async throws
-    /// `stop({ keepPostgres })`: the backend writer, and PostgreSQL unless `keepPostgres`.
-    func stop(keepPostgres: Bool) async throws
-    /// `getSchemaHead()`: the highest `public.kysely_migration` name of the live database.
-    func schemaHead() async throws -> String
-    /// `getLocalMigrationChainHead()`: the newest migration the installed payload carries;
-    /// empty when it has no migration files.
-    func migrationChainHead() async -> String
-    /// `activateRestoredDatabase(source, { format, expectedSchemaHead })`: restores into a
-    /// staging database, stops the backend and switches it in, keeping the previous one.
-    func activateRestoredDatabase(_ path: String, format: RestoreFormat, expectedSchemaHead: String) async throws
-        -> DatabaseSwitchToken
+    /// `stop()`: the backend, the only writer of the database file.
+    func stop() async throws
+    /// The newest migration the installed payload carries (`getLocalMigrationVersion`); 0
+    /// when it has none.
+    func packagedMigrationVersion() async -> Int
+    /// `activateRestoredDatabase(source, { expectedSchemaVersion, expectedSha256 })`: stages
+    /// and verifies the file as the next database generation, stops the backend and
+    /// switches it in, keeping the previous generation.
+    func activateRestoredDatabase(_ path: String, expectedSchemaVersion: Int?, expectedSha256: String?) async throws
+        -> DatabaseActivation
     /// `replaceAttachments(source, { preservePrevious: true })`.
     func replaceAttachments(from source: String) async throws -> DirectorySwitchToken
+    /// `start()`, without waiting for readiness (a rollback's restart).
+    func startBackend() async throws
     /// `start()` then `waitUntilReady({ detailed: true })`.
     func startBackendAndWait() async throws
     func finalizeDatabaseSwitch(_ token: DatabaseSwitchToken) async throws
@@ -28,99 +30,29 @@ public protocol BackupRuntime: Sendable {
     func rollbackAttachmentSwitch(_ token: DirectorySwitchToken) async throws
 }
 
-/// The dump formats `restoreIntoDatabase` accepts.
-public enum RestoreFormat: String, Sendable, Equatable {
-    case plain
-    case custom
-}
-
-/// Schema-revision checks and the restore transaction of `restore.ts` and
-/// `native-transport.ts`.
+/// Schema checks and the restore transaction of `restore.ts` and `native-transport.ts`.
 public enum BackupRestore {
-    /// `revisionNumericPrefix`: the number of an `NNNN_name` migration.
-    public static func revisionNumericPrefix(_ revision: String) -> Int? {
-        MigrationLedger.numericPrefix(revision)
-    }
-
-    /// `assertBackupSchemaCompatible`: refuses a backup from a newer schema.
-    public static func assertSchemaCompatible(_ candidate: String, current: String, noun: String = "backup") throws {
-        guard let candidateNumber = revisionNumericPrefix(candidate),
-            let currentNumber = revisionNumericPrefix(current), candidateNumber > currentNumber
-        else {
-            return
-        }
+    /// `assertBackupSchemaCompatible`: refuses a backup from a newer schema with the marker
+    /// the screens turn into an "update Vision" message. Restore verification enforces the
+    /// same rule on the database itself.
+    public static func assertSchemaCompatible(_ candidate: Int, current: Int, noun: String = "backup") throws {
+        guard current > 0, candidate > current else { return }
         throw BackupFailure(
-            "BUNDLE_SCHEMA_NEWER: This \(noun) was created on schema revision \"\(candidate)\" "
-                + "but this Vision install is at \"\(current)\". Update Vision to a newer version and retry.")
+            "BUNDLE_SCHEMA_NEWER: This \(noun) was created on schema version \(candidate) "
+                + "but this Vision install is at \(current). Update Vision to a newer version and retry.")
     }
 
-    private static let kyselyCopyPattern =
-        #"^COPY\s+(?:"?public"?\.)?"?kysely_migration"?\s*\(\s*"?name"?\s*,[^)]*\)\s+FROM\s+stdin;"#
-    private static let kyselyInsertPattern =
-        #"^INSERT INTO\s+(?:"?public"?\.)?"?kysely_migration"?\s*(?:\([^)]*\)\s*)?VALUES\s*\('([^']+)'"#
-    private static let anyCopyPattern = #"^COPY\s+\S.*\s+FROM\s+stdin;$"#
-
-    /// `readDumpSchemaLedger`: the highest `public.kysely_migration` name of a plain dump,
-    /// or "" when the dump has no ledger. A plain dump writes one COPY block per table, so
-    /// the whole file is scanned, line by line. COPY rows are table data: only statements
-    /// outside them are parsed, and the rows of the ledger's own COPY block are its names
-    /// (the first tab-separated column). Throws when the file cannot be read.
-    public static func readDumpSchemaLedger(_ path: String) throws -> String {
-        let handle = try BackupFiles.openForReading(path)
-        defer { try? handle.close() }
-        let copy = try NSRegularExpression(pattern: kyselyCopyPattern, options: [.caseInsensitive])
-        let insert = try NSRegularExpression(pattern: kyselyInsertPattern, options: [.caseInsensitive])
-        let anyCopy = try NSRegularExpression(pattern: anyCopyPattern, options: [.caseInsensitive])
-        enum CopyBlock { case kysely, other }
-        var head = ""
-        var block: CopyBlock?
-
-        func record(_ name: String?) {
-            if let name, !name.isEmpty, name > head { head = name }
-        }
-
-        func consume(_ rawLine: Data) {
-            var line = String(decoding: rawLine, as: UTF8.self)
-            if line.hasSuffix("\r") { line.removeLast() }
-            if let current = block {
-                if line == "\\." {
-                    block = nil
-                } else if current == .kysely {
-                    record(line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init))
-                }
-                return
-            }
-            let range = NSRange(line.startIndex..., in: line)
-            if copy.firstMatch(in: line, range: range) != nil {
-                block = .kysely
-            } else if anyCopy.firstMatch(in: line, range: range) != nil {
-                block = .other
-            } else if let match = insert.firstMatch(in: line, range: range), let value = Range(match.range(at: 1), in: line) {
-                record(String(line[value]))
-            }
-        }
-
-        var pending = Data()
-        while true {
-            let chunk = try BackupFiles.read(handle, upTo: 256 * 1024)
-            if chunk.isEmpty { break }
-            pending.append(chunk)
-            var start = pending.startIndex
-            while let newline = pending[start...].firstIndex(of: 0x0A) {
-                consume(Data(pending[start..<newline]))
-                start = newline + 1
-            }
-            pending = Data(pending[start...])
-        }
-        if !pending.isEmpty { consume(pending) }
-        return head
+    /// `metadataSchemaVersion`: metadata.json is untrusted, so only a positive integer
+    /// becomes a restore expectation.
+    public static func metadataSchemaVersion(_ metadata: [String: JSONValue]) -> Int? {
+        guard let value = metadata["schemaVersion"]?.intValue, value > 0 else { return nil }
+        return value
     }
 
-    /// `assertPostBaselineBackup`: a dump without the Kysely ledger predates the
-    /// TypeScript migration baseline and is refused (`BACKUP_PRE_BASELINE`).
-    public static func assertPostBaselineBackup(_ head: String) throws -> String {
-        if head.isEmpty { throw MigrationLedger.preBaselineBackupError() }
-        return head
+    /// `metadataSha256`.
+    public static func metadataSha256(_ metadata: [String: JSONValue]) -> String? {
+        guard let value = metadata["databaseSha256"]?.stringValue, PathUtilities.isSHA256(value) else { return nil }
+        return value
     }
 
     /// `rollbackNativeRestore`: attachments, then the database, then (unless the database
@@ -141,7 +73,7 @@ public enum BackupRestore {
             }
         }
         if restart {
-            do { try await runtime.startBackendAndWait() } catch { errors.append(error) }
+            do { try await runtime.startBackend() } catch { errors.append(error) }
         }
         return errors
     }
@@ -150,18 +82,18 @@ public enum BackupRestore {
         (error as? NativeRuntimeError)?.code != "DATABASE_SWITCH_RECOVERY_FAILED"
     }
 
-    /// `restoreNativeDatabase`: a database-only restore (legacy SQL files).
+    /// `restoreNativeDatabase`: a bare database file.
     public static func restoreDatabase(
-        _ runtime: any BackupRuntime, source: String, format: RestoreFormat, expectedSchemaHead: String?,
-        log: @Sendable (String) -> Void = { _ in }
+        _ runtime: any BackupRuntime, source: String, expectedSchemaVersion: Int? = nil,
+        expectedSha256: String? = nil, log: @Sendable (String) -> Void = { _ in }
     ) async throws {
         var databaseSwitch: DatabaseSwitchToken?
         do {
-            let token = try await runtime.activateRestoredDatabase(
-                source, format: format, expectedSchemaHead: expectedSchemaHead ?? "")
-            databaseSwitch = token
+            let activation = try await runtime.activateRestoredDatabase(
+                source, expectedSchemaVersion: expectedSchemaVersion, expectedSha256: expectedSha256)
+            databaseSwitch = activation.switchToken
             try await runtime.startBackendAndWait()
-            try await runtime.finalizeDatabaseSwitch(token)
+            try await runtime.finalizeDatabaseSwitch(activation.switchToken)
         } catch {
             let failures = await rollback(
                 runtime, databaseSwitch: databaseSwitch, attachmentSwitch: nil, restart: restartsAfter(error))
@@ -174,20 +106,20 @@ public enum BackupRestore {
     /// database finalization as the commit point. Removing the previous attachment tree
     /// afterwards is cleanup only; its failure is returned as a warning.
     public static func restoreBundle(
-        _ runtime: any BackupRuntime, dbSqlPath: String, attachmentsDirectory: String?, expectedSchemaHead: String?,
-        log: @Sendable (String) -> Void = { _ in }
+        _ runtime: any BackupRuntime, databasePath: String, attachmentsDirectory: String?,
+        expectedSchemaVersion: Int?, expectedSha256: String?, log: @Sendable (String) -> Void = { _ in }
     ) async throws -> String? {
         var databaseSwitch: DatabaseSwitchToken?
         var attachmentSwitch: DirectorySwitchToken?
         do {
-            let token = try await runtime.activateRestoredDatabase(
-                dbSqlPath, format: .plain, expectedSchemaHead: expectedSchemaHead ?? "")
-            databaseSwitch = token
+            let activation = try await runtime.activateRestoredDatabase(
+                databasePath, expectedSchemaVersion: expectedSchemaVersion, expectedSha256: expectedSha256)
+            databaseSwitch = activation.switchToken
             if let attachmentsDirectory {
                 attachmentSwitch = try await runtime.replaceAttachments(from: attachmentsDirectory)
             }
             try await runtime.startBackendAndWait()
-            try await runtime.finalizeDatabaseSwitch(token)
+            try await runtime.finalizeDatabaseSwitch(activation.switchToken)
         } catch {
             let failures = await rollback(
                 runtime, databaseSwitch: databaseSwitch, attachmentSwitch: attachmentSwitch,
@@ -201,19 +133,6 @@ public enum BackupRestore {
             return nil
         } catch {
             return backupErrorMessage(error)
-        }
-    }
-
-    /// `String(value)` of an untrusted metadata field, for `schemaHead`.
-    static func javaScriptString(_ value: JSONValue) -> String {
-        switch value {
-        case .string(let text): return text
-        case .int(let number): return String(number)
-        case .double(let number): return number == number.rounded() && abs(number) < 1e21 ? String(Int(number)) : String(number)
-        case .bool(let flag): return flag ? "true" : "false"
-        case .null: return "null"
-        case .array(let items): return items.map(javaScriptString).joined(separator: ",")
-        case .object: return "[object Object]"
         }
     }
 }

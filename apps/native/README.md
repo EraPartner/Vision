@@ -2,8 +2,8 @@
 
 Vision Native is the Swift macOS app that replaces the Electron shell in phases
 ([ADR-204](../../docs/adr/204-vision-native-swift-app-target.md)). Phase 1 hosts the existing
-React frontend in a `WKWebView` (since removed: the app is native-only, see Shell) and runs its own PostgreSQL 18 cluster and backend on synthetic
-Demo data in `~/Library/Application Support/Vision Native Demo/` (or `Vision Native/` for the
+React frontend in a `WKWebView` (since removed: the app is native-only, see Shell) and runs its own backend over one
+SQLite database file (ADR-263) on synthetic Demo data in `~/Library/Application Support/Vision Native Demo/` (or `Vision Native/` for the
 standard variant). It never reads or changes the Vision or Vision Demo data directories. The
 phase 1 hand-over is recorded in
 [ADR-205](../../docs/adr/205-vision-native-hand-over.md) (accepted), and
@@ -56,9 +56,10 @@ swift test --package-path apps/native
 
 ## Install
 
-`./install-native.sh` prepares the runtime payload (PostgreSQL 18, the compiled backend with its Kysely
-migrations, the Apple Foundation Models helper, the frontend build and the synthetic Demo seed; no
-Alembic and no Chrome Headless Shell) with the same scripts as `install-demo.sh`,
+`./install-native.sh` prepares the runtime payload (the compiled backend with its SQLite migrations,
+the database tool `tools/db-file.js` and the analysis sandbox, the Apple Foundation Models helper,
+the frontend build and the synthetic Demo seed database; no database server, no Alembic and no
+Chrome Headless Shell) with the same scripts as `install-demo.sh`,
 into `apps/native/build/payload/`. It then generates the project, builds Release into
 `apps/native/build/`, stages the payload into `Contents/Resources/runtime/` and
 `Contents/Resources/demo-seed/` before signing, and copies the app to
@@ -70,10 +71,10 @@ without a payload; the app then shows how to provide one.
 One target builds two variants, picked by the build setting `VISION_NATIVE_VARIANT` and read at
 launch from `VisionNativeVariant` in `Info.plist`:
 
-| Variant                | App                      | Data directory and runtime id               | PostgreSQL |
-| ---------------------- | ------------------------ | ------------------------------------------- | ---------- |
-| `demo` (install)       | `Vision Native Demo.app` | `Vision Native Demo/`, `vision_native_demo` | 54332      |
-| `standard` (Xcode, CI) | `Vision Native.app`      | `Vision Native/`, `vision_native`           | 54331      |
+| Variant                | App                      | Data directory and runtime id               |
+| ---------------------- | ------------------------ | ------------------------------------------- |
+| `demo` (install)       | `Vision Native Demo.app` | `Vision Native Demo/`, `vision_native_demo` |
+| `standard` (Xcode, CI) | `Vision Native.app`      | `Vision Native/`, `vision_native`           |
 
 `./install-native.sh` builds the Demo variant; `VISION_NATIVE_VARIANT=standard ./install-native.sh`
 builds the standard one, and `xcodebuild ... VISION_NATIVE_VARIANT=demo` picks the Demo variant in
@@ -92,12 +93,24 @@ either the build is signed ad-hoc, and the signature changes on every build.
 ## Runtime
 
 On launch the app takes a single-instance lock, verifies the payload against its `manifest.json`,
-creates or reuses its private cluster on `127.0.0.1:54331`, activates the synthetic Demo seed when
-it changed, starts the backend on a random loopback port (persisted as `appPort` in
-`settings.json`) and loads the frontend once `/health/detailed` is ready. On quit it stops the
-backend and PostgreSQL unless "keep services running on quit" is on. Logs are in
+recovers an interrupted restore, activates the synthetic Demo seed when it changed, starts the
+backend on a random loopback port (persisted as `appPort` in `settings.json`) and loads the
+frontend once `/health/detailed` is ready. The backend opens
+`database/vision.sqlite3` in the application-data folder and applies pending migrations itself;
+when the database is behind the payload's migrations it first copies it to
+`database/pre-migration-backups` (ADR-242/263), and the splash says "backing up" meanwhile. A
+failed pre-migration backup stops the launch with the localized explanation. On quit it stops the
+backend unless "keep services running on quit" is on. Logs are in
 `~/Library/Application Support/Vision Native/logs/main.log` and
-`native/vision_native/logs/{backend,postgres}.log` below the same folder.
+`native/vision_native/logs/backend.log` below the same folder.
+
+The database directory is one generation. Demo seeding and restore copy the new file into a
+`database.restore-<nonce>` sibling, verify it with `tools/db-file.js verify` (integrity, foreign
+keys, migration ledger, and the expected checksum and schema version), journal the switch in
+`runtime-state.json`, then swap the directories with two renames. The previous generation stays as
+`database.previous-<nonce>` (the newest three are kept); a failed switch is preserved as
+`database.failed-<nonce>`. The database tool runs as the packaged backend executable with
+`BUN_BE_BUN=1`, so it uses the backend's Bun and SQLite.
 
 The payload is found in this order:
 
@@ -107,7 +120,7 @@ The payload is found in this order:
 2. `Contents/Resources/runtime/` in the app bundle.
 
 Without a payload the window shows the reason and a Retry button. A failed launch stops the
-backend it started and keeps PostgreSQL running, so Retry starts a fresh backend.
+backend it started, so Retry starts a fresh backend.
 
 To run a Debug build against a payload, run `./install-native.sh` once (it leaves `native-runtime/` and `demo-seed/` in
 `apps/native/build/payload/`), then set `VISION_NATIVE_RUNTIME_DIR` to
@@ -265,8 +278,11 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
 Settings > Backup works as in Electron Vision (see
 [the architecture page](../../docs/architecture/native-app.md#backup-and-restore-phase-1d)).
 `Sources/VisionNativeCore/Backup/` writes and reads the same `.visionbak` and `.visionbak.enc`
-bundles, so a backup made by either app restores in the other, and restores the legacy `.sql` and
-`.sql.enc` dumps.
+bundles (format 2: `metadata.json`, a verified `db.sqlite3` snapshot, `attachments/` and
+`frontend-state.json`), so a backup made by either app restores in the other. It also restores a
+bare Vision SQLite database file (`.sqlite3`, optionally encrypted as `.enc`), such as a
+pre-migration copy. Format 1 bundles and plain SQL dumps from the PostgreSQL versions are refused
+(`BACKUP_FORMAT_UNSUPPORTED`, `BACKUP_UNRECOGNIZED`).
 
 - The backup passphrase is `VISION_BACKUP_PASSPHRASE`, else a login Keychain item with the service
   `com.vaultvoyager.vision-native.backup-passphrase`. It is never written to `settings.json`. An
@@ -274,21 +290,20 @@ bundles, so a backup made by either app restores in the other, and restores the 
 - Without a configured directory, backups go to `Vision Native/Backups` in iCloud Drive (not
   Electron's `Vision/Backups`), and the backup on quit is on.
 - Restores accept only files chosen in the restore file picker and ask for confirmation first.
-  A restore refuses a backup from a newer schema, one with a numbered schema when this
-  install's schema cannot be determined, and one whose dump has no `public.kysely_migration` ledger
-  (taken before the TypeScript migration baseline, `BACKUP_PRE_BASELINE`). The ledger's highest
-  name is the schema head. Backups in the retired v1 encryption format are refused by name.
-- When an existing database is behind the payload's migrations, the launch first writes a bundle
-  backup to `pre-update-backups` in the application-data directory (ADR-242); if that backup
-  fails, the backend does not start.
+  A restore refuses a backup whose schema version is newer than the payload's newest migration
+  (`BUNDLE_SCHEMA_NEWER`), and a database whose checksum or schema version does not match the
+  bundle's metadata. Backups in the retired v1 encryption format are refused by name.
+- A backup snapshot is taken with the backend stopped (`VACUUM INTO` through the database tool,
+  verified), together with the attachments, then the backend restarts.
 - The quit-time backup runs before the services stop, within the 45-second quit limit.
 
-The Swift tests open the Electron Vision 1.0.2 fixture in
+The Swift tests keep the Electron Vision 1.0.2 fixture in
 `Tests/VisionNativeCoreTests/Fixtures/`, a byte-for-byte copy of
-`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`.
+`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`; it still decrypts, and
+its format 1 contents are refused like Electron refuses them.
 
-The `native-interop` CI job checks the other direction: the Swift tests write a plain bundle and an
-encrypted bundle, and the job opens them with the Electron readers.
+With `VISION_NATIVE_INTEROP_DIR` set, the Swift tests write a plain and an encrypted format 2
+bundle there for the Electron readers to open.
 
 ## Manual checks on a Mac
 
@@ -302,10 +317,10 @@ these steps touches Electron Vision or its data.
 2. **Launch the Demo.** Run `open "/Applications/Vision Native Demo.app"`. Expected: the splash
    with the Vision mark, then Home with the synthetic Demo data; the menu bar reads "Vision Native
    Demo". `~/Library/Application Support/Vision Native Demo/` exists with
-   `native/vision_native_demo/`, and `lsof -nP -iTCP:54332 -sTCP:LISTEN` shows `postgres` on
-   `127.0.0.1` only. `~/Library/Application Support/Vision/` is unchanged.
+   `native/vision_native_demo/` and `database/vision.sqlite3`, and no database server is
+   listening. `~/Library/Application Support/Vision/` is unchanged.
 3. **Side by side with Electron Vision Demo.** Open `/Applications/Vision Demo.app` as well.
-   Expected: both run (PostgreSQL 54330 and 54332) and neither shows an error.
+   Expected: both run, each on its own SQLite file, and neither shows an error.
 4. **Backup from Vision Native to Electron.** In Vision Native Demo, Settings > Backup: choose a
    folder, save a passphrase, click Back up now. Expected: a toast with the file name and a
    `vision_backup_<device>_<date>.visionbak.enc` in the folder. In Electron Vision Demo,
@@ -325,7 +340,7 @@ these steps touches Electron Vision or its data.
    settles rows #203 to #205 of the exit checklist.
 9. **Quit backup.** In Settings > Backup, turn on "Back up when quitting" and keep "Keep services
    running on quit" off. Quit with `⌘Q`. Expected: the app quits within 45 seconds, a new bundle
-   is in the backup folder, and port 54332 is no longer listening.
+   is in the backup folder, and no `vision-backend` process of Vision Native Demo is left.
 10. **Demo reset.** Run `bun run demo:reset-vision-native`, then reopen the app. Expected: the
     canonical Demo data is back.
 11. **Native sidebar (phase 2).** Expected: the native sidebar lists the web sections with SF

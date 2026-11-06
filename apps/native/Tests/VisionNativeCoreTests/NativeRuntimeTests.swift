@@ -4,57 +4,28 @@ import Testing
 @testable import VisionNativeCore
 
 @Suite struct NativeRuntimeLifecycleTests {
-    @Test func firstStartCreatesAPrivateClusterRolesAndBackend() async throws {
+    @Test func firstStartCreatesThePrivateLayoutAndSpawnsTheBackend() async throws {
         let harness = try Harness()
         let runtime = try harness.makeRuntime()
         let result = try await runtime.start()
 
-        let initdb = try #require(harness.runner.calls(named: "initdb").first)
-        #expect(initdb.arguments.contains("--locale=C"))
-        #expect(initdb.arguments.contains("--data-checksums"))
-        #expect(initdb.arguments.contains("--auth-host=scram-sha-256"))
-        #expect(initdb.options.environment["LC_ALL"] == "C")
-        let username = initdb.arguments.firstIndex(of: "--username").map { initdb.arguments[$0 + 1] }
-        #expect(username == "vision_native_admin")
-
-        let data = harness.layout.postgresData
-        #expect(harness.fileSystem.text("\(data)/PG_VERSION") == "18\n")
-        #expect(harness.fileSystem.text("\(data)/vision.conf") == PostgresSQL.visionConf(port: 54331))
-        #expect(PostgresSQL.includesVisionConf(harness.fileSystem.text("\(data)/postgresql.conf") ?? ""))
-        #expect(try harness.fileSystem.mode(data) == 0o700)
+        #expect(try harness.fileSystem.mode(harness.layout.databaseDirectory) == 0o700)
         #expect(try harness.fileSystem.mode(harness.layout.env) == 0o600)
+        #expect(harness.fileSystem.text(harness.layout.env) == RuntimeEnvFile.header)
 
         let spawns = harness.spawner.spawns
-        #expect(spawns.count == 2)
-        let postgres = spawns[0]
-        #expect(PathUtilities.basename(postgres.executable) == "postgres")
-        #expect(postgres.arguments == PostgresSQL.serverArguments(dataDirectory: data, port: 54331))
-        #expect(postgres.logPath == harness.layout.postgresLog)
-        let postgresRecord = try #require(harness.fileSystem.json(harness.layout.postgresPid))
-        #expect(postgresRecord["pid"] == .int(Int(postgres.pid)))
-        #expect(postgresRecord["runtimeId"] == .string("vision_native"))
-
-        #expect(harness.roles.isSuperset(of: ["vision_native_owner", "vision_native_app", RuntimeConstants.analysisRole]))
-        #expect(harness.databases.contains("vision_native"))
-        #expect(harness.adminSQL.allSatisfy { !$0.isEmpty })
-        // Roles, the database and the extensions go through one psql session as the administrator.
-        let bootstraps = harness.adminSQL.filter { $0.contains("\\connect vision_native") }
-        #expect(bootstraps.count == 1)
-        #expect(bootstraps.first?.contains("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;") == true)
-        // Tool discovery runs `psql --version` without a role; every query runs with a pgpass file.
-        for call in harness.runner.calls(named: "psql") where !call.arguments.contains("--version") {
-            #expect(call.options.environment["PGPASSFILE"] != nil)
-            #expect(!call.arguments.joined(separator: " ").contains("PASSWORD"))
-        }
-
-        let backend = spawns[1]
+        #expect(spawns.count == 1)
+        let backend = try #require(spawns.first)
         #expect(backend.executable == "\(testRuntimeRoot)/vision-backend")
         #expect(backend.cwd == testRuntimeRoot)
         #expect(backend.environment["PORT"] == "41000")
         #expect(backend.environment["SERVER_HOST"] == "127.0.0.1")
         #expect(backend.environment["HOME"] == testHome)
+        #expect(backend.environment["VISION_DATABASE_PATH"] == harness.layout.database)
+        #expect(backend.environment["APP_TIMEZONE"] != nil)
+        #expect(backend.environment["DATABASE_URL"] == nil)
         #expect(backend.logPath == harness.layout.backendLog)
-        #expect(result == .started(pid: backend.pid, port: 41_000, database: "vision_native"))
+        #expect(result == .started(pid: backend.pid, port: 41_000, database: harness.layout.database))
         let backendRecord = try #require(harness.fileSystem.json(harness.layout.pid))
         #expect(backendRecord["command"] == .string("vision-backend"))
         #expect(backendRecord["port"] == .int(41_000))
@@ -62,40 +33,22 @@ import Testing
         let state = try #require(harness.fileSystem.json(harness.layout.state))
         #expect(state["activeRuntime"] == .string("native"))
         #expect(state["runtimeId"] == .string("vision_native"))
+        // The backend creates and migrates the database itself; the shell runs no tool first.
+        #expect(harness.toolCommands.isEmpty)
         #expect(harness.fileSystem.paths(withPrefix: "/tmp/").isEmpty)
     }
 
-    @Test func secondStartReusesTheClusterAndRoles() async throws {
+    @Test func runtimeEnvLosesTheRetiredDatabaseServerSettings() async throws {
         let harness = try Harness()
-        _ = try await harness.makeRuntime().start()
-        try await harness.makeRuntime().stop(keepPostgres: false)
-        let sqlCount = harness.adminSQL.count
-
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        #expect(harness.runner.calls(named: "initdb").count == 1)
-        let newSQL = harness.adminSQL.dropFirst(sqlCount)
-        // Roles are only created when missing; their passwords and attributes are reset anyway.
-        #expect(newSQL.allSatisfy { !$0.contains("CREATE ROLE") || $0.contains("WHERE NOT EXISTS") })
-        #expect(newSQL.contains { $0.contains("ALTER ROLE \"vision_native_owner\"") })
-    }
-
-    @Test func occupiedPostgresPortFailsClosed() async throws {
-        let harness = try Harness()
-        harness.ports.occupy(54331)
-        let error = await #expect(throws: NativeRuntimeError.self) { try await harness.makeRuntime().start() }
-        #expect(error?.code == "POSTGRES_PORT_COLLISION")
-        #expect(harness.spawner.spawns.isEmpty)
-    }
-
-    @Test func serverForAnotherDataDirectoryIsAPortCollision() async throws {
-        let harness = try Harness()
-        harness.postgresRunning = true
-        harness.reportedDataDirectory = "/Users/demo/Library/Application Support/Vision Demo/native/vision_demo/postgres/data"
-        let error = await #expect(throws: NativeRuntimeError.self) { try await harness.makeRuntime().start() }
-        #expect(error?.code == "POSTGRES_PORT_COLLISION")
-        #expect(harness.spawner.spawns.isEmpty)
-        #expect(harness.runner.calls(named: "pg_ctl").isEmpty)
+        harness.fileSystem.addFile(
+            harness.layout.env,
+            RuntimeEnvFile.header + "DATABASE_URL=postgresql://x@127.0.0.1/vision\nTWELVE_DATA_API_KEY=abc\n",
+            mode: 0o644)
+        try await harness.makeRuntime().ensureLayout()
+        let env = try #require(harness.fileSystem.text(harness.layout.env))
+        #expect(!env.contains("DATABASE_URL"))
+        #expect(env.contains("TWELVE_DATA_API_KEY=abc"))
+        #expect(try harness.fileSystem.mode(harness.layout.env) == 0o600)
     }
 
     @Test func occupiedBackendPortIsReportedForRepicking() async throws {
@@ -103,39 +56,7 @@ import Testing
         harness.ports.occupy(41_000)
         let error = await #expect(throws: NativeRuntimeError.self) { try await harness.makeRuntime().start() }
         #expect(error?.code == "PORT_COLLISION")
-    }
-
-    @Test func clusterFromAnotherMajorIsRejected() async throws {
-        let harness = try Harness()
-        harness.fileSystem.addFile("\(harness.layout.postgresData)/PG_VERSION", "17\n")
-        let error = await #expect(throws: NativeRuntimeError.self) { try await harness.makeRuntime().start() }
-        #expect(error?.code == "POSTGRES_DATA_WRONG_VERSION")
-        #expect(harness.runner.calls(named: "initdb").isEmpty)
-    }
-
-    @Test func interruptedInitializationIsQuarantined() async throws {
-        let harness = try Harness()
-        harness.fileSystem.addFile("\(harness.layout.postgresData)/base/partial", "x")
-        _ = try await harness.makeRuntime().start()
-        let quarantined = harness.fileSystem.paths(withPrefix: "\(harness.layout.postgresRoot)/data.incomplete-")
-        #expect(quarantined.contains { $0.hasSuffix("/base/partial") })
-        #expect(harness.fileSystem.text("\(harness.layout.postgresData)/PG_VERSION") == "18\n")
-    }
-
-    @Test func failedInitdbKeepsTheFailedStagingCopy() async throws {
-        let harness = try Harness()
-        let respond = harness.runner.handler
-        harness.runner.handler = { call in
-            if call.name == "initdb" {
-                _ = try respond(call)
-                throw FakeProcessFailure()
-            }
-            return try respond(call)
-        }
-        await #expect(throws: FakeProcessFailure.self) { try await harness.makeRuntime().start() }
-        #expect(!harness.fileSystem.exists("\(harness.layout.postgresData)/PG_VERSION"))
-        #expect(!harness.fileSystem.paths(withPrefix: "\(harness.layout.postgresRoot)/data.failed-").isEmpty)
-        #expect(harness.fileSystem.paths(withPrefix: "/tmp/").isEmpty)
+        #expect(harness.spawner.spawns.isEmpty)
     }
 
     @Test func healthyRecordedBackendIsReused() async throws {
@@ -171,10 +92,10 @@ import Testing
     @Test func runtimeEnvThatIsNotARegularFileIsRefused() async throws {
         for node in [FakeFileSystem.Node.symlink("/Users/demo/elsewhere.env"), .fifo] {
             let harness = try Harness()
-            harness.fileSystem.addFile("/Users/demo/elsewhere.env", "PGPORT=54331\n", mode: 0o644)
+            harness.fileSystem.addFile("/Users/demo/elsewhere.env", "TWELVE_DATA_API_KEY=x\n", mode: 0o644)
             harness.fileSystem.addNode(harness.layout.env, node)
             let runtime = try harness.makeRuntime()
-            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.prepareLayout() }
+            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.ensureLayout() }
             #expect(error?.code == "INVALID_RUNTIME_ENV")
             #expect(harness.fileSystem.node(harness.layout.env) == node)
             #expect(try harness.fileSystem.mode("/Users/demo/elsewhere.env") == 0o644)
@@ -244,30 +165,11 @@ import Testing
         #expect(harness.processes.sentSignals.map { $0.1 } == [SIGTERM])
     }
 
-    @Test func stopPostgresUsesFastShutdownOnOurDataDirectory() async throws {
+    @Test func stopWithoutABackendIsANoOp() async throws {
         let harness = try Harness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        try await runtime.stop(keepPostgres: false)
-        let pgCtl = try #require(harness.runner.calls(named: "pg_ctl").last)
-        #expect(pgCtl.arguments == ["-D", harness.layout.postgresData, "-m", "fast", "-w", "-t", "30", "stop"])
-        #expect(!harness.postgresRunning)
-        #expect(!harness.fileSystem.exists(harness.layout.postgresPid))
-    }
-
-    @Test func keepPostgresLeavesTheClusterRunning() async throws {
-        let harness = try Harness()
-        let runtime = try harness.makeRuntime()
-        _ = try await runtime.start()
-        try await runtime.stop(keepPostgres: true)
-        #expect(harness.runner.calls(named: "pg_ctl").isEmpty)
-        #expect(harness.postgresRunning)
-    }
-
-    @Test func stopWithoutAClusterIsANoOp() async throws {
-        let harness = try Harness()
-        try await harness.makeRuntime().stop(keepPostgres: false)
+        try await harness.makeRuntime().stop()
         #expect(harness.runner.calls.isEmpty)
+        #expect(harness.processes.sentSignals.isEmpty)
     }
 
     @Test func detailedReadinessWaitsForTheDatabase() async throws {
@@ -310,19 +212,122 @@ import Testing
             "2026-10-19T18:45:42.512Z [ERROR] Failed to start application {\"error\":\"migration 0004 failed\"}\n")
         harness.spawner.markExited(backend.pid)
         let failure = await runtime.backendStartupFailure()
-        #expect(failure == "migration 0004 failed")
+        #expect(failure == BackendStartupFailure(message: "migration 0004 failed"))
+
+        harness.fileSystem.addFile(
+            harness.layout.backendLog,
+            "[ERROR] Failed to start application {\"error\":\"disk full\",\"code\":\"PRE_MIGRATION_BACKUP_FAILED\"}\n")
+        let backup = await runtime.backendStartupFailure()
+        #expect(backup == BackendStartupFailure(message: "disk full", code: "PRE_MIGRATION_BACKUP_FAILED"))
 
         harness.fileSystem.addFile(harness.layout.backendLog, "no structured error\n")
         let generic = await runtime.backendStartupFailure()
-        #expect(generic == "The Vision backend stopped during startup.")
+        #expect(generic == BackendStartupFailure(message: "The Vision backend stopped during startup."))
     }
 
-    @Test func backendLogTailIsRedacted() async throws {
+    @Test func backendLogTailDropsColourCodes() async throws {
         let harness = try Harness()
-        harness.fileSystem.addFile(
-            harness.layout.backendLog, "boot\nDATABASE_URL=postgresql://vision_native_app:abcdef@127.0.0.1/x\n")
+        harness.fileSystem.addFile(harness.layout.backendLog, "boot\n\u{1B}[31mred error\u{1B}[0m\n")
         let tail = try await harness.makeRuntime().backendLogTail()
-        #expect(tail.contains("vision_native_app:***@"))
-        #expect(!tail.contains("abcdef"))
+        #expect(tail.contains("red error"))
+        #expect(!tail.contains("\u{1B}"))
+    }
+}
+
+@Suite struct NativeRuntimeDatabaseToolTests {
+    @Test func verifyRunsThePackagedToolThroughTheBackendExecutable() async throws {
+        let harness = try Harness()
+        let data = harness.installDatabase()
+        let report = try await harness.makeRuntime().verifyDatabaseFile(harness.layout.database)
+        #expect(report.sha256 == sha256Hex(data))
+        #expect(report.bytes == data.count)
+        #expect(report.schemaVersion == Harness.packagedSchemaVersion)
+        #expect(report.pendingMigrations == 0)
+        #expect(report.tableCounts == harness.tableCounts)
+
+        let call = try #require(harness.runner.calls(named: "vision-backend").last)
+        #expect(call.arguments == ["\(testRuntimeRoot)/tools/db-file.js", "verify", harness.layout.database])
+        #expect(call.options.cwd == testRuntimeRoot)
+        #expect(call.options.environment["BUN_BE_BUN"] == "1")
+        #expect(call.options.environment["VISION_SKIP_DOTENV"] == "1")
+        #expect(call.options.environment["VISION_DATABASE_PATH"] == harness.layout.database)
+    }
+
+    @Test func aToolFailureCarriesTheToolsOwnError() async throws {
+        let harness = try Harness()
+        harness.installDatabase()
+        harness.failTool("verify", "database disk image is malformed")
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await harness.makeRuntime().verifyDatabaseFile(harness.layout.database)
+        }
+        #expect(error == NativeRuntimeError("DATABASE_VERIFY_FAILED", "database disk image is malformed"))
+    }
+
+    @Test func aMissingToolIsReportedAsAnInstallationProblem() async throws {
+        let harness = try Harness()
+        try harness.fileSystem.remove("\(testRuntimeRoot)/tools/db-file.js")
+        harness.writeManifest()
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await harness.makeRuntime().verifyDatabaseFile(harness.layout.database)
+        }
+        #expect(error?.code == "DATABASE_TOOL_MISSING")
+    }
+
+    @Test func snapshotLandsAtItsFinalNameOnlyOnceVerified() async throws {
+        let harness = try Harness()
+        let data = harness.installDatabase()
+        let runtime = try harness.makeRuntime()
+        let destination = "/Users/demo/Backups/work/db.sqlite3"
+        let report = try await runtime.snapshotDatabase(to: destination)
+        #expect(report.file == destination)
+        #expect(report.sha256 == sha256Hex(data))
+        #expect(harness.toolCommands.last == ["snapshot", harness.layout.database, "\(destination).partial"])
+        #expect(!harness.fileSystem.exists("\(destination).partial"))
+        #expect(try harness.fileSystem.mode(destination) == 0o600)
+
+        harness.failTool("snapshot", "disk full")
+        let failed = "/Users/demo/Backups/work/second.sqlite3"
+        let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.snapshotDatabase(to: failed) }
+        #expect(error?.code == "DATABASE_SNAPSHOT_FAILED")
+        #expect(!harness.fileSystem.exists(failed))
+        #expect(!harness.fileSystem.exists("\(failed).partial"))
+    }
+
+    @Test func snapshotWithoutADatabaseFailsClearly() async throws {
+        let harness = try Harness()
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await harness.makeRuntime().snapshotDatabase(to: "/Users/demo/Backups/db.sqlite3")
+        }
+        #expect(error?.code == "DATABASE_MISSING")
+        #expect(harness.toolCommands.isEmpty)
+    }
+
+    @Test func pendingSchemaUpgradeComparesTheHeaderWithThePackagedMigrations() async throws {
+        let harness = try Harness()
+        let runtime = try harness.makeRuntime()
+        #expect(await runtime.packagedMigrationVersion() == Harness.packagedSchemaVersion)
+        #expect(await runtime.pendingSchemaUpgrade() == nil)
+
+        harness.installDatabase(userVersion: 1)
+        #expect(await runtime.pendingSchemaUpgrade() == PendingSchemaUpgrade(databaseVersion: 1, packagedVersion: 3))
+        harness.installDatabase(userVersion: 0)
+        #expect(await runtime.pendingSchemaUpgrade() == nil)
+        harness.installDatabase(userVersion: 3)
+        #expect(await runtime.pendingSchemaUpgrade() == nil)
+        // No tool runs: the header is read directly.
+        #expect(harness.toolCommands.isEmpty)
+    }
+
+    @Test func databaseStatsReadTheHeaderAndSidecars() async throws {
+        let harness = try Harness()
+        let data = harness.installDatabase(userVersion: 2)
+        harness.fileSystem.addFile("\(harness.layout.database)-wal", Data(count: 512))
+        let stats = try await harness.makeRuntime().getDatabaseStats()
+        #expect(stats.exists)
+        #expect(stats.bytes == data.count)
+        #expect(stats.walBytes == 512)
+        #expect(stats.schemaVersion == 2)
+        #expect(stats.journalMode == .wal)
+        #expect(stats.sqliteVersion == "3.43.2")
     }
 }
