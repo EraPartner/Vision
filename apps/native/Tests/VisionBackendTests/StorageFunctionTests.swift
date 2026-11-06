@@ -34,7 +34,7 @@ import Testing
         ]
         let bad = [
             #"["a",1]"#, "[1.5]", "[1.0]", "[1e2]", "[-0]", "[9007199254740993]", "[[1]]", #"[{"a":1}]"#, "[true]",
-            "[1, 2]", " [1]", #"["é"]"#, #"{"a":1}"#, #""a""#, "1", "null", "", "not json",
+            "[1, 2]", " [1]", #"["\u00e9"]"#, #"{"a":1}"#, #""a""#, "1", "null", "", "not json",
         ]
         for array in ok { #expect(try db.scalar("SELECT vision_array_ok(?)", [.text(array)]) == .integer(1), "\(array)") }
         for array in bad { #expect(try db.scalar("SELECT vision_array_ok(?)", [.text(array)]) == .integer(0), "\(array)") }
