@@ -160,6 +160,12 @@ public struct AnalysisTemplate: Identifiable, Sendable {
                 orderBy: [.init(id: "month")])),
     ]
 }
+/// A result chart's `kind` (`"bar" | "line" | "stacked-bar" | "scatter" | "waterfall"`).
+public enum AnalysisChartKind: String, CaseIterable, Sendable {
+    case bar, line
+    case stackedBar = "stacked-bar"
+    case scatter, waterfall
+}
 /// The result window's discriminant (`{ kind: "page" } | { kind: "truncated" }`).
 public enum AnalysisWindowKind: String, Sendable {
     case page, truncated

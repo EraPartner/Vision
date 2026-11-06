@@ -13,9 +13,8 @@ struct AnalysisResultCharts: View {
     private var columns: [AnalysisColumn] {
         result.effectiveColumns
     }
-    private var kind: String {
-        let value = spec["kind"]?.stringValue ?? ""
-        return ["bar", "line", "stacked-bar", "scatter", "waterfall"].contains(value) ? value : "bar"
+    private var kind: AnalysisChartKind {
+        spec["kind"]?.stringValue.flatMap(AnalysisChartKind.init(rawValue:)) ?? .bar
     }
     private var xID: String { spec["x"]?.stringValue ?? "" }  // lint:allow raw-id analysis chart column key, not an API entity
     private var yIDs: [String] {
@@ -29,15 +28,15 @@ struct AnalysisResultCharts: View {
                 values: yIDs.map { coordinate(row[$0]) }, raw: row)
         }
     }
-    private var omitted: Int { points.filter { $0.values.contains(nil) || (kind == "scatter" && $0.x == nil) }.count }
+    private var omitted: Int { points.filter { $0.values.contains(nil) || (kind == .scatter && $0.x == nil) }.count }
     private var unavailable: String? {
         if !AnalysisPresentation.isComplete(result.raw) { return "analysis.ext.chart.complete" }
         if !AnalysisPresentation.compatibleChartUnits(result: result.raw, series: yIDs) {
             return "analysis.ext.chart.units"
         }
         if xID.isEmpty || yIDs.isEmpty { return "analysis.ext.chart.select" }
-        if kind == "waterfall" && omitted > 0 { return "analysis.ext.chart.waterfallMissing" }
-        if kind == "waterfall" && yIDs.count != 1 { return "analysis.ext.chart.oneSeries" }
+        if kind == .waterfall && omitted > 0 { return "analysis.ext.chart.waterfallMissing" }
+        if kind == .waterfall && yIDs.count != 1 { return "analysis.ext.chart.oneSeries" }
         if points.isEmpty { return "analysis.ext.chart.empty" }
         return nil
     }
@@ -49,9 +48,9 @@ struct AnalysisResultCharts: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VisionSegmentedControl(
-                selection: Binding(get: { kind }, set: { spec["kind"] = .string($0) }),
-                values: ["bar", "line", "stacked-bar", "scatter", "waterfall"],
-                title: { strings.t("analysis.ext.chart.\($0)") }, label: strings.t("analysis.ext.chart.type"))
+                selection: Binding(get: { kind }, set: { spec["kind"] = .string($0.rawValue) }),
+                values: AnalysisChartKind.allCases,
+                title: { strings.t("analysis.ext.chart.\($0.rawValue)") }, label: strings.t("analysis.ext.chart.type"))
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("analysis.ext.chart.x")).font(.callout.weight(.medium))
                 VisionSelect(
@@ -131,7 +130,7 @@ struct AnalysisResultCharts: View {
                 zero.addLine(to: CGPoint(x: model.right, y: model.y(0)))
                 context.stroke(zero, with: .color(theme.foreground.opacity(0.4)), lineWidth: 1)
                 for index in yIDs.indices {
-                    if kind == "line" {
+                    if kind == .line {
                         var line = Path()
                         var started = false
                         for point in points {
@@ -150,31 +149,31 @@ struct AnalysisResultCharts: View {
                         context.stroke(line, with: .color(color(index)), lineWidth: 2)
                     } else {
                         for point in points {
-                            guard let value = point.values[index], kind != "scatter" || point.x != nil,
-                                kind != "waterfall" || index == 0
+                            guard let value = point.values[index], kind != .scatter || point.x != nil,
+                                kind != .waterfall || index == 0
                             else { continue }
-                            if kind == "scatter" {
+                            if kind == .scatter {
                                 let rect = CGRect(x: model.x(point) - 4, y: model.y(value) - 4, width: 8, height: 8)
                                 context.fill(Path(ellipseIn: rect), with: .color(color(index)))
                             } else {
                                 let ends = model.ends[point.index][index]
                                 let barWidth =
-                                    kind == "bar" ? model.step * 0.72 / Double(max(1, yIDs.count)) : model.step * 0.72
+                                    kind == .bar ? model.step * 0.72 / Double(max(1, yIDs.count)) : model.step * 0.72
                                 let originX =
-                                    model.x(point) - model.step * 0.36 + (kind == "bar" ? Double(index) * barWidth : 0)
+                                    model.x(point) - model.step * 0.36 + (kind == .bar ? Double(index) * barWidth : 0)
                                 let rect = CGRect(
                                     x: originX, y: min(model.y(ends.0), model.y(ends.1)), width: max(1, barWidth),
                                     height: abs(model.y(ends.0) - model.y(ends.1)))
                                 context.fill(
                                     Path(rect),
                                     with: .color(
-                                        kind == "waterfall" ? (value < 0 ? theme.loss : theme.gain) : color(index)))
+                                        kind == .waterfall ? (value < 0 ? theme.loss : theme.gain) : color(index)))
                             }
                         }
                     }
                 }
                 for point in points where point.index % max(1, Int(ceil(Double(points.count) / 10))) == 0 {
-                    if kind != "scatter" || point.x != nil {
+                    if kind != .scatter || point.x != nil {
                         context.draw(
                             Text(String(formatted(point.raw[xID], id: xID).prefix(20))).font(.caption2).foregroundStyle(
                                 theme.secondaryLabel),
@@ -185,7 +184,7 @@ struct AnalysisResultCharts: View {
                 switch phase {
                 case .active(let position):
                     selected =
-                        points.filter { kind != "scatter" || $0.x != nil }
+                        points.filter { kind != .scatter || $0.x != nil }
                         .min { abs(model.x($0) - position.x) < abs(model.x($1) - position.x) }?.index
                 case .ended: selected = nil
                 }
@@ -205,7 +204,7 @@ struct AnalysisResultCharts: View {
                 }
                 if let selected { AccessibilityNotification.Announcement(readout(points[selected])).post() }
                 return .handled
-            }.accessibilityLabel(strings.t("analysis.ext.chart.\(kind)"))
+            }.accessibilityLabel(strings.t("analysis.ext.chart.\(kind.rawValue)"))
                 .accessibilityValue(selected.flatMap { points.indices.contains($0) ? readout(points[$0]) : nil } ?? "")
         }.frame(height: 330)
     }
@@ -287,7 +286,7 @@ struct AnalysisResultCharts: View {
     /// These Double sums only position drawn segments. No sum is exposed as a financial value.
     private struct Drawing {
         let points: [Point]
-        let kind: String
+        let kind: AnalysisChartKind
         let size: CGSize
         let ends: [[(Double, Double)]]
         let minimum: Double
@@ -298,7 +297,7 @@ struct AnalysisResultCharts: View {
         var right: Double { max(76, size.width - 20) }
         var bottom: Double { max(21, size.height - 60) }
         var step: Double { (right - left) / Double(max(1, points.count)) }
-        init(points: [Point], kind: String, seriesCount: Int, size: CGSize) {
+        init(points: [Point], kind: AnalysisChartKind, seriesCount: Int, size: CGSize) {
             self.points = points
             self.kind = kind
             self.size = size
@@ -308,12 +307,12 @@ struct AnalysisResultCharts: View {
                 var negative = 0.0
                 return point.values.map { optional in
                     let value = optional ?? 0
-                    if kind == "waterfall" {
+                    if kind == .waterfall {
                         let start = cumulative
                         cumulative += value
                         return (start, cumulative)
                     }
-                    if kind == "stacked-bar" {
+                    if kind == .stackedBar {
                         if value >= 0 {
                             let start = positive
                             positive += value
@@ -337,7 +336,7 @@ struct AnalysisResultCharts: View {
         }
         func y(_ value: Double) -> Double { 20 + ((minimum + span - value) / span) * (bottom - 20) }
         func x(_ point: Point) -> Double {
-            kind == "scatter"
+            kind == .scatter
                 ? left + ((point.x ?? xmin) - xmin) / xspan * (right - left) : left + step * (Double(point.index) + 0.5)
         }
     }

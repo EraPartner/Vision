@@ -120,9 +120,13 @@ public struct AnalysisWorkbenchDraft: Equatable, Sendable {
     public var assumptionValuesJson: String { Self.json(.object(assumptionValues)) }
 }
 
+/// A preparation step's `type` (`"convert" | "lookup" | "append" | "calculate" | "unpivot" | "pivot"`).
+public enum AnalysisPreparationStepType: String, CaseIterable, Sendable {
+    case convert, lookup, append, calculate, unpivot, pivot
+}
 public struct AnalysisPreparationStepDraft: Equatable, Sendable {
-    public static let types = ["convert", "lookup", "append", "calculate", "unpivot", "pivot"]
-    public var type = "convert"
+    public static let types = AnalysisPreparationStepType.allCases.map(\.rawValue)
+    public var type = AnalysisPreparationStepType.convert
     public var column = ""
     public var inputId = ""
     public var inputKey = ""
@@ -139,51 +143,49 @@ public struct AnalysisPreparationStepDraft: Equatable, Sendable {
     private var outputName: String { outputId.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var unpivotName: String { unpivotValueColumn.trimmingCharacters(in: .whitespacesAndNewlines) }
     public func hasUnpivotConflict(columnIds: [String]) -> Bool {
-        type == "unpivot" && !outputName.isEmpty && !unpivotName.isEmpty
+        type == .unpivot && !outputName.isEmpty && !unpivotName.isEmpty
             && (outputName == unpivotName || columnIds.contains(outputName) || columnIds.contains(unpivotName))
     }
     public func isValid(columnIds: [String]) -> Bool {
         switch type {
-        case "convert": !column.isEmpty && !targetType.isEmpty
-        case "lookup": !column.isEmpty && !inputId.isEmpty && !inputKey.isEmpty && !outputName.isEmpty
-        case "append": !inputId.isEmpty
-        case "calculate": !outputName.isEmpty && !expression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case "unpivot":
+        case .convert: !column.isEmpty && !targetType.isEmpty
+        case .lookup: !column.isEmpty && !inputId.isEmpty && !inputKey.isEmpty && !outputName.isEmpty
+        case .append: !inputId.isEmpty
+        case .calculate: !outputName.isEmpty && !expression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .unpivot:
             !selected.isEmpty && !outputName.isEmpty && !unpivotName.isEmpty
                 && !hasUnpivotConflict(columnIds: columnIds)
-        case "pivot": !nameColumn.isEmpty && !valueColumn.isEmpty && !aggregate.isEmpty
-        default: false
+        case .pivot: !nameColumn.isEmpty && !valueColumn.isEmpty && !aggregate.isEmpty
         }
     }
     public func payload(input: TaxValue?, assumptions: [String: TaxValue]) -> TaxValue {
-        var fields: [String: TaxValue] = ["type": .string(type)]
+        var fields: [String: TaxValue] = ["type": .string(type.rawValue)]
         switch type {
-        case "convert":
+        case .convert:
             fields.merge(["columnId": .string(column), "targetType": .string(targetType), "onError": .string("null")]) {
                 _, new in new
             }
-        case "lookup":
+        case .lookup:
             fields["input"] = input
             fields["keys"] = .array([.string(column)])
             fields["inputKeys"] = .array([.string(inputKey)])
             fields["prefix"] = .string(outputId)
-        case "append": fields["input"] = input
-        case "calculate":
+        case .append: fields["input"] = input
+        case .calculate:
             fields["formula"] = .object([
                 "id": .string(outputId), "label": .string(outputId), "scope": .string("row"),
                 "expression": .string(expression),
             ])
             fields["assumptions"] = .object(assumptions)
-        case "unpivot":
+        case .unpivot:
             fields["columnIds"] = .array(selected.map(TaxValue.string))
             fields["nameColumn"] = .string(outputName)
             fields["valueColumn"] = .string(unpivotName)
-        case "pivot":
+        case .pivot:
             fields["groupColumns"] = .array(groups.map(TaxValue.string))
             fields["nameColumn"] = .string(nameColumn)
             fields["valueColumn"] = .string(valueColumn)
             fields["aggregate"] = .string(aggregate)
-        default: break
         }
         return .object(fields)
     }
