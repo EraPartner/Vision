@@ -59,6 +59,8 @@ enum GoldenFixtures {
             }
         } catch let error as DatabaseError {
             return .error(error.code.isEmpty ? "thrown: \(error.message)" : error.code)
+        } catch let error as SQLStateError {
+            return .error(error.code)
         } catch {
             return .error("thrown: \(error)")
         }
