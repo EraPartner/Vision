@@ -119,7 +119,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     /// `/tax`, Belgian tax (phase 3h).
     case tax
     case portfolio
-    case portfolioHoldings(assetClass: String)
+    case portfolioHoldings(PortfolioHoldingsPage)
     case rebalance
     case netWorth
     case portfolioTax
@@ -167,9 +167,9 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         .home,
         .statistics,
         .tax,
-        .portfolio, .portfolioHoldings(assetClass: "stock"), .portfolioHoldings(assetClass: "crypto"),
-        .portfolioHoldings(assetClass: "metals"), .portfolioHoldings(assetClass: "real_estate"),
-        .portfolioHoldings(assetClass: "savings"), .rebalance, .netWorth, .portfolioTax, .portfolioImport,
+        .portfolio, .portfolioHoldings(.stocks), .portfolioHoldings(.crypto),
+        .portfolioHoldings(.metals), .portfolioHoldings(.realEstate),
+        .portfolioHoldings(.savings), .rebalance, .netWorth, .portfolioTax, .portfolioImport,
         .analysis, .analysisMonitors,
         .researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare,
         .researchForecast, .researchChartBuilder,
@@ -185,9 +185,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .statistics: return InsightsRoutes.statistics
         case .tax: return "/tax"
         case .portfolio: return "/portfolio"
-        case .portfolioHoldings(let assetClass):
-            return "/portfolio/"
-                + (assetClass == "real_estate" ? "real-estate" : assetClass == "stock" ? "stocks" : assetClass)
+        case .portfolioHoldings(let page): return page.path
         case .rebalance: return "/portfolio/rebalance"
         case .netWorth: return "/portfolio/net-worth"
         case .portfolioTax: return "/portfolio/tax"

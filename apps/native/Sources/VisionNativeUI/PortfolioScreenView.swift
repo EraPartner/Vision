@@ -5,18 +5,16 @@ import VisionNativeCore
 struct PortfolioScreenView: View {
     let screens: PortfolioScreens
     let shell: NativeShellModel
-    var assetClass: String? = nil
+    var page: PortfolioHoldingsPage? = nil
     @State private var connectivity = PortfolioConnectivity()
     private var guardId: String {  // lint:allow raw-id leave-guard route key, not an API entity
-        assetClass.map { NativeScreen.portfolioHoldings(assetClass: $0).path } ?? "/portfolio"
+        page.map(\.path) ?? "/portfolio"
     }
     var body: some View {
         Group {
-            if let assetClass {
-                PortfolioHoldingsView(
-                    model: screens.model, editing: screens.editing, shell: shell, assetClass: assetClass
-                )
-                .id(assetClass)
+            if let page {
+                PortfolioHoldingsView(model: screens.model, editing: screens.editing, shell: shell, page: page)
+                    .id(page)
             } else {
                 PortfolioOverviewView(model: screens.model, editing: screens.editing, shell: shell)
             }

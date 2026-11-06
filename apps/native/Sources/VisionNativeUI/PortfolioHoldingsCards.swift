@@ -6,7 +6,7 @@ struct PortfolioHoldingActionsMenu: View {
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
-    var deletePrefix = "stocks"
+    var page = PortfolioHoldingsPage.stocks
     private var strings: any Localizing { shell.strings }
     var body: some View {
         Menu {
@@ -41,14 +41,7 @@ struct PortfolioHoldingActionsMenu: View {
         .buttonStyle(.vision(.ghost, size: .iconSm)).menuStyle(.button).menuIndicator(.hidden).fixedSize()
         .accessibilityLabel(strings.t("portfolio.row.menu", ["name": holding.name]))
     }
-    private var deleteKey: String {
-        switch deletePrefix {
-        case "crypto": "crypto.deleteAsset"
-        case "realestate": "realestate.deleteProperty"
-        case "savings": "savings.deleteAccount"
-        default: "portfolio.deleteInvestment"
-        }
-    }
+    private var deleteKey: String { page.deleteKey }
 }
 
 struct PortfolioAssetCard: View {
@@ -78,7 +71,7 @@ struct PortfolioAssetCard: View {
     private var actionsMenu: some View {
         PortfolioHoldingActionsMenu(
             holding: holding, model: model, editing: editing, shell: shell,
-            deletePrefix: isProperty ? "realestate" : "savings")
+            page: isProperty ? .realEstate : .savings)
     }
     /// The web property `CardHeader`: a 40 pt icon tile, the serif title and the location.
     private var propertyHeader: some View {
