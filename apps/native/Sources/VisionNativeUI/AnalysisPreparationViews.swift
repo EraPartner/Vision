@@ -10,42 +10,46 @@ struct AnalysisPreparationStepView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             AnalysisWorkbenchPicker(
-                key: "step", value: $model.step.type, choices: AnalysisPreparationStepDraft.types, shell: shell,
+                key: "step",
+                value: Binding(
+                    get: { model.step.type.rawValue },
+                    set: { model.step.type = AnalysisPreparationStepType(rawValue: $0) ?? .convert }),
+                choices: AnalysisPreparationStepDraft.types, shell: shell,
                 clearable: false)
-            Text(t("stepHelp." + model.step.type)).font(.callout).foregroundStyle(theme.secondaryLabel)
-            if ["lookup", "append"].contains(model.step.type), model.attachments.isEmpty {
+            Text(t("stepHelp." + model.step.type.rawValue)).font(.callout).foregroundStyle(theme.secondaryLabel)
+            if [AnalysisPreparationStepType.lookup, .append].contains(model.step.type), model.attachments.isEmpty {
                 Text(t("attachmentRequired")).font(.callout).foregroundStyle(theme.secondaryLabel)
             }
-            if ["convert", "lookup"].contains(model.step.type) { fieldPicker("column", value: $model.step.column) }
-            if model.step.type == "convert" {
+            if [AnalysisPreparationStepType.convert, .lookup].contains(model.step.type) { fieldPicker("column", value: $model.step.column) }
+            if model.step.type == .convert {
                 AnalysisWorkbenchPicker(
                     key: "targetType", value: $model.step.targetType,
                     choices: ["string", "decimal", "integer", "date", "boolean"], shell: shell, clearable: false,
                     segmented: true)
             }
-            if ["lookup", "append"].contains(model.step.type) {
+            if [AnalysisPreparationStepType.lookup, .append].contains(model.step.type) {
                 AnalysisWorkbenchPicker(
                     key: "attachment", value: $model.step.inputId,
                     choices: model.attachments.compactMap { $0["id"]?.stringValue }, shell: shell, labels: { $0 })
             }
-            if model.step.type == "lookup" {
+            if model.step.type == .lookup {
                 AnalysisWorkbenchPicker(
                     key: "inputKey", value: $model.step.inputKey,
                     choices: (model.attachments.first { $0["id"]?.stringValue == model.step.inputId }?["columns"]?
                         .arrayValue ?? []).compactMap { $0["id"]?.stringValue },
                     shell: shell, labels: { $0 })
             }
-            if ["calculate", "lookup", "unpivot"].contains(model.step.type) {
+            if [AnalysisPreparationStepType.calculate, .lookup, .unpivot].contains(model.step.type) {
                 AnalysisWorkbenchTextField(key: "outputId", value: $model.step.outputId, shell: shell)
             }
-            if model.step.type == "calculate" {
+            if model.step.type == .calculate {
                 AnalysisWorkbenchTextField(key: "expression", value: $model.step.expression, shell: shell)
             }
-            if model.step.type == "unpivot" {
+            if model.step.type == .unpivot {
                 AnalysisWorkbenchColumnChecks(key: "values", ids: $model.step.selected, model: model, shell: shell)
                 AnalysisWorkbenchTextField(key: "valueColumn", value: $model.step.unpivotValueColumn, shell: shell)
             }
-            if model.step.type == "pivot" {
+            if model.step.type == .pivot {
                 AnalysisWorkbenchColumnChecks(key: "groups", ids: $model.step.groups, model: model, shell: shell)
                 fieldPicker("nameColumn", value: $model.step.nameColumn)
                 fieldPicker("valueColumn", value: $model.step.valueColumn)

@@ -42,7 +42,7 @@ struct AnalysisWorkbenchTests {
 
     @Test func preparationEmbedsTheSelectedImportedTableAndRejectsUnpivotNameCollisions() {
         var step = AnalysisPreparationStepDraft()
-        step.type = "lookup"
+        step.type = .lookup
         step.column = "recipient"
         step.inputId = "imported"
         step.inputKey = "name"
@@ -54,7 +54,7 @@ struct AnalysisWorkbenchTests {
         #expect(wire["input"] == imported)
         #expect(wire["keys"] == .array([.string("recipient")]))
         #expect(wire["inputKeys"] == .array([.string("name")]))
-        step.type = "unpivot"
+        step.type = .unpivot
         step.selected = ["amount"]
         step.outputId = " label "
         step.unpivotValueColumn = " amount "
