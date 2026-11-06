@@ -8,11 +8,11 @@ public final class PortfolioImportScreens {
     public var staging: PortfolioImportSessionModel { session }
     public let history: PortfolioImportHistoryModel
     public let review: PortfolioImportReviewModel
-    public private(set) var requestedReviewBatchId: Int?
+    public private(set) var requestedReviewBatchId: PortfolioImportBatchNumericID?
     public var isDirty: Bool { advanced.isDirty || session.isDirty }
     public var isBusy: Bool { advanced.isBusy || session.isBusy || history.isBusy || review.isBusy }
     public var didMutate: (@MainActor () async -> Void)?
-    public var navigateToReview: (@MainActor (Int) -> Void)?
+    public var navigateToReview: (@MainActor (PortfolioImportBatchNumericID) -> Void)?
     public init(
         service: any PortfolioImportService,
         store: any PortfolioImportSessionStore = PortfolioImportMemorySessionStore()
@@ -24,8 +24,8 @@ public final class PortfolioImportScreens {
         advanced.didImport = { [weak self] outcome in
             guard let self else { return }
             if outcome.requiresReview {
-                requestedReviewBatchId = outcome.batchId.rawValue
-                navigateToReview?(outcome.batchId.rawValue)
+                requestedReviewBatchId = outcome.batchId
+                navigateToReview?(outcome.batchId)
             }
         }
         advanced.didMutate = { [weak self] in await self?.serverChanged() }
@@ -35,7 +35,7 @@ public final class PortfolioImportScreens {
         history.beginRollback = { [weak session] in session?.beginRollback() ?? false }
         history.didRollback = { [weak session] id, failed in session?.endRollback(batchId: id, failed: failed) }
     }
-    public func load(reviewBatchId: String? = nil) async {
+    public func load(reviewBatchId: String? = nil) async {  // lint:allow raw-id unparsed route parameter, typed when read
         if let reviewBatchId {
             await review.load(rawBatchId: reviewBatchId)
         } else {

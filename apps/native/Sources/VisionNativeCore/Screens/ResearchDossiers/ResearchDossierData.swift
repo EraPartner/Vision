@@ -171,7 +171,7 @@ public struct ResearchDossierContent: Codable, Equatable, Sendable {
 }
 public struct ResearchDossierLinkDetail: Decodable, Equatable, Sendable, Identifiable {
     public let kind: ResearchDossierLinkKind
-    public let historicalId: String
+    public let historicalId: String  // lint:allow raw-id snapshot of a reference whose entity kind varies per row
     public let labelSnapshot: String
     public let liveId: TaxValue
     public let status: ResearchDossierLinkStatus

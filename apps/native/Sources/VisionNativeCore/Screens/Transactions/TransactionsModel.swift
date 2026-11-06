@@ -44,7 +44,7 @@ public enum TransactionToastAction: Equatable, Sendable {
 
 /// The toast's action while it may still be taken.
 public struct TransactionPendingAction: Equatable, Sendable {
-    public let noticeID: Int
+    public let noticeID: Int  // lint:allow raw-id local notice counter, not an API entity
     public let action: TransactionToastAction
 }
 

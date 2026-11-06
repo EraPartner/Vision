@@ -22,7 +22,7 @@ import Foundation
 ///         attachments/, cache/
 public struct RuntimeLayout: Sendable, Equatable {
     public let userDataDirectory: String
-    public let runtimeId: String
+    public let runtimeId: String  // lint:allow raw-id runtime directory name of the app variant, not an API entity
     public let nativeRoot: String
     public let env: String
     public let state: String
@@ -43,7 +43,7 @@ public struct RuntimeLayout: Sendable, Equatable {
     public let rawState: String
 
     /// Refuses any application-data directory other than Vision Native's own.
-    public init(userDataDirectory: String, runtimeId: String = VisionNativeIdentity.runtimeId) throws {
+    public init(userDataDirectory: String, runtimeId: String = VisionNativeIdentity.runtimeId) throws {  // lint:allow raw-id runtime directory name of the app variant, not an API entity
         let root = PathUtilities.normalize(userDataDirectory)
         try RuntimeLayout.assertVisionNativeDirectory(root)
         let id = try RuntimeNames.normalize(runtimeId)

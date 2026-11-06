@@ -33,7 +33,7 @@ public enum NativeVariant: String, Sendable, CaseIterable {
 
     public var userDataName: String { appName }
 
-    public var runtimeId: String {
+    public var runtimeId: String {  // lint:allow raw-id runtime directory name of the app variant, not an API entity
         switch self {
         case .standard: return VisionNativeIdentity.runtimeId
         case .demo: return "vision_native_demo"

@@ -48,7 +48,7 @@ extension APIClient: PlannedPaymentsService {
 /// The Undo action of the Pause and Resume toast (`undoToast`).
 public struct PlannedUndo: Equatable, Sendable {
     /// The toast it belongs to.
-    public let noticeID: Int
+    public let noticeID: Int  // lint:allow raw-id local notice counter, not an API entity
     public let paymentID: PlannedTransactionID
     public let restoreActive: Bool
 }

@@ -21,10 +21,10 @@ public struct AnalysisMonitorRule: Codable, Equatable, Sendable, Identifiable {
     public let enabled: Bool
     public let savedAnalysisId: SavedAnalysisID?
     public let dossierId: ResearchDossierID?
-    public let historicalTargetId: String
+    public let historicalTargetId: String  // lint:allow raw-id snapshot of a reference whose entity kind varies per row
     public let targetLabel: String
     public let targetAvailable: Bool
-    public let fieldId: String?
+    public let fieldId: String?  // lint:allow raw-id analysis dataset field catalog key (a fixed code), not a stored entity
     public let `operator`: AnalysisMonitorOperator?
     public let threshold: String?
     public let intervalMinutes: Int

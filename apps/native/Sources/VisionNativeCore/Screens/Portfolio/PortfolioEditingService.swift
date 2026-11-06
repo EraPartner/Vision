@@ -133,7 +133,7 @@ extension APIClient: PortfolioEditingService {
 }
 private struct PortfolioProvidersResponse: Decodable, Sendable { let providers: [PortfolioPriceProvider] }
 private struct PortfolioEditingRequest<Operation: APIOperation, Response: Decodable & Sendable>: APIOperation {
-    static var operationId: String { Operation.operationId }
+    static var operationId: String { Operation.operationId }  // lint:allow raw-id OpenAPI operation name, not an entity id
     static var method: HTTPMethod { Operation.method }
     static var pathTemplate: String { Operation.pathTemplate }
     let path: String

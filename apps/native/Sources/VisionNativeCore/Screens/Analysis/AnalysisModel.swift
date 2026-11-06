@@ -112,7 +112,7 @@ public final class AnalysisModel {
     public private(set) var isSaving = false
     public private(set) var offset = 0
     public private(set) var sqlHistory: [String] = []
-    public private(set) var resultDatasetId: String?
+    public private(set) var resultDatasetId: String?  // lint:allow raw-id analysis dataset catalog key (a fixed code), not a stored entity
     public private(set) var exportInputsKnown = false
     public private(set) var resultInputs = AnalysisResultInputs(
         formulasJson: "[]", assumptionsJson: "[]", assumptionValuesJson: "{}", workbench: .object([:]),
@@ -494,7 +494,7 @@ public final class AnalysisModel {
         else { throw APIError.invalidRequest("analysis.sqlParametersInvalid") }
         return value
     }
-    public func executionInput(requestId: String, offset: Int = 0) throws -> TaxValue {
+    public func executionInput(requestId: String, offset: Int = 0) throws -> TaxValue {  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
         var input: TaxValue = .object([
             "requestId": .string(requestId), "mode": .string(mode.rawValue), "limit": .number(Decimal(plan.limit)),
             "offset": .number(Decimal(offset)), "workbench": workbench, "scenarioModel": scenarioModel,

@@ -126,7 +126,7 @@ export const RULES: Rule[] = [
   },
   {
     id: "raw-id",
-    kind: "ratchet",
+    kind: "strict",
     description: "raw Int/String for *Id/*ID outside the API layer",
     find: (c, file) =>
       file.includes(API_LAYER)

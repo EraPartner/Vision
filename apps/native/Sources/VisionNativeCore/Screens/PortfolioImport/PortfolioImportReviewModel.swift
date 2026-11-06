@@ -70,7 +70,7 @@ public final class PortfolioImportReviewModel {
             outcomeUncertain = false
         } catch { if generation == revision { self.error = error.localizedDescription } }
     }
-    public func load(rawBatchId: String) async {
+    public func load(rawBatchId: String) async {  // lint:allow raw-id unparsed route parameter, typed when read
         guard let id = Self.parseBatchId(rawBatchId) else {
             invalidate()
             error = "Invalid portfolio import batch identifier"

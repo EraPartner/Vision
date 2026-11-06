@@ -2,7 +2,7 @@ import Foundation
 
 public protocol ResearchChartBuilderService: ResearchService {
     func researchMacroSearch(query: String) async throws -> ResearchSnapshot<ResearchMacroSearchData>
-    func researchMacroSeries(provider: String, seriesId: String, range: String) async throws -> ResearchSnapshot<
+    func researchMacroSeries(provider: String, seriesId: String, range: String) async throws -> ResearchSnapshot<  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         ResearchMacroSeriesData
     >
 }
@@ -13,7 +13,7 @@ extension APIClient: ResearchChartBuilderService {
                 OpenAPIOperations.ResearchMacroSearch.self, query: [.init(name: "q", value: query)]))
         return .init(data: result.data, meta: .init(raw: result.meta))
     }
-    public func researchMacroSeries(provider: String, seriesId: String, range: String) async throws -> ResearchSnapshot<
+    public func researchMacroSeries(provider: String, seriesId: String, range: String) async throws -> ResearchSnapshot<  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         ResearchMacroSeriesData
     > {
         let result = try await sendWithMeta(

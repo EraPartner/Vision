@@ -3,9 +3,9 @@ import Foundation
 public protocol AnalysisService: AnalysisInterchangeService {
     func analysisCatalog() async throws -> AnalysisCatalog
     func analysisExecute(_ input: TaxValue) async throws -> AnalysisResult
-    func analysisCancel(requestId: String) async throws -> TaxValue
-    func analysisDrill(plan: AnalysisPlan, row: AnalysisRow, requestId: String) async throws -> AnalysisResult
-    func analysisPivot(plan: AnalysisPlan, config: AnalysisPivotConfig, requestId: String) async throws
+    func analysisCancel(requestId: String) async throws -> TaxValue  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
+    func analysisDrill(plan: AnalysisPlan, row: AnalysisRow, requestId: String) async throws -> AnalysisResult  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
+    func analysisPivot(plan: AnalysisPlan, config: AnalysisPivotConfig, requestId: String) async throws  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
         -> AnalysisPivotResult
     func evaluateExtension(_ input: TaxValue) async throws -> AnalysisExtensionOutput
     func analysisSaved(workspace: AnalysisWorkspace?) async throws -> [AnalysisSaved]
@@ -23,7 +23,7 @@ public protocol AnalysisService: AnalysisInterchangeService {
 /// Uses the generated endpoint metadata with a Decimal-preserving dynamic body.
 public struct AnalysisRequest<Operation: APIOperation, Value: Decodable & Sendable>: APIOperation {
     public typealias Response = Value
-    public static var operationId: String { Operation.operationId }
+    public static var operationId: String { Operation.operationId }  // lint:allow raw-id OpenAPI operation name, not an entity id
     public static var method: HTTPMethod { Operation.method }
     public static var pathTemplate: String { Operation.pathTemplate }
     public let path: String
@@ -65,10 +65,10 @@ extension APIClient: AnalysisService {
         }
         return result
     }
-    public func analysisCancel(requestId: String) async throws -> TaxValue {
+    public func analysisCancel(requestId: String) async throws -> TaxValue {  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
         try await send(AnalysisRequest(OpenAPIOperations.CancelAnalysis.self, parameters: ["requestId": requestId]))
     }
-    public func analysisDrill(plan: AnalysisPlan, row: AnalysisRow, requestId: String) async throws -> AnalysisResult {
+    public func analysisDrill(plan: AnalysisPlan, row: AnalysisRow, requestId: String) async throws -> AnalysisResult {  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
         let input: TaxValue = .object([
             "plan": try TaxValue(encoding: plan), "row": .object(row), "requestId": .string(requestId),
         ])
@@ -78,7 +78,7 @@ extension APIClient: AnalysisService {
         }
         return result
     }
-    public func analysisPivot(plan: AnalysisPlan, config: AnalysisPivotConfig, requestId: String) async throws
+    public func analysisPivot(plan: AnalysisPlan, config: AnalysisPivotConfig, requestId: String) async throws  // lint:allow raw-id client-generated correlation token for an in-flight request, not a stored entity
         -> AnalysisPivotResult
     {
         try await send(

@@ -101,7 +101,7 @@ public final class RecipientsModel {
     public internal(set) var isDeleting = false
     public internal(set) var isUnmerging = false
     public internal(set) var notice: ScreenNotice?
-    @ObservationIgnored private(set) var pendingAction: (noticeID: Int, action: PayeePendingAction)?
+    @ObservationIgnored private(set) var pendingAction: (noticeID: Int, action: PayeePendingAction)?  // lint:allow raw-id local notice counter, not an API entity
 
     @ObservationIgnored let service: any RecipientsService
     @ObservationIgnored weak var shell: NativeShellModel?

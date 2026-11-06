@@ -33,7 +33,7 @@ public struct RebalanceURLDraft: Equatable, Sendable {
         source.hasPrefix("model:") ? RebalancePreset(rawValue: String(source.dropFirst(6))) : nil
     }
     // lint:allow raw-id a plan id is a client-generated UUID inside a settings value, not an API entity
-    public var planId: String? { source.hasPrefix("plan:") ? String(source.dropFirst(5)) : nil }
+    public var planId: String? { source.hasPrefix("plan:") ? String(source.dropFirst(5)) : nil }  // lint:allow raw-id rebalance plan key in the URL state, not an API entity
 }
 
 public enum RebalanceURLState {

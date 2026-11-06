@@ -3,7 +3,7 @@ import Foundation
 public struct ResearchMacroSearchItem: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
     public let provider: String
-    public let seriesId: String
+    public let seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     public let title: String
     public let region: String?
     public let units: String?
@@ -38,7 +38,7 @@ public struct ResearchMacroSearchData: Codable, Equatable, Sendable {
 public struct ResearchMacroSeriesData: Codable, Equatable, Sendable {
     public let raw: TaxValue
     public let provider: String
-    public let seriesId: String
+    public let seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     public let title: String
     public let units: String?
     public let frequency: String?
@@ -61,9 +61,9 @@ public struct ResearchMacroSeriesData: Codable, Equatable, Sendable {
 }
 public struct ResearchChartBuilderMacro: Codable, Equatable, Sendable {
     public var provider: String
-    public var seriesId: String
+    public var seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     public var title: String
-    public init(provider: String, seriesId: String, title: String) {
+    public init(provider: String, seriesId: String, title: String) {  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         self.provider = provider
         self.seriesId = seriesId
         self.title = title
@@ -130,8 +130,8 @@ public struct ResearchChartBuilderIndicator: Codable, Equatable, Sendable, Ident
     public var id: String
     public var type: String
     public var period: Int
-    public var seriesId: String
-    public init(id: String, type: String, period: Int, seriesId: String) {
+    public var seriesId: String  // lint:allow raw-id macro data series code of the research provider, not a stored entity
+    public init(id: String, type: String, period: Int, seriesId: String) {  // lint:allow raw-id macro data series code of the research provider, not a stored entity
         self.id = id
         self.type = type
         self.period = period
@@ -160,10 +160,10 @@ public struct ResearchChartBuilderState: Codable, Equatable, Sendable {
     public var series: [ResearchChartBuilderSeries]
     public var indicators: [ResearchChartBuilderIndicator]
     public var oscillator: String
-    public var oscillatorSeriesId: String?
+    public var oscillatorSeriesId: String?  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     public init(
         range: String = "1y", logLeft: Bool = false, rebase: Bool = false, series: [ResearchChartBuilderSeries] = [],
-        indicators: [ResearchChartBuilderIndicator] = [], oscillator: String = "none", oscillatorSeriesId: String? = nil
+        indicators: [ResearchChartBuilderIndicator] = [], oscillator: String = "none", oscillatorSeriesId: String? = nil  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     ) {
         self.range = range
         self.logLeft = logLeft
@@ -237,11 +237,11 @@ public struct ResearchChartBuilderLayout: Codable, Equatable, Sendable, Identifi
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
 }
 public struct ResearchChartBuilderLibrary: Codable, Equatable, Sendable {
-    public var activeLayoutId: String?
+    public var activeLayoutId: String?  // lint:allow raw-id client-side chart layout key, not an API entity
     public var draft: ResearchChartBuilderState
     public var layouts: [ResearchChartBuilderLayout]
     public init(
-        activeLayoutId: String? = nil, draft: ResearchChartBuilderState = .default,
+        activeLayoutId: String? = nil, draft: ResearchChartBuilderState = .default,  // lint:allow raw-id client-side chart layout key, not an API entity
         layouts: [ResearchChartBuilderLayout] = []
     ) {
         self.activeLayoutId = activeLayoutId

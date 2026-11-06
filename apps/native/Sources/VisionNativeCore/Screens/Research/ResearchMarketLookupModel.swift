@@ -8,7 +8,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
             $0.isEmpty ? nil : $0
         }
     }
-    public var rawInvestmentId: String? { route.value("investmentId") }
+    public var rawInvestmentId: String? { route.value("investmentId") }  // lint:allow raw-id unparsed route parameter, typed when read
     public var mappingInvestmentId: InvestmentID? {
         guard let raw = rawInvestmentId,
             let number = Decimal(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)), number > 0,

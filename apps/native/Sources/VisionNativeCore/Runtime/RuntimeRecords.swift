@@ -7,7 +7,7 @@ public enum RuntimeMarker {
     /// (the keys the Electron runtime sets to `undefined`).
     public static func merged(
         current: [String: JSONValue]?,
-        runtimeId: String,
+        runtimeId: String,  // lint:allow raw-id runtime directory name of the app variant, not an API entity
         set: [String: JSONValue],
         remove: [String] = [],
         now: Date
@@ -45,7 +45,7 @@ public enum PIDRecord {
         return probeablePID(record["pid"])
     }
 
-    public static func backend(pid: Int32, port: Int, runtimeId: String, command: String, now: Date) -> JSONValue {
+    public static func backend(pid: Int32, port: Int, runtimeId: String, command: String, now: Date) -> JSONValue {  // lint:allow raw-id runtime directory name of the app variant, not an API entity
         .object([
             "pid": .int(Int(pid)),
             "port": .int(port),
