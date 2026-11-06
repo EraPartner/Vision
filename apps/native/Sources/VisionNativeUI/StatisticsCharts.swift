@@ -56,6 +56,9 @@ struct InsightRankedChart: View {
             }
             .onChange(of: focused) { _, value in if !value { selection = nil } }
             .onChange(of: selection) { _, value in onSelectionChange(value) }
+            .accessibilityValue(
+                ChartAccessibility.series(
+                    strings, kind: .bar, categoryCount: rows.count, seriesLabels: [strings.t("statsPage.spending")]))
         }
     }
     private func rankedRow(_ row: CustomChartEntity, position: Int, maximum: Decimal) -> some View {
@@ -195,6 +198,7 @@ struct StatisticsCategoryDonut: View {
             }
             .onChange(of: focused) { _, value in if !value { selected = nil } }
             .onChange(of: selected) { _, value in onSelectionChange(value) }
+            .accessibilityValue(ChartAccessibility.proportion(strings, kind: .donut, names: rows.map(\.name)))
             .onChange(of: angle) { _, value in
                 guard let value else { return }
                 var total = 0.0

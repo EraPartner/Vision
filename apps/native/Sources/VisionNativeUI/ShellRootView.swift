@@ -187,6 +187,7 @@ public struct ShellRootView: View {
             detailColumn(theme)
         }
         .environment(\.visionTheme, theme)
+        .environment(\.visionStrings, model.strings)
         .background { WindowAppearanceSync(isDark: theme.isDark) }
         // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
         // chosen accent) instead of the system blue.

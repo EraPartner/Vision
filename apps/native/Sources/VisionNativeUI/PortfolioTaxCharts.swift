@@ -139,6 +139,9 @@ private struct PortfolioTaxBarChart: View {
             }
             .frame(height: 280).focusable().focused($focused).focusEffectDisabled()
             .accessibilityLabel(title).onKeyPress(phases: .down, action: move)
+            .accessibilityValue(
+                ChartAccessibility.series(
+                    shell.strings, kind: .bar, categoryCount: rows.count, seriesLabels: [taxLabel, feeLabel]))
             if showsLegend {
                 ChartLegendRow(items: [
                     ChartLegendItem(id: "taxes", label: taxLabel, color: taxColor),

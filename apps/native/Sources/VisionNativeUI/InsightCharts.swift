@@ -336,6 +336,11 @@ struct InsightTimelineChart: View {
                 if start == nil, scrub.range != nil { scrub.clear() }
             }
             .accessibilityLabel(title)
+            .chartAccessibilitySummary { strings in
+                ChartAccessibility.series(
+                    strings, kind: stackedBars ? .stackedBar : bars ? .bar : areas ? .area : .line,
+                    categoryCount: keys.count, seriesLabels: series.map(\.label))
+            }
             if placement == .bottomLeading { ChartLegendRow(items: legendItems) }
             if placement == .bottomCenter { ChartLegendRow(items: legendItems, centered: true) }
             if scrub.range == nil, let selection {
@@ -573,6 +578,9 @@ struct HomeCategoryChart: View {
                 // Each slice stays reachable without a pointer as an accessibility action, as the
                 // web chart's keyboard-focusable sectors are; no visible link row (the web has none).
                 .accessibilityElement(children: .contain)
+                .chartAccessibilitySummary { strings in
+                    ChartAccessibility.proportion(strings, kind: .donut, names: slices.map(\.name))
+                }
                 .accessibilityActions {
                     ForEach(slices) { slice in
                         Button(slice.name) { navigate(slice.route.string) }
