@@ -5,7 +5,7 @@ extension TaxProfileSheet {
     var homeStep: some View {
         VStack(alignment: .leading, spacing: 18) {
             intro("home")
-            number("tax.profile.field.cadastralIncome", path: ["home", "cadastralIncome"])
+            number("tax.profile.field.cadastralIncome", path: ["home", "cadastralIncome"], optionalBadge: true)
             intro("residences")
             let residences = draft.get(["home", "additionalResidences"])?.arrayValue ?? []
             ForEach(TaxProfileRow.rows(residences)) { row in
@@ -39,14 +39,15 @@ extension TaxProfileSheet {
                 if draft.get(["region"])?.stringValue == "wallonia" {
                     number(
                         "tax.profile.field.chequeHabitatFirstYear", path: ["home", "firstQualifyingYear"],
-                        integer: true, optional: true, bounds: 1900...2200)
+                        integer: true, optional: true, bounds: 1900...2200, optionalBadge: true)
                 }
                 if draft.get(["region"])?.stringValue == "flanders",
                     let year = draft.get(["home", "mortgageStartYear"])?.decimalValue, year < 2020
                 {
                     number(
                         "tax.profile.field.woonbonusChildrenAtLoanStart",
-                        path: ["home", "woonbonusChildrenAtLoanStart"], integer: true, optional: true, bounds: 0...1000)
+                        path: ["home", "woonbonusChildrenAtLoanStart"], integer: true, optional: true, bounds: 0...1000,
+                        optionalBadge: true)
                 }
                 Text(strings.t("tax.profile.section.ownHome.note")).font(.footnote).foregroundStyle(
                     theme.secondaryLabel)

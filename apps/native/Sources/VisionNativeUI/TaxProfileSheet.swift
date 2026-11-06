@@ -138,9 +138,9 @@ struct TaxProfileSheet: View {
     }
     func number(
         _ key: String, path: [String], integer: Bool = false, optional: Bool = false,
-        bounds: ClosedRange<Decimal>? = nil, clampMinimum: Decimal? = nil
+        bounds: ClosedRange<Decimal>? = nil, clampMinimum: Decimal? = nil, optionalBadge: Bool = false
     ) -> some View {
-        field(key) {
+        field(key, optionalBadge: optionalBadge) {
             TaxProfileNumberField(
                 value: draft.get(path)?.decimalValue, format: settings.numberFormat,
                 integer: integer, optional: optional, label: strings.t(key)
@@ -198,8 +198,8 @@ struct TaxProfileSheet: View {
         }
         return options
     }
-    func date(_ key: String, path: [String], optional: Bool = true) -> some View {
-        field(key) {
+    func date(_ key: String, path: [String], optional: Bool = true, optionalBadge: Bool = false) -> some View {
+        field(key, optionalBadge: optionalBadge) {
             VisionDateField(
                 day: day(draft.get(path)?.stringValue), placeholder: strings.t("tax.household.activity.wholeYear"),
                 allowClear: optional, clearLabel: strings.t("common.clear"), settings: settings, strings: strings,
@@ -209,9 +209,16 @@ struct TaxProfileSheet: View {
             }
         }
     }
-    func field<Content: View>(_ key: String, @ViewBuilder content: () -> Content) -> some View {
+    /// `optionalBadge`: the profile steps' `OptionalBadge` (`Badge variant="outline" size="sm"
+    /// className="ml-1"`) after the label.
+    func field<Content: View>(
+        _ key: String, optionalBadge: Bool = false, @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
+            HStack(spacing: 4) {
+                Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
+                if optionalBadge { VisionBadge(text: strings.t("common.optional"), tone: .outline, small: true) }
+            }
             content()
             if strings.t(key + ".desc") != key + ".desc" {
                 Text(strings.t(key + ".desc")).font(.footnote).foregroundStyle(theme.secondaryLabel)

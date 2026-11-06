@@ -35,7 +35,31 @@ struct VisionTextEditorStyle: ViewModifier {
     private static var textContainerInset: CGFloat { 5 }
 }
 
+/// The web `Textarea`'s `placeholder`: shown over an empty editor, in the field's font and inset,
+/// hidden from VoiceOver (the editor keeps its own label) and from the pointer.
+private struct VisionTextEditorPlaceholder: ViewModifier {
+    let text: String
+    let shown: Bool
+    @Environment(\.visionTheme) private var theme
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .topLeading) {
+            if shown {
+                Text(text).font(VisionControlMetrics.fieldFont).foregroundStyle(theme.tertiaryLabel)
+                    .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
+                    .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
+    }
+}
+
 extension View {
+    /// Shows `text` over a `visionTextEditor` while `shown` (its text is empty).
+    func visionTextEditorPlaceholder(_ text: String, shown: Bool) -> some View {
+        modifier(VisionTextEditorPlaceholder(text: text, shown: shown))
+    }
+
     /// Styles a `TextEditor` as the web `Textarea`; `minHeight` defaults to `min-h-20` (80 pt).
     func visionTextEditor(isFocused: Bool? = nil, minHeight: CGFloat = VisionControlMetrics.textAreaMinHeight)
         -> some View

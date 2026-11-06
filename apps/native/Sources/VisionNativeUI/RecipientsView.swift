@@ -515,6 +515,8 @@ struct PayeeAddSheet: View {
                 AccountField(label: strings.t("addRec.notesOptional")) {
                     TextEditor(text: Binding(get: { model.add?.notes ?? "" }, set: { model.add?.setNotes($0) }))
                         .visionTextEditor(minHeight: 64)
+                        .visionTextEditorPlaceholder(
+                            strings.t("addRec.notesPlaceholder"), shown: (model.add?.notes ?? "").isEmpty)
                         .frame(maxHeight: 120)
                         .accessibilityLabel(strings.t("addRec.notesOptional"))
                 }

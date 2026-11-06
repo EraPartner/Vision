@@ -65,12 +65,14 @@ extension TaxProfileSheet {
             dependentCount("tax.profile.field.children", key: "children", maximum: 5)
             if dependent("children") > 0 {
                 dependentCount(
-                    "tax.profile.field.childrenDisabled", key: "childrenDisabled", maximum: dependent("children"))
+                    "tax.profile.field.childrenDisabled", key: "childrenDisabled", maximum: dependent("children"),
+                    optionalBadge: true)
             }
-            dependentCount("tax.profile.field.others", key: "otherPersons", maximum: 3)
+            dependentCount("tax.profile.field.others", key: "otherPersons", maximum: 3, optionalBadge: true)
             if dependent("otherPersons") > 0 {
                 dependentCount(
-                    "tax.profile.field.othersDisabled", key: "otherPersonsDisabled", maximum: dependent("otherPersons"))
+                    "tax.profile.field.othersDisabled", key: "otherPersonsDisabled", maximum: dependent("otherPersons"),
+                    optionalBadge: true)
             }
             Divider()
             Text(strings.t("tax.profile.section.otherDeductions.title")).font(.headline)
@@ -109,8 +111,8 @@ extension TaxProfileSheet {
     func dependent(_ key: String) -> Int {
         draft.get(["dependents", key])?.decimalValue.map { NSDecimalNumber(decimal: $0).intValue } ?? 0
     }
-    func dependentCount(_ label: String, key: String, maximum: Int) -> some View {
-        field(label) {
+    func dependentCount(_ label: String, key: String, maximum: Int, optionalBadge: Bool = false) -> some View {
+        field(label, optionalBadge: optionalBadge) {
             VisionSelect(
                 selection: Binding(
                     get: { dependent(key) },

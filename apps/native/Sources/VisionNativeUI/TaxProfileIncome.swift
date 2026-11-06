@@ -18,12 +18,13 @@ extension TaxProfileSheet {
             ForEach(draft.expenseCategories(model.partner), id: \.self) { category in
                 expenseChoice(category)
             }
-            number("tax.profile.field.otherTaxableIncome", path: partnerPath + ["otherTaxableIncome"])
+            number(
+                "tax.profile.field.otherTaxableIncome", path: partnerPath + ["otherTaxableIncome"], optionalBadge: true)
             number("tax.profile.field.alimonyPaid", path: partnerPath + ["alimonyPaid"])
             number("tax.profile.field.unionDues", path: partnerPath + ["unionDues"])
             number(
                 "tax.household.field.birthYear", path: partnerPath + ["birthYear"], integer: true, optional: true,
-                bounds: 1900...2200)
+                bounds: 1900...2200, optionalBadge: true)
             toggle(
                 "tax.household.field.disability", path: partnerPath + ["isDisabled"],
                 variables: ["partner": label(model.partner)])
@@ -77,8 +78,8 @@ extension TaxProfileSheet {
                     ? "tax.household.activity.netIncome" : "tax.profile.field.grossAnnualIncome",
                 path: path + [kind.incomeField])
             HStack(alignment: .top) {
-                date("tax.household.activity.startDate", path: path + ["startDate"])
-                date("tax.household.activity.endDate", path: path + ["endDate"])
+                date("tax.household.activity.startDate", path: path + ["startDate"], optionalBadge: true)
+                date("tax.household.activity.endDate", path: path + ["endDate"], optionalBadge: true)
             }
         }.padding(12).background(theme.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }

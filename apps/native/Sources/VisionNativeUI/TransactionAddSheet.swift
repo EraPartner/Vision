@@ -129,16 +129,7 @@ struct TransactionAddSheet: View {
             field("addTxn.commentOptional") {
                 TextEditor(text: Binding(get: { draft.comment }, set: { form.setComment($0) }))
                     .visionTextEditor()
-                    .overlay(alignment: .topLeading) {
-                        if draft.comment.isEmpty {
-                            Text(strings.t("addTxn.commentPlaceholder"))
-                                .font(VisionControlMetrics.fieldFont)
-                                .foregroundStyle(theme.tertiaryLabel)
-                                .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
-                                .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                    .visionTextEditorPlaceholder(strings.t("addTxn.commentPlaceholder"), shown: draft.comment.isEmpty)
                     .accessibilityLabel(strings.t("addTxn.commentOptional"))
             }
             if form.duplicateDetected {
@@ -174,14 +165,17 @@ struct TransactionAddSheet: View {
                 )
                 .textFieldStyle(.vision)
                 .frame(width: 64)
+                .focused($focused, equals: .currency)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t("accounts.field.currency"))
             }
             .frame(maxWidth: .infinity)
-            if let key = errors[.amount] {
-                Text(strings.t(key))
-                    .font(.footnote)
-                    .foregroundStyle(theme.destructive)
+            ForEach([AddTransactionField.amount, .currency], id: \.self) { field in
+                if let key = errors[field] {
+                    Text(strings.t(key))
+                        .font(.footnote)
+                        .foregroundStyle(theme.destructive)
+                }
             }
         }
         .id(Optional(AddTransactionField.amount))

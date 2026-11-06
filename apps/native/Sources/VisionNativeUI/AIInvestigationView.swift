@@ -174,14 +174,7 @@ struct AIInvestigationView: View {
         -> some View
     {
         TextEditor(text: text).visionTextEditor(minHeight: minimumHeight)
-            .overlay(alignment: .topLeading) {
-                if text.wrappedValue.isEmpty {
-                    Text(strings.t(placeholder)).font(VisionControlMetrics.fieldFont).foregroundStyle(theme.tertiaryLabel)
-                        .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
-                        .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
-                        .allowsHitTesting(false).accessibilityHidden(true)
-                }
-            }
+            .visionTextEditorPlaceholder(strings.t(placeholder), shown: text.wrappedValue.isEmpty)
             .accessibilityLabel(strings.t(label))
     }
 }

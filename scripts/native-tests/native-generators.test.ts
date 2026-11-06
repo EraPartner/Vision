@@ -1217,3 +1217,30 @@ void test("generation is deterministic", () => {
   const second = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
   assert.deepEqual(first, second);
 });
+
+void test("every web string key the Swift code names is in the String Catalog list", () => {
+  // A key missing from i18n-keys.txt has no catalog entry, so the app shows the raw key.
+  const listed = new Set(
+    parseListFile(fs.readFileSync(repoPath("apps", "native", "i18n-keys.txt"), "utf8"), "i18n-keys.txt"),
+  );
+  const web = new Set(
+    Object.keys(JSON.parse(fs.readFileSync(repoPath("i18n", "source", "en.json"), "utf8")) as object),
+  );
+  const swiftFiles = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return swiftFiles(full);
+      return entry.name.endsWith(".swift") ? [full] : [];
+    });
+  const missing = new Set<string>();
+  for (const root of ["Sources", "VisionNative"]) {
+    for (const file of swiftFiles(repoPath("apps", "native", root))) {
+      for (const match of fs.readFileSync(file, "utf8").matchAll(/"([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_-]+)+)"/g)) {
+        const key = match[1] ?? "";
+        // Plural keys are listed by their forms and read through `tc`.
+        if (web.has(key) && !listed.has(key) && !listed.has(`${key}.other`)) missing.add(key);
+      }
+    }
+  }
+  assert.deepEqual([...missing].sort(), []);
+});
