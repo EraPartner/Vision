@@ -27,7 +27,7 @@ public struct AnalysisInterchangeView: View {
             }
             HStack {
                 Button(strings.t("analysis.ext.workbook.export"), systemImage: "tablecells") {
-                    Task { await model.export(format: "xlsx") }
+                    Task { await model.export(format: .xlsx) }
                 }
                 .disabled(!model.canExport)
                 Button(strings.t("analysis.ext.workbook.import"), systemImage: "square.and.arrow.up") {
@@ -37,10 +37,10 @@ public struct AnalysisInterchangeView: View {
                     isPresented: $workbookPicker, allowedContentTypes: [UTType(filenameExtension: "xlsx") ?? .data],
                     allowsMultipleSelection: false
                 ) {
-                    selected($0, format: "xlsx")
+                    selected($0, format: .xlsx)
                 }
                 Button(strings.t("analysis.exportCsv"), systemImage: "square.and.arrow.down") {
-                    Task { await model.export(format: "csv") }
+                    Task { await model.export(format: .csv) }
                 }
                 .disabled(!model.canExport)
                 Button(strings.t("analysis.attachScenarioCsv"), systemImage: "paperclip") {
@@ -49,7 +49,7 @@ public struct AnalysisInterchangeView: View {
                 .fileImporter(
                     isPresented: $csvPicker, allowedContentTypes: [.commaSeparatedText], allowsMultipleSelection: false
                 ) {
-                    selected($0, format: "csv")
+                    selected($0, format: .csv)
                 }
                 if model.isInterchangeBusy { ProgressView().controlSize(.small) }
             }.buttonStyle(.visionOutline).controlSize(.small).disabled(model.isInterchangeBusy)
@@ -69,14 +69,14 @@ public struct AnalysisInterchangeView: View {
         localError = nil
         if workbook { workbookPicker = true } else { csvPicker = true }
     }
-    private func selected(_ selection: Result<[URL], Error>, format: String) {
+    private func selected(_ selection: Result<[URL], Error>, format: AnalysisInterchangeFormat) {
         guard case .success(let urls) = selection, let url = urls.first else { return }
         Task {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             do {
                 let data = try await Task.detached { try Data(contentsOf: url, options: .mappedIfSafe) }.value
-                guard data.count <= (format == "csv" ? 1_000_000 : 10_000_000) else {
+                guard data.count <= (format == .csv ? 1_000_000 : 10_000_000) else {
                     localError = strings.t("analysis.ext.workbook.limit")
                     return
                 }

@@ -146,17 +146,15 @@ struct AnalysisPresentationTests {
     @Test func interchangeRunsLocallyAndEnforcesTheImportLimits() throws {
         #expect(throws: AnalysisInterchangeError.self) {
             try AnalysisInterchange.importAttachment(
-                file: .init(name: "huge.csv", data: Data(count: 1_000_001)), format: "csv")
+                file: .init(name: "huge.csv", data: Data(count: 1_000_001)), format: .csv)
         }
         #expect(throws: AnalysisInterchangeError.self) {
             try AnalysisInterchange.importAttachment(
-                file: .init(name: "huge.xlsx", data: Data(count: 10_000_001)), format: "xlsx")
+                file: .init(name: "huge.xlsx", data: Data(count: 10_000_001)), format: .xlsx)
         }
-        #expect(throws: AnalysisInterchangeError.self) {
-            try AnalysisInterchange.importAttachment(file: .init(name: "a.ods", data: Data()), format: "ods")
-        }
+        #expect(AnalysisInterchangeFormat(rawValue: "ods") == nil)
         let attachment = try AnalysisInterchange.importAttachment(
-            file: .init(name: "inputs.csv", data: Data("Month,Cost\nJan,40.5\n".utf8)), format: "csv",
+            file: .init(name: "inputs.csv", data: Data("Month,Cost\nJan,40.5\n".utf8)), format: .csv,
             now: Date(timeIntervalSince1970: 1_800_000_000))
         #expect(attachment.columns.map(\.id) == ["month", "cost"])
         #expect(attachment.importedAt == "2027-01-15T08:00:00.000Z")

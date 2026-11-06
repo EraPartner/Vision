@@ -129,7 +129,7 @@ struct AnalysisInterchangeTests {
     @Test func csvImportReturnsExactTypedValuesAndStableReplacementIdentity() throws {
         let source = "Name,Cost,Account,Enabled,Date\nPlan,40.500,9007199254740993,true,2026-10-13\n"
         let file = AnalysisInterchangeFile(name: "scenario.csv", data: Data(source.utf8))
-        let first = try AnalysisInterchange.importAttachment(file: file, format: "csv")
+        let first = try AnalysisInterchange.importAttachment(file: file, format: .csv)
         let hash = "f10f63cd0384240e9e64d951ec3627ae2fb6046878554966bd31e3fab6e191fe"
         #expect(first.id == "scenario_" + hash.prefix(12))
         #expect(first.sha256 == hash)
@@ -140,13 +140,13 @@ struct AnalysisInterchangeTests {
             ])
         #expect(first.columns[2].raw == .object(["id": .string("account"), "label": .string("Account"), "type": .string("string")]))
         let repeated = try AnalysisInterchange.importAttachment(
-            file: .init(name: "renamed.csv", data: Data(source.utf8)), format: "csv")
+            file: .init(name: "renamed.csv", data: Data(source.utf8)), format: .csv)
         #expect(repeated.id == first.id)
         #expect(repeated.fileName == "renamed.csv")
     }
     @Test func csvDigestKeepsFileTextByteOrderMarkAndReplacementSemantics() throws {
         let bytes = Data([0xEF, 0xBB, 0xBF, 0x41, 0x0A, 0xFF, 0x0A])
-        let attachment = try AnalysisInterchange.importAttachment(file: .init(name: "encoded.csv", data: bytes), format: "csv")
+        let attachment = try AnalysisInterchange.importAttachment(file: .init(name: "encoded.csv", data: bytes), format: .csv)
         #expect(attachment.sha256 == "f87a4d2daf065cc9866582082370ff3b84c3836553acc7c7c4699ff3ab154d7b")
         #expect(attachment.rows[0] == ["a": .string("\u{FFFD}")])
         #expect(interchangeDecodeUTF8([0xEF, 0xBB, 0xBF, 0x41]) == "A")
@@ -159,14 +159,14 @@ struct AnalysisInterchangeTests {
         ]
         for (label, source) in cases {
             #expect(throws: AnalysisInterchangeError.self, Comment(rawValue: label)) {
-                try AnalysisInterchange.importAttachment(file: .init(name: "s.csv", data: Data(source.utf8)), format: "csv")
+                try AnalysisInterchange.importAttachment(file: .init(name: "s.csv", data: Data(source.utf8)), format: .csv)
             }
         }
         #expect(throws: AnalysisInterchangeError.self) {
-            try AnalysisInterchange.importAttachment(file: .init(name: "l.csv", data: Data(count: 1_000_001)), format: "csv")
+            try AnalysisInterchange.importAttachment(file: .init(name: "l.csv", data: Data(count: 1_000_001)), format: .csv)
         }
         let atLimit = try AnalysisInterchange.importAttachment(
-            file: .init(name: "ok.csv", data: Data(("A\n" + String(repeating: "1\n", count: 1000)).utf8)), format: "csv")
+            file: .init(name: "ok.csv", data: Data(("A\n" + String(repeating: "1\n", count: 1000)).utf8)), format: .csv)
         #expect(atLimit.rows.count == 1000)
     }
     @Test func csvReaderFollowsCsvParseQuotingAndLineRules() throws {
@@ -327,7 +327,7 @@ struct AnalysisInterchangeTests {
         let snapshot = merged(try json(routeResult), [("declaredColumns", declared)])
         let bytes = try AnalysisWorkbook.exportWorkbook(result: snapshot, context: try json(routeContext))
         let first = try AnalysisInterchange.importAttachment(
-            file: .init(name: "snapshot.xlsx", data: Data(bytes)), format: "xlsx")
+            file: .init(name: "snapshot.xlsx", data: Data(bytes)), format: .xlsx)
         #expect(
             first.rows[0] == [
                 "date": .string("1900-01-01"), "amount": .number(Decimal(string: "-12.3")!),
@@ -337,10 +337,10 @@ struct AnalysisInterchangeTests {
         #expect(first.sha256 == sha256Hex(Data(bytes)))
         #expect(first.id.hasPrefix("workbook_") && first.id.count == "workbook_".count + 32)
         let repeated = try AnalysisInterchange.importAttachment(
-            file: .init(name: "snapshot.xlsx", data: Data(bytes)), format: "xlsx")
+            file: .init(name: "snapshot.xlsx", data: Data(bytes)), format: .xlsx)
         #expect(repeated.id != first.id)
         let fixed = try AnalysisInterchange.importAttachment(
-            file: .init(name: "snapshot.xlsx", data: Data(bytes)), format: "xlsx", makeWorkbookID: { "workbook_fixed" })
+            file: .init(name: "snapshot.xlsx", data: Data(bytes)), format: .xlsx, makeWorkbookID: { "workbook_fixed" })
         #expect(fixed.id == "workbook_fixed")
     }
     @Test func countsIgnoredFormulaCellsWithoutEvaluatingCachedResults() throws {
@@ -449,7 +449,7 @@ struct AnalysisInterchangeTests {
         for snapshot in [rows, columns] {
             let bytes = try AnalysisWorkbook.exportWorkbook(result: snapshot, context: context)
             do {
-                _ = try AnalysisInterchange.importAttachment(file: .init(name: "b.xlsx", data: Data(bytes)), format: "xlsx")
+                _ = try AnalysisInterchange.importAttachment(file: .init(name: "b.xlsx", data: Data(bytes)), format: .xlsx)
                 Issue.record("expected the attachment caps")
             } catch let error as AnalysisInterchangeError {
                 #expect(error.message.contains("attachment"))
@@ -466,7 +466,7 @@ struct AnalysisInterchangeTests {
         ]
         for (label, bytes) in cases {
             #expect(throws: AnalysisInterchangeError.self, Comment(rawValue: label)) {
-                try AnalysisInterchange.importAttachment(file: .init(name: "i.xlsx", data: Data(bytes)), format: "xlsx")
+                try AnalysisInterchange.importAttachment(file: .init(name: "i.xlsx", data: Data(bytes)), format: .xlsx)
             }
         }
         let valid = try AnalysisWorkbook.importWorkbook(storedSheet(xml))
@@ -488,9 +488,7 @@ struct AnalysisInterchangeTests {
             try AnalysisInterchange.validateExport(result: try json(routeResult), context: try json(#"{"name":"x"}"#))
         }
         try AnalysisInterchange.validateExport(result: try json(routeResult), context: context)
-        #expect(throws: AnalysisInterchangeError.self) {
-            try AnalysisInterchange.importAttachment(file: .init(name: "a.csv", data: Data("A\n1".utf8)), format: "ods")
-        }
+        #expect(AnalysisInterchangeFormat(rawValue: "ods") == nil)
     }
 
     // MARK: Entry points
@@ -515,24 +513,22 @@ struct AnalysisInterchangeTests {
             "datasetIds": .array([.string("cash-flows")]), "sourceReferences": .array([]),
             "assumptions": .object(["definitions": .array([]), "values": .object([:])]), "formulas": .array([]),
         ])
-        let csv = try AnalysisInterchange.exportFile(result: result, context: context, format: "csv")
+        let csv = try AnalysisInterchange.exportFile(result: result, context: context, format: .csv)
         #expect(csv.filename == "household-plan-.csv")
         #expect(csv.contentType == "text/csv")
         let csvText = String(decoding: csv.data, as: UTF8.self)
         #expect(csvText.hasPrefix("# Vision analysis export,Household Plan!\r\n"))
         #expect(csvText.contains("'=CMD(),-12.34\r\n"))
-        let xlsx = try AnalysisInterchange.exportFile(result: result, context: context, format: "xlsx")
+        let xlsx = try AnalysisInterchange.exportFile(result: result, context: context, format: .xlsx)
         #expect(xlsx.filename == "Household Plan!.xlsx")
         #expect(xlsx.contentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         #expect(Array(xlsx.data.prefix(4)) == [0x50, 0x4B, 0x03, 0x04])
         #expect(try AnalysisWorkbook.importWorkbook(Array(xlsx.data)).rows[0]["label"] == .string("=CMD()"))
-        #expect(throws: AnalysisInterchangeError.self) {
-            try AnalysisInterchange.exportFile(result: result, context: context, format: "pdf")
-        }
+        #expect(AnalysisInterchangeFormat(rawValue: "pdf") == nil)
         let unnamed = try AnalysisInterchange.exportFile(
             result: result,
             context: .object(["name": .string(""), "timezone": .string("UTC"), "workspace": .string("budgeting")]),
-            format: "csv")
+            format: .csv)
         #expect(unnamed.filename == "analysis.csv")
     }
 

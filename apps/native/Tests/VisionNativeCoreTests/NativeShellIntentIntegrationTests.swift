@@ -150,7 +150,7 @@ struct NativeShellIntentIntegrationTests {
         #expect(settings.themeRaw?["schedule"]?["darkFrom"] == .string("21:15"))
         #expect(model.acceptNativeMenuAction(.closeSettings))
         #expect(model.settingsSection == nil && !model.canGoBack)
-        #expect(!model.acceptNativeMenuAction(MenuAction("unknown")))
+        #expect(MenuAction.Kind(rawValue: "unknown") == nil)
         await settings.flush()
         #expect(await service.writes.count == 1)
         await model.settingsSettled()

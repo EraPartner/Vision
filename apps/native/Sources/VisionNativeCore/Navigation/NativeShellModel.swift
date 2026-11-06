@@ -513,40 +513,39 @@ public final class NativeShellModel {
     }
 
     /// Menu admission: each menu or dock action runs through its native owner. Invalid
-    /// payloads of known commands are ignored, as in ElectronBridge; an unknown action is
-    /// refused.
+    /// payloads of known commands are ignored, as in ElectronBridge; `MenuAction.Kind` admits no
+    /// unknown action.
     @discardableResult
     public func acceptNativeMenuAction(_ action: MenuAction) -> Bool {
         guard hasCurrentNativeIntentLease else { return false }
         let intent: NativeShellIntentCoordinator.Intent
         switch action.action {
-        case "new-transaction": intent = .newTransaction
-        case "open-settings":
+        case .newTransaction: intent = .newTransaction
+        case .openSettings:
             guard nativeSettings != nil else { return false }
             intent = .openSettings(section: "general")
-        case "close-settings":
+        case .closeSettings:
             guard nativeSettings != nil else { return false }
             intent = .closeSettings
-        case "set-theme":
+        case .setTheme:
             guard nativeSettings != nil else { return false }
             guard let mode = action.payload, ApplicationMenu.themeModes.contains(where: { $0.id == mode })
             else {
                 return true
             }
             intent = .setTheme(mode)
-        case "navigate":
+        case .navigate:
             guard let raw = action.payload, let location = NativeNavigationLocation(raw) else {
                 return true
             }
             intent = .navigate(location, replace: false)
-        case "toggle-sidebar": intent = .toggleSidebar
-        case "open-palette":
+        case .toggleSidebar: intent = .toggleSidebar
+        case .openPalette:
             guard commandPalette != nil else { return false }
             intent = .openPalette
-        case "open-shortcuts":
+        case .openShortcuts:
             guard commandPalette != nil else { return false }
             intent = .openShortcuts
-        default: return false
         }
         return enqueueNativeIntent(intent)
     }

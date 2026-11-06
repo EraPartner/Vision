@@ -1023,7 +1023,7 @@ public final class AnalysisModel {
         batching = false
         changed()
     }
-    public func importAttachment(file: AnalysisInterchangeFile, format: String) async {
+    public func importAttachment(file: AnalysisInterchangeFile, format: AnalysisInterchangeFormat) async {
         guard !isInterchangeBusy else { return }
         guard (scenarioModel["attachments"]?.arrayValue?.count ?? 0) < 5 else {
             interchangeError = "analysis.ext.workbook.limit"
@@ -1038,7 +1038,7 @@ public final class AnalysisModel {
             guard epoch == selectedEpoch else { return }
             var attachments = scenarioModel["attachments"]?.arrayValue ?? []
             guard attachments.count < 5 else { return }
-            if format == "csv" { attachments.removeAll { $0["id"]?.stringValue == attachment.id } }
+            if format == .csv { attachments.removeAll { $0["id"]?.stringValue == attachment.id } }
             attachments.append(attachment.raw)
             scenarioModel["attachments"] = .array(attachments)
         } catch { if epoch == selectedEpoch { interchangeError = error.localizedDescription } }
@@ -1049,7 +1049,7 @@ public final class AnalysisModel {
         scenarioModel["joins"] = .array(
             (scenarioModel["joins"]?.arrayValue ?? []).filter { $0["inputId"]?.stringValue != id })
     }
-    public func export(format: String) async {
+    public func export(format: AnalysisInterchangeFormat) async {
         guard canExport, let result = displayedResult, let context = exportContext else { return }
         isInterchangeBusy = true
         interchangeError = nil

@@ -1,5 +1,10 @@
 import Foundation
 
+/// The analysis import and export file formats: a scenario CSV or a Vision workbook.
+public enum AnalysisInterchangeFormat: String, CaseIterable, Sendable {
+    case csv, xlsx
+}
+
 public struct AnalysisInterchangeFile: Equatable, Sendable {
     public let name: String
     public let data: Data

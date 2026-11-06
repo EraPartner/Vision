@@ -2,25 +2,37 @@ import Foundation
 
 /// A menu or dock action the native shell performs (Electron's `ElectronMenuAction`).
 public struct MenuAction: Hashable, Sendable {
-    public let action: String
+    /// `ElectronMenuAction['action']`; the raw value is the Electron action name.
+    public enum Kind: String, CaseIterable, Hashable, Sendable {
+        case newTransaction = "new-transaction"
+        case openSettings = "open-settings"
+        case closeSettings = "close-settings"
+        case setTheme = "set-theme"
+        case navigate
+        case toggleSidebar = "toggle-sidebar"
+        case openPalette = "open-palette"
+        case openShortcuts = "open-shortcuts"
+    }
+
+    public let action: Kind
     public let payload: String?
 
-    public init(_ action: String, payload: String? = nil) {
+    public init(_ action: Kind, payload: String? = nil) {
         self.action = action
         self.payload = payload
     }
 
-    public static let openSettings = MenuAction("open-settings")
+    public static let openSettings = MenuAction(.openSettings)
     /// Native history decides Back versus query replacement when Settings closes.
-    public static let closeSettings = MenuAction("close-settings")
-    public static let openShortcuts = MenuAction("open-shortcuts")
-    public static let newTransaction = MenuAction("new-transaction")
-    public static let toggleSidebar = MenuAction("toggle-sidebar")
+    public static let closeSettings = MenuAction(.closeSettings)
+    public static let openShortcuts = MenuAction(.openShortcuts)
+    public static let newTransaction = MenuAction(.newTransaction)
+    public static let toggleSidebar = MenuAction(.toggleSidebar)
     /// Opens the command palette.
-    public static let openPalette = MenuAction("open-palette")
+    public static let openPalette = MenuAction(.openPalette)
 
-    public static func navigate(_ path: String) -> MenuAction { MenuAction("navigate", payload: path) }
-    public static func setTheme(_ mode: String) -> MenuAction { MenuAction("set-theme", payload: mode) }
+    public static func navigate(_ path: String) -> MenuAction { MenuAction(.navigate, payload: path) }
+    public static func setTheme(_ mode: String) -> MenuAction { MenuAction(.setTheme, payload: mode) }
 }
 
 /// What a menu item does. Shell actions go to the native owners (`NativeShellModel`); the

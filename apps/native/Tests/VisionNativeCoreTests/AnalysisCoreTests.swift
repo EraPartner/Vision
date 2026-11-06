@@ -197,8 +197,8 @@ struct AnalysisCoreTests {
         let service = AnalysisFixtureService()
         let model = AnalysisModel(service: service)
         let file = AnalysisInterchangeFile(name: "synthetic.csv", data: Data())
-        await model.importAttachment(file: file, format: "csv")
-        await model.importAttachment(file: file, format: "csv")
+        await model.importAttachment(file: file, format: .csv)
+        await model.importAttachment(file: file, format: .csv)
         #expect(model.scenarioModel["attachments"]?.arrayValue?.count == 1)
         model.scenarioModel["joins"] = .array([
             .object(["inputId": .string("scenario-synthetic"), "resultColumn": .string("month")])
@@ -206,7 +206,7 @@ struct AnalysisCoreTests {
         model.removeAttachment(id: "scenario-synthetic")
         #expect(model.scenarioModel["joins"] == .array([]))
         await service.pause("import")
-        let upload = Task { await model.importAttachment(file: file, format: "csv") }
+        let upload = Task { await model.importAttachment(file: file, format: .csv) }
         await service.waitForPause()
         model.startBlank()
         await service.release()
@@ -225,7 +225,7 @@ struct AnalysisCoreTests {
         #expect(await model.run())
         #expect(!model.displayedResult!.isComplete)
         #expect(model.canExport)
-        await model.export(format: "csv")
+        await model.export(format: .csv)
         #expect(exported == Data("synthetic export".utf8))
         let captured = try #require(await service.lastExport)
         #expect(captured["result"]?["coverage"]?["complete"] == .bool(false))
@@ -561,7 +561,7 @@ private actor AnalysisFixtureService: AnalysisService {
     func analysisGenerateProposal(id: SavedAnalysisID, instruction: String, model: String?) async throws
         -> AnalysisProposalPreview
     { try await analysisPreviewProposal(analysisProposalWire(id: id).decode(AnalysisEditProposal.self)) }
-    func analysisImport(file: AnalysisInterchangeFile, format: String) async throws -> AnalysisAttachment {
+    func analysisImport(file: AnalysisInterchangeFile, format: AnalysisInterchangeFormat) async throws -> AnalysisAttachment {
         await wait("import")
         return try AnalysisAttachment(
             raw: .object([
@@ -572,7 +572,7 @@ private actor AnalysisFixtureService: AnalysisService {
                 ]), "rows": .array([]),
             ]))
     }
-    func analysisExport(result: AnalysisResult, context: TaxValue, format: String) async throws -> AnalysisExportFile {
+    func analysisExport(result: AnalysisResult, context: TaxValue, format: AnalysisInterchangeFormat) async throws -> AnalysisExportFile {
         lastExport = .object(["result": result.raw, "context": context])
         return .init(filename: "synthetic.csv", data: Data("synthetic export".utf8), contentType: "text/csv")
     }
