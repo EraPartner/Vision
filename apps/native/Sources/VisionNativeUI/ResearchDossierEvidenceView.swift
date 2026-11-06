@@ -161,7 +161,7 @@ struct ResearchDossierAccessedAtField: View {
             } label: {
                 HStack {
                     Image(systemName: "calendar").foregroundStyle(theme.secondaryLabel)
-                    Text(ResearchDossierDateDisplay.localPrefix(value)).monospacedDigit()
+                    Text(ResearchDossierDateDisplay.localText(value)).monospacedDigit()
                     Spacer(minLength: 0)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.visionOutline).accessibilityLabel(label)
