@@ -118,17 +118,17 @@ struct ResearchChartBuilderIndicatorsView: View {
             Text(strings.t("research.builder.indicators")).font(.headline)
             Text(strings.t("research.builder.indicatorHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
             HStack {
-                ForEach(["sma", "ema", "bollinger"], id: \.self) { type in
+                ForEach(ResearchChartIndicatorKind.allCases, id: \.self) { type in
                     Button {
                         model.addIndicator(type: type)
                     } label: {
-                        Label(type.uppercased(), systemImage: "plus")
+                        Label(type.rawValue.uppercased(), systemImage: "plus")
                     }.buttonStyle(.vision(.outline, size: .sm)).disabled(model.state.indicators.count >= 20)
                 }
             }
             ForEach(model.state.indicators) { indicator in
                 HStack {
-                    let name = indicator.type == "bollinger" ? "BB" : indicator.type.uppercased()
+                    let name = indicator.type.label
                     Text(name).font(.callout.monospaced().weight(.medium)).frame(width: 55, alignment: .leading)
                     Text(strings.t("research.builder.period")).font(.caption).foregroundStyle(theme.secondaryLabel)
                     TextField(

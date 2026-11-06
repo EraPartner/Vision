@@ -268,12 +268,12 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         if state.oscillatorSeriesId == id { state.oscillatorSeriesId = nil }
         self.state = state
     }
-    public func addIndicator(type: String) {
+    public func addIndicator(type: ResearchChartIndicatorKind) {
         guard state.indicators.count < 20, let base = state.series.first(where: { $0.field == .price }) else { return }
         var state = state
         state.indicators.append(
             .init(
-                id: makeID(), type: type, period: type == "bollinger" ? 20 : type == "ema" ? 12 : 50, seriesId: base.id)
+                id: makeID(), type: type, period: type == .bollinger ? 20 : type == .ema ? 12 : 50, seriesId: base.id)
         )
         self.state = state
     }
@@ -325,9 +325,9 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
             next.indicators =
                 preset == .sma
                 ? [
-                    .init(id: makeID(), type: "sma", period: 50, seriesId: primary.id),
-                    .init(id: makeID(), type: "sma", period: 200, seriesId: primary.id),
-                ] : [.init(id: makeID(), type: "bollinger", period: 20, seriesId: primary.id)]
+                    .init(id: makeID(), type: .sma, period: 50, seriesId: primary.id),
+                    .init(id: makeID(), type: .sma, period: 200, seriesId: primary.id),
+                ] : [.init(id: makeID(), type: .bollinger, period: 20, seriesId: primary.id)]
         case .rsi, .macd:
             next.oscillator = preset == .rsi ? .rsi : .macd
             next.oscillatorSeriesId = primary.id

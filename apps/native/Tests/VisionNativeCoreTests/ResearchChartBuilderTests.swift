@@ -15,10 +15,10 @@ struct ResearchChartBuilderTests {
         duplicate.series.append(duplicate.series[0])
         #expect(throws: APIError.self) { try duplicate.validate() }
         var dangling = original
-        dangling.indicators = [.init(id: "i", type: "sma", period: 1, seriesId: "absent")]
+        dangling.indicators = [.init(id: "i", type: .sma, period: 1, seriesId: "absent")]
         #expect(throws: APIError.self) { try dangling.validate() }
         var legal = original
-        legal.indicators = [.init(id: "i", type: "sma", period: 1, seriesId: original.series[0].id)]
+        legal.indicators = [.init(id: "i", type: .sma, period: 1, seriesId: original.series[0].id)]
         #expect(try ResearchChartBuilderState(raw: legal.raw).indicators[0].period == 1)
         legal.indicators[0].period = 501
         #expect(throws: APIError.self) { try legal.validate() }
@@ -348,7 +348,7 @@ struct ResearchChartBuilderTests {
         model.state = state
         model.preset(.priceVolume)
         #expect(model.state == state)
-        model.addIndicator(type: "ema")
+        model.addIndicator(type: .ema)
         let indicator = try #require(model.state.indicators.first)
         #expect(indicator.period == 12)
         model.setIndicatorPeriod(id: indicator.id, raw: "2e2")
@@ -482,7 +482,7 @@ struct ResearchChartBuilderTests {
     @Test func chartProjectionReceivesFullRawDecimalPointsAndNeverRunsNativeIndicatorMath() async throws {
         let transport = ChartTestTransport()
         var state = chartTestState()
-        state.indicators = [.init(id: "indicator", type: "sma", period: 1, seriesId: "price")]
+        state.indicators = [.init(id: "indicator", type: .sma, period: 1, seriesId: "price")]
         state.oscillator = .rsi
         let store = ChartTestStore(data: try ResearchChartLayoutCodec.save(.init(draft: state)))
         let model = chartTestModel(transport, store: store)
@@ -509,7 +509,7 @@ private func chartLargeUnicodeState() -> ResearchChartBuilderState {
     }
     let indicators = (0..<20).map { index in
         ResearchChartBuilderIndicator(
-            id: String(repeating: "界", count: 126) + String(format: "%02d", index), type: "sma", period: 1,
+            id: String(repeating: "界", count: 126) + String(format: "%02d", index), type: .sma, period: 1,
             seriesId: series[0].id)
     }
     return .init(series: series, indicators: indicators)
