@@ -8,22 +8,22 @@ public enum RebalancePreset: String, CaseIterable, Codable, Sendable {
     /// Form defaults from RebalancePage, not an allocation algorithm. The server computes targets/deployment.
     public var weights: [(String, Decimal)] {
         switch self {
-        case .sixtyForty: [("stocks", Decimal(string: "0.6")!), ("bonds", Decimal(string: "0.4")!)]
+        case .sixtyForty: [("stocks", Decimal.literal("0.6")), ("bonds", Decimal.literal("0.4"))]
         case .allWeather:
             [
-                ("stocks", Decimal(string: "0.3")!), ("bonds", Decimal(string: "0.55")!),
-                ("gold", Decimal(string: "0.075")!), ("commodities", Decimal(string: "0.075")!),
+                ("stocks", Decimal.literal("0.3")), ("bonds", Decimal.literal("0.55")),
+                ("gold", Decimal.literal("0.075")), ("commodities", Decimal.literal("0.075")),
             ]
         case .threeFund:
             [
-                ("stocks", Decimal(string: "0.48")!), ("intl_stocks", Decimal(string: "0.12")!),
-                ("bonds", Decimal(string: "0.4")!),
+                ("stocks", Decimal.literal("0.48")), ("intl_stocks", Decimal.literal("0.12")),
+                ("bonds", Decimal.literal("0.4")),
             ]
         case .awesome:
             [
-                ("real_estate", Decimal(string: "0.2")!), ("stocks", Decimal(string: "0.2")!),
-                ("gold", Decimal(string: "0.2")!), ("bonds", Decimal(string: "0.2")!),
-                ("savings", Decimal(string: "0.2")!),
+                ("real_estate", Decimal.literal("0.2")), ("stocks", Decimal.literal("0.2")),
+                ("gold", Decimal.literal("0.2")), ("bonds", Decimal.literal("0.2")),
+                ("savings", Decimal.literal("0.2")),
             ]
         }
     }

@@ -485,7 +485,7 @@ public final class AnalysisModel {
     private func sqlParameterValues() throws -> TaxValue {
         let value = try parse(sqlValues, shape: "array")
         guard
-            value.arrayValue!.allSatisfy({
+            (value.arrayValue ?? []).allSatisfy({
                 switch $0 {
                 case .array, .object: false
                 default: true

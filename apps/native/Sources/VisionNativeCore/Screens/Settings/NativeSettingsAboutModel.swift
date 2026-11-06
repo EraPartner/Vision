@@ -2,8 +2,8 @@ import Foundation
 import Observation
 
 @MainActor @Observable public final class NativeSettingsAboutModel {
-    public static let repositoryURL = URL(string: "https://github.com/EraPartner/Vision")!
-    public static let documentationURL = URL(string: "https://github.com/EraPartner/Vision/tree/main/docs")!
+    public static let repositoryURL = URL.literal("https://github.com/EraPartner/Vision")
+    public static let documentationURL = URL.literal("https://github.com/EraPartner/Vision/tree/main/docs")
     public let appName: String
     public let version: String?
     public let license = "AGPL-3.0-only"

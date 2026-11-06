@@ -104,7 +104,7 @@ public struct AnalysisPlan: Codable, Equatable, Sendable {
     public var joins: [String]
     public var orderBy: [AnalysisOrder]
     public var limit: Int
-    public var reportingCurrency: String?
+    public var reportingCurrency: String?  // lint:allow raw-currency free-text editor value; the web input stores raw text too
     public var from: String?
     public var to: String?
     public var symbol: String?
@@ -204,7 +204,7 @@ public struct AnalysisResult: Codable, Equatable, Sendable {
     public let transformationCoverage: [TaxValue]?
     public let preparationLineage: [TaxValue]?
     public let sourceResult: TaxValue?
-    public var effectiveColumns: [AnalysisColumn] { declaredColumns?.isEmpty == false ? declaredColumns! : columns }
+    public var effectiveColumns: [AnalysisColumn] { if let declaredColumns, !declaredColumns.isEmpty { declaredColumns } else { columns } }
     public var isComplete: Bool { AnalysisPresentation.isComplete(raw) }
     public var sourceResultData: AnalysisResult? { try? sourceResult?.decode(AnalysisResult.self) }
     public init(from decoder: any Decoder) throws {

@@ -60,7 +60,7 @@ extension APIClient: PortfolioImportService {
     public func importInvestments() async throws -> [PortfolioInvestment] {
         var rows: [PortfolioInvestment] = []
         var total: Int?
-        while total == nil || rows.count < total! {
+        while total.map({ rows.count < $0 }) ?? true {
             let page: PortfolioPage<PortfolioInvestment> = try await send(
                 InsightRequest(
                     OpenAPIOperations.GetInvestments(active: true, limit: 500, offset: rows.count),
@@ -244,7 +244,7 @@ public enum PortfolioImportStreamEvents {
             return .progress(try payload.decode(ImportProgress.self))
         case "error":
             let detail = payload["detail"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw PortfolioImportFailure.ambiguous(detail?.isEmpty == false ? detail! : "Import failed")
+            throw PortfolioImportFailure.ambiguous(detail.flatMap { $0.isEmpty ? nil : $0 } ?? "Import failed")
         case "review_required":
             payload["requires_review"] = .bool(true)
             payload["status"] = .string("review_required")

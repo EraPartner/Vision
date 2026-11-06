@@ -53,7 +53,7 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
         copy.selectedBank = NativeCommandPaletteQueries.trim(copy.selectedBank)
         copy.selectedCategoryIndexes.sort()
         // Codable's nil defaults omit keys, while the source v1 schema requires explicit nulls.
-        var raw = try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(copy)).objectValue!
+        var raw = try JSONDecoder().decode([String: TaxValue].self, from: JSONEncoder().encode(copy))
         if copy.importResult == nil { raw["importResult"] = .null }
         if copy.reviewBatch == nil { raw["reviewBatch"] = .null }
         let value = TaxValue.object(raw)

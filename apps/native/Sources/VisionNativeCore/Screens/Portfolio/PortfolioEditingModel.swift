@@ -426,10 +426,11 @@ public final class PortfolioEditingModel {
             brokers.contains(where: { $0.id == brokerId })
         else { return false }
         let fingerprint = ids.map { String($0.rawValue) }.joined(separator: ",") + "|\(brokerId.rawValue)"
-        if retagKeys[fingerprint] == nil { retagKeys[fingerprint] = UUID().uuidString }
+        let idempotencyKey = retagKeys[fingerprint] ?? UUID().uuidString
+        retagKeys[fingerprint] = idempotencyKey
         let body = PortfolioEditingPayload([
             "transaction_ids": .array(ids.map { .number(Decimal($0.rawValue)) }), "from_account_id": .null,
-            "to_account_id": .number(Decimal(brokerId.rawValue)), "idempotency_key": .string(retagKeys[fingerprint]!),
+            "to_account_id": .number(Decimal(brokerId.rawValue)), "idempotency_key": .string(idempotencyKey),
         ])
         return await mutation(key: nil, failureKey: "portfolio.assignLotsFailedTitle") {
             let receipt = try await service.portfolioRetagLots(body)

@@ -15,7 +15,7 @@ public struct NativeNavigationLocation: Equatable, Sendable {
             }
         }
     }
-    public static let home = NativeNavigationLocation("/")!
+    public static let home = NativeNavigationLocation("/")!  // lint:allow force-unwrap "/" is the root route, covered by NativeNavigationParameterTests
     public let raw: String
     public let route: NativeRoute
 

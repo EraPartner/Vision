@@ -330,13 +330,13 @@ public final class PortfolioImportSessionModel {
         let entries = files.map { PortfolioImportStatement(name: $0.filename, file: $0) }
         statements += entries
         await withTaskGroup(of: (String, Result<PortfolioImportProbe, Error>).self) { group in
-            for entry in entries {
+            for (entry, file) in zip(entries, files) {
                 group.addTask {
                     do {
                         return (
                             entry.id,
                             .success(
-                                try await self.service.importProbe(file: entry.file!, config: PortfolioImportConfig()))
+                                try await self.service.importProbe(file: file, config: PortfolioImportConfig()))
                         )
                     } catch { return (entry.id, .failure(error)) }
                 }
@@ -434,7 +434,9 @@ public final class PortfolioImportSessionModel {
             statements[index].status = .staging
             statements[index].error = nil
             do {
-                var config = PortfolioImportConfig.preset(detected.presetKey?.rawValue ?? detected.source.rawValue)!
+                guard var config = PortfolioImportConfig.preset(detected.presetKey?.rawValue ?? detected.source.rawValue) else {
+                    throw PortfolioImportFailure.unverified("Statement has no import preset")
+                }
                 config.accountId = item.accountId
                 config.includedSymbols = item.includedSymbols
                 config.transferDestinationAccountId = item.transferDestinationAccountId

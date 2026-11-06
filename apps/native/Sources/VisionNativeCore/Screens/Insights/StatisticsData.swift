@@ -219,7 +219,7 @@ public struct StatisticsSnapshot: Equatable, Sendable {
     public var averageSpending: Decimal { totalSpending / Decimal(max(1, monthly.months.count)) }
 
     public func categories(metric: StatisticsMetric, periods: Set<String>? = nil) -> [StatisticsCategory] {
-        let entries = pivot.categoryPivot.filter { periods == nil || periods!.contains($0.key) }
+        let entries = pivot.categoryPivot.filter { periods?.contains($0.key) ?? true }
         var rows: [String: StatisticsCategory] = [:]
         for (period, items) in entries {
             for item in items {

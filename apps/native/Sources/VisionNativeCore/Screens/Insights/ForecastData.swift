@@ -88,7 +88,8 @@ public struct InsightForecast: Decodable, Equatable, Sendable {
                 let bands = cumulative ? method.cumulative_bands : method.bands, !bands.isEmpty
             else { continue }
             let keys = bands.keys.sorted { percentile($0) < percentile($1) }
-            for key in Set([keys.first!, keys.last!]).sorted() {
+            guard let lowest = keys.first, let highest = keys.last else { continue }
+            for key in Set([lowest, highest]).sorted() {
                 let source = bands[key] ?? []
                 let values = source.map { point -> InsightChartPoint in
                     InsightChartPoint(key: point.date, value: point.value)

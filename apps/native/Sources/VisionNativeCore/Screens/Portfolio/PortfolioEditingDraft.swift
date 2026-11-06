@@ -88,8 +88,7 @@ public struct PortfolioUnitInput: Equatable, Sendable {
         self.price = p
         if derive, providedCount >= 2, let a, let u, let p {
             consistent =
-                Self.round(abs(Self.round(u * p, places: 4) - Self.round(a, places: 4)), places: 4) <= Decimal(
-                    string: "0.01")!
+                Self.round(abs(Self.round(u * p, places: 4) - Self.round(a, places: 4)), places: 4) <= Decimal.literal("0.01")
         } else {
             consistent = false
         }

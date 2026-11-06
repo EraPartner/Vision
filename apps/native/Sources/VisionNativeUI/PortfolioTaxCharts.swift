@@ -62,6 +62,7 @@ private struct PortfolioTaxBarChart: View {
     private var taxColor: Color { Color(token: theme.palette.chart5) }
     private var feeColor: Color { Color(token: theme.palette.chart4) }
     /// `BarChart`'s value domain: the baseline stays in view, the top is padded.
+    // lint:allow double-money chart coordinate, not a money value
     private var yDomain: ClosedRange<Double> {
         ChartAxisTicks.zeroBasedDomain(rows.flatMap { [coordinate($0.taxes), coordinate($0.fees)] })
     }
@@ -73,6 +74,7 @@ private struct PortfolioTaxBarChart: View {
                 // month whatever ticks it is given, so long ranges overlapped.
                 ForEach(Array(rows.enumerated()), id: \.element.id) { position, row in
                     RectangleMark(
+                        // lint:allow double-money chart coordinate, not a money value
                         xStart: .value(title, Double(position) - 0.34), xEnd: .value(title, Double(position) - 0.02),
                         yStart: .value(taxLabel, 0.0), yEnd: .value(taxLabel, coordinate(row.taxes))
                     )
@@ -80,6 +82,7 @@ private struct PortfolioTaxBarChart: View {
                     .accessibilityLabel(Text(row.label + " · " + taxLabel))
                     .accessibilityValue(Text(money(row.taxes)))
                     RectangleMark(
+                        // lint:allow double-money chart coordinate, not a money value
                         xStart: .value(title, Double(position) + 0.02), xEnd: .value(title, Double(position) + 0.34),
                         yStart: .value(feeLabel, 0.0), yEnd: .value(feeLabel, coordinate(row.fees))
                     )
@@ -88,14 +91,18 @@ private struct PortfolioTaxBarChart: View {
                     .accessibilityValue(Text(money(row.fees)))
                 }
                 if let row = selected, let position = rows.firstIndex(of: row) {
+                    // lint:allow double-money chart coordinate, not a money value
                     RuleMark(x: .value(title, Double(position))).foregroundStyle(theme.secondaryLabel.opacity(0.5))
                         .accessibilityHidden(true)
                 }
             }
+            // lint:allow double-money chart coordinate, not a money value
             .chartXScale(domain: -0.5...(Double(max(rows.count, 1)) - 0.5))
             .chartXAxis {
+                // lint:allow double-money chart coordinate, not a money value
                 AxisMarks(values: ChartAxisTicks.evenlySpaced(rows.indices.map(Double.init), count: 12)) { value in
                     AxisValueLabel {
+                        // lint:allow double-money chart coordinate, not a money value
                         if let position = value.as(Double.self), rows.indices.contains(Int(position.rounded())) {
                             Text(rows[Int(position.rounded())].label).font(ChartTickText.font)
                                 .foregroundStyle(theme.secondaryLabel)
@@ -169,6 +176,7 @@ private struct PortfolioTaxBarChart: View {
             return
         }
         let frame = geometry[plot]
+        // lint:allow double-money chart coordinate, not a money value
         guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self),
             !rows.isEmpty
         else {
@@ -198,6 +206,7 @@ private struct PortfolioTaxBarChart: View {
         selection = rows[next].id
         return .handled
     }
+    // lint:allow double-money chart coordinate, not a money value
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
     private func money(_ value: Decimal) -> String {
         MoneyText.text(value, currency: currency, settings: shell.settings, signed: false)

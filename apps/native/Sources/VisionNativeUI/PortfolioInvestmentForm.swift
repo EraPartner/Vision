@@ -248,8 +248,8 @@ struct PortfolioInvestmentForm: View {
                 .font(monospaced ? .body.monospaced() : .body)
                 .focused($focused, equals: id).onSubmit(save)
                 .accessibilityLabel(strings.t(key))
-            if model.issue?.field == id {
-                Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)
+            if let issue = model.issue, issue.field == id {
+                Text(strings.t(issue.key)).font(.footnote).foregroundStyle(theme.destructive)
             }
         }.id(id)
     }
@@ -266,8 +266,8 @@ struct PortfolioInvestmentForm: View {
                     model.investmentDraft?[keyPath: path] = $0?.ymd ?? ""
                     model.clearIssue()
                 })
-            if model.issue?.field == id {
-                Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)
+            if let issue = model.issue, issue.field == id {
+                Text(strings.t(issue.key)).font(.footnote).foregroundStyle(theme.destructive)
             }
         }.id(id)
     }

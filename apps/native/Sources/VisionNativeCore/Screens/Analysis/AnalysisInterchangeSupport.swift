@@ -47,7 +47,7 @@ enum InterchangeJSON: Equatable, Sendable {
                 case (nil, nil): return left < right
                 }
             }
-            self = .object(keys.map { Member(key: $0, value: InterchangeJSON(tax: fields[$0]!)) })
+            self = .object(keys.compactMap { key in fields[key].map { Member(key: key, value: InterchangeJSON(tax: $0)) } })
         }
     }
 

@@ -145,7 +145,7 @@ struct AIChatStatusBanner: View {
                     Task { await model.retryStatus() }
                 }
                 .buttonStyle(.visionOutline)
-                Link(destination: URL(string: "https://ollama.com/download")!) {
+                Link(destination: URL.literal("https://ollama.com/download")) {
                     Label(strings.t("aiChat.banner.setup"), systemImage: "arrow.up.right.square")
                 }
             }.font(.callout)

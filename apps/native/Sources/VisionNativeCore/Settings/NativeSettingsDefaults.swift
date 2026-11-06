@@ -21,7 +21,7 @@ public enum NativeSettingsDefaults {
     /// The source migrates editable state; raw CAS expected.value remains untouched in the writer.
     public static func migrateApp(_ raw: TaxValue?) -> TaxValue {
         guard var fields = raw?.objectValue else { return app }
-        for key in app.objectValue!.keys { fields[key] = appValue(key, raw: raw) }
+        for key in (app.objectValue ?? [:]).keys { fields[key] = appValue(key, raw: raw) }
         for key in ["aiDefaultModel", "aiAnswerDepth", "analysisBenchmark"] {
             fields[key] = appValue(key, raw: raw)
         }

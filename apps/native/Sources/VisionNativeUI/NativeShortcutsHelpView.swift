@@ -30,7 +30,7 @@ public struct NativeShortcutsHelpView: View {
                     ForEach(Array(general.enumerated()), id: \.offset) { _, row in shortcut(row.0, row.1) }
                     heading("shortcuts.goTo")
                     ForEach(NavigationRegistry.allItems.filter { $0.shortcutKey != nil }) { item in
-                        shortcut(item.titleKey, ["G", item.shortcutKey!.uppercased()])
+                        shortcut(item.titleKey, ["G", item.shortcutKey?.uppercased() ?? ""])
                     }
                     heading("shortcuts.desktopSection")
                     shortcut("shortcuts.newTransaction", ["⌘", "N"])
