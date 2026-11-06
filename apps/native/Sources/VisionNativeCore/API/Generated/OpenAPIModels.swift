@@ -10056,6 +10056,134 @@ extension OpenAPI {
         }
     }
 
+    public struct PortfolioExposureClassifications: Codable, Equatable, Sendable {
+        public let items: [ItemsItem]
+        public let issuers: [IssuersItem]
+        public let sectors: [String]
+
+        public init(items: [ItemsItem], issuers: [IssuersItem], sectors: [String]) {
+            self.items = items
+            self.issuers = issuers
+            self.sectors = sectors
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case issuers = "issuers"
+            case sectors = "sectors"
+        }
+
+        public struct ItemsItem: Codable, Equatable, Sendable {
+            public let investmentId: InvestmentID
+            public let name: String
+            public let symbol: String?
+            public let assetClass: String
+            public let hasFundDocument: Bool
+            public let classification: Classification?
+
+            public init(investmentId: InvestmentID, name: String, symbol: String? = nil, assetClass: String, hasFundDocument: Bool, classification: Classification? = nil) {
+                self.investmentId = investmentId
+                self.name = name
+                self.symbol = symbol
+                self.assetClass = assetClass
+                self.hasFundDocument = hasFundDocument
+                self.classification = classification
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case investmentId = "investmentId"
+                case name = "name"
+                case symbol = "symbol"
+                case assetClass = "assetClass"
+                case hasFundDocument = "hasFundDocument"
+                case classification = "classification"
+            }
+
+            public struct Classification: Codable, Equatable, Sendable {
+                public let issuerId: String
+                public let issuerName: String
+                public let sector: String?
+                public let issuerCountryCode: String?
+                public let origin: Origin
+                public let sourceLabel: String
+                public let updatedAt: Instant
+
+                public init(issuerId: String, issuerName: String, sector: String? = nil, issuerCountryCode: String? = nil, origin: Origin, sourceLabel: String, updatedAt: Instant) {
+                    self.issuerId = issuerId
+                    self.issuerName = issuerName
+                    self.sector = sector
+                    self.issuerCountryCode = issuerCountryCode
+                    self.origin = origin
+                    self.sourceLabel = sourceLabel
+                    self.updatedAt = updatedAt
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case issuerId = "issuerId"
+                    case issuerName = "issuerName"
+                    case sector = "sector"
+                    case issuerCountryCode = "issuerCountryCode"
+                    case origin = "origin"
+                    case sourceLabel = "sourceLabel"
+                    case updatedAt = "updatedAt"
+                }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Origin: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case `import`
+                    case manual
+                    case unknown(String)
+
+                    public static var allKnownCases: [Origin] {
+                        [.`import`, .manual]
+                    }
+
+                    public static var allCases: [Origin] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "import": self = .`import`
+                        case "manual": self = .manual
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .`import`: return "import"
+                        case .manual: return "manual"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
+                }
+            }
+        }
+
+        public struct IssuersItem: Codable, Equatable, Sendable {
+            public let issuerId: String
+            public let issuerName: String
+
+            public init(issuerId: String, issuerName: String) {
+                self.issuerId = issuerId
+                self.issuerName = issuerName
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case issuerId = "issuerId"
+                case issuerName = "issuerName"
+            }
+        }
+    }
+
     public struct PortfolioExposureContribution: Codable, Equatable, Sendable {
         public let sourceType: SourceType
         public let investmentId: InvestmentID
@@ -10885,6 +11013,44 @@ extension OpenAPI {
                     var container = encoder.singleValueContainer()
                     try container.encode(rawValue)
                 }
+            }
+        }
+    }
+
+    /// Investments may appear once across set and clear. Set rows become manual and imports skip them;
+    /// cleared rows are deleted.
+    public struct PortfolioManualClassificationChanges: Codable, Equatable, Sendable {
+        public let set: [SetItem]?
+        public let clear: [Int]?
+
+        public init(set: [SetItem]? = nil, clear: [Int]? = nil) {
+            self.set = set
+            self.clear = clear
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case set = "set"
+            case clear = "clear"
+        }
+
+        public struct SetItem: Codable, Equatable, Sendable {
+            public let investmentId: InvestmentID
+            public let issuerName: String
+            public let sector: String?
+            public let issuerCountryCode: String?
+
+            public init(investmentId: InvestmentID, issuerName: String, sector: String? = nil, issuerCountryCode: String? = nil) {
+                self.investmentId = investmentId
+                self.issuerName = issuerName
+                self.sector = sector
+                self.issuerCountryCode = issuerCountryCode
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case investmentId = "investmentId"
+                case issuerName = "issuerName"
+                case sector = "sector"
+                case issuerCountryCode = "issuerCountryCode"
             }
         }
     }

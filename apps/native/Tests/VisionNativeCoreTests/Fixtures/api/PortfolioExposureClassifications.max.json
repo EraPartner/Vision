@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "investmentId": 1,
+      "name": "string",
+      "symbol": "string",
+      "assetClass": "string",
+      "hasFundDocument": true,
+      "classification": {
+        "issuerId": "id-1",
+        "issuerName": "string",
+        "sector": "string",
+        "issuerCountryCode": "string",
+        "origin": "import",
+        "sourceLabel": "string",
+        "updatedAt": "2024-01-15T10:30:00.000Z"
+      }
+    }
+  ],
+  "issuers": [
+    {
+      "issuerId": "id-1",
+      "issuerName": "string"
+    }
+  ],
+  "sectors": [
+    "string"
+  ]
+}

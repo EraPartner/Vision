@@ -184,6 +184,8 @@ getPortfolioPerformance
 getPortfolioPerformanceByBroker
 getPortfolioExposure
 upsertPortfolioExposureSources
+getPortfolioExposureClassifications
+savePortfolioExposureClassifications
 refreshInvestmentPrices
 listInvestmentProviders
 getInvestmentPriceHistory

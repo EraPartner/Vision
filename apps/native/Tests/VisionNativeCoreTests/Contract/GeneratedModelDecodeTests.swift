@@ -106,7 +106,7 @@ struct GeneratedModelDecodeTests {
 
     @Test("Every generated model has a fixture case")
     func everyModelHasACase() {
-        #expect(GeneratedModelDecoder.all.count == 262)
+        #expect(GeneratedModelDecoder.all.count == 264)
     }
 
     @Test("Only three capital letters decode as a currency code")
@@ -367,6 +367,7 @@ extension GeneratedModelDecoder {
         GeneratedModelDecoder(name: "PortfolioExposure") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposure.self, $0) },
         GeneratedModelDecoder(name: "PortfolioExposureBundle") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposureBundle.self, $0) },
         GeneratedModelDecoder(name: "PortfolioExposureClassification") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposureClassification.self, $0) },
+        GeneratedModelDecoder(name: "PortfolioExposureClassifications") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposureClassifications.self, $0) },
         GeneratedModelDecoder(name: "PortfolioExposureContribution") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposureContribution.self, $0) },
         GeneratedModelDecoder(name: "PortfolioExposureDimension") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposureDimension.self, $0) },
         GeneratedModelDecoder(name: "PortfolioExposureFundSource") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioExposureFundSource.self, $0) },
@@ -376,6 +377,7 @@ extension GeneratedModelDecoder {
         GeneratedModelDecoder(name: "PortfolioImportReconciliationCommitResult") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioImportReconciliationCommitResult.self, $0) },
         GeneratedModelDecoder(name: "PortfolioImportReconciliationPlan") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioImportReconciliationPlan.self, $0) },
         GeneratedModelDecoder(name: "PortfolioImportReconciliationRequest") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioImportReconciliationRequest.self, $0) },
+        GeneratedModelDecoder(name: "PortfolioManualClassificationChanges") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioManualClassificationChanges.self, $0) },
         GeneratedModelDecoder(name: "PortfolioParserConfig") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioParserConfig.self, $0) },
         GeneratedModelDecoder(name: "PortfolioSecurityIdentifier") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioSecurityIdentifier.self, $0) },
         GeneratedModelDecoder(name: "PortfolioSummaryAccountTotals") { try GeneratedModelCodec.roundTrip(OpenAPI.PortfolioSummaryAccountTotals.self, $0) },

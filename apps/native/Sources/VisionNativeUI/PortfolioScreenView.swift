@@ -48,6 +48,17 @@ struct PortfolioScreenView: View {
         ) {
             PortfolioDetailSheet(model: screens.model, editing: screens.editing, shell: shell)
         }
+        .visionDialog(
+            isPresented: Binding(
+                get: { screens.editing.classification.isPresented },
+                set: { if !$0 { screens.editing.classification.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: shell.strings.t("portfolio.classify.title")
+        ) {
+            PortfolioClassifySheet(
+                model: screens.editing.classification, editing: screens.editing, portfolio: screens.model,
+                shell: shell)
+        }
         // Applied after the detail dialog so the editor and its confirmation open over it: in-window
         // dialogs cannot nest inside another dialog's panel.
         .portfolioEditingPresentation(model: screens.editing, shell: shell)

@@ -24,13 +24,21 @@ struct PortfolioExposureView: View {
             title: shell.strings.t("portfolio.exposure.title"),
             description: shell.strings.t("portfolio.exposure.description"), large: true
         ) {
-            VisionSegmentedControl(
-                selection: $dimension, values: ["issuer", "sector", "issuerCountry"],
-                title: { shell.strings.t("portfolio.exposure." + $0) }
-            )
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(shell.strings.t("portfolio.exposure.dimensionLabel"))
-            .frame(maxWidth: 600)
+            HStack(alignment: .center, spacing: 12) {
+                VisionSegmentedControl(
+                    selection: $dimension, values: ["issuer", "sector", "issuerCountry"],
+                    title: { shell.strings.t("portfolio.exposure." + $0) }
+                )
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(shell.strings.t("portfolio.exposure.dimensionLabel"))
+                .frame(maxWidth: 600)
+                Spacer(minLength: 0)
+                // ADR-267: classify holdings by hand.
+                Button(shell.strings.t("portfolio.classify.open"), systemImage: "tag") {
+                    Task { await editing.classification.open() }
+                }
+                .buttonStyle(.vision(.outline, size: .sm))
+            }
             if let error = importError ?? model.errors["exposure"] {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(shell.strings.t("common.retry")) { Task { await model.loadExposure(force: true) } }

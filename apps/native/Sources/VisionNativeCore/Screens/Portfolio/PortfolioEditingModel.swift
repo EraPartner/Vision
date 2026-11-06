@@ -31,7 +31,10 @@ public final class PortfolioEditingModel {
     public var strings: any Localizing = DictionaryStrings(language: .en, table: [:])
     public var hasUnsavedChanges: Bool {
         (investmentDraft?.isEditing == true && investmentDraft != investmentBaseline) || tradeDraft != tradeBaseline
+            || classification.hasUnsavedChanges
     }
+    /// The Classify holdings sheet (ADR-267).
+    public let classification: PortfolioClassificationModel
     @ObservationIgnored private let service: any PortfolioEditingService
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var onChanged: (@MainActor () async -> Void)?
@@ -53,10 +56,14 @@ public final class PortfolioEditingModel {
     public init(service: any PortfolioEditingService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
         self.now = now
+        classification = PortfolioClassificationModel(service: service)
     }
     public func configure(settings: NativeAppSettings, strings: (any Localizing)? = nil) {
         self.settings = settings
-        if let strings { self.strings = strings }
+        if let strings {
+            self.strings = strings
+            classification.strings = strings
+        }
     }
     public func bindChanged(_ action: @escaping @MainActor () async -> Void) { onChanged = action }
     public func bindInvestments(_ value: [PortfolioInvestment]) {
@@ -142,6 +149,7 @@ public final class PortfolioEditingModel {
     public func discardDrafts() {
         guard !isSaving else { return }
         presentation = nil
+        classification.close()
         investmentDraft = nil
         tradeDraft = nil
         investmentBaseline = nil
@@ -365,7 +373,25 @@ public final class PortfolioEditingModel {
     }
     /// The exposure card reports a failed import inline (`error`), without a toast.
     @discardableResult public func importExposure(data: Data) async -> Bool {
-        await mutation(key: nil, failureKey: nil) { try await service.portfolioImportExposure(data) }
+        var kept = 0
+        let imported = await mutation(key: nil, failureKey: nil) {
+            kept = try await service.portfolioImportExposure(data)
+        }
+        guard imported else { return false }
+        if kept > 0 { postCount(.info, "portfolio.classify.keptOnImport", kept) }
+        await classification.invalidate()
+        return true
+    }
+    /// Saves the Classify holdings sheet; the caller reloads exposure on success.
+    @discardableResult public func saveClassifications() async -> Bool {
+        guard let count = await classification.save() else { return false }
+        postCount(.success, "portfolio.classify.saved", count)
+        return true
+    }
+    /// `toast(tc(key, count))`: the plural form of `key` for `count`.
+    private func postCount(_ kind: ScreenNotice.Kind, _ key: String, _ count: Int) {
+        let category = PluralCategory.of(count, language: strings.language).rawValue
+        notice = notices.make(kind, "\(key).\(category)", ["count": String(count)])
     }
     /// `failureKey` titles the error toast over the humanized detail; `nil` reports only `error`.
     private func mutation(key: String?, failureKey: String?, operation: () async throws -> Void) async -> Bool {

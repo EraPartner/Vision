@@ -1,0 +1,13 @@
+{
+  "set": [
+    {
+      "investmentId": 1,
+      "issuerName": "string",
+      "sector": "string",
+      "issuerCountryCode": "BE"
+    }
+  ],
+  "clear": [
+    1
+  ]
+}

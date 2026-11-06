@@ -1044,7 +1044,10 @@ Swift members when ordinary camelization would collide.
 Ticker queries are restricted to Yahoo-provider identities, including the existing configured-id
 or symbol fallback. Polling stops while hidden, inactive or offline; reduced motion and hover stop
 animation. News displays six articles and validates external HTTP(S) links. Exposure imports retain
-the existing typed server contract and 1 MB limit. The five asset pages reuse guarded histories,
+the existing typed server contract and 1 MB limit, and report holdings that kept a classification
+set by hand. `PortfolioClassificationModel` drives the Classify holdings sheet (ADR-267) from the
+exposure card or a holding's row menu: search, multi-select with bulk sector and country, and one
+`savePortfolioExposureClassifications` write of the changed rows. The five asset pages reuse guarded histories,
 price disclosures and native forms while retaining their distinct layouts.
 
 `RebalanceModel` sends targets and reserve floor to the existing TypeScript operations. It first

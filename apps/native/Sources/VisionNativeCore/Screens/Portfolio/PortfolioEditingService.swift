@@ -18,7 +18,7 @@ public struct PortfolioPriceProvider: Decodable, Equatable, Sendable, Identifiab
     ]
 }
 
-public protocol PortfolioEditingService: Sendable {
+public protocol PortfolioEditingService: PortfolioClassificationService {
     func portfolioCreateInvestment(_ payload: PortfolioEditingPayload) async throws -> PortfolioInvestment
     func portfolioUpdateInvestment(id: InvestmentID, payload: PortfolioEditingPayload) async throws
         -> PortfolioInvestment
@@ -32,7 +32,8 @@ public protocol PortfolioEditingService: Sendable {
     func portfolioEditingTransactions(investmentIds: [InvestmentID]) async throws -> [PortfolioTransaction]
     func portfolioEditingAccounts() async throws -> [OpenAPI.Account]
     func portfolioRetagLots(_ payload: PortfolioEditingPayload) async throws -> OpenAPI.PortfolioBrokerRetagReceipt
-    func portfolioImportExposure(_ data: Data) async throws
+    /// Returns how many holdings kept a classification set by hand (ADR-267).
+    func portfolioImportExposure(_ data: Data) async throws -> Int
 }
 
 extension APIClient: PortfolioEditingService {
@@ -122,10 +123,12 @@ extension APIClient: PortfolioEditingService {
                 OpenAPIOperations.BulkRetagPortfolioTransactions, OpenAPI.PortfolioBrokerRetagReceipt
             >(path: "/api/investments/transactions/broker", payload: payload))
     }
-    public func portfolioImportExposure(_ data: Data) async throws {
-        _ = try await send(
-            PortfolioEditingRequest<OpenAPIOperations.UpsertPortfolioExposureSources, APIEmpty>(
+    public func portfolioImportExposure(_ data: Data) async throws -> Int {
+        let result = try await send(
+            PortfolioEditingRequest<OpenAPIOperations.UpsertPortfolioExposureSources, JSONValue>(
                 path: "/api/investments/exposure/sources", body: data))
+        // Imports skip classifications set by hand and report them (ADR-267).
+        return result["keptManualInvestmentIds"]?.arrayValue?.count ?? 0
     }
 }
 private struct PortfolioProvidersResponse: Decodable, Sendable { let providers: [PortfolioPriceProvider] }

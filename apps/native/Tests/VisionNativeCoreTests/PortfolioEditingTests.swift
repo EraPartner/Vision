@@ -206,7 +206,7 @@ struct PortfolioEditingAPITests {
         let transport = PortfolioEditingTransport(body: #"{"ok":true,"data":{"saved":1}}"#)
         let importer = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
         let bytes = Data(#"{"classifications":[],"documents":[]}"#.utf8)
-        try await importer.portfolioImportExposure(bytes)
+        #expect(try await importer.portfolioImportExposure(bytes) == 0)
         let request = try #require(await transport.requests.first)
         #expect(request.method == .put)
         #expect(request.url.path == "/api/investments/exposure/sources")
@@ -587,8 +587,17 @@ private actor EditingFixtureService: PortfolioEditingService {
             idempotencyKey: "synthetic", transactionIds: [9], previousAssignments: [], selectedCount: 1,
             changedCount: 1, replayed: false)
     }
-    func portfolioImportExposure(_ data: Data) async throws {
+    func portfolioImportExposure(_ data: Data) async throws -> Int {
         if exposureFails { throw APIError.backendUnavailable }
+        return 0
+    }
+    func portfolioClassifications() async throws -> OpenAPI.PortfolioExposureClassifications {
+        .init(items: [], issuers: [], sectors: [])
+    }
+    func portfolioSaveClassifications(_ changes: PortfolioClassificationChanges) async throws
+        -> OpenAPI.PortfolioExposureClassifications
+    {
+        .init(items: [], issuers: [], sectors: [])
     }
 }
 
