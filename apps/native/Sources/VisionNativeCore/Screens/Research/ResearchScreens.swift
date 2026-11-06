@@ -47,19 +47,19 @@ import Observation
     public func didAppear(route: NativeRoute) async { await load(route: route) }
     public func load(route: NativeRoute, force: Bool = false) async {
         if activeRoute?.path != route.path {
-            if let previous = activeRoute { disappear(path: previous.path) }
+            if let previous = activeRoute { disappear(screen: previous.screen) }
             visitRevision = UUID()
-            if route.path == "/research" { home.beginVisit() }
-            if route.path == "/research/markets" { markets.beginVisit() }
+            if route.screen == .researchHome { home.beginVisit() }
+            if route.screen == .researchMarkets { markets.beginVisit() }
         }
         activeRoute = route
         let visit = visitRevision
-        switch route.path {
-        case "/research": await home.load(force: force)
-        case "/research/markets": await markets.load(force: force)
-        case "/research/market": await lookup.load(route: route, force: force)
-        case "/research/watchlist": await watchlist.load(force: force)
-        case "/research/compare": await compare.load(route: route, force: force)
+        switch route.screen {
+        case .researchHome: await home.load(force: force)
+        case .researchMarkets: await markets.load(force: force)
+        case .researchMarketLookup: await lookup.load(route: route, force: force)
+        case .researchWatchlist: await watchlist.load(force: force)
+        case .researchCompare: await compare.load(route: route, force: force)
         default: return
         }
         guard visit == visitRevision else { return }
@@ -68,29 +68,29 @@ import Observation
         guard activeRoute?.path == route.path else { return }
         visitRevision = UUID()
         activeRoute = nil
-        disappear(path: route.path)
+        disappear(screen: route.screen)
     }
-    private func disappear(path: String) {
-        switch path {
-        case "/research": home.didDisappear()
-        case "/research/markets": markets.didDisappear()
-        case "/research/market":
+    private func disappear(screen: NativeScreen?) {
+        switch screen {
+        case .researchHome: home.didDisappear()
+        case .researchMarkets: markets.didDisappear()
+        case .researchMarketLookup:
             lookup.didDisappear()
             if !watchlistAdd.isSubmitting { watchlistAdd.close() }
-        case "/research/watchlist": watchlist.didDisappear()
-        case "/research/compare": compare.didDisappear()
+        case .researchWatchlist: watchlist.didDisappear()
+        case .researchCompare: compare.didDisappear()
         default: break
         }
     }
     public func invalidate() {
         revision += 1
         guard let route = activeRoute else { return }
-        switch route.path {
-        case "/research": home.invalidate()
-        case "/research/markets": markets.invalidate()
-        case "/research/market": lookup.invalidate()
-        case "/research/watchlist": watchlist.invalidate()
-        case "/research/compare": compare.invalidate()
+        switch route.screen {
+        case .researchHome: home.invalidate()
+        case .researchMarkets: markets.invalidate()
+        case .researchMarketLookup: lookup.invalidate()
+        case .researchWatchlist: watchlist.invalidate()
+        case .researchCompare: compare.invalidate()
         default: return
         }
         Task { [weak self] in
@@ -102,9 +102,9 @@ import Observation
         revision += 1
         markets.invalidate()
         lookup.portfolioDataDidChange()
-        if activeRoute?.path == "/research/markets" {
+        if activeRoute?.screen == .researchMarkets {
             Task { [weak self] in
-                guard let self, activeRoute?.path == "/research/markets" else { return }
+                guard let self, activeRoute?.screen == .researchMarkets else { return }
                 await markets.refreshHoldings()
             }
         }
@@ -115,9 +115,9 @@ import Observation
         watchlist.invalidate()
         await didMutateWatchlist?()
         if let route = activeRoute {
-            if route.path == "/research" {
+            if route.screen == .researchHome {
                 await home.load()
-            } else if route.path == "/research/watchlist", refreshCurrent {
+            } else if route.screen == .researchWatchlist, refreshCurrent {
                 await watchlist.refreshAfterAdd()
             }
         }

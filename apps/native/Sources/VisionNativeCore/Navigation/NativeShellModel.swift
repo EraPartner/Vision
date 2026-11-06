@@ -342,7 +342,7 @@ public final class NativeShellModel {
             return .unavailable
         }
         if screen == .tax && (tax == nil || reports == nil && route.value("export") == "pdf") { return .unavailable }
-        if screen.path == "/portfolio" || screen.path.hasPrefix("/portfolio/") {
+        if screen.isPortfolioSection {
             if portfolio == nil || reports == nil && route.value("export") == "pdf" { return .unavailable }
         }
         if screen == .portfolioTax && tax == nil { return .unavailable }
@@ -389,13 +389,14 @@ public final class NativeShellModel {
             nativeIntentConsumer = nil
             reports?.didLeavePage()
             if route.path == TransactionsRoutes.path { transactions.didLeavePage() }
-            if route.path == "/analysis" { analysis?.didDisappear() }
+            let leaving = route.screen
+            if leaving == .analysis { analysis?.didDisappear() }
             research?.didDisappear(route: route)
-            if route.path == "/research/forecast" { researchForecast?.didDisappear() }
-            if route.path == "/research/charts" { researchChartBuilder?.didDisappear() }
-            if route.path == "/research/dossiers" { researchDossiers?.didDisappear() }
-            if route.path == "/ai-chat" { aiChat?.didDisappear() }
-            if route.path == "/research/market" { removeLeaveGuard(id: route.path) }
+            if leaving == .researchForecast { researchForecast?.didDisappear() }
+            if leaving == .researchChartBuilder { researchChartBuilder?.didDisappear() }
+            if leaving == .researchDossiers { researchDossiers?.didDisappear() }
+            if leaving == .aiChat { aiChat?.didDisappear() }
+            if leaving == .researchMarketLookup { removeLeaveGuard(id: route.path) }
         }
         route = next
         if let reports {
@@ -416,14 +417,15 @@ public final class NativeShellModel {
         if pathChanged { reloadSettings() }
         if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
         if pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
-        if pathChanged && next.path == "/tax" { tax?.invalidate() }
-        if pathChanged && next.path == "/portfolio/tax" { tax?.invalidate() }
-        if pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) {
+        let entering = next.screen
+        if pathChanged && entering == .tax { tax?.invalidate() }
+        if pathChanged && entering == .portfolioTax { tax?.invalidate() }
+        if pathChanged && (next.path == NativeScreen.portfolio.path || next.path.hasPrefix("/portfolio/")) {
             portfolio?.invalidate()
         }
-        if pathChanged && next.path.hasPrefix("/portfolio/import") { portfolioImports?.invalidate() }
-        if pathChanged && next.path == "/analysis" { analysis?.invalidate() }
-        if pathChanged && next.path == "/analysis/monitors" { analysisMonitors?.invalidate() }
+        if pathChanged && next.path.hasPrefix(NativeScreen.portfolioImport.path) { portfolioImports?.invalidate() }
+        if pathChanged && entering == .analysis { analysis?.invalidate() }
+        if pathChanged && entering == .analysisMonitors { analysisMonitors?.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link: pushes a history
@@ -448,7 +450,7 @@ public final class NativeShellModel {
     }
 
     public func openTaxReport() {
-        guard route.path == "/tax" else { return }
+        guard route.screen == .tax else { return }
         replaceQuery("export", with: "pdf")
     }
 
@@ -812,14 +814,12 @@ public final class NativeShellModel {
         }
     }
     private static func reportType(for path: String) -> NativeReportType? {
-        if path == "/statistics" { return .financial }
-        if path == "/tax" { return .tax }
-        if path == "/portfolio" || path == "/portfolio/net-worth"
-            || ["stocks", "crypto", "metals", "real-estate", "savings"].contains(where: { path == "/portfolio/" + $0 })
-        {
-            return .portfolio
+        switch NativeScreen.screen(forPath: path) {
+        case .statistics: return .financial
+        case .tax: return .tax
+        case .portfolio, .netWorth, .portfolioHoldings: return .portfolio
+        default: return nil
         }
-        return nil
     }
 
     /// A key press on a native screen. Returns `false` when the key is not a shortcut.
