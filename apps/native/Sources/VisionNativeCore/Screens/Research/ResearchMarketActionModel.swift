@@ -26,10 +26,14 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
     public var isRecurring = false
     public init() {}
 }
+/// The dialog step (`useState<"choose" | "new" | "transaction">` in AddInvestmentFromMarketDialog.tsx).
+public enum ResearchMarketActionStep: String, Sendable {
+    case choose, new, transaction
+}
 /// This flow intentionally keeps the quote-native price while booking in the held summary's currency, matching web.
 @MainActor @Observable public final class ResearchMarketActionModel {
     public var isPresented = false
-    public var step = "choose"
+    public var step = ResearchMarketActionStep.choose
     public var investment = ResearchMarketInvestmentDraft()
     public var trade = ResearchMarketTradeDraft() { didSet { if trade != oldValue { queueMath() } } }
     public private(set) var quote: ResearchQuote?
@@ -113,7 +117,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
         trade = .init()
         baselineInvestment = investment
         baselineTrade = trade
-        step = "choose"
+        step = .choose
         error = nil
         errorKey = nil
         isPresented = false
@@ -129,7 +133,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
         trade.price = LocaleNumber.editable(quote.price, format: numberFormat)
         baselineInvestment = investment
         baselineTrade = trade
-        step = "choose"
+        step = .choose
     }
     public static func ymd(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -277,7 +281,7 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
             try await operation()
             await didMutate?()
             guard stamp == context else { return }
-            let key = step == "new" ? "addInv.toast.added" : "addPortTxn.toast.recorded"
+            let key = step == .new ? "addInv.toast.added" : "addPortTxn.toast.recorded"
             noticeKey = key
             notice = notices.make(
                 .success, key, ["name": quote?.symbol ?? "", "assetClass": assetClass, "type": trade.type])

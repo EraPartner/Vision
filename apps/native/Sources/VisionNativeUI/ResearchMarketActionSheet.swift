@@ -13,18 +13,18 @@ struct ResearchMarketActionSheet: View {
             // The web `DialogDescription` is `sr-only`, so no visible description here.
             VisionDialogHeader(
                 title: strings.t(
-                    model.step == "choose"
+                    model.step == .choose
                         ? "addInvFromMarket.title.add"
-                        : model.step == "new"
+                        : model.step == .new
                             ? "addInvFromMarket.title.create" : "addInvFromMarket.title.transaction",
                     ["symbol": model.quote?.symbol ?? ""]),
                 closeLabel: strings.t("common.close"), onClose: { model.close() }
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if model.step == "choose" {
+                    if model.step == .choose {
                         choices
-                    } else if model.step == "new" {
+                    } else if model.step == .new {
                         newInvestment
                     } else {
                         transaction
@@ -45,14 +45,14 @@ struct ResearchMarketActionSheet: View {
                     }
                 }.padding(.horizontal, 1)
             }
-            if model.step != "choose" {
+            if model.step != .choose {
                 // `DialogFooter sm:justify-between`: Back on the left, the submit action on the right.
                 HStack(spacing: 8) {
-                    Button(strings.t("addInv.back")) { model.step = "choose" }.buttonStyle(.visionOutline)
+                    Button(strings.t("addInv.back")) { model.step = .choose }.buttonStyle(.visionOutline)
                     Spacer(minLength: 0)
-                    Button(strings.t(model.step == "new" ? "addInv.create" : "addPortTxn.record")) {
+                    Button(strings.t(model.step == .new ? "addInv.create" : "addPortTxn.record")) {
                         Task {
-                            if model.step == "new" {
+                            if model.step == .new {
                                 await model.createInvestment()
                             } else {
                                 await model.recordTransaction()
@@ -60,16 +60,16 @@ struct ResearchMarketActionSheet: View {
                         }
                     }.buttonStyle(.visionPrimary).disabled(
                         model.isSubmitting || model.hasUncertainWrite
-                            || (model.step == "new"
+                            || (model.step == .new
                                 && model.investment.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     )
                 }
             }
         }.visionDialogPadding().frame(width: 448).frame(maxHeight: 760)
             .onSubmit {
-                if model.step != "choose" {
+                if model.step != .choose {
                     Task {
-                        if model.step == "new" {
+                        if model.step == .new {
                             await model.createInvestment()
                         } else {
                             await model.recordTransaction()
@@ -84,7 +84,7 @@ struct ResearchMarketActionSheet: View {
                 .font(.footnote).foregroundStyle(theme.secondaryLabel)
             if let holding = model.holding {
                 Button {
-                    model.step = "transaction"
+                    model.step = .transaction
                 } label: {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(strings.t("form.addTransaction.title")).font(.body.weight(.medium))
@@ -95,7 +95,7 @@ struct ResearchMarketActionSheet: View {
                 }.buttonStyle(.visionOutline)
             }
             Button {
-                model.step = "new"
+                model.step = .new
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(strings.t("addInvFromMarket.option.createNew")).font(.body.weight(.medium))

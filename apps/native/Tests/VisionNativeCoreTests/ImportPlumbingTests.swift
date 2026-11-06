@@ -275,7 +275,7 @@ enum PlumbingFixture {
         ) { progress in await log.append(progress) }
         #expect(outcome == .completed(ImportCompletion(total: 10, imported: 8, duplicates: 2, errors: 0, batchId: 5)))
         let phases = await log.items.map { item in item.phase }
-        #expect(phases == ["parsing", "importing", "complete"])
+        #expect(phases == [.parsing, .importing, .complete])
         #expect(await log.items.last?.percent == 100)
         let body = String(decoding: try #require(stream.requests.first?.body), as: UTF8.self)
         #expect(body.contains("name=\"file\"; filename=\"bank.csv\"\r\nContent-Type: text/csv"))
@@ -349,7 +349,7 @@ enum PlumbingFixture {
         #expect(
             progress
                 == .progress(
-                    ImportProgress(phase: "importing", current: 2, total: 4, imported: 1, duplicates: 1, percent: 50)))
+                    ImportProgress(phase: .importing, current: 2, total: 4, imported: 1, duplicates: 1, percent: 50)))
     }
 }
 

@@ -303,10 +303,30 @@ public enum ImportSource: Hashable, Sendable {
 /// A built-in bank adapter of `GET /api/info/supported-adapters`.
 public typealias ImportAdapter = OpenAPIOperations.GetSupportedAdapters.ResponseData.ItemsItem
 
+/// The `phase` of an import progress event. The stream may send phases this client does not
+/// name, so the type keeps any raw value, as the web panel does with its string.
+public struct ImportPhase: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public var description: String { rawValue }
+
+    public static let connecting = Self(rawValue: "connecting")
+    public static let counting = Self(rawValue: "counting")
+    public static let parsing = Self(rawValue: "parsing")
+    public static let importing = Self(rawValue: "importing")
+    public static let staging = Self(rawValue: "staging")
+    public static let validating = Self(rawValue: "validating")
+    public static let matching = Self(rawValue: "matching")
+    public static let committing = Self(rawValue: "committing")
+    public static let reviewRequired = Self(rawValue: "review_required")
+    public static let complete = Self(rawValue: "complete")
+    public static let error = Self(rawValue: "error")
+}
+
 /// `ImportProgress`: one `progress` event of the import stream, or the panel state the card
 /// sets itself (`connecting`, `complete`, `error`).
 public struct ImportProgress: Equatable, Sendable, Decodable {
-    public var phase: String
+    public var phase: ImportPhase
     public var current: Int
     public var total: Int
     public var imported: Int
@@ -315,7 +335,7 @@ public struct ImportProgress: Equatable, Sendable, Decodable {
     public var percent: Int
 
     public init(
-        phase: String, current: Int = 0, total: Int = 0, imported: Int = 0, duplicates: Int = 0, errors: Int = 0,
+        phase: ImportPhase, current: Int = 0, total: Int = 0, imported: Int = 0, duplicates: Int = 0, errors: Int = 0,
         percent: Int = 0
     ) {
         self.phase = phase
@@ -328,7 +348,7 @@ public struct ImportProgress: Equatable, Sendable, Decodable {
     }
 
     /// The panel the card shows as soon as Import is pressed.
-    public static let connecting = ImportProgress(phase: "connecting")
+    public static let connecting = ImportProgress(phase: .connecting)
 
     enum CodingKeys: String, CodingKey {
         case phase, current, total, imported, duplicates, errors, percent
@@ -337,7 +357,7 @@ public struct ImportProgress: Equatable, Sendable, Decodable {
     /// `importProgressSchema`: every field required, numbers in any JSON form.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        phase = try container.decode(String.self, forKey: .phase)
+        phase = try container.decode(ImportPhase.self, forKey: .phase)
         current = try Self.count(container, .current)
         total = try Self.count(container, .total)
         imported = try Self.count(container, .imported)
@@ -359,16 +379,16 @@ public struct ImportProgress: Equatable, Sendable, Decodable {
     /// the web panel.
     public var labelKey: String? {
         switch phase {
-        case "counting": return "importPage.analyzing"
-        case "parsing": return "importPage.parsingCSV"
-        case "importing": return "importPage.importingTxns"
-        case "connecting": return "importPage.connecting"
+        case .counting: return "importPage.analyzing"
+        case .parsing: return "importPage.parsingCSV"
+        case .importing: return "importPage.importingTxns"
+        case .connecting: return "importPage.connecting"
         default: return nil
         }
     }
 
     /// The row and count line shows only while `importing` with a known total.
-    public var showsCounts: Bool { phase == "importing" && total > 0 }
+    public var showsCounts: Bool { phase == .importing && total > 0 }
 
     /// `min(100, max(0, percent))` for the bar.
     public var fraction: Double { Double(min(100, max(0, percent))) / 100 }

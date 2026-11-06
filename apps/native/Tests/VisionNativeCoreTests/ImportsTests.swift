@@ -465,7 +465,7 @@ enum ImportFixture {
     @Test func aBankImportStreamsItsProgressThenToastsAndResets() async {
         let service = FakeImportService(batches: ImportFixture.batches(2))
         await service.scriptStream(
-            [ImportProgress(phase: "parsing", percent: 5), ImportProgress(phase: "importing", current: 3, total: 10, percent: 30)],
+            [ImportProgress(phase: .parsing, percent: 5), ImportProgress(phase: .importing, current: 3, total: 10, percent: 30)],
             .success(.completed(ImportFixture.completion)))
         let model = ImportFixture.model(service)
         await model.appear(strings: ImportFixture.strings)
@@ -479,7 +479,7 @@ enum ImportFixture {
         #expect(model.file == nil)
         #expect(model.source == nil)
         // The panel keeps the last progress the stream reported.
-        #expect(model.progress?.phase == "importing")
+        #expect(model.progress?.phase == .importing)
         #expect(await service.historyOffsets == [0, 0])
     }
 
@@ -519,13 +519,13 @@ enum ImportFixture {
         let service = FakeImportService()
         let gate = CallGate()
         await service.holdStream(gate)
-        await service.scriptStream([ImportProgress(phase: "parsing", percent: 5)], .success(.reviewRequired(batchId: 42)))
+        await service.scriptStream([ImportProgress(phase: .parsing, percent: 5)], .success(.reviewRequired(batchId: 42)))
         let model = ImportFixture.model(service)
         await model.appear(strings: ImportFixture.strings)
         model.chooseFile(ImportFixture.file())
         model.selectSource(.adapter("kbc"))
         let running = Task { await model.startImport(strings: ImportFixture.strings) }
-        while model.progress?.phase != "parsing" { await Task.yield() }
+        while model.progress?.phase != .parsing { await Task.yield() }
         // The user leaves `/import` while the import runs.
         model.disappear()
         gate.open()
@@ -550,14 +550,14 @@ enum ImportFixture {
         let service = FakeImportService()
         let gate = CallGate()
         await service.holdStream(gate)
-        await service.scriptStream([ImportProgress(phase: "parsing", percent: 5)], .success(.completed(ImportFixture.completion)))
+        await service.scriptStream([ImportProgress(phase: .parsing, percent: 5)], .success(.completed(ImportFixture.completion)))
         let model = ImportFixture.model(service)
         await model.appear(strings: ImportFixture.strings)
         let first = ImportFixture.file()
         model.chooseFile(first)
         model.selectSource(.adapter("kbc"))
         let running = Task { await model.startImport(strings: ImportFixture.strings) }
-        while model.progress?.phase != "parsing" { await Task.yield() }
+        while model.progress?.phase != .parsing { await Task.yield() }
         let next = ImportFixture.file("next.csv")
         model.handoff(next)
         // The running import keeps its card.
@@ -573,7 +573,7 @@ enum ImportFixture {
     @Test func aStreamErrorToastsItsDetailAndKeepsTheFile() async {
         let service = FakeImportService()
         await service.scriptStream(
-            [ImportProgress(phase: "parsing", percent: 5)], .failure(ImportStreamFailure(detail: "No rows found")))
+            [ImportProgress(phase: .parsing, percent: 5)], .failure(ImportStreamFailure(detail: "No rows found")))
         let model = ImportFixture.model(service)
         let file = ImportFixture.file()
         model.chooseFile(file)
@@ -581,7 +581,7 @@ enum ImportFixture {
         await model.startImport(strings: ImportFixture.strings)
         #expect(model.notice?.key == "importPage.toast.serverError")
         #expect(model.notice?.detail == "No rows found")
-        #expect(model.progress?.phase == "error")
+        #expect(model.progress?.phase == .error)
         #expect(!model.isImporting)
         #expect(model.file == file)
         #expect(model.canImport)
@@ -595,12 +595,12 @@ enum ImportFixture {
         let service = FakeImportService()
         let gate = CallGate()
         await service.holdStream(gate)
-        await service.scriptStream([ImportProgress(phase: "parsing", percent: 5)], .success(.completed(ImportFixture.completion)))
+        await service.scriptStream([ImportProgress(phase: .parsing, percent: 5)], .success(.completed(ImportFixture.completion)))
         let model = ImportFixture.model(service)
         model.chooseFile(ImportFixture.file())
         model.selectSource(.adapter("kbc"))
         let running = Task { await model.startImport(strings: ImportFixture.strings) }
-        while model.progress?.phase != "parsing" { await Task.yield() }
+        while model.progress?.phase != .parsing { await Task.yield() }
         #expect(model.isImporting)
         #expect(!model.canImport)
         #expect(model.hasUnsavedChanges)
@@ -630,7 +630,7 @@ enum ImportFixture {
         #expect(await service.customConfigs == [ImportFixture.mapped])
         #expect(await service.streamed.isEmpty)
         #expect(model.progress == ImportProgress(
-            phase: "complete", current: 10, total: 10, imported: 8, duplicates: 2, errors: 0, percent: 100))
+            phase: .complete, current: 10, total: 10, imported: 8, duplicates: 2, errors: 0, percent: 100))
         #expect(model.notice?.key == "importPage.toast.importSuccess")
         #expect(model.source == nil)
         await service.scriptCustom(.success(.reviewRequired(batchId: 9)))
@@ -816,15 +816,15 @@ enum ImportFixture {
     }
 
     @Test func progressPhasesLabelOnlyTheWebPhases() {
-        #expect(ImportProgress(phase: "counting").labelKey == "importPage.analyzing")
-        #expect(ImportProgress(phase: "parsing").labelKey == "importPage.parsingCSV")
-        #expect(ImportProgress(phase: "importing").labelKey == "importPage.importingTxns")
+        #expect(ImportProgress(phase: .counting).labelKey == "importPage.analyzing")
+        #expect(ImportProgress(phase: .parsing).labelKey == "importPage.parsingCSV")
+        #expect(ImportProgress(phase: .importing).labelKey == "importPage.importingTxns")
         #expect(ImportProgress.connecting.labelKey == "importPage.connecting")
-        #expect(ImportProgress(phase: "committing").labelKey == nil)
-        #expect(ImportProgress(phase: "importing", total: 4).showsCounts)
-        #expect(!ImportProgress(phase: "parsing", total: 4).showsCounts)
-        #expect(ImportProgress(phase: "x", percent: 140).fraction == 1)
-        #expect(ImportProgress(phase: "x", percent: -3).fraction == 0)
+        #expect(ImportProgress(phase: .committing).labelKey == nil)
+        #expect(ImportProgress(phase: .importing, total: 4).showsCounts)
+        #expect(!ImportProgress(phase: .parsing, total: 4).showsCounts)
+        #expect(ImportProgress(phase: ImportPhase(rawValue: "x"), percent: 140).fraction == 1)
+        #expect(ImportProgress(phase: ImportPhase(rawValue: "x"), percent: -3).fraction == 0)
     }
 
     @Test func theReceiptValidatesItsCountsAndDates() {

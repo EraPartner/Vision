@@ -153,17 +153,23 @@ public struct ResearchChartBuilderIndicator: Codable, Equatable, Sendable, Ident
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
 }
+/// The chart builder's oscillator pane (`"none" | "rsi" | "macd"`). `off` is the `"none"` value,
+/// named so that it never reads as `Optional.none`.
+public enum ResearchChartOscillator: String, CaseIterable, Sendable {
+    case off = "none"
+    case rsi, macd
+}
 public struct ResearchChartBuilderState: Codable, Equatable, Sendable {
     public var range: String
     public var logLeft: Bool
     public var rebase: Bool
     public var series: [ResearchChartBuilderSeries]
     public var indicators: [ResearchChartBuilderIndicator]
-    public var oscillator: String
+    public var oscillator: ResearchChartOscillator
     public var oscillatorSeriesId: String?  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     public init(
         range: String = "1y", logLeft: Bool = false, rebase: Bool = false, series: [ResearchChartBuilderSeries] = [],
-        indicators: [ResearchChartBuilderIndicator] = [], oscillator: String = "none", oscillatorSeriesId: String? = nil  // lint:allow raw-id macro data series code of the research provider, not a stored entity
+        indicators: [ResearchChartBuilderIndicator] = [], oscillator: ResearchChartOscillator = .off, oscillatorSeriesId: String? = nil  // lint:allow raw-id macro data series code of the research provider, not a stored entity
     ) {
         self.range = range
         self.logLeft = logLeft
@@ -178,7 +184,7 @@ public struct ResearchChartBuilderState: Codable, Equatable, Sendable {
         .object([
             "range": .string(range), "logLeft": .bool(logLeft), "rebase": .bool(rebase),
             "series": .array(series.map(\.raw)), "indicators": .array(indicators.map(\.raw)),
-            "oscillator": .string(oscillator), "oscillatorSeriesId": oscillatorSeriesId.map(TaxValue.string) ?? .null,
+            "oscillator": .string(oscillator.rawValue), "oscillatorSeriesId": oscillatorSeriesId.map(TaxValue.string) ?? .null,
         ])
     }
     public init(raw: TaxValue) throws {
@@ -190,7 +196,9 @@ public struct ResearchChartBuilderState: Codable, Equatable, Sendable {
         rebase = try ResearchDecode.bool(raw["rebase"])
         series = try ResearchDecode.required(raw["series"], [ResearchChartBuilderSeries].self)
         indicators = try ResearchDecode.required(raw["indicators"], [ResearchChartBuilderIndicator].self)
-        oscillator = try ResearchChartValidation.choice(raw["oscillator"], ["none", "rsi", "macd"])
+        oscillator = try ResearchChartOscillator(
+            rawValue: ResearchChartValidation.choice(raw["oscillator"], Set(ResearchChartOscillator.allCases.map(\.rawValue))))
+            ?? .off
         oscillatorSeriesId = try ResearchDecode.optionalString(raw["oscillatorSeriesId"])
         guard series.count <= 5, indicators.count <= 20, Set(series.map(\.id)).count == series.count,
             Set(indicators.map(\.id)).count == indicators.count

@@ -314,14 +314,14 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
                         provider: base.provider)
                 ]
             next.indicators = []
-            next.oscillator = "none"
+            next.oscillator = .off
         case .sma, .bollinger:
             next.series = priceOnly.map {
                 var series = $0
                 series.type = "line"
                 return series
             }
-            next.oscillator = "none"
+            next.oscillator = .off
             next.indicators =
                 preset == .sma
                 ? [
@@ -329,7 +329,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
                     .init(id: makeID(), type: "sma", period: 200, seriesId: primary.id),
                 ] : [.init(id: makeID(), type: "bollinger", period: 20, seriesId: primary.id)]
         case .rsi, .macd:
-            next.oscillator = preset.rawValue
+            next.oscillator = preset == .rsi ? .rsi : .macd
             next.oscillatorSeriesId = primary.id
         case .rebased:
             next.rebase = true
@@ -672,7 +672,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
                         "points": .array((snapshots[series.fetchKey]?.data.points ?? []).map(\.raw)),
                     ])
                 }), "indicators": .array(state.indicators.map(\.raw)), "rebase": .bool(state.rebase),
-            "oscillator": .string(state.oscillator),
+            "oscillator": .string(state.oscillator.rawValue),
             "oscillatorSeriesId": state.oscillatorSeriesId.map(TaxValue.string) ?? .null,
         ])
     }

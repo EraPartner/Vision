@@ -178,13 +178,13 @@ public struct ResearchChartBuilderView: View {
                 VisionSelect(
                     selection: state(\.oscillator),
                     options: [
-                        VisionSelectOption(value: "none", title: strings.t("research.builder.oscNone")),
-                        VisionSelectOption(value: "rsi", title: "RSI"),
-                        VisionSelectOption(value: "macd", title: "MACD"),
+                        VisionSelectOption(value: ResearchChartOscillator.off, title: strings.t("research.builder.oscNone")),
+                        VisionSelectOption(value: ResearchChartOscillator.rsi, title: "RSI"),
+                        VisionSelectOption(value: ResearchChartOscillator.macd, title: "MACD"),
                     ], accessibilityLabel: strings.t("research.builder.oscillator")
                 ).frame(width: 135).disabled(!controlsEnabled)
             }
-            if model.state.oscillator != "none" {
+            if model.state.oscillator != .off {
                 if model.isLoading || model.isPreparing && model.presentation == nil {
                     ProgressView().frame(maxWidth: .infinity).frame(height: 160)
                 } else if let presentation = model.presentation, !presentation.oscillatorRows.isEmpty {
@@ -243,7 +243,7 @@ public struct ResearchChartBuilderView: View {
         return marks
     }
     private var oscillatorMarks: [ResearchChartBuilderMark] {
-        model.state.oscillator == "rsi"
+        model.state.oscillator == .rsi
             ? [.init(id: "rsi", label: "RSI(14)", kind: "line", axis: "left", color: theme.primary)]
             : [
                 .init(id: "macd", label: "MACD", kind: "line", axis: "left", color: theme.primary),

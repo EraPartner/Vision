@@ -55,7 +55,7 @@ actor StaticImportService: ImportService {
     func importStream(
         file: ImportFile, bankName: String, onProgress: @escaping @Sendable (ImportProgress) async -> Void
     ) async throws -> ImportOutcome {
-        await onProgress(ImportProgress(phase: "importing", current: 12, total: 40, imported: 10, duplicates: 1, errors: 1, percent: 30))
+        await onProgress(ImportProgress(phase: .importing, current: 12, total: 40, imported: 10, duplicates: 1, errors: 1, percent: 30))
         if hangs { try await Task.sleep(for: .seconds(60)) }
         return .completed(ImportCompletion(total: 40, imported: 37, duplicates: 2, errors: 1))
     }
@@ -1361,7 +1361,7 @@ actor StaticAccountsService: AccountsService {
         model.config.amountColumn = "Bedrag"
         model.config.separator = ";"
         await model.startImport(strings: shell.strings)
-        #expect(model.progress?.phase == "complete")
+        #expect(model.progress?.phase == .complete)
         #expect(layOutImports(shell).fittingSize.height > 0)
         model.showCommitReceipt(try #require(ImportCommitReceipt(imported: 37, duplicates: 2, errors: 1, dateFrom: "2026-10-01", dateTo: "2026-10-09")))
         #expect(model.commitReceipt != nil)
@@ -1379,7 +1379,7 @@ actor StaticAccountsService: AccountsService {
         model.selectSource(.adapter("kbc"))
         // Importing: the progress panel with its counts, and Cancel.
         let running = Task { await model.startImport(strings: shell.strings) }
-        while model.progress?.phase != "importing" { await Task.yield() }
+        while model.progress?.phase != .importing { await Task.yield() }
         #expect(model.isImporting)
         #expect(model.progress?.showsCounts == true)
         #expect(layOutImports(shell).fittingSize.height > 0)
@@ -1408,7 +1408,7 @@ actor StaticAccountsService: AccountsService {
         failing.imports.config.encoding = "utf-16"
         #expect(failing.imports.headersPanel == .unreadable)
         await failing.imports.startImport(strings: failing.strings)
-        #expect(failing.imports.progress?.phase == "error")
+        #expect(failing.imports.progress?.phase == .error)
         #expect(failing.imports.notice?.key == "importPage.toast.serverError")
         #expect(layOutImports(failing).fittingSize.height > 0)
     }

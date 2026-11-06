@@ -125,9 +125,9 @@ public enum ImportStreamEvents {
             let completion = ImportCompletion(
                 total: result.totalProcessed, imported: result.imported, duplicates: result.duplicates,
                 errors: result.errors, batchId: result.batchId)
-            // `{ ...data, phase: "complete", percent: 100 }`: the event has no row position.
+            // `{ ...data, phase: .complete, percent: 100 }`: the event has no row position.
             let panel = ImportProgress(
-                phase: "complete", imported: result.imported, duplicates: result.duplicates, errors: result.errors,
+                phase: .complete, imported: result.imported, duplicates: result.duplicates, errors: result.errors,
                 percent: 100)
             if result.requiresReview == true, let batchId = result.batchId {
                 return .finished(.reviewRequired(batchId: batchId), panel)
@@ -135,7 +135,7 @@ public enum ImportStreamEvents {
             return .finished(.completed(completion), panel)
         case "review_required":
             let result = try decode(ReviewRequiredEvent.self, from: payload, event: event.event)
-            return .finished(.reviewRequired(batchId: result.batchId), ImportProgress(phase: "review_required", percent: 100))
+            return .finished(.reviewRequired(batchId: result.batchId), ImportProgress(phase: .reviewRequired, percent: 100))
         case "error":
             throw ImportStreamFailure(detail: detail(payload))
         default:

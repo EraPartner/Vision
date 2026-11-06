@@ -319,7 +319,7 @@ struct ImportBankCard: View {
                 .background(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.foreground.opacity(0.04)))
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.updatesFrequently)
-            } else if progress.phase == "complete" {
+            } else if progress.phase == .complete {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
@@ -343,7 +343,7 @@ struct ImportBankCard: View {
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.success.opacity(0.1)))
                 .accessibilityElement(children: .combine)
-            } else if progress.phase == "error" {
+            } else if progress.phase == .error {
                 HStack(spacing: 12) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title3)

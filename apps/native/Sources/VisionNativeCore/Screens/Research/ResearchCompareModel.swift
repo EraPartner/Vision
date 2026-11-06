@@ -129,7 +129,7 @@ public final class ResearchCompareModel {
         acceptRoute(next)
         return next
     }
-    public func selectTab(_ tab: String) -> NativeRoute {
+    public func selectTab(_ tab: ResearchCompareTab) -> NativeRoute {
         let next = state.settingTab(tab, in: route)
         acceptRoute(next)
         return next
