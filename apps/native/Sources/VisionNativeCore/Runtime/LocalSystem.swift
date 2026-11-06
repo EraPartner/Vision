@@ -557,8 +557,9 @@ extension LocalFileSystem {
         var buffer = [UInt8](repeating: 0, count: max(length, 0))
         var total = 0
         while total < buffer.count {
-            let count = buffer.withUnsafeMutableBytes { raw in
-                Darwin.pread(descriptor, raw.baseAddress! + total, raw.count - total, off_t(total))
+            let count = buffer.withUnsafeMutableBytes { raw -> Int in
+                guard let base = raw.baseAddress else { return 0 }
+                return Darwin.pread(descriptor, base + total, raw.count - total, off_t(total))
             }
             if count < 0 {
                 if errno == EINTR { continue }

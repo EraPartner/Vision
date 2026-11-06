@@ -77,7 +77,6 @@ public enum DatabaseStatistics {
             schemaFormat: Int(uint32(bytes, 44)),
             textEncoding: textEncodings[uint32(bytes, 56)],
             userVersion: Int(Int32(bitPattern: uint32(bytes, 60))),
-            applicationId: Int(Int32(bitPattern: uint32(bytes, 68))),
             sqliteVersionNumber: Int(uint32(bytes, 96)))
     }
 
@@ -179,7 +178,6 @@ public struct SqliteFileHeader: Sendable, Equatable {
     public let textEncoding: SqliteTextEncoding?
     /// `PRAGMA user_version`: the migration runner sets it to the latest applied version.
     public let userVersion: Int
-    public let applicationId: Int
     /// `SQLITE_VERSION_NUMBER` of the library that last wrote the file.
     public let sqliteVersionNumber: Int
 }
