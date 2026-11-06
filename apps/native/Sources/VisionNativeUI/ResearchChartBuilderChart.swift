@@ -90,7 +90,7 @@ struct ResearchChartBuilderChart: View {
                                 context.stroke(
                                     line, with: .color(labelColor.opacity(0.6)),
                                     style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                                if kind == "rsi" {
+                                if kind == .rsi {
                                     context.draw(
                                         Text(String(Int(reference))).font(.caption2).foregroundColor(
                                             labelColor), at: CGPoint(x: plot.maxX - 4, y: y - 6),
