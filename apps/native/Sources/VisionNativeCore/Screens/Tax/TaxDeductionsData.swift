@@ -55,9 +55,9 @@ public struct TaxDeductionMapping: Equatable, Sendable {
         default: nil
         }
     }
-    public func currentValue(in household: TaxValue, partner id: String = "A") -> Decimal {
+    public func currentValue(in household: TaxValue, partner id: TaxPartnerID = .a) -> Decimal {
         if isHome { return household["home"]?[amountField]?.decimalValue ?? 0 }
-        let partner = household["partners"]?.arrayValue?.first { $0["id"]?.stringValue == id }
+        let partner = household["partners"]?.arrayValue?.first { TaxPartnerID($0["id"]) == id }
         return (isPartnerField ? partner?[amountField] : partner?["reductions"]?[amountField])?.decimalValue ?? 0
     }
 }
@@ -79,17 +79,18 @@ public struct TaxDeductionApplication: Equatable, Sendable {
             draft.set(["home", mapping.amountField], .number(group.total))
             return draft.value
         }
-        let twoPartners = draft.partners.contains { $0["id"]?.stringValue == "B" }
+        let twoPartners = draft.partners.contains { TaxPartnerID($0["id"]) == .b }
         if twoPartners {
-            guard let shares = group.partnerShares, let a = shares["A"], let b = shares["B"], a >= 0, b >= 0,
+            guard let shares = group.partnerShares, let a = shares[TaxPartnerID.a.rawValue],
+                let b = shares[TaxPartnerID.b.rawValue], a >= 0, b >= 0,
                 a + b == group.total
             else {
                 throw APIError.invalidRequest("Deduction candidate needs backend partner attribution")
             }
         }
         for partner in draft.partners {
-            guard let id = partner["id"]?.stringValue else { throw APIError.invalidRequest("Invalid tax partner") }
-            let amount = twoPartners ? (group.partnerShares?[id] ?? 0) : group.total
+            guard let id = TaxPartnerID(partner["id"]) else { throw APIError.invalidRequest("Invalid tax partner") }
+            let amount = twoPartners ? (group.partnerShares?[id.rawValue] ?? 0) : group.total
             let path = draft.partnerPath(id) + (mapping.isPartnerField ? [] : ["reductions"])
             draft.set(path + [mapping.amountField], .number(amount))
             if let eligible = mapping.eligibilityField, amount > 0 { draft.set(path + [eligible], .bool(true)) }

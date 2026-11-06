@@ -140,7 +140,7 @@ public enum TaxYearCSV {
             return []
         }
         let ids = partners.map { $0["partnerId"]?.stringValue ?? "" }
-        let headings = ids.map { $0 == "A" ? "You" : $0 == "B" ? "Partner" : "" }
+        let headings = ids.map { Self.partnerHeading(TaxPartnerID(rawValue: $0)) }
         var lines = [
             "", row([.string("# Per-partner inputs")]),
             row([.string("Field")] + headings.map(TaxValue.string) + [.string("Household")]),
@@ -177,7 +177,8 @@ public enum TaxYearCSV {
                 lines.append(
                     row([
                         .string("Marital quotient transfer"), rounded(quotient?["transfer"]),
-                        .string(from == "A" ? "You" : "Partner"), .string(to == "A" ? "You" : "Partner"),
+                        .string(TaxPartnerID(rawValue: from) == .a ? "You" : "Partner"),
+                        .string(TaxPartnerID(rawValue: to) == .a ? "You" : "Partner"),
                     ]))
                 lines.append(row([.string("Marital quotient benefit"), rounded(quotient?["benefit"])]))
             }
@@ -185,13 +186,21 @@ public enum TaxYearCSV {
         return lines
     }
 
+    /// The web export's column heading for a partner id; blank for any other id.
+    private static func partnerHeading(_ id: TaxPartnerID?) -> String {
+        switch id {
+        case .a: "You"
+        case .b: "Partner"
+        case nil: ""
+        }
+    }
     private static func partnerInputRows(_ partner: TaxValue?) -> [(String, TaxValue?)] {
         guard let partner else {
             return partnerInputRows(.object([:])).map { ($0.0, nil) }
         }
         let activities = partner["activities"]?.arrayValue
         let amounts = activities?.map { activity in
-            activity["kind"]?.stringValue == "net_professional_amount"
+            TaxActivityKind(activity["kind"]) == .netProfessionalAmount
                 ? coalesce(activity["netProfessionalIncome"], .number(0)) : activity["grossIncome"]
         }
         let reductions = partner["reductions"]
