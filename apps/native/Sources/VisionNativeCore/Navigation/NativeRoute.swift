@@ -26,6 +26,9 @@ public struct NativeRoute: Equatable, Sendable {
     /// The registry page this route's path names, or `nil` for any other path.
     public var destination: Destination? { Destination(rawValue: path) }
 
+    /// The native screen this route's path names, or `nil` for a path the web app draws.
+    public var screen: NativeScreen? { NativeScreen.screen(forPath: path) }
+
     /// An app-relative route: one leading `/` (not `//`), no fragment, backslash or
     /// control character. Chart Builder alone admits its larger, bounded share URL.
     public static func isValid(_ raw: String) -> Bool {
@@ -216,6 +219,16 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .accountDetail(let id): return AccountsRoutes.detailPath(id)
         case .categories: return CategoriesRoutes.path
         case .recipients: return RecipientsRoutes.path
+        }
+    }
+
+    /// `/portfolio` and every screen below it.
+    public var isPortfolioSection: Bool {
+        switch self {
+        case .portfolio, .portfolioHoldings, .rebalance, .netWorth, .portfolioTax, .portfolioImport,
+            .portfolioImportReview:
+            return true
+        default: return false
         }
     }
 
