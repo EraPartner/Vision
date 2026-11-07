@@ -6,7 +6,8 @@ import VisionNativeCore
 /// Every other operation still goes to the Bun backend.
 public enum PortedOperations {
     public static let ids: Set<String> = [
-        "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings",
+        "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings", "getExchangeRates",
+        "refreshExchangeRates",
     ]
 }
 
@@ -52,10 +53,13 @@ public struct InProcessBackend: Sendable {
     }
 
     /// The handlers the app uses: one per id in `PortedOperations.ids`, in inventory order.
-    public static func live(database: BackendDatabase) -> InProcessBackend {
+    public static func live(
+        database: BackendDatabase, fetcher: any ProviderFetching = URLSessionProviderFetcher()
+    ) -> InProcessBackend {
         var backend = InProcessBackend(isActive: { await database.isConfigured })
         TagsArea.register(&backend, database: database)
         SettingsArea.register(&backend, database: database)
+        ExchangeRatesArea.register(&backend, database: database, fetcher: fetcher)
         return backend
     }
 

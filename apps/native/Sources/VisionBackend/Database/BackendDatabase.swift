@@ -49,7 +49,7 @@ public actor BackendDatabase: InProcessDatabaseHolder {
         if let session { return session }
         let clock = SQLConnectionClock()
         let connection = try VisionDatabase.open(path: path, role: .writer, time: time, clock: clock)
-        let opened = BackendSession(connection: connection, clock: clock)
+        let opened = BackendSession(connection: connection, clock: clock, time: time)
         session = opened
         return opened
     }
@@ -61,10 +61,18 @@ public actor BackendDatabase: InProcessDatabaseHolder {
 public final class BackendSession {
     let connection: SQLiteConnection
     let clock: SQLConnectionClock
+    /// The session's time zone, the backend's `APP_TIMEZONE`.
+    let time: SQLTimestamps
 
-    init(connection: SQLiteConnection, clock: SQLConnectionClock) {
+    init(connection: SQLiteConnection, clock: SQLConnectionClock, time: SQLTimestamps) {
         self.connection = connection
         self.clock = clock
+        self.time = time
+    }
+
+    /// `todayAppDateString()`: today's calendar day in the session's zone, `YYYY-MM-DD`.
+    func today() -> String {
+        SQLTimestamps.formatDate(time.localDate(of: Self.currentInstant()))
     }
 
     private static func currentInstant() -> SQLTimestamps.Instant {

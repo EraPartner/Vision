@@ -49,7 +49,15 @@ interface ParityArea {
   /** SQL run after the migrations, before the first step. */
   seed: string[];
   steps: ParityStep[];
+  /**
+   * Answers to the backend's outbound `fetch` by URL (providers such as ECB); any other URL
+   * fails like an unreachable host. The Swift replay serves the same answers.
+   */
+  fetch?: Record<string, { status: number; body: string }>;
 }
+
+/** Recorded in place of today's date (APP_TIMEZONE Europe/Brussels): the replay substitutes its own. */
+export const TODAY_TOKEN = "{{today}}";
 
 const SEED_TIME = "2025-03-01T09:00:00.000000Z";
 
@@ -106,6 +114,22 @@ const read = (key: string): ParityStep => ({ operationId: "getSetting", method: 
 const list = (query = ""): ParityStep => ({ operationId: "getSettings", method: "GET", path: `/api/settings${query}` });
 const LONG_KEY = "k".repeat(101);
 const jsonText = (text: string): unknown => JSON.parse(text);
+
+
+const ECB_DAILY = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+const ER_API_LATEST = "https://open.er-api.com/v6/latest/EUR";
+const RATE_ROW = (code: string, rate: string, date: string, latest: number, fetched = SEED_TIME) =>
+  `('${code}', vision_numeric('${rate}', 20, 10), '${date}', ${latest}, '${fetched}', '${SEED_TIME}')`;
+const ratesList = (query = ""): ParityStep => ({
+  operationId: "getExchangeRates",
+  method: "GET",
+  path: `/api/info/exchange-rates${query}`,
+});
+const ratesRefresh: ParityStep = {
+  operationId: "refreshExchangeRates",
+  method: "POST",
+  path: "/api/info/exchange-rates/refresh",
+};
 
 export const AREAS: Record<string, ParityArea> = {
   tags: {
@@ -389,6 +413,60 @@ export const AREAS: Record<string, ParityArea> = {
       list("?withBaselines=true"),
     ],
   },
+  "exchange-rates": {
+    router: { module: "info/rates.ts", mountPath: "/api/info" },
+    seed: [
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("AUD", "0.61", "2099-01-01", 1, "2025-03-02T10:00:00.123456Z")},
+        ${RATE_ROW("USD", "0.9123456789", "2025-01-02", 1)},
+        ${RATE_ROW("USD", "0.95", "2024-12-31", 0)},
+        ${RATE_ROW("GBP", "1.18", "2025-01-02", 1)},
+        ${RATE_ROW("XYZ", "123.4567", "2025-01-02", 1)}`,
+    ],
+    fetch: {
+      [ECB_DAILY]: {
+        status: 200,
+        body: [
+          `<?xml version="1.0" encoding="UTF-8"?>`,
+          `<gesmes:Envelope><Cube><Cube time='2025-03-03'>`,
+          `<Cube currency='USD' rate='1.0812'/>`,
+          `<Cube currency="GBP" rate="0.83465" />`,
+          `<Cube\tcurrency='JPY'\nrate="162.2.5"/>`,
+          `<Cube currency='CHF' rate='0.00001'/>`,
+          `<Cube currency='SEK' rate='.'/>`,
+          `<Cube currency='usd' rate='1'/>`,
+          `<Cube currency='NOK' rate='11.5'/><Cube currency='NOK' rate='11.75'/>`,
+          `</Cube></Cube></gesmes:Envelope>`,
+        ].join("\n"),
+      },
+      [ER_API_LATEST]: {
+        status: 200,
+        body: JSON.stringify({
+          result: "success",
+          rates: { EUR: 1, USD: 1.09, AED: 3.97, "123": 2, KWD: "0.33", ZWL: 1e6, XAU: 0.00005, QAR: 3.93 },
+        }),
+      },
+    },
+    steps: [
+      ratesList(),
+      ratesList("?db_only=true"),
+      ratesList("?db_only=1"),
+      ratesList("?db_only=yes"),
+      ratesList("?db_only=FALSE"),
+      ratesList("?db_only=true&db_only=false"),
+      ratesRefresh,
+      ratesList("?db_only=true"),
+    ],
+  },
+  "exchange-rates-empty": {
+    router: { module: "info/rates.ts", mountPath: "/api/info" },
+    seed: [],
+    fetch: {
+      [ECB_DAILY]: { status: 503, body: "unavailable" },
+      [ER_API_LATEST]: { status: 200, body: "{not json" },
+    },
+    steps: [ratesList("?db_only=true"), ratesRefresh, ratesList("?db_only=1")],
+  },
 };
 
 interface RecordedStep extends ParityStep {
@@ -424,6 +502,16 @@ async function recordArea(name: string, area: ParityArea): Promise<RecordedStep[
   // Before any backend module loads its settings.
   process.env.VISION_DATABASE_PATH = file;
   process.env.NODE_ENV = "test";
+  process.env.APP_TIMEZONE = "Europe/Brussels";
+  const stubs = area.fetch;
+  if (stubs !== undefined) {
+    globalThis.fetch = ((input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const stub = stubs[url];
+      if (stub === undefined) return Promise.reject(new TypeError(`fetch failed: ${url}`));
+      return Promise.resolve(new Response(stub.body, { status: stub.status }));
+    });
+  }
   const { runMigrations } = await import("../apps/node-backend/src/database/migrate.ts");
   await runMigrations(file, { skipBackup: true });
   const { openDatabase } = await import("../apps/node-backend/src/database/connection.ts");
@@ -443,13 +531,20 @@ async function recordArea(name: string, area: ParityArea): Promise<RecordedStep[
   const agent = httpAgent(
     createRouteApp(router, { mountPath: area.router.mountPath, isProduction: () => true }),
   );
+  const { todayAppDateString } = (await import(backendModule("src/lib/timezone.ts"))) as {
+    todayAppDateString: () => string;
+  };
   const recorded: RecordedStep[] = [];
   for (const step of area.steps) {
     const method = step.method.toLowerCase() as "get" | "post" | "put" | "patch" | "delete";
     const request = agent[method](step.path);
     if ("body" in step) request.set("Content-Type", "application/json").send(JSON.stringify(step.body));
     const res = await request;
-    recorded.push({ ...step, status: res.status, response: withoutRequestId(res.body) });
+    const today = todayAppDateString();
+    const response = JSON.parse(
+      JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) => (value === today ? TODAY_TOKEN : value)),
+    ) as unknown;
+    recorded.push({ ...step, status: res.status, response });
   }
   fs.rmSync(dir, { recursive: true, force: true });
   return recorded;
@@ -457,7 +552,8 @@ async function recordArea(name: string, area: ParityArea): Promise<RecordedStep[
 
 /** The corpus file of one area: the seed and the recorded steps. */
 function corpusText(area: ParityArea, steps: RecordedStep[]): string {
-  return `${JSON.stringify({ generatedBy: "bun run native:parity", seed: area.seed, steps }, null, 2)}\n`;
+  const corpus = { generatedBy: "bun run native:parity", seed: area.seed, fetch: area.fetch, steps };
+  return `${JSON.stringify(corpus, null, 2)}\n`;
 }
 
 /**

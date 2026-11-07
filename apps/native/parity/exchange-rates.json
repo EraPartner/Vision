@@ -1,0 +1,347 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('AUD', vision_numeric('0.61', 20, 10), '2099-01-01', 1, '2025-03-02T10:00:00.123456Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.9123456789', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.95', 20, 10), '2024-12-31', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.18', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('XYZ', vision_numeric('123.4567', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "fetch": {
+    "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml": {
+      "status": 200,
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gesmes:Envelope><Cube><Cube time='2025-03-03'>\n<Cube currency='USD' rate='1.0812'/>\n<Cube currency=\"GBP\" rate=\"0.83465\" />\n<Cube\tcurrency='JPY'\nrate=\"162.2.5\"/>\n<Cube currency='CHF' rate='0.00001'/>\n<Cube currency='SEK' rate='.'/>\n<Cube currency='usd' rate='1'/>\n<Cube currency='NOK' rate='11.5'/><Cube currency='NOK' rate='11.75'/>\n</Cube></Cube></gesmes:Envelope>"
+    },
+    "https://open.er-api.com/v6/latest/EUR": {
+      "status": 200,
+      "body": "{\"result\":\"success\",\"rates\":{\"123\":2,\"EUR\":1,\"USD\":1.09,\"AED\":3.97,\"KWD\":\"0.33\",\"ZWL\":1000000,\"XAU\":0.00005,\"QAR\":3.93}}"
+    }
+  },
+  "steps": [
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 4,
+          "rates": [
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.18,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9123456789,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2025-03-02T10:00:00.123Z"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 4,
+          "rates": [
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.18,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9123456789,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2025-03-02T10:00:00.123Z"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 4,
+          "rates": [
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.18,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9123456789,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2025-03-02T10:00:00.123Z"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=yes",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 4,
+          "rates": [
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.18,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9123456789,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2025-03-02T10:00:00.123Z"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=FALSE",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 4,
+          "rates": [
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.18,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9123456789,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2025-03-02T10:00:00.123Z"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=true&db_only=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 4,
+          "rates": [
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.18,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9123456789,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2025-03-02T10:00:00.123Z"
+        }
+      }
+    },
+    {
+      "operationId": "refreshExchangeRates",
+      "method": "POST",
+      "path": "/api/info/exchange-rates/refresh",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "message": "Exchange rates refreshed from ECB"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 9,
+          "rates": [
+            {
+              "currency": "123",
+              "rate_to_eur": 0.5,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "AED",
+              "rate_to_eur": 0.2518891688,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "AUD",
+              "rate_to_eur": 0.61,
+              "rate_date": "2099-01-01",
+              "fetched_at": "2025-03-02T10:00:00.123Z"
+            },
+            {
+              "currency": "GBP",
+              "rate_to_eur": 1.198106991,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "JPY",
+              "rate_to_eur": 0.0061652281,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "NOK",
+              "rate_to_eur": 0.085106383,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "QAR",
+              "rate_to_eur": 0.2544529262,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "USD",
+              "rate_to_eur": 0.9248982612,
+              "rate_date": "{{today}}",
+              "fetched_at": "2026-11-07T09:19:58.190Z"
+            },
+            {
+              "currency": "XYZ",
+              "rate_to_eur": 123.4567,
+              "rate_date": "2025-01-02",
+              "fetched_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "source": "database",
+          "is_stale": false,
+          "last_fetched_at": "2026-11-07T09:19:58.190Z"
+        }
+      }
+    }
+  ]
+}

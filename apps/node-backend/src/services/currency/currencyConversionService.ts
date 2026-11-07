@@ -14,6 +14,7 @@
 
 import { sql } from "kysely";
 import { checkedRows, db } from "../../database/db.ts";
+import { externalWriteVersion } from "../../database/connection.ts";
 import { RowContractError } from "../../database/rowContracts.ts";
 import {
   currencyDatePairRowSchema,
@@ -93,6 +94,31 @@ const NO_STORED_RATES: RateTable = Object.freeze({ EUR: 1 });
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
+// `externalWriteVersion` when the caches above were last checked.
+let cachedWriteVersion: number | null = null;
+
+/**
+ * Drop the database-backed caches (latest rates, historical index) when
+ * another connection has committed since the last check: the Swift app's
+ * in-process backend writes `exchange_rates` too (ADR-270 decision 4). Every
+ * other writer of those rows runs in this process and clears them itself.
+ */
+function revalidateAgainstExternalWrites(): void {
+  let version: number;
+  try {
+    version = externalWriteVersion();
+  } catch {
+    // No database to compare against: the caches stay as they are.
+    return;
+  }
+  if (cachedWriteVersion !== null && version !== cachedWriteVersion) {
+    memoryCache = null;
+    clearHistoricalIndexCache();
+  }
+  cachedWriteVersion = version;
+}
+
+
 /**
  * Get current rates using the cache hierarchy:
  *   1. In-memory cache (24-hour TTL)
@@ -101,6 +127,7 @@ const NO_STORED_RATES: RateTable = Object.freeze({ EUR: 1 });
  * rate, which callers flag and leave out, never convert at a constant or 1:1.
  */
 async function getRates(): Promise<RateTable> {
+  revalidateAgainstExternalWrites();
   if (memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
     return memoryCache.rates;
   }
@@ -145,6 +172,7 @@ export async function getHistoricalRateIndex(
 ): Promise<HistoricalRateIndex> {
   const wanted = [...new Set(currencies)].filter(Boolean);
   if (wanted.length === 0) return new Map();
+  revalidateAgainstExternalWrites();
 
   const cache = historicalIndexCache;
   const fresh =

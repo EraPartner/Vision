@@ -39,7 +39,7 @@ import VisionNativeCore
         let database = BackendDatabase()
         await database.resume(databasePath: ":memory:")
         let transport = RoutingAPITransport(backend: .live(database: database), fallback: bun, streamFallback: bun)
-        let response = try await transport.send(try Self.request(.get, "/api/info/exchange-rates"))
+        let response = try await transport.send(try Self.request(.get, "/api/accounts"))
         #expect(response.body == Data("bun".utf8))
         #expect(bun.sent.count == 1)
     }
