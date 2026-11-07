@@ -47,6 +47,9 @@ public final class SQLiteConnection {
 
     public static var libraryVersion: String { String(cString: sqlite3_libversion()) }
 
+    /// False while a transaction is open (`db.isTransaction` of node:sqlite, negated).
+    public var isAutocommit: Bool { sqlite3_get_autocommit(handle) != 0 }
+
     public init(path: String, role: Role = .writer) throws {
         guard sqlite3_libversion_number() >= Self.minimumVersionNumber else {
             throw DatabaseError(

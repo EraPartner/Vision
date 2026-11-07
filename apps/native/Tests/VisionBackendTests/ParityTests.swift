@@ -1,0 +1,206 @@
+import Foundation
+import Testing
+import VisionNativeCore
+
+@testable import VisionBackend
+
+/// Replays the parity corpus `bun run native:parity` recorded from the TypeScript backend
+/// (ADR-270 decision 5): the same migrated database and seed, the same requests in order,
+/// through `RoutingAPITransport`, and the JSON compared semantically. `meta.requestId` is left
+/// out, and a timestamp the run created (one not written in the seed) is compared by form.
+@Suite struct ParityTests {
+    struct Step: Decodable {
+        // lint:allow raw-id an OpenAPI operationId, not an entity identifier
+        let operationId: String
+        let method: String
+        let path: String
+        let body: JSONValue?
+        let hasBody: Bool
+        let status: Int
+        let response: JSONValue
+
+        enum CodingKeys: String, CodingKey { case operationId, method, path, body, status, response }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            operationId = try container.decode(String.self, forKey: .operationId)
+            method = try container.decode(String.self, forKey: .method)
+            path = try container.decode(String.self, forKey: .path)
+            hasBody = container.contains(.body)
+            body = hasBody ? try container.decode(JSONValue.self, forKey: .body) : nil
+            status = try container.decode(Int.self, forKey: .status)
+            response = try container.decode(JSONValue.self, forKey: .response)
+        }
+    }
+
+    struct Corpus: Decodable {
+        let seed: [String]
+        let steps: [Step]
+    }
+
+    struct NoFallback: APITransport, APIStreamTransport {
+        struct Unrouted: Error { let path: String }
+        func send(_ request: APIRequest) async throws -> APIResponse { throw Unrouted(path: request.url.path) }
+        func stream(_ request: APIRequest, receive: (Data) async throws -> Void) async throws -> APIResponse {
+            throw Unrouted(path: request.url.path)
+        }
+    }
+
+    static let corpusDirectory = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("parity")
+
+    /// A database file as `runMigrations` leaves it, plus the area's seed.
+    static func migratedDatabase(seed: [String]) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vision-parity-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("vision.sqlite3")
+        let db = try SQLiteConnection(path: file.path)
+        try db.registerVisionFunctions()
+        try db.registerSchemaFunctions()
+        try db.execute("PRAGMA foreign_keys = OFF")
+        try db.execute("BEGIN IMMEDIATE")
+        try db.execute(
+            "CREATE TABLE vision_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL)"
+        )
+        for entry in MigrationLedger.expected {
+            let sql = try String(
+                contentsOf: PersistenceTests.migrations.appendingPathComponent("\(entry.name).sql"), encoding: .utf8)
+            try db.execute(sql)
+            _ = try db.query(
+                "INSERT INTO vision_migrations VALUES (?, ?, ?, '2026-11-07T00:00:00.000Z')",
+                [.integer(entry.version), .text(entry.name), .text(entry.sha256)])
+        }
+        try db.execute("PRAGMA user_version = \(MigrationLedger.expected.count)")
+        try db.execute("COMMIT")
+        try db.execute("PRAGMA foreign_keys = ON")
+        for statement in seed { try db.execute(statement) }
+        return file
+    }
+
+    /// The `YYYY-MM-DDTHH:mm:ss.sssZ` form of every canonical timestamp the seed writes.
+    static func seedTimestamps(_ seed: [String]) -> Set<String> {
+        var found: Set<String> = []
+        for statement in seed {
+            let bytes = Array(statement.utf8)
+            guard bytes.count >= 27 else { continue }
+            for start in 0...(bytes.count - 27) {
+                let candidate = String(decoding: bytes[start..<(start + 27)], as: UTF8.self)
+                if let iso = SQLRow.isoMilliseconds(fromCanonical: candidate) { found.insert(iso) }
+            }
+        }
+        return found
+    }
+
+    static func isTimestampForm(_ text: String) -> Bool {
+        text.count == 24 && text.hasSuffix("Z") && Instant(text) != nil
+            && SQLRow.isoMilliseconds(fromCanonical: String(text.dropLast()) + "000Z") != nil
+    }
+
+    /// The first difference between `expected` and `actual`, or nil when they match.
+    static func difference(
+        _ expected: JSONValue, _ actual: JSONValue, at path: String, seedTimes: Set<String>
+    ) -> String? {
+        switch (expected, actual) {
+        case (.object(let want), .object(let got)):
+            if Set(want.keys) != Set(got.keys) {
+                return "\(path): keys \(want.keys.sorted()) != \(got.keys.sorted())"
+            }
+            for key in want.keys.sorted() {
+                if let found = difference(want[key]!, got[key]!, at: "\(path).\(key)", seedTimes: seedTimes) {
+                    return found
+                }
+            }
+            return nil
+        case (.array(let want), .array(let got)):
+            if want.count != got.count { return "\(path): \(want.count) items != \(got.count)" }
+            for (index, pair) in zip(want, got).enumerated() {
+                if let found = difference(pair.0, pair.1, at: "\(path)[\(index)]", seedTimes: seedTimes) {
+                    return found
+                }
+            }
+            return nil
+        case (.string(let want), .string(let got)) where isTimestampForm(want) && !seedTimes.contains(want):
+            return isTimestampForm(got) ? nil : "\(path): \(got) is not a timestamp"
+        case (.int(let want), .double(let got)), (.double(let got), .int(let want)):
+            return Double(want) == got ? nil : "\(path): \(want) != \(got)"
+        default:
+            return expected == actual ? nil : "\(path): \(expected) != \(actual)"
+        }
+    }
+
+    /// The body without `meta.requestId`, and without `meta` when nothing else is in it.
+    static func withoutRequestId(_ body: JSONValue) -> JSONValue {
+        guard case .object(var fields) = body, case .object(var meta)? = fields["meta"] else { return body }
+        meta["requestId"] = nil
+        fields["meta"] = meta.isEmpty ? nil : .object(meta)
+        return .object(fields)
+    }
+
+    static func replay(_ area: String) async throws {
+        let data = try Data(contentsOf: corpusDirectory.appendingPathComponent("\(area).json"))
+        let corpus = try JSONDecoder().decode(Corpus.self, from: data)
+        let file = try migratedDatabase(seed: corpus.seed)
+        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        let database = BackendDatabase(path: file.path)
+        let backend = InProcessBackend.live(database: database)
+        let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
+        let seedTimes = seedTimestamps(corpus.seed)
+        for (index, step) in corpus.steps.enumerated() {
+            let label = "\(area) step \(index): \(step.method) \(step.path)"
+            let url = try #require(URL(string: "http://127.0.0.1:3001\(step.path)"))
+            let method = try #require(HTTPMethod(rawValue: step.method), "\(label)")
+            let request = APIRequest(
+                method: method, url: url, headers: step.hasBody ? ["Content-Type": "application/json"] : [:],
+                body: try step.body.map { try JSONEncoder().encode($0) }, timeout: 30)
+            let matched = try #require(backend.match(request), "\(label) is not ported")
+            #expect(matched.0.operationId == step.operationId, "\(label)")
+            let response = try await transport.send(request)
+            #expect(response.status == step.status, "\(label)")
+            let body = try JSONDecoder().decode(JSONValue.self, from: response.body)
+            let found = difference(step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes)
+            #expect(found == nil, "\(label): \(found ?? "")")
+            if case .object(let fields) = body, case .object(let meta)? = fields["meta"] {
+                #expect(meta["requestId"] != nil, "\(label)")
+                #expect(response.headers["x-request-id"] != nil, "\(label)")
+            }
+        }
+    }
+
+    @Test func tags() async throws {
+        try await Self.replay("tags")
+    }
+
+    @Test func everyPortedOperationHasACorpus() throws {
+        let files = try FileManager.default.contentsOfDirectory(atPath: Self.corpusDirectory.path)
+            .filter { $0.hasSuffix(".json") }
+        var covered: Set<String> = []
+        for file in files {
+            let data = try Data(contentsOf: Self.corpusDirectory.appendingPathComponent(file))
+            covered.formUnion(try JSONDecoder().decode(Corpus.self, from: data).steps.map(\.operationId))
+        }
+        #expect(PortedOperations.ids.isSubset(of: covered))
+    }
+}
+
+/// The helpers whose JavaScript semantics the corpus only samples, against values Bun gave.
+@Suite struct BackendInputTests {
+    @Test func slugifyMatchesTheSharedUtility() {
+        let cases: [(String, String)] = [
+            ("  Groceries   Weekly!! ", "groceries-weekly"), ("Café İstanbul", "caf-istanbul"), ("a - b", "a-b"),
+            ("--x--", "x"), ("a\u{00A0}\u{2028}b", "a-b"), ("-!-a-!-", "a"), ("KELVIN \u{212A}", "kelvin-k"),
+            ("x\u{0085}y", "xy"), ("ÀÉÎ", ""), ("a_b.c", "abc"), ("\tTab\nNew\r", "tab-new"), ("", ""), ("  ", ""),
+            ("a—b", "ab"), ("ŞİŞLİ 2020", "ili-2020"), ("--", ""), ("a!-!b", "a-b"),
+        ]
+        for (input, slug) in cases { #expect(slugify(input) == slug, "\(input)") }
+    }
+
+    @Test func parseIntMatchesJavaScript() {
+        let cases: [(String, Double?)] = [
+            ("12", 12), (" +7x", 7), ("-0", 0), ("1e3", 1), ("0x10", 0), ("abc", nil), ("", nil), ("\u{00A0} 42", 42),
+            ("99999999999999999999", 1e20), ("9007199254740993", 9_007_199_254_740_992), ("-5", -5),
+        ]
+        for (input, value) in cases { #expect(JavaScriptInteger.parse(input) == value, "\(input)") }
+    }
+}

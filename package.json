@@ -63,6 +63,7 @@
     "native:generate-strings": "bun scripts/native-strings.ts",
     "native:generate-navigation": "bun scripts/native-navigation.ts",
     "native:test-generators": "bun test scripts/native-tests",
+    "native:parity": "bun scripts/native-parity.ts",
     "demo:reset-native": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-demo-cli.js reset --execute",
     "version:bump": "bun scripts/version-bump.ts",
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",
