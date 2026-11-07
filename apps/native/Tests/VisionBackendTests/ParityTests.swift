@@ -33,8 +33,30 @@ import VisionNativeCore
 
     struct Corpus: Decodable {
         let seed: [String]
+        let fetch: [String: Stub]?
         let steps: [Step]
     }
+
+    /// A recorded provider answer.
+    struct Stub: Decodable, Sendable {
+        let status: Int
+        let body: String
+    }
+
+    /// The recorder's `fetch`: a recorded answer by URL, anything else unreachable.
+    struct StubFetcher: ProviderFetching {
+        struct Unreachable: Error { let url: URL }
+        let stubs: [String: Stub]
+
+        func get(_ url: URL, timeout: TimeInterval) async throws -> ProviderResponse {
+            guard let stub = stubs[url.absoluteString] else { throw Unreachable(url: url) }
+            return ProviderResponse(status: stub.status, body: Data(stub.body.utf8))
+        }
+    }
+
+    /// The recorder's `APP_TIMEZONE`; `{{today}}` in a response is that zone's today.
+    static let recorderTime = SQLTimestamps(timeZone: TimeZone(identifier: "Europe/Brussels") ?? .current)
+    static let todayToken = "{{today}}"
 
     struct NoFallback: APITransport, APIStreamTransport {
         struct Unrouted: Error { let path: String }
@@ -98,7 +120,7 @@ import VisionNativeCore
 
     /// The first difference between `expected` and `actual`, or nil when they match.
     static func difference(
-        _ expected: JSONValue, _ actual: JSONValue, at path: String, seedTimes: Set<String>
+        _ expected: JSONValue, _ actual: JSONValue, at path: String, seedTimes: Set<String>, today: String = ""
     ) -> String? {
         switch (expected, actual) {
         case (.object(let want), .object(let got)):
@@ -106,7 +128,9 @@ import VisionNativeCore
                 return "\(path): keys \(want.keys.sorted()) != \(got.keys.sorted())"
             }
             for key in want.keys.sorted() {
-                if let found = difference(want[key]!, got[key]!, at: "\(path).\(key)", seedTimes: seedTimes) {
+                if let found = difference(
+                    want[key]!, got[key]!, at: "\(path).\(key)", seedTimes: seedTimes, today: today)
+                {
                     return found
                 }
             }
@@ -114,11 +138,15 @@ import VisionNativeCore
         case (.array(let want), .array(let got)):
             if want.count != got.count { return "\(path): \(want.count) items != \(got.count)" }
             for (index, pair) in zip(want, got).enumerated() {
-                if let found = difference(pair.0, pair.1, at: "\(path)[\(index)]", seedTimes: seedTimes) {
+                if let found = difference(
+                    pair.0, pair.1, at: "\(path)[\(index)]", seedTimes: seedTimes, today: today)
+                {
                     return found
                 }
             }
             return nil
+        case (.string(let want), .string(let got)) where want == todayToken:
+            return got == today ? nil : "\(path): \(got) is not today (\(today))"
         case (.string(let want), .string(let got)) where isTimestampForm(want) && !seedTimes.contains(want):
             return isTimestampForm(got) ? nil : "\(path): \(got) is not a timestamp"
         case (.int(let want), .double(let got)), (.double(let got), .int(let want)):
@@ -141,8 +169,8 @@ import VisionNativeCore
         let corpus = try JSONDecoder().decode(Corpus.self, from: data)
         let file = try migratedDatabase(seed: corpus.seed)
         defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-        let database = BackendDatabase(path: file.path)
-        let backend = InProcessBackend.live(database: database)
+        let database = BackendDatabase(path: file.path, time: recorderTime)
+        let backend = InProcessBackend.live(database: database, fetcher: StubFetcher(stubs: corpus.fetch ?? [:]))
         let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
         let seedTimes = seedTimestamps(corpus.seed)
         // The bodies go out as `JSON.stringify` wrote them: key order decides issue order.
@@ -163,7 +191,9 @@ import VisionNativeCore
             let response = try await transport.send(request)
             #expect(response.status == step.status, "\(label)")
             let body = try JSONDecoder().decode(JSONValue.self, from: response.body)
-            let found = difference(step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes)
+            let today = SQLTimestamps.formatDate(recorderTime.localDate(of: .init(ms: Int64(Date().timeIntervalSince1970 * 1000))))
+            let found = difference(
+                step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
             #expect(found == nil, "\(label): \(found ?? "")")
             if case .object(let fields) = body, case .object(let meta)? = fields["meta"] {
                 #expect(meta["requestId"] != nil, "\(label)")
@@ -178,6 +208,36 @@ import VisionNativeCore
 
     @Test func settings() async throws {
         try await Self.replay("settings")
+    }
+
+    @Test func exchangeRates() async throws {
+        try await Self.replay("exchange-rates")
+        try await Self.replay("exchange-rates-empty")
+    }
+
+    /// A stale list without `db_only` starts `warmCache` in the background, which the corpus
+    /// cannot record in order: the rates appear once the refresh has run.
+    @Test func staleListRefreshesInTheBackground() async throws {
+        let file = try Self.migratedDatabase(seed: [])
+        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        let corpus = try JSONDecoder().decode(
+            Corpus.self, from: Data(contentsOf: Self.corpusDirectory.appendingPathComponent("exchange-rates.json")))
+        let database = BackendDatabase(path: file.path, time: Self.recorderTime)
+        let backend = InProcessBackend.live(database: database, fetcher: StubFetcher(stubs: corpus.fetch ?? [:]))
+        let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
+        let url = try #require(URL(string: "http://127.0.0.1:3001/api/info/exchange-rates"))
+        let response = try await transport.send(APIRequest(method: .get, url: url, headers: [:], body: nil, timeout: 30))
+        #expect(response.status == 200)
+        var stored = 0
+        for _ in 0..<200 {
+            stored = try await database.run { session in
+                try session.rows("SELECT currency_code FROM exchange_rates WHERE is_latest = 1").count
+            }
+            if stored > 0 { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        // The recorded ECB and open.er-api answers hold seven usable quotes besides EUR.
+        #expect(stored == 7)
     }
 
     @Test func everyPortedOperationHasACorpus() throws {
@@ -210,6 +270,15 @@ import VisionNativeCore
             ("99999999999999999999", 1e20), ("9007199254740993", 9_007_199_254_740_992), ("-5", -5),
         ]
         for (input, value) in cases { #expect(JavaScriptInteger.parse(input) == value, "\(input)") }
+    }
+
+    @Test func parseFloatMatchesJavaScript() {
+        let cases: [(String, String)] = [
+            ("1.2.3", "1.2"), (".", "NaN"), (".5", "0.5"), ("5.", "5"), ("007", "7"), ("..5", "NaN"), ("162.2.5", "162.2"),
+        ]
+        for (input, text) in cases {
+            #expect(SQLArguments.javaScriptText(ExchangeRatesArea.parseFloat(input)) == text, "\(input)")
+        }
     }
 
     @Test func numberCoercionMatchesJavaScript() {

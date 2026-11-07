@@ -133,6 +133,7 @@ function completeConnectionSurface<E extends object>(
     openDatabase: vi.fn(),
     resetSchemaCaches: vi.fn(),
     getStatementStats: vi.fn(() => []),
+    externalWriteVersion: vi.fn(() => 0),
     resetStatementStats: vi.fn(),
     ...base,
   };

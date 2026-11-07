@@ -1,0 +1,60 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [],
+  "fetch": {
+    "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml": {
+      "status": 503,
+      "body": "unavailable"
+    },
+    "https://open.er-api.com/v6/latest/EUR": {
+      "status": 200,
+      "body": "{not json"
+    }
+  },
+  "steps": [
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 0,
+          "rates": [],
+          "source": "fallback",
+          "is_stale": true,
+          "last_fetched_at": null
+        }
+      }
+    },
+    {
+      "operationId": "refreshExchangeRates",
+      "method": "POST",
+      "path": "/api/info/exchange-rates/refresh",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "message": "Exchange rates refreshed from ECB"
+        }
+      }
+    },
+    {
+      "operationId": "getExchangeRates",
+      "method": "GET",
+      "path": "/api/info/exchange-rates?db_only=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_rates": 0,
+          "rates": [],
+          "source": "fallback",
+          "is_stale": true,
+          "last_fetched_at": null
+        }
+      }
+    }
+  ]
+}

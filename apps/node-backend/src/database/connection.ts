@@ -692,6 +692,18 @@ export function getTableCount(): Promise<number> {
   }
 }
 
+/**
+ * `PRAGMA data_version` of the writer connection. It changes only when another
+ * connection commits to the file (the Swift app's in-process backend during
+ * the port, ADR-270 decision 4), never for this process's own writes, so an
+ * in-memory cache over tables that runtime writes compares it to know when to
+ * reload.
+ */
+export function externalWriteVersion(): number {
+  const row = getWriter().db.prepare("PRAGMA data_version").get() as { data_version: number | bigint } | undefined;
+  return Number(row?.data_version ?? 0);
+}
+
 /** Lock statistics in the shape the health endpoint reported for the pool. */
 export function getPoolStats() {
   const lock = writeLock.stats();
