@@ -14,7 +14,6 @@ import VisionNativeCore
         let operationId: String
         let method: String
         let path: String
-        let body: JSONValue?
         let hasBody: Bool
         let status: Int
         let response: JSONValue
@@ -27,7 +26,6 @@ import VisionNativeCore
             method = try container.decode(String.self, forKey: .method)
             path = try container.decode(String.self, forKey: .path)
             hasBody = container.contains(.body)
-            body = hasBody ? try container.decode(JSONValue.self, forKey: .body) : nil
             status = try container.decode(Int.self, forKey: .status)
             response = try container.decode(JSONValue.self, forKey: .response)
         }
@@ -147,13 +145,19 @@ import VisionNativeCore
         let backend = InProcessBackend.live(database: database)
         let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
         let seedTimes = seedTimestamps(corpus.seed)
+        // The bodies go out as `JSON.stringify` wrote them: key order decides issue order.
+        guard case .array(let rawSteps)? = JSValue.parse(data)?.objectValue?["steps"] else {
+            Issue.record("\(area): the corpus has no steps")
+            return
+        }
         for (index, step) in corpus.steps.enumerated() {
             let label = "\(area) step \(index): \(step.method) \(step.path)"
             let url = try #require(URL(string: "http://127.0.0.1:3001\(step.path)"))
             let method = try #require(HTTPMethod(rawValue: step.method), "\(label)")
             let request = APIRequest(
                 method: method, url: url, headers: step.hasBody ? ["Content-Type": "application/json"] : [:],
-                body: try step.body.map { try JSONEncoder().encode($0) }, timeout: 30)
+                body: step.hasBody ? rawSteps[index].objectValue?["body"].map { Data($0.jsonText.utf8) } : nil,
+                timeout: 30)
             let matched = try #require(backend.match(request), "\(label) is not ported")
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
@@ -170,6 +174,10 @@ import VisionNativeCore
 
     @Test func tags() async throws {
         try await Self.replay("tags")
+    }
+
+    @Test func settings() async throws {
+        try await Self.replay("settings")
     }
 
     @Test func everyPortedOperationHasACorpus() throws {
@@ -202,5 +210,34 @@ import VisionNativeCore
             ("99999999999999999999", 1e20), ("9007199254740993", 9_007_199_254_740_992), ("-5", -5),
         ]
         for (input, value) in cases { #expect(JavaScriptInteger.parse(input) == value, "\(input)") }
+    }
+
+    @Test func numberCoercionMatchesJavaScript() {
+        let cases: [(String, String)] = [
+            (" 0x1F ", "31"), ("1e", "NaN"), (".5", "0.5"), ("5.", "5"), ("+.e1", "NaN"), ("-Infinity", "-Infinity"),
+            ("infinity", "NaN"), ("1_000", "NaN"), ("\u{00A0}12\n", "12"), ("0b101", "5"), ("-0b1", "NaN"),
+            ("00012", "12"), ("1e1000", "Infinity"), ("0x", "NaN"), ("1e+2", "100"), ("-.5e-1", "-0.05"), ("+5", "5"),
+            (" ", "0"),
+        ]
+        for (input, text) in cases {
+            #expect(SQLArguments.javaScriptText(JavaScriptNumber.fromString(input)) == text, "\(input)")
+        }
+    }
+
+    @Test func jsonTextMatchesJavaScript() throws {
+        let parsed = try #require(
+            JSValue.parse(
+                #"{"b":1,"2":2,"a":{"1":0,"x":[1e21,-0,0.1,1e-7,123456789012345680000]},"10":3,"4294967295":4,"4294967294":5}"#
+            ))
+        #expect(
+            parsed.jsonText
+                == #"{"2":2,"10":3,"4294967294":5,"b":1,"a":{"1":0,"x":[1e+21,0,0.1,1e-7,123456789012345680000]},"4294967295":4}"#
+        )
+        #expect(JSValue.parse(#"{"a":1,"b":2,"a":3}"#)?.jsonText == #"{"a":3,"b":2}"#)
+        #expect(JSValue.string("\u{01}\u{2028}\"\\\u{08}\u{7F}/").jsonText == "\"\\u0001\u{2028}\\\"\\\\\\b\u{7F}/\"")
+        for text in [#"[1,]"#, #"{"a":1,}"#, "01", "1.", "-", #""\x""#, "[1] x", "tru", "\"\t\""] {
+            #expect(JSValue.parse(text) == nil, "\(text)")
+        }
+        #expect(JSValue.parse("1E5") == .number(100_000))
     }
 }
