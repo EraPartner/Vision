@@ -5,7 +5,9 @@ import VisionNativeCore
 /// operation is one reviewed change: its id here and its handler in `InProcessBackend.live`.
 /// Every other operation still goes to the Bun backend.
 public enum PortedOperations {
-    public static let ids: Set<String> = ["getTags", "createTag"]
+    public static let ids: Set<String> = [
+        "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings",
+    ]
 }
 
 /// One request as a handler sees it: the matched operation, its decoded path parameters,
@@ -53,6 +55,7 @@ public struct InProcessBackend: Sendable {
     public static func live(database: BackendDatabase) -> InProcessBackend {
         var backend = InProcessBackend(isActive: { await database.isConfigured })
         TagsArea.register(&backend, database: database)
+        SettingsArea.register(&backend, database: database)
         return backend
     }
 

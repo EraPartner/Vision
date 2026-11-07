@@ -581,7 +581,9 @@ It runs the operations listed in `PortedOperations.ids` in-process through their
 sends every other request, and every event stream, to the Bun backend through the ephemeral
 `URLSession`. The API inspector and the data-session fence sit above it, so both see in-process calls
 too. Areas move in the inventory's order; the ported list today is the tags area's `getTags` and
-`createTag` (`updateTag` and `deleteTag` are not in the generated client and stay on Bun).
+`createTag` (`updateTag` and `deleteTag` are not in the generated client and stay on Bun) and the
+settings area's `getSettings`, `getSetting`, `saveSetting` and `saveSettings` (`DELETE
+/api/settings/:key` is not in the client and stays on Bun).
 
 Handlers live in `VisionBackend/Areas/` and answer the data plane's envelope
 (`HTTP/BackendEnvelope.swift`): `meta.requestId` from a safe `X-Request-Id` or a new UUID, a
@@ -589,16 +591,24 @@ Handlers live in `VisionBackend/Areas/` and answer the data plane's envelope
 `HTTP/RequestInput.swift` holds the JavaScript semantics the routes depend on: zod 4's issue
 messages, `parseInt`, `parseBooleanQueryParam`, opt-in pagination and `slugify`. A malformed JSON
 body is a 400 `VALIDATION_ERROR` whose message differs from the JavaScript engine's.
+`HTTP/JSValue.swift` holds a JSON value as JavaScript holds it (`JSON.parse` key order, double
+numbers, byte-identical `JSON.stringify`), for routes that store or compare JSON text, such as the
+settings baselines compared as canonical jsonb. `HTTP/Zod.swift` runs zod 4.6 schemas on it with
+zod's messages, issue order, abort rules and outputs; `Areas/SettingsSchemas.swift` declares the
+settings value schemas with it. A body with invalid UTF-8 or a lone surrogate escape is the one
+known difference: JavaScript keeps a lone surrogate, Swift reads U+FFFD.
 
 `BackendDatabase` is one actor over one writer connection, opened lazily after the runtime
 resumes it: Bun applies pending migrations at boot, and the ledger check refuses the file until then.
 `NativeRuntime` suspends it whenever it stops Bun (snapshot, restore, database switch, quit), so no
 second writer holds the file. A debug build pointed at another backend has no database file, and
-its ported operations go to that backend. Bun keeps no cache over `tags`; the 2-second filtered
-transaction count cache joins it but the TypeScript tag writes do not clear it either.
+its ported operations go to that backend. Bun keeps no cache over `tags` or `user_settings`; the
+2-second filtered transaction count cache joins `tags` but the TypeScript tag writes do not clear it
+either.
 
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
-TypeScript routers on a migrated database with a small seed. `ParityTests` replays it through
+TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each
+body sent in the key order the recorder wrote, through
 `RoutingAPITransport` on the same database and compares the JSON semantically; timestamps the run
 created are compared by form. `scripts/native-tests` checks that each corpus still holds the
 recorder's seed and requests.

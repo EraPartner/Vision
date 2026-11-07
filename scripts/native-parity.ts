@@ -53,6 +53,60 @@ interface ParityArea {
 
 const SEED_TIME = "2025-03-01T09:00:00.000000Z";
 
+/** A complete, valid Belgian tax household (ADR-200) for the settings corpus. */
+function household(taxYear: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const reductions = {
+    personalPensionContributions: 0,
+    lifeInsurancePremiums: 0,
+    charitableDonations: 0,
+    childcareCosts: 0,
+    medicalExpenses: 0,
+  };
+  return {
+    version: 2,
+    taxYear,
+    profileConfigured: true,
+    region: "flanders",
+    communalSurchargePercent: 7,
+    partners: [
+      {
+        id: "A",
+        isDisabled: false,
+        activities: [{ id: "act_main", kind: "employee", grossIncome: 52000, startDate: "2024-02-29" }],
+        professionalExpenses: { remuneration: { method: "lump_sum", actualAmount: 0 } },
+        unionDues: 0,
+        otherTaxableIncome: 0,
+        alimonyPaid: 0,
+        reductions,
+      },
+    ],
+    relationship: { events: [] },
+    dependents: { children: 0, otherPersons: 0 },
+    home: { cadastralIncome: 0, mortgageInterestPaid: 0 },
+    ...overrides,
+  };
+}
+
+/** A partner of `household` with the given id and activities. */
+function partner(id: string, activities: unknown[], extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const base = (household(2024).partners as Record<string, unknown>[])[0] ?? {};
+  return { ...base, id, activities, ...extra };
+}
+
+const NEW = { exists: false };
+/** A single-key save of `value` against an absent baseline (validation runs first). */
+const save = (key: string, value: unknown, expected: unknown = NEW): ParityStep => ({
+  operationId: "saveSetting",
+  method: "PUT",
+  path: `/api/settings/${key}`,
+  body: { value, expected },
+});
+const bulk = (body: unknown): ParityStep => ({ operationId: "saveSettings", method: "PUT", path: "/api/settings", body });
+const read = (key: string): ParityStep => ({ operationId: "getSetting", method: "GET", path: `/api/settings/${key}` });
+const list = (query = ""): ParityStep => ({ operationId: "getSettings", method: "GET", path: `/api/settings${query}` });
+const LONG_KEY = "k".repeat(101);
+const jsonText = (text: string): unknown => JSON.parse(text);
+
 export const AREAS: Record<string, ParityArea> = {
   tags: {
     router: { module: "tags.ts", mountPath: "/api/tags" },
@@ -90,6 +144,249 @@ export const AREAS: Record<string, ParityArea> = {
       { operationId: "createTag", method: "POST", path: "/api/tags" },
       { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "extra", unknown: 1 } },
       { operationId: "getTags", method: "GET", path: "/api/tags?active=all" },
+    ],
+  },
+  settings: {
+    router: { module: "settings.ts", mountPath: "/api/settings" },
+    seed: [
+      `INSERT INTO user_settings (key, value, updated_at) VALUES
+        ('app_settings', vision_jsonb('{"defaultCurrency":"USD","defaultPageSize":25,"adminMode":true}'), '${SEED_TIME}'),
+        ('theme_settings', vision_jsonb('{"mode":"light"}'), '${SEED_TIME}'),
+        ('cost_basis_method', vision_jsonb('"fifo"'), '${SEED_TIME}'),
+        ('onboarding_complete', vision_jsonb('"true"'), '${SEED_TIME}'),
+        ('legacy_blob', vision_jsonb('"{\\"a\\":[1,2.5,null]}"'), '${SEED_TIME}'),
+        ('legacy_text', vision_jsonb('"not json {"'), '${SEED_TIME}'),
+        ('widget_visibility', vision_jsonb('{"a":true,"b":false}'), '${SEED_TIME}'),
+        ('10', vision_jsonb('1.50'), '${SEED_TIME}'),
+        ('9', vision_jsonb('[{"z":1,"a":{"y":null}}]'), '${SEED_TIME}')`,
+    ],
+    steps: [
+      list(),
+      list("?withBaselines=true"),
+      list("?withBaselines=false"),
+      list("?withBaselines=yes"),
+      list("?withBaselines=TRUE"),
+      list("?withBaselines="),
+      list("?withBaselines=true&withBaselines=false"),
+      read("app_settings"),
+      read("onboarding_complete"),
+      read("cost_basis_method"),
+      read("legacy_blob"),
+      read("legacy_text"),
+      read("10"),
+      read("includeTransfers"),
+      read("dashboard_settings"),
+      read("brokerage_cash_category_ids"),
+      read("nope"),
+      read("constructor"),
+      read("a%20b"),
+      // Conditional single-key saves.
+      save("includeTransfers", true),
+      save("includeTransfers", true),
+      save("includeTransfers", false, { exists: true, value: true }),
+      save("includeTransfers", true, { exists: true, value: true }),
+      save("app_settings", { defaultCurrency: "EUR", nested: { b: 1, a: [2, { c: 3 }] } }, {
+        exists: true,
+        value: { adminMode: true, defaultPageSize: 25.0, defaultCurrency: "USD" },
+      }),
+      read("app_settings"),
+      save("onboarding_complete", true, { exists: true, value: "true" }),
+      read("onboarding_complete"),
+      save("cost_basis_method", "lifo", { exists: true, value: "fifo" }),
+      save("widget_visibility", jsonText('{"__proto__":{"x":1},"c":true,"2":false}'), {
+        exists: true,
+        value: { b: false, a: true },
+      }),
+      read("widget_visibility"),
+      save("portfolio_tax_adjustments_v1", jsonText('{"__proto__":{},"2024:1":{"amount":5},"7":{}}')),
+      read("portfolio_tax_adjustments_v1"),
+      // Key and body guards.
+      save("bogus_key", 1),
+      save("constructor", 1),
+      save("prototype", 1),
+      save(LONG_KEY, 1),
+      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers", body: { expected: NEW } },
+      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers", body: {} },
+      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers", body: [] },
+      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers" },
+      { operationId: "saveSetting", method: "PUT", path: "/api/settings/bogus", body: {} },
+      save("includeTransfers", true, { exists: true }),
+      save("includeTransfers", true, { exists: false, value: true }),
+      save("includeTransfers", true, { exists: "yes" }),
+      save("includeTransfers", true, { exists: false, extra: 1 }),
+      save("includeTransfers", true, null),
+      save("includeTransfers", true, [NEW]),
+      save("includeTransfers", null),
+      // Value schemas.
+      save("dashboard_settings", { excludedCategoryIds: "1" }),
+      save("dashboard_settings", { excludedCategoryIds: [1, "2", "x"] }),
+      save("dashboard_settings", { excludedCategoryIds: [1, [2, [3, null]]] }),
+      save("dashboard_settings", { excludedCategoryIds: [{}] }),
+      save("dashboard_settings", { excludedCategoryIds: [null] }),
+      save("dashboard_settings", { excludedCategoryIds: [0] }),
+      save("dashboard_settings", { excludedCategoryIds: [2147483648] }),
+      save("dashboard_settings", { excludedCategoryIds: [1.5] }),
+      save("dashboard_settings", { excludedCategoryIds: ["1e3"] }),
+      save("dashboard_settings", { excludedCategoryIds: [true] }),
+      save("dashboard_settings", { excludedRecipientIds: 7, excludeHiddenCategories: "yes", exclusionScope: "x" }),
+      save("dashboard_settings", []),
+      save("dashboard_settings", { excludedCategoryIds: ["03", 4, "2147483647"], extra: { keep: [true] } }),
+      read("dashboard_settings"),
+      save("theme_settings", { mode: "dim", schedule: { lightFrom: "7:00", darkFrom: "24:00" }, variant: 5 }),
+      save("theme_settings", { schedule: null }),
+      save("theme_settings", { schedule: { lightFrom: "23:59", darkFrom: "19:60" } }),
+      save("theme_settings", "dark"),
+      save("cost_basis_method", "avg"),
+      save("cost_basis_method", 5),
+      save("includeTransfers", "true"),
+      save("onboarding_complete", 1),
+      save("fx_full_history_repair_done", []),
+      save("app_settings", []),
+      save("backup_settings", null),
+      save("services_settings", "x"),
+      save("dismissed_recurring_patterns", {}),
+      save("dismissed_recurring_patterns", [1, "a", null, { b: 2 }]),
+      save("brokerage_cash_category_ids", { dividend: 1.5, interest: 0, fee: null, tax: 2147483648, extra: 1 }),
+      save("brokerage_cash_category_ids", { dividend: null }),
+      save("brokerage_cash_category_ids", { dividend: 9007199254740993, interest: -9007199254740993, fee: "1", tax: true }),
+      save("brokerage_cash_category_ids", jsonText('{"dividend":1,"interest":2,"fee":3,"tax":4,"__proto__":5,"z":6}')),
+      save("brokerage_cash_category_ids", { dividend: 1, interest: null, fee: 3, tax: null }),
+      save("rebalance_plans", [{ id: "", name: "   ", targetWeights: {}, cashCap: -1 }]),
+      save("rebalance_plans", [{ id: "p1", name: "x".repeat(81), targetWeights: { a: "abc", b: 1 } }]),
+      save("rebalance_plans", [{ id: "p1", name: "ok", targetWeights: { a: 0, b: "0", c: null } }]),
+      save("rebalance_plans", [{ id: "p1", name: "ok", targetWeights: [1] }]),
+      save("rebalance_plans", [{ id: "p1", name: "  ﻿", targetWeights: { a: [2] }, cashCap: "x" }]),
+      save("rebalance_plans", [{ id: 1, name: null }]),
+      save("rebalance_plans", [{ name: "n", targetWeights: { a: "Infinity" } }]),
+      save("rebalance_plans", [{ id: "p", name: "n", targetWeights: { a: "-0x10", b: "0x10" } }]),
+      save("rebalance_plans", Array.from({ length: 51 }, () => ({ id: "" }))),
+      save("rebalance_plans", [
+        {
+          id: "p1",
+          name: "Core 🚀",
+          targetWeights: { "2": "0.5", "10": 0.5, eq: [1], bond: " 1e-1 " },
+          cashCap: "100",
+          note: { keep: true },
+        },
+      ]),
+      read("rebalance_plans"),
+      save("belgian_tax_profile", {
+        communalSurchargePercent: 70,
+        grossAnnualIncome: -1,
+        unionDues: 1e13,
+        dependentChildren: 1.5,
+        serviceVoucherCount: 1001,
+        taxYear: 1800,
+        cadastralCentimesOverride: 100001,
+        selfEmployedIncomeKind: "wages",
+        additionalResidences: [{ cadastralIncome: "x", centimesOverride: null }, 3],
+        unknownField: "kept",
+      }),
+      save("belgian_tax_profile", { grossAnnualIncome: null, taxYear: 2024, selfEmployedIncomeKind: "fees", extra: "keep" }),
+      save("belgian_tax_profile", null),
+      save("belgian_tax_profile_snapshots_v1", { "2024": { taxYear: "x" }, abc: 5, "1": { mortgageStartYear: 2201 } }),
+      save("belgian_tax_profile_snapshots_v1", []),
+      save("belgian_tax_profile_snapshot_meta_v1", {
+        "2024": { frozenCalculation: { federalPITTotal: 1 } },
+        "2023": { frozenCalculation: 5 },
+        x: { frozenHouseholdResult: null },
+        y: [],
+      }),
+      save("belgian_tax_profile_snapshot_meta_v1", { "2024": { frozenCalculation: { federalPITBeforeExemption: 1 } } }),
+      save("portfolio_tax_classifications_v1", { "12": 5, "13": {} }),
+      // Household (ADR-200).
+      save("belgian_tax_household_v2", household(2024)),
+      read("belgian_tax_household_v2"),
+      save("belgian_tax_household_v2", {}),
+      save("belgian_tax_household_v2", []),
+      save("belgian_tax_household_v2", household(2024.5, { version: 3, region: "x", communalSurchargePercent: 10 })),
+      save("belgian_tax_household_v2", household(2024, { partners: [] })),
+      save("belgian_tax_household_v2", household(2024, { partners: [partner("A", []), partner("B", []), partner("B", [])] })),
+      save(
+        "belgian_tax_household_v2",
+        household(2024, {
+          partners: [
+            partner("B", [
+              { id: "act_x", kind: "employee", grossIncome: 1, netProfessionalIncome: 5, pensionKind: "other" },
+              { id: "act_x", kind: "pension", grossIncome: 1, pensionKind: "other" },
+            ]),
+            partner("B", [{ id: "act_y", kind: "net_professional_amount", grossIncome: 1, netProfessionalIncome: 1 }]),
+          ],
+          relationship: { events: [{ id: "e1", kind: "death", date: "2024-01-01" }, { id: "e2", kind: "marriage", date: "2024-01-02", partnerId: "A" }] },
+          dependents: { children: 1, otherPersons: 0, claimantPartnerId: "A" },
+          home: { cadastralIncome: 0, mortgageInterestPaid: 0, mortgageCreditPartnerId: "A" },
+        }),
+      ),
+      save(
+        "belgian_tax_household_v2",
+        household(2024, {
+          partners: [
+            partner(
+              "A",
+              [
+                {
+                  id: "bad",
+                  kind: "employee",
+                  grossIncome: 1,
+                  startDate: "2024-02-30",
+                  endDate: "2023-02-29",
+                  label: "é".repeat(201),
+                  sourceRefs: Array.from({ length: 101 }, () => 5),
+                },
+                { id: `act_${"a".repeat(65)}`, kind: "wizard", grossIncome: -1, startDate: "2000-02-29" },
+              ],
+              {
+                professionalExpenses: { remuneration: { method: "actual", actualAmount: 5 }, bogus: {}, fees: { method: "x" } },
+                reductions: { personalPensionContributions: 1, pensionScheme: "1000" },
+                displayName: "n".repeat(81),
+                birthYear: 1899,
+              },
+            ),
+          ],
+          relationship: { events: Array.from({ length: 51 }, () => 1), deathYearElection: "x" },
+          dependents: { children: -1 },
+          home: {
+            cadastralIncome: 0,
+            mortgageInterestPaid: 0,
+            additionalResidences: [{ cadastralIncome: 1, region: "mars", label: 5 }],
+            mortgageSharePartnerB: 101,
+          },
+          taxIncomeCategoryIds: [1, 0, 2.5],
+          migratedFrom: { fromVersion: 2, unmappedFields: [{ field: "x" }, { field: "y", note: "n", value: { any: 1 } }] },
+        }),
+      ),
+      save("belgian_tax_household_v2", household(2024, { partners: Array.from({ length: 3 }, () => 1) })),
+      save("belgian_tax_household_snapshots_v2", { "2024": household(2025), "24": household(24) }),
+      save("belgian_tax_household_snapshots_v2", { "2024": household(2025), "2023": household(2023) }),
+      save("belgian_tax_household_snapshots_v2", { "2025": household(2025, { partners: [] }), "2026": household(2027) }),
+      save("belgian_tax_household_snapshots_v2", { "2024": household(2024) }),
+      // Bulk saves.
+      bulk({}),
+      { operationId: "saveSettings", method: "PUT", path: "/api/settings" },
+      bulk([]),
+      bulk({ settings: [], expected: [] }),
+      bulk({ settings: { nope: 1, includeTransfers: true }, expected: {} }),
+      bulk(jsonText('{"settings":{"__proto__":1}}')),
+      bulk({ settings: { includeTransfers: true, constructor: 1 }, expected: {} }),
+      bulk({ settings: { [LONG_KEY]: 1 }, expected: {} }),
+      bulk({ settings: { includeTransfers: true }, expected: {} }),
+      bulk({ settings: { includeTransfers: true }, expected: { includeTransfers: { exists: true } } }),
+      bulk({
+        settings: { onboarding_complete: 1, includeTransfers: "x" },
+        expected: { includeTransfers: NEW, onboarding_complete: NEW },
+      }),
+      bulk({ settings: {}, expected: {} }),
+      bulk({
+        settings: { widget_visibility: { d: 1 }, services_settings: { keepServicesOnQuit: true } },
+        expected: { services_settings: NEW, widget_visibility: { exists: true, value: { c: true, "2": false } }, extra: 1 },
+      }),
+      bulk({
+        settings: { theme_settings: { mode: "dark" }, backup_settings: { backupDir: "/x" } },
+        expected: { backup_settings: NEW, theme_settings: { exists: true, value: { mode: "dark" } } },
+      }),
+      read("backup_settings"),
+      read("services_settings"),
+      list("?withBaselines=true"),
     ],
   },
 };
