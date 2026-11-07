@@ -5,7 +5,7 @@ import VisionNativeCore
 /// operation is one reviewed change: its id here and its handler in `InProcessBackend.live`.
 /// Every other operation still goes to the Bun backend.
 public enum PortedOperations {
-    public static let ids: Set<String> = []
+    public static let ids: Set<String> = ["getTags", "createTag"]
 }
 
 /// One request as a handler sees it: the matched operation, its decoded path parameters,
@@ -41,11 +41,20 @@ public struct InProcessBackend: Sendable {
     }
 
     private(set) var routes: [Route] = []
+    /// Whether the handlers can run: false while the app has no database file of its own (a
+    /// debug build pointed at another backend), and every request then goes to the fallback.
+    let isActive: @Sendable () async -> Bool
 
-    public init() {}
+    public init(isActive: @escaping @Sendable () async -> Bool = { true }) {
+        self.isActive = isActive
+    }
 
-    /// The handlers the app uses: one per id in `PortedOperations.ids`.
-    public static var live: InProcessBackend { InProcessBackend() }
+    /// The handlers the app uses: one per id in `PortedOperations.ids`, in inventory order.
+    public static func live(database: BackendDatabase) -> InProcessBackend {
+        var backend = InProcessBackend(isActive: { await database.isConfigured })
+        TagsArea.register(&backend, database: database)
+        return backend
+    }
 
     public var operationIds: Set<String> { Set(routes.map(\.operationId)) }
 
@@ -96,7 +105,7 @@ public struct RoutingAPITransport: APITransport, APIStreamTransport {
     private let streamFallback: any APIStreamTransport
 
     public init(
-        backend: InProcessBackend = .live, fallback: any APITransport, streamFallback: any APIStreamTransport
+        backend: InProcessBackend, fallback: any APITransport, streamFallback: any APIStreamTransport
     ) {
         self.backend = backend
         self.fallback = fallback
@@ -104,7 +113,9 @@ public struct RoutingAPITransport: APITransport, APIStreamTransport {
     }
 
     public func send(_ request: APIRequest) async throws -> APIResponse {
-        guard let (route, parameters) = backend.match(request) else { return try await fallback.send(request) }
+        guard let (route, parameters) = backend.match(request), await backend.isActive() else {
+            return try await fallback.send(request)
+        }
         let items = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         return try await route.handler(
             InProcessRequest(

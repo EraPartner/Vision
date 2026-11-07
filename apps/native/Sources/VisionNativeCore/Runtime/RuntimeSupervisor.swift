@@ -31,6 +31,9 @@ public struct SupervisorConfiguration: Sendable {
     /// Whether `VISION_NATIVE_RUNTIME_DIR` is honoured (Debug builds only, like the
     /// backend URL override).
     public var allowPayloadOverride: Bool
+    /// The in-process Swift backend's connection, which the runtime suspends while Bun is
+    /// stopped (ADR-270).
+    public var databaseHolder: (any InProcessDatabaseHolder)?
 
     public init(
         environment: [String: String],
@@ -38,8 +41,10 @@ public struct SupervisorConfiguration: Sendable {
         resourcesDirectory: String?,
         readinessAttempts: Int = 600,
         allowPayloadOverride: Bool = false,
-        variant: NativeVariant = .standard
+        variant: NativeVariant = .standard,
+        databaseHolder: (any InProcessDatabaseHolder)? = nil
     ) {
+        self.databaseHolder = databaseHolder
         self.environment = environment
         self.homeDirectory = homeDirectory
         self.resourcesDirectory = resourcesDirectory
@@ -89,13 +94,14 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path,
         resourcesDirectory: String? = Bundle.main.resourcePath,
         allowPayloadOverride: Bool,
-        variant: NativeVariant = .standard
+        variant: NativeVariant = .standard,
+        databaseHolder: (any InProcessDatabaseHolder)? = nil
     ) -> RuntimeSupervisor {
         let userData = variant.userDataDirectory(homeDirectory: homeDirectory)
         return RuntimeSupervisor(
             configuration: SupervisorConfiguration(
                 environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory,
-                allowPayloadOverride: allowPayloadOverride, variant: variant),
+                allowPayloadOverride: allowPayloadOverride, variant: variant, databaseHolder: databaseHolder),
             dependencies: .live(),
             instanceLock: FileInstanceLock(),
             logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"), rotate: false)
@@ -201,7 +207,8 @@ public actor RuntimeSupervisor: BackupSettingsStore {
             appPort: appPort,
             inheritedEnvironment: configuration.environment,
             dependencies: dependencies,
-            recordBootPhase: { phase, milliseconds in log.log("log", "[runtime] \(phase) \(milliseconds) ms") })
+            recordBootPhase: { phase, milliseconds in log.log("log", "[runtime] \(phase) \(milliseconds) ms") },
+            databaseHolder: configuration.databaseHolder)
         self.runtime = runtime
 
         try enterLaunchPhase(.preparingDatabase)

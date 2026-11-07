@@ -1,0 +1,737 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO tags (slug, color, is_active, created_at, updated_at) VALUES\n        ('holiday', '#00aaff', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('rome-2020', NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('archived', '#999999', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('business', NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?active=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "slug": "archived",
+              "color": "#999999",
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 4,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?active=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "slug": "archived",
+              "color": "#999999",
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?active=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "slug": "archived",
+              "color": "#999999",
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?active=bogus",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?active=all&limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 4,
+          "limit": 2,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?limit=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 1000,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?limit=abc&offset=-3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?limit=5000",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?limit=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "  Groceries   Weekly!! ",
+        "color": "#ff0000"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 5,
+          "slug": "groceries-weekly",
+          "color": "#ff0000",
+          "is_active": true,
+          "created_at": "2026-11-07T08:11:21.542Z",
+          "updated_at": "2026-11-07T08:11:21.542Z",
+          "reactivated": false,
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "groceries-weekly",
+        "color": "#00ff00"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 5,
+          "slug": "groceries-weekly",
+          "color": "#ff0000",
+          "is_active": true,
+          "created_at": "2026-11-07T08:11:21.542Z",
+          "updated_at": "2026-11-07T08:11:21.556Z",
+          "reactivated": true,
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "Archived"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "slug": "archived",
+          "color": "#999999",
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-07T08:11:21.566Z",
+          "reactivated": true,
+          "reactivated_junction_count": 0,
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "rome 2020",
+        "color": "#123456"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "slug": "rome-2020",
+          "color": "#123456",
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-07T08:11:21.574Z",
+          "reactivated": true,
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "Café İstanbul",
+        "color": null
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 9,
+          "slug": "caf-istanbul",
+          "color": null,
+          "is_active": true,
+          "created_at": "2026-11-07T08:11:21.580Z",
+          "updated_at": "2026-11-07T08:11:21.580Z",
+          "reactivated": false,
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required field: slug"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required field: slug"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "!!!"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "slug is empty after normalization"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "slug: Invalid input: expected string, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "x",
+        "color": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "color: Invalid input: expected string, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": true,
+        "color": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "slug: Invalid input: expected string, received boolean; color: Invalid input: expected string, received array"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "createTag",
+      "method": "POST",
+      "path": "/api/tags",
+      "body": {
+        "slug": "extra",
+        "unknown": 1
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 10,
+          "slug": "extra",
+          "color": null,
+          "is_active": true,
+          "created_at": "2026-11-07T08:11:21.627Z",
+          "updated_at": "2026-11-07T08:11:21.627Z",
+          "reactivated": false,
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getTags",
+      "method": "GET",
+      "path": "/api/tags?active=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "slug": "archived",
+              "color": "#999999",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-07T08:11:21.566Z"
+            },
+            {
+              "id": 4,
+              "slug": "business",
+              "color": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 9,
+              "slug": "caf-istanbul",
+              "color": null,
+              "is_active": true,
+              "created_at": "2026-11-07T08:11:21.580Z",
+              "updated_at": "2026-11-07T08:11:21.580Z"
+            },
+            {
+              "id": 10,
+              "slug": "extra",
+              "color": null,
+              "is_active": true,
+              "created_at": "2026-11-07T08:11:21.627Z",
+              "updated_at": "2026-11-07T08:11:21.627Z"
+            },
+            {
+              "id": 5,
+              "slug": "groceries-weekly",
+              "color": "#ff0000",
+              "is_active": true,
+              "created_at": "2026-11-07T08:11:21.542Z",
+              "updated_at": "2026-11-07T08:11:21.556Z"
+            },
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "slug": "rome-2020",
+              "color": "#123456",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-07T08:11:21.574Z"
+            }
+          ],
+          "total": 7,
+          "links": []
+        }
+      }
+    }
+  ]
+}

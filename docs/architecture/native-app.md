@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-06
-updated: 2026-11-06
+date: 2026-11-07
+updated: 2026-11-07
 tags:
   [
     architecture,
@@ -70,7 +70,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                                                     |
 | `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools, Analysis/Monitors, Research) |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                                      |
-| `apps/native/Sources/VisionBackend/`               | In-process Swift backend (ADR-270): SQLite connection, the application SQL functions, ledger check, routing transport                                                                                  |
+| `apps/native/Sources/VisionBackend/`               | In-process Swift backend (ADR-270): SQLite connection, SQL functions, ledger check, routing, envelope, ported areas                                                                                    |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                                                     |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                                                  |
 | `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, backend lifecycle, SQLite database tool and switch, Demo seeding, seams                                                                                                            |
@@ -580,7 +580,28 @@ The app's transport is `RoutingAPITransport` (VisionBackend, [[docs/adr/270-swif
 It runs the operations listed in `PortedOperations.ids` in-process through their Swift handlers and
 sends every other request, and every event stream, to the Bun backend through the ephemeral
 `URLSession`. The API inspector and the data-session fence sit above it, so both see in-process calls
-too. The list is empty until the first backend area moves.
+too. Areas move in the inventory's order; the ported list today is the tags area's `getTags` and
+`createTag` (`updateTag` and `deleteTag` are not in the generated client and stay on Bun).
+
+Handlers live in `VisionBackend/Areas/` and answer the data plane's envelope
+(`HTTP/BackendEnvelope.swift`): `meta.requestId` from a safe `X-Request-Id` or a new UUID, a
+`BackendHTTPError` as its status, code and message, and any other error as the production-masked 500.
+`HTTP/RequestInput.swift` holds the JavaScript semantics the routes depend on: zod 4's issue
+messages, `parseInt`, `parseBooleanQueryParam`, opt-in pagination and `slugify`. A malformed JSON
+body is a 400 `VALIDATION_ERROR` whose message differs from the JavaScript engine's.
+
+`BackendDatabase` is one actor over one writer connection, opened lazily after the runtime
+resumes it: Bun applies pending migrations at boot, and the ledger check refuses the file until then.
+`NativeRuntime` suspends it whenever it stops Bun (snapshot, restore, database switch, quit), so no
+second writer holds the file. A debug build pointed at another backend has no database file, and
+its ported operations go to that backend. Bun keeps no cache over `tags`; the 2-second filtered
+transaction count cache joins it but the TypeScript tag writes do not clear it either.
+
+`bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
+TypeScript routers on a migrated database with a small seed. `ParityTests` replays it through
+`RoutingAPITransport` on the same database and compares the JSON semantically; timestamps the run
+created are compared by form. `scripts/native-tests` checks that each corpus still holds the
+recorder's seed and requests.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from

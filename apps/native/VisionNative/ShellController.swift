@@ -97,7 +97,8 @@ final class ShellController: NSObject, NSWindowDelegate {
     private func makeAPIClient(session: NativeDataSession? = nil, timeout: TimeInterval = 30) -> APIClient {
         // Ported operations run in-process (ADR-270); the rest go to Bun over loopback HTTP.
         let http = URLSessionAPITransport()
-        let transport = RoutingAPITransport(fallback: http, streamFallback: http)
+        let transport = RoutingAPITransport(
+            backend: .live(database: AppRuntime.backendDatabase), fallback: http, streamFallback: http)
         let inspected = NativeAPIInspectorTransport(base: transport, inspector: apiInspector)
         let fenced = NativeSessionAPITransport(base: inspected, streamBase: transport, session: session ?? dataSession)
         return APIClient(

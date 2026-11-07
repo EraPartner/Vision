@@ -1,5 +1,6 @@
 import AppKit
 import OSLog
+import VisionBackend
 import VisionNativeCore
 
 /// Process-wide runtime objects.
@@ -15,9 +16,13 @@ enum AppRuntime {
     /// the `VISION_NATIVE_VARIANT` build setting writes.
     static let variant = NativeVariant.fromInfoPlist(
         Bundle.main.object(forInfoDictionaryKey: NativeVariant.infoPlistKey))
+    /// The in-process Swift backend's connection (ADR-270); the runtime suspends it while
+    /// the Bun backend is stopped and resumes it on the live database file.
+    static let backendDatabase = BackendDatabase()
     /// Starts and stops Vision Native's backend, which opens the SQLite database in-process.
     static let supervisor = RuntimeSupervisor.live(
-        allowPayloadOverride: AppRuntime.isDebugBuild, variant: AppRuntime.variant)
+        allowPayloadOverride: AppRuntime.isDebugBuild, variant: AppRuntime.variant,
+        databaseHolder: AppRuntime.backendDatabase)
     /// The Vision version the bundled runtime payload was prepared from (`appVersion` in its
     /// manifest), which Electron reports as `app.getVersion()`: the About section, the update
     /// check and backups use it rather than the app bundle's own version. `nil` without a payload.

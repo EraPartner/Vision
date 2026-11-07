@@ -41,6 +41,9 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     private let dependencies: RuntimeDependencies
     /// `recordBootPhase`: receives named startup timings, such as the payload verification.
     private let recordBootPhase: (@Sendable (String, Int) -> Void)?
+    /// The in-process Swift backend's connection (ADR-270): suspended while Bun is stopped,
+    /// so no snapshot, restore or switch runs with a second writer on the file.
+    private let databaseHolder: (any InProcessDatabaseHolder)?
     private var appPort: Int
     private var tools: NativeTools?
     private var backendChild: SpawnedChild?
@@ -60,9 +63,11 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         appPort: Int,
         inheritedEnvironment: [String: String],
         dependencies: RuntimeDependencies,
-        recordBootPhase: (@Sendable (String, Int) -> Void)? = nil
+        recordBootPhase: (@Sendable (String, Int) -> Void)? = nil,
+        databaseHolder: (any InProcessDatabaseHolder)? = nil
     ) throws {
         self.recordBootPhase = recordBootPhase
+        self.databaseHolder = databaseHolder
         self.layout = layout
         names = try RuntimeNames(runtimeId: layout.runtimeId)
         self.runtimeRoot = PathUtilities.normalize(runtimeRoot)
@@ -301,6 +306,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                     "The recorded backend process id belongs to another process; refusing to signal it.")
             }
             if (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil {
+                await databaseHolder?.resume(databasePath: layout.database)
                 return .alreadyRunning(pid: existing, port: appPort)
             }
             try await stopBackend()
@@ -338,6 +344,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                 pid: child.pid, port: port, runtimeId: names.id, command: tools.compiledBackend, now: now()
             ).serialized(),
             mode: 0o600)
+        await databaseHolder?.resume(databasePath: layout.database)
         return .started(pid: child.pid, port: port, database: layout.database)
     }
 
@@ -349,7 +356,9 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     /// `stopBackend`: SIGTERM, up to `forceAfterMilliseconds` of grace, then SIGKILL, only
     /// for a recorded PID whose command line is our backend.
+    /// The in-process connection is suspended first, so Bun's stop leaves no writer behind.
     public func stopBackend(forceAfterMilliseconds: Int = 10_000) async throws {
+        await databaseHolder?.suspend()
         guard let recorded = PIDRecord.recordedPID(try? fileSystem.readIfPresent(layout.pid)),
             dependencies.processes.exists(recorded)
         else {

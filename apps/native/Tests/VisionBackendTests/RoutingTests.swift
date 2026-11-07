@@ -30,16 +30,36 @@ import VisionNativeCore
     }
 
     @Test func liveHandlersAreExactlyThePortedList() {
-        #expect(InProcessBackend.live.operationIds == PortedOperations.ids)
+        #expect(InProcessBackend.live(database: BackendDatabase()).operationIds == PortedOperations.ids)
         #expect(PortedOperations.ids.isSubset(of: Set(OpenAPIOperations.operationIds)))
     }
 
     @Test func unportedOperationsGoToBun() async throws {
         let bun = Recorder()
-        let transport = RoutingAPITransport(fallback: bun, streamFallback: bun)
+        let database = BackendDatabase()
+        await database.resume(databasePath: ":memory:")
+        let transport = RoutingAPITransport(backend: .live(database: database), fallback: bun, streamFallback: bun)
         let response = try await transport.send(try Self.request(.get, "/api/info/exchange-rates"))
         #expect(response.body == Data("bun".utf8))
         #expect(bun.sent.count == 1)
+    }
+
+    @Test func portedOperationsGoToBunWithoutADatabaseFile() async throws {
+        let bun = Recorder()
+        let transport = RoutingAPITransport(
+            backend: .live(database: BackendDatabase()), fallback: bun, streamFallback: bun)
+        let response = try await transport.send(try Self.request(.get, "/api/tags"))
+        #expect(response.body == Data("bun".utf8))
+    }
+
+    @Test func aSuspendedDatabaseFailsLikeAStoppedBackend() async throws {
+        let bun = Recorder()
+        let database = BackendDatabase()
+        await database.resume(databasePath: ":memory:")
+        await database.suspend()
+        let transport = RoutingAPITransport(backend: .live(database: database), fallback: bun, streamFallback: bun)
+        await #expect(throws: APIError.self) { try await transport.send(try Self.request(.get, "/api/tags")) }
+        #expect(bun.sent.isEmpty)
     }
 
     @Test func portedOperationsRunInProcessWithTheirPathParameters() async throws {
