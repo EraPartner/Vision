@@ -63,13 +63,14 @@ aliases: [vision native, native app, swift app]
 | `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                                                                                                    |
 | `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                                                                                                  |
 | `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `ShellController` (native shell host) and the SwiftUI launch state                                                                                                  |
-| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                                                                                                  |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore`, `VisionNativeUI` and `VisionBackend`, no deps                                                                                                 |
 | `apps/native/Sources/VisionNativeCore/`            | Non-UI logic (runtime, health, API, screens), testable without the Xcode UI                                                                                                                            |
 | `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                                                                                                    |
 | `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens, `GlassMaterialSpec` and `ThemeSelection` (variant and appearance)                                                                                                             |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                                                     |
 | `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools, Analysis/Monitors, Research) |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                                      |
+| `apps/native/Sources/VisionBackend/`               | In-process Swift backend (ADR-270): SQLite connection, the application SQL functions, ledger check, routing transport                                                                                  |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                                                     |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                                                  |
 | `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, backend lifecycle, SQLite database tool and switch, Demo seeding, seams                                                                                                            |
@@ -574,6 +575,17 @@ retries of idempotent methods on 408, 429, 502, 503 and 504, timeouts and networ
 500 ms × 2^n backoff plus up to 200 ms of jitter. Validation, rate-limit, auth, not-found and
 conflict errors are not retried. The transport is a protocol; the app uses an ephemeral
 `URLSession`, and the tests use a fake.
+
+The app's transport is `RoutingAPITransport` (VisionBackend, [[docs/adr/270-swift-backend-in-process|ADR-270]]).
+It runs the operations listed in `PortedOperations.ids` in-process through their Swift handlers and
+sends every other request, and every event stream, to the Bun backend through the ephemeral
+`URLSession`. The API inspector and the data-session fence sit above it, so both see in-process calls
+too. The list is empty until the first backend area moves.
+
+`VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
+SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from
+`MigrationLedger.expected`. The SQL functions replay the TypeScript golden fixtures
+(`apps/node-backend/tests/database/sqlite/*.golden.json`) in `VisionBackendTests`.
 
 The client sends no credential: the backend answers loopback requests only and reads no admin Bearer
 token ([[docs/adr/233-loopback-only-backend|ADR-233]]), so a request carries `Content-Type` and

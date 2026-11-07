@@ -39,6 +39,10 @@ targets:
       # Localizable.xcstrings), which Xcode compiles into the package's resource bundle.
       - package: VisionNativeCore
         product: VisionNativeUI
+      # The in-process Swift backend (ADR-270); RoutingAPITransport sends it the ported
+      # operations and everything else to the bundled Bun backend.
+      - package: VisionNativeCore
+        product: VisionBackend
     configFiles:
       Debug: Config/Signing.xcconfig
       Release: Config/Signing.xcconfig

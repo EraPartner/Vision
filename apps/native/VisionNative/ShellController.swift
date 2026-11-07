@@ -4,6 +4,7 @@ import Observation
 import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
+import VisionBackend
 import VisionNativeCore
 import VisionNativeUI
 
@@ -94,7 +95,9 @@ final class ShellController: NSObject, NSWindowDelegate {
     private var lastSettingsSystemIsDark: Bool?
 
     private func makeAPIClient(session: NativeDataSession? = nil, timeout: TimeInterval = 30) -> APIClient {
-        let transport = URLSessionAPITransport()
+        // Ported operations run in-process (ADR-270); the rest go to Bun over loopback HTTP.
+        let http = URLSessionAPITransport()
+        let transport = RoutingAPITransport(fallback: http, streamFallback: http)
         let inspected = NativeAPIInspectorTransport(base: transport, inspector: apiInspector)
         let fenced = NativeSessionAPITransport(base: inspected, streamBase: transport, session: session ?? dataSession)
         return APIClient(

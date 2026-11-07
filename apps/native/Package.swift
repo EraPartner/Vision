@@ -11,6 +11,7 @@ let package = Package(
     products: [
         .library(name: "VisionNativeCore", targets: ["VisionNativeCore"]),
         .library(name: "VisionNativeUI", targets: ["VisionNativeUI"]),
+        .library(name: "VisionBackend", targets: ["VisionBackend"]),
     ],
     targets: [
         .target(name: "VisionNativeCore"),
@@ -30,6 +31,10 @@ let package = Package(
             // and the per-schema JSON samples scripts/native-fixtures.ts generates from openapi.yaml.
             resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc"), .copy("Fixtures/api")]
         ),
+        // The in-process Swift backend (ADR-270): the system SQLite and no other dependency.
+        // It answers the generated client's requests, so it shares VisionNativeCore's types.
+        .target(name: "VisionBackend", dependencies: ["VisionNativeCore"]),
+        .testTarget(name: "VisionBackendTests", dependencies: ["VisionBackend"]),
         .testTarget(
             name: "VisionNativeUITests",
             dependencies: ["VisionNativeUI", "VisionNativeCore"]
