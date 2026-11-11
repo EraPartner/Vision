@@ -15,6 +15,11 @@
  * (decimal.js, csv-parse, `Date.parse`, identity text), re-evaluated the same way.
  * analysis-formulas.jsonl holds requests of `evaluateAnalysisFormulas` (captured from the
  * analysis tests, written by hand for the edges, and generated) with its answer or error, and
+ * belgian-tax.jsonl holds calls of the Belgian tax engine (packages/shared-utils/src/belgianTax):
+ * households for `computeHouseholdTax`, the profile and household conversions, the settings
+ * loader, the overview and the portfolio tax dashboard, captured from the engine's tests and
+ * generated, thinned to stay under the repository's file-size limit.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -54,6 +59,26 @@ import {
   toUtc,
   ymdToEpochDay,
 } from "../apps/node-backend/src/lib/timezone.ts";
+import { filesJointly } from "../packages/shared-utils/src/belgianTax/assessment.ts";
+import {
+  computeHouseholdTax,
+  toBelgianTaxCalculation,
+} from "../packages/shared-utils/src/belgianTax/household.ts";
+import {
+  applyProfileV1PatchToHousehold,
+  projectHouseholdToProfileV1,
+  upgradeProfileV1ToHousehold,
+  upgradeSnapshotsV1ToV2,
+} from "../packages/shared-utils/src/belgianTax/householdMigration.ts";
+import { buildTaxOverview } from "../packages/shared-utils/src/belgianTax/overview.ts";
+import { buildPortfolioTaxDashboard } from "../packages/shared-utils/src/belgianTax/portfolioDashboard.ts";
+import {
+  attributeToPartners,
+  householdForRecordedIncome,
+} from "../packages/shared-utils/src/belgianTax/recordedIncomeAttribution.ts";
+import { loadHouseholdSettings } from "../packages/shared-utils/src/belgianTax/settings.ts";
+import { estimateSelfEmployedContributions } from "../packages/shared-utils/src/belgianTax/socialSecurity.ts";
+import { getTaxTable } from "../packages/shared-utils/src/belgianTax/constants.ts";
 import type { ReconciliationPlanInput } from "../apps/node-backend/src/services/portfolioImportReconciliationService.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
@@ -90,6 +115,8 @@ const FORMULAS = repoPath("apps/native/parity/plans/analysis-formulas.jsonl");
 /** `{ op, r }` lines: see `evaluateFoundation`. */
 const FOUNDATIONS = repoPath("apps/native/parity/plans/foundations.jsonl");
 /** `{ op, r }` lines: see `evaluate`. */
+const TAX = repoPath("apps/native/parity/plans/belgian-tax.jsonl");
+
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 
 /** The columns of an adoption image the corpus compares, `null` when missing. */
@@ -391,6 +418,95 @@ export function recordFormulas(input: unknown): {
   }
 }
 
+/**
+ * One call of the Belgian tax engine. The corpus is JSON, so each argument is cast to the
+ * type the engine reads it as; an absent optional argument is recorded as null. A `true` in
+ * place of the joint-filing check stands for `filesJointly`, and the dashboard's currency
+ * conversion is a table of rates (null: no rate known).
+ */
+export function evaluateTax(op: unknown[]): unknown {
+  const [name, a, b, c] = op;
+  type Household = Parameters<typeof computeHouseholdTax>[0];
+  const optional = (value: unknown): unknown =>
+    value === null ? undefined : value;
+  const joint = (flag: unknown) => (flag === true ? filesJointly : undefined);
+  try {
+    switch (name) {
+      case "household": {
+        const household = a as Household;
+        const result = computeHouseholdTax(household);
+        return {
+          result,
+          calculation: toBelgianTaxCalculation(result, household),
+        };
+      }
+      case "upgrade":
+        return upgradeProfileV1ToHousehold(a as Household);
+      case "upgradeSnapshots":
+        return upgradeSnapshotsV1ToV2(
+          a as Parameters<typeof upgradeSnapshotsV1ToV2>[0],
+        );
+      case "project":
+        return projectHouseholdToProfileV1(a as Household, joint(b));
+      case "patch":
+        return applyProfileV1PatchToHousehold(
+          a as Household,
+          b as Parameters<typeof applyProfileV1PatchToHousehold>[1],
+          joint(c),
+        );
+      case "load":
+        return loadHouseholdSettings(
+          a as Parameters<typeof loadHouseholdSettings>[0],
+        );
+      case "overview":
+        return buildTaxOverview(
+          a as Parameters<typeof buildTaxOverview>[0],
+          b as Parameters<typeof buildTaxOverview>[1],
+          optional(c) as number | undefined,
+        );
+      case "attribute":
+        return attributeToPartners(
+          a as number,
+          optional(b) as Parameters<typeof attributeToPartners>[1],
+          c as boolean,
+        );
+      case "recorded":
+        return (
+          householdForRecordedIncome(
+            a as Household | null,
+            b as number,
+            optional(c) as Parameters<typeof householdForRecordedIncome>[2],
+          ) ?? null
+        );
+      case "selfEmployed":
+        return estimateSelfEmployedContributions(
+          a as number,
+          getTaxTable(b as number),
+        );
+      case "dashboard": {
+        const rates = b as Record<string, number | null | undefined>;
+        return buildPortfolioTaxDashboard({
+          ...(a as Omit<
+            Parameters<typeof buildPortfolioTaxDashboard>[0],
+            "convert"
+          >),
+          convert: (amount, currency) => {
+            const rate = rates[currency ?? ""];
+            return rate === null || rate === undefined
+              ? undefined
+              : amount * rate;
+          },
+        });
+      }
+      default:
+        throw new Error(`unknown op ${String(name)}`);
+    }
+  } catch (error) {
+    if (error instanceof TypeError) return "error: TypeError";
+    throw error;
+  }
+}
+
 function rerecord(
   file: string,
   line: (recorded: string) => unknown,
@@ -426,6 +542,14 @@ if (isEntrypoint(import.meta)) {
     (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: evaluateFoundation(op) };
+    },
+    check,
+  );
+  rerecord(
+    TAX,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluateTax(op) };
     },
     check,
   );

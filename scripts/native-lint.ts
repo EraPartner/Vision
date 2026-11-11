@@ -40,6 +40,12 @@ function matches(re: RegExp, code: string): number[] {
 
 const MONEY_FILE = /(Money|Price|Amount|Balance|Currency|Tax)/;
 const API_LAYER = "/VisionNativeCore/API/";
+/**
+ * The backend's Belgian tax engine is a port of packages/shared-utils/src/belgianTax, which
+ * computes in JavaScript numbers; it has to use Double to give the same answers bit for bit
+ * (apps/native/parity/plans/belgian-tax.jsonl replays them).
+ */
+const JS_NUMBER_PARITY = "/VisionBackend/Tax/";
 
 export const RULES: Rule[] = [
   {
@@ -122,7 +128,9 @@ export const RULES: Rule[] = [
     kind: "strict",
     description: "Double in money-named files",
     find: (c, file) =>
-      MONEY_FILE.test(path.basename(file)) ? matches(/\bDouble\b/g, c) : [],
+      MONEY_FILE.test(path.basename(file)) && !file.includes(JS_NUMBER_PARITY)
+        ? matches(/\bDouble\b/g, c)
+        : [],
   },
   {
     id: "raw-id",

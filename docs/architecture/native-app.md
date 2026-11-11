@@ -635,14 +635,26 @@ as absent there, where the TypeScript reads the inherited function.
 
 `VisionBackend/Numeric/` and `VisionBackend/Time/` hold the shared helpers those ports and later ones
 build on: decimal.js at the money module's settings (`DecimalJS`, with powers, square roots and
-radix parsing), the money helpers of `packages/shared-utils/src/money.ts` (`DecimalMoney`, `Money`),
+radix parsing), the money helpers of `packages/shared-utils/src/money.ts` (`DecimalMoney`, `MoneyAmount`),
 JavaScript number rendering (`JavaScriptNumber.toFixed`, `toPrecision`, `round`), `lib/math.ts`
 (`RobustStatistics`) and `lib/timezone.ts` (`AppTimeZone`, `CalendarDays`).
 
+`VisionBackend/Tax/` holds the Belgian tax engine of `packages/shared-utils/src/belgianTax`: the
+household computation (`HouseholdTax.compute`, with assessment, exemptions, marital quotient, own-home
+credit, social security and property tax), the flat calculation (`BelgianTaxCalculation.json`), the
+version 1 profile and version 2 household conversions (`HouseholdMigration`), the settings loader and
+overview (`HouseholdTaxSettings`), recorded-income attribution and the portfolio tax dashboard
+(`PortfolioTaxDashboard.build`). It computes in `Double`, as the TypeScript computes in JavaScript
+numbers, so `native-lint` exempts the folder from its `double-money` rule. The year tables are
+generated from `constants.ts` (`bun run native:generate-tax-tables`). The version 1 `computeBelgianPIT`
+of `pit.ts` is not ported: only tests call it. No route calls the engine yet; the database-bound
+services of `apps/node-backend/src/services/tax/` stay on Bun.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
-analysis tests, generated variations of both, and sampled inputs of the shared helpers, each with
-what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests` and
+analysis tests, tax engine calls captured from its tests, generated variations of all three, and
+sampled inputs of the shared helpers, each with what the TypeScript answered.
+`PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests` and
 `FoundationParityTests` replay them.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
