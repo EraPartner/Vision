@@ -13,6 +13,10 @@
  *
  * import-interop.jsonl beside it samples the JavaScript behaviours the planner leans on
  * (decimal.js, csv-parse, `Date.parse`, identity text), re-evaluated the same way.
+ * analysis-formulas.jsonl holds requests of `evaluateAnalysisFormulas` (captured from the
+ * analysis tests, written by hand for the edges, and generated) with its answer or error, and
+ * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
+ * `lib/timezone.ts`).
  *
  * The Swift test (VisionBackendTests/PortfolioImportPlanParityTests.swift) builds the same
  * inputs and compares the same projection, ignoring key order. Sets are recorded as arrays
@@ -27,14 +31,41 @@ import {
 } from "../apps/node-backend/src/services/analysisFormulaEngine.ts";
 import type { EvaluateAnalysisFormulasInput } from "../apps/node-backend/src/services/analysisFormulaEngine.ts";
 import { normalizeIdentityText } from "../apps/node-backend/src/services/importIdentity.ts";
-import { toDecimal } from "../packages/shared-utils/src/money.ts";
+import {
+  addAll,
+  numericColumn,
+  roundMoney,
+  roundToCents,
+  toDecimal,
+} from "../packages/shared-utils/src/money.ts";
+import {
+  isRobustNeedle,
+  madReturnStats,
+  median,
+} from "../apps/node-backend/src/lib/math.ts";
+import { epochMsToUtcYmd } from "../apps/node-backend/src/lib/dateFormat.ts";
+import {
+  addDaysYmd,
+  appDateStringToUtc,
+  differenceInCalendarDaysYmd,
+  firstOfMonthYmd,
+  toAppDateString,
+  toAppTz,
+  toUtc,
+  ymdToEpochDay,
+} from "../apps/node-backend/src/lib/timezone.ts";
 import type { ReconciliationPlanInput } from "../apps/node-backend/src/services/portfolioImportReconciliationService.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
 // The backend's own csv-parse: this script's folder has no dependencies of its own.
-const { parse } = createRequire(repoPath("apps/node-backend/package.json"))("csv-parse/sync") as {
-  parse: (input: string, options: { relax_quotes: boolean; relax_column_count: boolean }) => string[][];
+const { parse } = createRequire(repoPath("apps/node-backend/package.json"))(
+  "csv-parse/sync",
+) as {
+  parse: (
+    input: string,
+    options: { relax_quotes: boolean; relax_column_count: boolean },
+  ) => string[][];
 };
 /** `new Decimal(text)` on the decimal.js the money module configured; `toDecimal` alone reads "" as 0. */
 const decimal = (text: string) => {
@@ -43,15 +74,21 @@ const decimal = (text: string) => {
 };
 /** `Decimal.sum` of that same decimal.js. */
 const DecimalSum = toDecimal(0).constructor as unknown as {
-  sum: (...values: ReturnType<typeof toDecimal>[]) => ReturnType<typeof toDecimal>;
+  sum: (
+    ...values: ReturnType<typeof toDecimal>[]
+  ) => ReturnType<typeof toDecimal>;
 };
 /** decimal.js `ROUND_HALF_UP` and `ROUND_HALF_EVEN`. */
 const HALF_UP = 4;
 const HALF_EVEN = 6;
 
-const CORPUS = repoPath("apps/native/parity/plans/portfolio-import-reconciliation.jsonl");
+const CORPUS = repoPath(
+  "apps/native/parity/plans/portfolio-import-reconciliation.jsonl",
+);
 /** `{ input, result | error }` lines of `evaluateAnalysisFormulas`. */
 const FORMULAS = repoPath("apps/native/parity/plans/analysis-formulas.jsonl");
+/** `{ op, r }` lines: see `evaluateFoundation`. */
+const FOUNDATIONS = repoPath("apps/native/parity/plans/foundations.jsonl");
 /** `{ op, r }` lines: see `evaluate`. */
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 
@@ -103,10 +140,17 @@ function planInput(wire: Wire): ReconciliationPlanInput {
 
 const image = (snapshot: object) =>
   Object.fromEntries(
-    IMAGE_COLUMNS.map((column) => [column, (snapshot as Record<string, unknown>)[column] ?? null]),
+    IMAGE_COLUMNS.map((column) => [
+      column,
+      (snapshot as Record<string, unknown>)[column] ?? null,
+    ]),
   );
 
-export function record(wire: Wire): { input: Wire; result?: unknown; error?: string } {
+export function record(wire: Wire): {
+  input: Wire;
+  result?: unknown;
+  error?: string;
+} {
   try {
     const answer = buildPortfolioImportReconciliationPlan(planInput(wire));
     return {
@@ -119,7 +163,9 @@ export function record(wire: Wire): { input: Wire; result?: unknown; error?: str
           before: image(adoption.before),
           after: image(adoption.after),
         })),
-        settledDuplicates: answer.settledDuplicates.map((row) => Number(row.id)),
+        settledDuplicates: answer.settledDuplicates.map((row) =>
+          Number(row.id),
+        ),
         cashAdoptions: answer.cashAdoptions.map((adoption) => ({
           rowId: Number(adoption.row.id),
           decision: adoption.decision,
@@ -127,7 +173,10 @@ export function record(wire: Wire): { input: Wire; result?: unknown; error?: str
       },
     };
   } catch (error) {
-    return { input: wire, error: error instanceof Error ? error.message : String(error) };
+    return {
+      input: wire,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -152,24 +201,35 @@ export function evaluate(op: readonly unknown[]): unknown {
       case "sqrt":
         return decimal(text(0)).sqrt().toFixed();
       case "sum":
-        return DecimalSum.sum(...args.map((_, index) => decimal(text(index)))).toFixed();
+        return DecimalSum.sum(
+          ...args.map((_, index) => decimal(text(index))),
+        ).toFixed();
       case "text":
         return decimal(text(0)).toString();
       case "fromNumber":
         return toDecimal(Number(args[0])).toFixed();
       case "plus":
-        return decimal(text(0)).plus(decimal(text(1))).toFixed();
+        return decimal(text(0))
+          .plus(decimal(text(1)))
+          .toFixed();
       case "minus":
-        return decimal(text(0)).minus(decimal(text(1))).toFixed();
+        return decimal(text(0))
+          .minus(decimal(text(1)))
+          .toFixed();
       case "times":
-        return decimal(text(0)).times(decimal(text(1))).toFixed();
+        return decimal(text(0))
+          .times(decimal(text(1)))
+          .toFixed();
       case "div": {
         const quotient = decimal(text(0)).dividedBy(decimal(text(1)));
         return quotient.isFinite() ? quotient.toFixed() : "error";
       }
       case "dp":
         return decimal(text(0))
-          .toDecimalPlaces(Number(args[1]), args[2] === "up" ? HALF_UP : HALF_EVEN)
+          .toDecimalPlaces(
+            Number(args[1]),
+            args[2] === "up" ? HALF_UP : HALF_EVEN,
+          )
           .toFixed();
       case "cmp":
         return decimal(text(0)).cmp(decimal(text(1)));
@@ -178,23 +238,141 @@ export function evaluate(op: readonly unknown[]): unknown {
       case "day":
         return String(Date.parse(`${text(0)}T00:00:00Z`) / 86_400_000);
       case "csv":
-        return parse(text(0), { relax_quotes: args[1] === true, relax_column_count: args[2] === true });
+        return parse(text(0), {
+          relax_quotes: args[1] === true,
+          relax_column_count: args[2] === true,
+        });
       case "identity":
         return normalizeIdentityText(text(0));
       default:
         throw new Error(`unknown op ${String(name)}`);
     }
   } catch (error) {
-    if (name === undefined || (error instanceof Error && error.message.startsWith("unknown op"))) throw error;
+    if (
+      name === undefined ||
+      (error instanceof Error && error.message.startsWith("unknown op"))
+    )
+      throw error;
     return "error";
   }
 }
 
+/**
+ * One shared helper the backend builds on (the money helpers, JavaScript number rendering,
+ * `lib/math.ts`, `lib/timezone.ts`), evaluated for one input. Numbers travel as text so
+ * they stay exact. `"error: …"` stands for a thrown error: the message of a `TypeError`
+ * the helper wrote itself, `range` for the engine's `RangeError`.
+ */
+export function evaluateFoundation(op: readonly unknown[]): unknown {
+  const [name, ...args] = op;
+  const text = (index: number) => String(args[index]);
+  const number = (index: number) => Number(args[index]);
+  const numbers = (from: number) => args.slice(from).map(Number);
+  try {
+    switch (name) {
+      case "toFixed":
+        return number(0).toFixed(number(1));
+      case "toPrecision":
+        return number(0).toPrecision(number(1));
+      case "round":
+        return String(Math.round(number(0)));
+      case "roundMoney":
+        return String(roundMoney(text(0), number(1)));
+      case "roundToCents":
+        return roundToCents(text(0)).toFixed();
+      case "addAll":
+        return addAll(args.map(String)).toFixed();
+      case "decimalToFixed":
+        return decimal(text(0)).toFixed(
+          number(1),
+          args[2] === "up" ? HALF_UP : HALF_EVEN,
+        );
+      case "isInteger":
+        return decimal(text(0)).isInteger();
+      case "numericColumn": {
+        const value = numericColumn(args[0] === null ? null : text(0));
+        return value === null || value === undefined ? null : String(value);
+      }
+      case "median": {
+        const value = median(numbers(0));
+        return value === undefined ? null : String(value);
+      }
+      case "returnStatistics": {
+        const stats = madReturnStats(numbers(0));
+        return [
+          stats.medianReturn,
+          stats.robustSigma,
+          stats.spikeThreshold,
+          stats.bridgeThreshold,
+          stats.minSpikeMove,
+        ].map(String);
+      }
+      case "needle":
+        return isRobustNeedle(
+          number(0),
+          number(1),
+          number(2),
+          madReturnStats(numbers(3)),
+        );
+      case "zoneParts": {
+        const parts = toAppTz(new Date(number(0)), text(1));
+        return [
+          parts.year,
+          parts.month,
+          parts.day,
+          parts.hour,
+          parts.minute,
+          parts.second,
+        ];
+      }
+      case "zoneInstant":
+        return toUtc(
+          {
+            year: number(1),
+            month: number(2),
+            day: number(3),
+            hour: number(4),
+            minute: number(5),
+            second: number(6),
+          },
+          text(0),
+        ).getTime();
+      case "zoneDay":
+        return toAppDateString(new Date(number(0)), text(1));
+      case "startOfDay":
+        return appDateStringToUtc(text(0), text(1)).getTime();
+      case "epochDay":
+        return ymdToEpochDay(text(0));
+      case "differenceInDays":
+        return differenceInCalendarDaysYmd(text(0), text(1));
+      case "addDays":
+        return addDaysYmd(text(0), number(1));
+      case "firstOfMonth":
+        return firstOfMonthYmd(text(0), number(1));
+      case "utcDay":
+        return epochMsToUtcYmd(number(0));
+      default:
+        throw new Error(`unknown op ${String(name)}`);
+    }
+  } catch (error) {
+    if (error instanceof RangeError) return "error: range";
+    if (error instanceof TypeError) return `error: ${error.message}`;
+    throw error;
+  }
+}
+
 /** One formula evaluation: the engine's result, or the error it threw. */
-export function recordFormulas(input: unknown): { input: unknown; result?: unknown; error?: unknown } {
+export function recordFormulas(input: unknown): {
+  input: unknown;
+  result?: unknown;
+  error?: unknown;
+} {
   try {
     // The recorded inputs are request bodies, which the route passes on as untyped JSON.
-    return { input, result: evaluateAnalysisFormulas(input as EvaluateAnalysisFormulasInput) };
+    return {
+      input,
+      result: evaluateAnalysisFormulas(input as EvaluateAnalysisFormulasInput),
+    };
   } catch (error) {
     if (error instanceof AnalysisFormulaError)
       return {
@@ -206,11 +384,18 @@ export function recordFormulas(input: unknown): { input: unknown; result?: unkno
         },
       };
     // Any other error is the JavaScript engine's; its message is not part of the contract.
-    return { input, error: { name: error instanceof Error ? error.name : "Error" } };
+    return {
+      input,
+      error: { name: error instanceof Error ? error.name : "Error" },
+    };
   }
 }
 
-function rerecord(file: string, line: (recorded: string) => unknown, check: boolean): void {
+function rerecord(
+  file: string,
+  line: (recorded: string) => unknown,
+  check: boolean,
+): void {
   const recorded = fs.readFileSync(file, "utf8");
   const next = recorded
     .split("\n")
@@ -226,8 +411,24 @@ function rerecord(file: string, line: (recorded: string) => unknown, check: bool
 
 if (isEntrypoint(import.meta)) {
   const check = process.argv.includes("--check");
-  rerecord(CORPUS, (text) => record((JSON.parse(text) as { input: Wire }).input), check);
-  rerecord(FORMULAS, (text) => recordFormulas((JSON.parse(text) as { input: unknown }).input), check);
+  rerecord(
+    CORPUS,
+    (text) => record((JSON.parse(text) as { input: Wire }).input),
+    check,
+  );
+  rerecord(
+    FORMULAS,
+    (text) => recordFormulas((JSON.parse(text) as { input: unknown }).input),
+    check,
+  );
+  rerecord(
+    FOUNDATIONS,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluateFoundation(op) };
+    },
+    check,
+  );
   rerecord(
     INTEROP,
     (text) => {

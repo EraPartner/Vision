@@ -624,12 +624,26 @@ recorder's seed and requests.
 `VisionBackend/PortfolioImport/` holds the pure portfolio import reconciliation planner
 (`PortfolioImportReconciliation.buildPlan`, a port of `buildPortfolioImportReconciliationPlan`) with
 the cross-format rules (`PortfolioImportCrossFormat`), the custody previews and the JavaScript
-behaviours they depend on: decimal.js at the money module's settings (`DecimalJS`), csv-parse
-(`CSVRecords`), `Date.parse` day arithmetic and the identity text rule (`ImportInterop`). No route
-calls it yet: reconciliation preview and commit stay on Bun until the portfolio repositories move.
-`bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: plan inputs captured
-from the TypeScript unit and database tests, and mutations of them, with the plans they gave, and
-sampled inputs of those JavaScript behaviours. `PortfolioImportPlanParityTests` replays both.
+behaviours they depend on: csv-parse (`CSVRecords`), `Date.parse` day arithmetic and the identity
+text rule (`ImportInterop`). No route calls it yet: reconciliation preview and commit stay on Bun
+until the portfolio repositories move.
+
+`VisionBackend/Analysis/` holds the analysis formula engine (`AnalysisFormulaEngine.evaluate`, a port
+of `evaluateAnalysisFormulas`): the parser, unit inference and the evaluator. No route calls it yet.
+A unit field that names an `Object.prototype` member (a `currencyColumn` called `constructor`) reads
+as absent there, where the TypeScript reads the inherited function.
+
+`VisionBackend/Numeric/` and `VisionBackend/Time/` hold the shared helpers those ports and later ones
+build on: decimal.js at the money module's settings (`DecimalJS`, with powers, square roots and
+radix parsing), the money helpers of `packages/shared-utils/src/money.ts` (`MoneyMath`, `Money`),
+JavaScript number rendering (`JavaScriptNumber.toFixed`, `toPrecision`, `round`), `lib/math.ts`
+(`RobustStatistics`) and `lib/timezone.ts` (`AppTimeZone`, `CalendarDays`).
+
+`bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
+inputs captured from the TypeScript unit and database tests, formula requests captured from the
+analysis tests, generated variations of both, and sampled inputs of the shared helpers, each with
+what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests` and
+`FoundationParityTests` replay them.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from
