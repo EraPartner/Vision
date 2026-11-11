@@ -8,14 +8,15 @@ struct DecimalJSError: Error, Equatable, Sendable, CustomStringConvertible {
 
 /// `decimal.js` arithmetic as `packages/shared-utils/src/money.ts` configures it
 /// (`precision: 30`, `ROUND_HALF_EVEN`), for the services that compute with `toDecimal`
-/// (ADR-270). The persistence layer's `ExactDecimal` is PostgreSQL NUMERIC and rounds
+/// and the analysis formula engine, which computes with `Decimal` directly (ADR-270). The
+/// persistence layer's `ExactDecimal` is PostgreSQL NUMERIC and rounds
 /// differently, so a ported service that compared or printed `Decimal` values uses this type.
 ///
 /// A value is `coefficient × 10^exponent` without trailing zeros, as `decimal.js` normalizes
 /// it. The constructor keeps every digit; `plus`, `minus`, `times` and `dividedBy` round the
-/// result to 30 significant digits. Only finite values exist here: the ported callers feed
-/// NUMERIC column text, pattern-checked cells and JavaScript numbers, so `NaN`, the
-/// infinities and the `0x`/`0o`/`0b` forms that `decimal.js` also reads are refused.
+/// result to 30 significant digits. Only finite values exist here: text that `decimal.js`
+/// reads as `NaN` or an infinity is reported by `parse` and refused by `init`. The sign of
+/// zero is not kept; no ported caller can observe it.
 struct DecimalJS: Sendable, Hashable, CustomStringConvertible {
     enum Rounding: Sendable {
         /// `Decimal.ROUND_HALF_EVEN`, the module default.
@@ -31,7 +32,7 @@ struct DecimalJS: Sendable, Hashable, CustomStringConvertible {
     let coefficient: ExactInteger
     let exponent: Int
 
-    private init(normalizing coefficient: ExactInteger, exponent: Int) {
+    init(normalizing coefficient: ExactInteger, exponent: Int) {
         guard !coefficient.isZero else {
             self.coefficient = .zero
             self.exponent = 0
@@ -51,67 +52,10 @@ struct DecimalJS: Sendable, Hashable, CustomStringConvertible {
         self.init(normalizing: ExactInteger(value), exponent: 0)
     }
 
-    /// `new Decimal(text)`: an optional sign, digits with single `_` separators, an optional
-    /// point and exponent. No surrounding whitespace.
+    /// `new Decimal(text)` for text that holds a finite value; see `parse` for the grammar.
     init(_ text: String) throws {
-        var body = Substring(text)
-        var negative = false
-        if body.first == "-" {
-            negative = true
-            body = body.dropFirst()
-        } else if body.first == "+" {
-            body = body.dropFirst()
-        }
-        var bytes = Array(body.utf8)
-        // `v.replace(/(\d)_(?=\d)/g, '$1')`.
-        if bytes.contains(UInt8(ascii: "_")) {
-            var kept: [UInt8] = []
-            for (index, byte) in bytes.enumerated() {
-                let separator =
-                    byte == UInt8(ascii: "_") && index > 0 && index + 1 < bytes.count
-                    && Self.isDigit(bytes[index - 1]) && Self.isDigit(bytes[index + 1])
-                if !separator { kept.append(byte) }
-            }
-            bytes = kept
-        }
-        // `/^(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i`
-        var position = 0
-        var digits: [UInt8] = []
-        var fractionDigits = 0
-        while position < bytes.count, Self.isDigit(bytes[position]) {
-            digits.append(bytes[position])
-            position += 1
-        }
-        let wholeDigits = digits.count
-        if position < bytes.count, bytes[position] == UInt8(ascii: ".") {
-            position += 1
-            while position < bytes.count, Self.isDigit(bytes[position]) {
-                digits.append(bytes[position])
-                fractionDigits += 1
-                position += 1
-            }
-        }
-        guard wholeDigits > 0 || fractionDigits > 0 else { throw DecimalJSError(input: text) }
-        var exponent = 0
-        if position < bytes.count, bytes[position] == UInt8(ascii: "e") || bytes[position] == UInt8(ascii: "E") {
-            position += 1
-            var exponentNegative = false
-            if position < bytes.count, bytes[position] == UInt8(ascii: "+") || bytes[position] == UInt8(ascii: "-") {
-                exponentNegative = bytes[position] == UInt8(ascii: "-")
-                position += 1
-            }
-            let start = position
-            while position < bytes.count, Self.isDigit(bytes[position]) { position += 1 }
-            // An exponent beyond decimal.js's 9e15 range is an infinity or a zero there.
-            guard position > start, position - start <= 15,
-                let magnitude = Int(String(decoding: bytes[start..<position], as: UTF8.self))
-            else { throw DecimalJSError(input: text) }
-            exponent = exponentNegative ? -magnitude : magnitude
-        }
-        guard position == bytes.count,
-            let magnitude = ExactInteger(decimalDigits: Substring(String(decoding: digits, as: UTF8.self)))
-        else { throw DecimalJSError(input: text) }
-        self.init(normalizing: negative ? -magnitude : magnitude, exponent: exponent - fractionDigits)
+        guard case .finite(let value) = Self.parse(text) else { throw DecimalJSError(input: text) }
+        self = value
     }
 
     /// `new Decimal(number)`: the digits of JavaScript's `String(number)`.
@@ -125,8 +69,6 @@ struct DecimalJS: Sendable, Hashable, CustomStringConvertible {
         guard let text, !text.isEmpty else { return .zero }
         return try DecimalJS(text)
     }
-
-    private static func isDigit(_ byte: UInt8) -> Bool { byte >= 0x30 && byte <= 0x39 }
 
     // MARK: Rounding
 
@@ -157,7 +99,7 @@ struct DecimalJS: Sendable, Hashable, CustomStringConvertible {
     }
 
     /// `finalise(x, precision, rounding)`: at most 30 significant digits.
-    private static func finalised(_ coefficient: ExactInteger, _ exponent: Int, inexact: Bool = false) -> DecimalJS {
+    static func finalised(_ coefficient: ExactInteger, _ exponent: Int, inexact: Bool = false) -> DecimalJS {
         let excess = coefficient.isZero ? 0 : coefficient.digitCount - precision
         guard excess > 0 else { return DecimalJS(normalizing: coefficient, exponent: exponent) }
         return DecimalJS(
@@ -174,7 +116,7 @@ struct DecimalJS: Sendable, Hashable, CustomStringConvertible {
     // MARK: Arithmetic
 
     private static func aligned(_ a: DecimalJS, _ b: DecimalJS) -> (ExactInteger, ExactInteger, Int) {
-        let exponent = min(a.exponent, b.exponent)
+        let exponent = Swift.min(a.exponent, b.exponent)
         return (a.coefficient.timesPow10(a.exponent - exponent), b.coefficient.timesPow10(b.exponent - exponent), exponent)
     }
 

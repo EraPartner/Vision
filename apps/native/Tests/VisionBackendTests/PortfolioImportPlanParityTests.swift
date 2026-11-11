@@ -45,7 +45,17 @@ import VisionNativeCore
         func number(_ value: Double) -> JSValue { .string(value.isNaN ? "NaN" : SQLArguments.javaScriptText(value)) }
         let name = text(0)
         switch name {
-        case "new": return .string(try decimal(1).toFixed)
+        case "new":
+            switch DecimalJS.parse(text(1)) {
+            case .finite(let value): return .string(value.toFixed)
+            case .infinity(let negative): return .string(negative ? "-Infinity" : "Infinity")
+            case .notANumber: return .string("NaN")
+            case .invalid: throw DecimalJSError(input: text(1))
+            }
+        case "pow": return .string(try decimal(1).pow(try decimal(2)).toFixed)
+        case "sqrt": return .string(try decimal(1).squareRoot.toFixed)
+        case "sum": return .string(DecimalJS.sum(try op.indices.dropFirst().map { try decimal($0) }).toFixed)
+        case "text": return .string(try decimal(1).javaScriptString)
         case "fromNumber": return .string(try DecimalJS(op[1].javaScriptNumber).toFixed)
         case "plus": return .string(try decimal(1).plus(try decimal(2)).toFixed)
         case "minus": return .string(try decimal(1).minus(try decimal(2)).toFixed)

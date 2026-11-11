@@ -21,6 +21,11 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { buildPortfolioImportReconciliationPlan } from "../apps/node-backend/src/services/portfolioImportReconciliationService.ts";
+import {
+  AnalysisFormulaError,
+  evaluateAnalysisFormulas,
+} from "../apps/node-backend/src/services/analysisFormulaEngine.ts";
+import type { EvaluateAnalysisFormulasInput } from "../apps/node-backend/src/services/analysisFormulaEngine.ts";
 import { normalizeIdentityText } from "../apps/node-backend/src/services/importIdentity.ts";
 import { toDecimal } from "../packages/shared-utils/src/money.ts";
 import type { ReconciliationPlanInput } from "../apps/node-backend/src/services/portfolioImportReconciliationService.ts";
@@ -36,11 +41,17 @@ const decimal = (text: string) => {
   if (text === "") throw new Error("[DecimalError] Invalid argument: ");
   return toDecimal(text);
 };
+/** `Decimal.sum` of that same decimal.js. */
+const DecimalSum = toDecimal(0).constructor as unknown as {
+  sum: (...values: ReturnType<typeof toDecimal>[]) => ReturnType<typeof toDecimal>;
+};
 /** decimal.js `ROUND_HALF_UP` and `ROUND_HALF_EVEN`. */
 const HALF_UP = 4;
 const HALF_EVEN = 6;
 
 const CORPUS = repoPath("apps/native/parity/plans/portfolio-import-reconciliation.jsonl");
+/** `{ input, result | error }` lines of `evaluateAnalysisFormulas`. */
+const FORMULAS = repoPath("apps/native/parity/plans/analysis-formulas.jsonl");
 /** `{ op, r }` lines: see `evaluate`. */
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 
@@ -130,8 +141,20 @@ export function evaluate(op: readonly unknown[]): unknown {
   const text = (index: number) => String(args[index]);
   try {
     switch (name) {
-      case "new":
-        return decimal(text(0)).toFixed();
+      case "new": {
+        const value = decimal(text(0));
+        return value.isFinite() ? value.toFixed() : value.toString();
+      }
+      case "pow": {
+        const power = decimal(text(0)).pow(decimal(text(1)));
+        return power.isFinite() ? power.toFixed() : "error";
+      }
+      case "sqrt":
+        return decimal(text(0)).sqrt().toFixed();
+      case "sum":
+        return DecimalSum.sum(...args.map((_, index) => decimal(text(index)))).toFixed();
+      case "text":
+        return decimal(text(0)).toString();
       case "fromNumber":
         return toDecimal(Number(args[0])).toFixed();
       case "plus":
@@ -167,6 +190,26 @@ export function evaluate(op: readonly unknown[]): unknown {
   }
 }
 
+/** One formula evaluation: the engine's result, or the error it threw. */
+export function recordFormulas(input: unknown): { input: unknown; result?: unknown; error?: unknown } {
+  try {
+    // The recorded inputs are request bodies, which the route passes on as untyped JSON.
+    return { input, result: evaluateAnalysisFormulas(input as EvaluateAnalysisFormulasInput) };
+  } catch (error) {
+    if (error instanceof AnalysisFormulaError)
+      return {
+        input,
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(error.formulaId === null ? {} : { formulaId: error.formulaId }),
+        },
+      };
+    // Any other error is the JavaScript engine's; its message is not part of the contract.
+    return { input, error: { name: error instanceof Error ? error.name : "Error" } };
+  }
+}
+
 function rerecord(file: string, line: (recorded: string) => unknown, check: boolean): void {
   const recorded = fs.readFileSync(file, "utf8");
   const next = recorded
@@ -184,6 +227,7 @@ function rerecord(file: string, line: (recorded: string) => unknown, check: bool
 if (isEntrypoint(import.meta)) {
   const check = process.argv.includes("--check");
   rerecord(CORPUS, (text) => record((JSON.parse(text) as { input: Wire }).input), check);
+  rerecord(FORMULAS, (text) => recordFormulas((JSON.parse(text) as { input: unknown }).input), check);
   rerecord(
     INTEROP,
     (text) => {
