@@ -650,12 +650,21 @@ generated from `constants.ts` (`bun run native:generate-tax-tables`). The versio
 of `pit.ts` is not ported: only tests call it. No route calls the engine yet; the database-bound
 services of `apps/node-backend/src/services/tax/` stay on Bun.
 
+The same folder holds the rules that decide which SQL an analysis may run
+(`AnalysisSQLRules`, a port of `checkAnalysisSql`, `maskSql`, `referencedViews`, `columnKind`,
+`storedValueHint` and `checkParameters` of `services/analysisExecutor.ts`) and `SQLStatementScan`
+(`scanSql` of `database/sqlite/sqlText.ts`, by which the sandbox refuses a write or a second
+statement). The TypeScript rules are JavaScript regular expressions over UTF-16 code units; the Swift
+writes the same matches out by hand, so no other engine's case folding or word boundaries decide what
+is allowed. `analysisExecutor.ts` exports `__analysisSqlRules` for the recorder. The sandbox process
+itself, its row copies and its result typing are not ported yet.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
-analysis tests, tax engine calls captured from its tests, generated variations of all three, and
-sampled inputs of the shared helpers, each with what the TypeScript answered.
-`PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests` and
-`FoundationParityTests` replay them.
+analysis tests, tax engine calls captured from its tests, generated variations of all three,
+generated analysis SQL, and sampled inputs of the shared helpers, each with what the TypeScript
+answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
+`AnalysisSQLRulesParityTests` and `FoundationParityTests` replay them.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from

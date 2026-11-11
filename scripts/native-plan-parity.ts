@@ -19,6 +19,8 @@
  * households for `computeHouseholdTax`, the profile and household conversions, the settings
  * loader, the overview and the portfolio tax dashboard, captured from the engine's tests and
  * generated, thinned to stay under the repository's file-size limit.
+ * analysis-sql-rules.jsonl holds analysis SQL (the cases of the executor's tests and generated
+ * text) with what `checkAnalysisSql`, `scanSql` and the column-type rules answer.
  *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
@@ -80,6 +82,11 @@ import { loadHouseholdSettings } from "../packages/shared-utils/src/belgianTax/s
 import { estimateSelfEmployedContributions } from "../packages/shared-utils/src/belgianTax/socialSecurity.ts";
 import { getTaxTable } from "../packages/shared-utils/src/belgianTax/constants.ts";
 import type { ReconciliationPlanInput } from "../apps/node-backend/src/services/portfolioImportReconciliationService.ts";
+import {
+  __analysisSqlRules,
+  __validateAnalysisSql,
+} from "../apps/node-backend/src/services/analysisExecutor.ts";
+import { scanSql } from "../apps/node-backend/src/database/sqlite/sqlText.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -117,6 +124,7 @@ const FOUNDATIONS = repoPath("apps/native/parity/plans/foundations.jsonl");
 /** `{ op, r }` lines: see `evaluate`. */
 const TAX = repoPath("apps/native/parity/plans/belgian-tax.jsonl");
 
+const SQL_RULES = repoPath("apps/native/parity/plans/analysis-sql-rules.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 
 /** The columns of an adoption image the corpus compares, `null` when missing. */
@@ -507,6 +515,43 @@ export function evaluateTax(op: unknown[]): unknown {
   }
 }
 
+/**
+ * One call of the analysis SQL rules. A refusal is recorded by its message, which the API
+ * returns to the user.
+ */
+export function evaluateSqlRule(op: unknown[]): unknown {
+  const [name, a, b] = op;
+  try {
+    switch (name) {
+      case "check": {
+        const sql = __validateAnalysisSql(a, b as string[]);
+        return { sql, masked: __analysisSqlRules.maskSql(a as string) };
+      }
+      case "views":
+        return __analysisSqlRules.referencedViews(a as string, b as string[]);
+      case "kind":
+        return __analysisSqlRules.columnKind(a as string, b as string);
+      case "hint":
+        return __analysisSqlRules.storedValueHint(a as string);
+      case "params":
+        return __analysisSqlRules.checkParameters(a);
+      case "scan": {
+        const scanned = scanSql(a as string);
+        return {
+          text: scanned.text,
+          readOnly: scanned.readOnly,
+          multipleStatements: scanned.multipleStatements,
+          firstKeyword: scanned.firstKeyword,
+        };
+      }
+      default:
+        throw new Error(`unknown SQL rule operation: ${String(name)}`);
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function rerecord(
   file: string,
   line: (recorded: string) => unknown,
@@ -550,6 +595,14 @@ if (isEntrypoint(import.meta)) {
     (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: evaluateTax(op) };
+    },
+    check,
+  );
+  rerecord(
+    SQL_RULES,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluateSqlRule(op) };
     },
     check,
   );
