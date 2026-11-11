@@ -33,8 +33,13 @@ enum ImportInterop {
             let dayOfMonth = number(yearDigits + 4..<yearDigits + 6),
             (1...12).contains(month), (1...31).contains(dayOfMonth)
         else { return .nan }
-        return Double(daysFromCivil(year: sign * year, month: month, day: 1) + dayOfMonth - 1)
+        // "-000000" is not a year, and a Date holds at most 100,000,000 days either side of 1970.
+        if sign < 0, year == 0 { return .nan }
+        let days = daysFromCivil(year: sign * year, month: month, day: 1) + dayOfMonth - 1
+        return abs(days) <= maximumDateDays ? Double(days) : .nan
     }
+
+    private static let maximumDateDays = 100_000_000
 
     /// Days since 1970-01-01 in the proleptic Gregorian calendar.
     static func daysFromCivil(year: Int, month: Int, day: Int) -> Int {

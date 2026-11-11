@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-07
+date: 2026-11-11
 updated: 2026-11-07
 tags:
   [
@@ -620,6 +620,16 @@ created are compared by form. An area may record provider answers (`fetch`), whi
 `fetch` and the replay's fetcher both serve, and today's date in `APP_TIMEZONE` Europe/Brussels is
 recorded as `{{today}}`. `scripts/native-tests` checks that each corpus still holds the
 recorder's seed and requests.
+
+`VisionBackend/PortfolioImport/` holds the pure portfolio import reconciliation planner
+(`PortfolioImportReconciliation.buildPlan`, a port of `buildPortfolioImportReconciliationPlan`) with
+the cross-format rules (`PortfolioImportCrossFormat`), the custody previews and the JavaScript
+behaviours they depend on: decimal.js at the money module's settings (`DecimalJS`), csv-parse
+(`CSVRecords`), `Date.parse` day arithmetic and the identity text rule (`ImportInterop`). No route
+calls it yet: reconciliation preview and commit stay on Bun until the portfolio repositories move.
+`bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: plan inputs captured
+from the TypeScript unit and database tests, and mutations of them, with the plans they gave, and
+sampled inputs of those JavaScript behaviours. `PortfolioImportPlanParityTests` replays both.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from
