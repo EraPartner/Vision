@@ -635,7 +635,7 @@ as absent there, where the TypeScript reads the inherited function.
 
 `VisionBackend/Numeric/` and `VisionBackend/Time/` hold the shared helpers those ports and later ones
 build on: decimal.js at the money module's settings (`DecimalJS`, with powers, square roots and
-radix parsing), the money helpers of `packages/shared-utils/src/money.ts` (`MoneyMath`, `Money`),
+radix parsing), the money helpers of `packages/shared-utils/src/money.ts` (`DecimalMoney`, `Money`),
 JavaScript number rendering (`JavaScriptNumber.toFixed`, `toPrecision`, `round`), `lib/math.ts`
 (`RobustStatistics`) and `lib/timezone.ts` (`AppTimeZone`, `CalendarDays`).
 
@@ -873,7 +873,7 @@ inflow legs, and links them with `markTransfer`. A `409` shows the duplicate pro
 anyway, and the form persists across Cancel until a create succeeds, guarded by the leave guard
 while dirty. The payee picker offers "Add {name}" (`POST /api/recipients`). The Split dialog
 (`SplitDialogModel`) splits equally, lets others pay all or takes custom amounts, rounding with
-`MoneyMath` (banker's rounding, like `ROUND_HALF_EVEN`); a created split, single or bulk,
+`DecimalMoney` (banker's rounding, like `ROUND_HALF_EVEN`); a created split, single or bulk,
 invalidates the `/owes` summary and person detail like `splitKeys.all`. The bulk bar (`TransactionsModel+Actions`)
 acts on the checked ids or, after "Select all {n} matching filter", on the filter with
 `expected_count`; tag and split stay id-only. `/owes` (`OwesModel`, `OwesView`) shows the total

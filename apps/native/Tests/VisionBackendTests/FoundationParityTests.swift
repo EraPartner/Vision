@@ -25,15 +25,15 @@ import VisionNativeCore
         case "toFixed": return .string(JavaScriptNumber.toFixed(number(1), integer(2)))
         case "toPrecision": return .string(JavaScriptNumber.toPrecision(number(1), integer(2)))
         case "round": return rendered(JavaScriptNumber.round(number(1)))
-        case "roundMoney": return rendered(MoneyMath.roundMoney(try DecimalJS.from(text(1)), places: integer(2)))
-        case "roundToCents": return .string(MoneyMath.roundToCents(try DecimalJS.from(text(1))).toFixed)
+        case "roundMoney": return rendered(DecimalMoney.roundMoney(try DecimalJS.from(text(1)), places: integer(2)))
+        case "roundToCents": return .string(DecimalMoney.roundToCents(try DecimalJS.from(text(1))).toFixed)
         case "addAll":
-            return .string(MoneyMath.addAll(try op.indices.dropFirst().map { try DecimalJS.from(text($0)) }).toFixed)
+            return .string(DecimalMoney.addAll(try op.indices.dropFirst().map { try DecimalJS.from(text($0)) }).toFixed)
         case "decimalToFixed":
             return .string(try DecimalJS(text(1)).toFixed(integer(2), op[3] == .string("up") ? .halfUp : .halfEven))
         case "isInteger": return .bool(try DecimalJS(text(1)).isInteger)
         case "numericColumn":
-            return try MoneyMath.numericColumn(op[1] == .null ? nil : text(1)).map(rendered) ?? .null
+            return try DecimalMoney.numericColumn(op[1] == .null ? nil : text(1)).map(rendered) ?? .null
         case "median": return RobustStatistics.median(numbers(from: 1)).map(rendered) ?? .null
         case "returnStatistics":
             let statistics = RobustStatistics.returnStatistics(numbers(from: 1))
@@ -88,7 +88,7 @@ import VisionNativeCore
                 actual = try Self.evaluate(op)
             } catch is UnknownOperation {
                 throw PlanFixture.Malformed(what: String(line))
-            } catch let error as CalendarDayError {
+            } catch let error as CalendarDaysError {
                 // The engine words its own `RangeError`; the corpus records only that it threw.
                 actual = .string(error == CalendarDays.outOfRange ? "error: range" : "error: \(error.message)")
             }
@@ -106,10 +106,10 @@ import VisionNativeCore
     }
 
     @Test func mixedCurrenciesAreRefused() throws {
-        let euros = Money(amount: try DecimalJS("1.10"), currency: .eur)
-        let dollars = Money(amount: try DecimalJS("2"), currency: try CurrencyCode(validating: "USD"))
+        let euros = MoneyAmount(amount: try DecimalJS("1.10"), currency: .eur)
+        let dollars = MoneyAmount(amount: try DecimalJS("2"), currency: try CurrencyCode(validating: "USD"))
         #expect(try euros.adding(euros).amount.toFixed == "2.2")
         #expect(throws: CurrencyMismatchError(expected: .eur, actual: dollars.currency)) { try euros.adding(dollars) }
-        #expect(try Money.sum([], in: .eur).amount.isZero)
+        #expect(try MoneyAmount.sum([], in: .eur).amount.isZero)
     }
 }

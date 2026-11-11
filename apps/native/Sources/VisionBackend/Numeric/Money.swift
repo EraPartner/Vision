@@ -7,7 +7,7 @@ import VisionNativeCore
 /// `toDecimal(value)` is `DecimalJS.from(_:)` for text and `DecimalJS(_:)` for a number.
 /// Unlike decimal.js, `DecimalJS` holds finite values only, so the text `Infinity` or `NaN`
 /// throws here where `toDecimal` returns a non-finite decimal.
-enum MoneyMath {
+enum DecimalMoney {
     /// `addAll(values)`: the sum, rounded to the working precision after each addition.
     static func addAll(_ values: [DecimalJS]) -> DecimalJS {
         values.reduce(.zero) { $0.plus($1) }
@@ -47,30 +47,23 @@ extension DecimalJS {
     }
 }
 
-/// `CurrencyMismatchError`.
-struct CurrencyMismatchError: Error, Equatable, Sendable {
-    let expected: CurrencyCode
-    let actual: CurrencyCode
-
-    var message: String { "Cannot combine \(actual.rawValue) with \(expected.rawValue) without converting" }
-}
-
-/// An amount together with its currency (`Money`, ADR-220). Totals that may span currencies
-/// take `Money`, so a caller has to say which currency every figure is in.
-struct Money: Equatable, Sendable {
+/// An amount together with its currency (`Money`, ADR-220), held in the backend's decimal type.
+/// Totals that may span currencies take it, so a caller has to say which currency every figure
+/// is in. A mix throws the core module's `CurrencyMismatchError`.
+struct MoneyAmount: Equatable, Sendable {
     var amount: DecimalJS
     var currency: CurrencyCode
 
     /// `sumMoney(items, currency)`: the sum of `items`, all of which must be in `currency`.
-    static func sum(_ items: [Money], in currency: CurrencyCode) throws -> Money {
+    static func sum(_ items: [MoneyAmount], in currency: CurrencyCode) throws -> MoneyAmount {
         var total = DecimalJS.zero
         for item in items {
             if item.currency != currency { throw CurrencyMismatchError(expected: currency, actual: item.currency) }
             total = total.plus(item.amount)
         }
-        return Money(amount: total, currency: currency)
+        return MoneyAmount(amount: total, currency: currency)
     }
 
     /// `addMoney(a, b)`.
-    func adding(_ other: Money) throws -> Money { try Money.sum([self, other], in: currency) }
+    func adding(_ other: MoneyAmount) throws -> MoneyAmount { try MoneyAmount.sum([self, other], in: currency) }
 }

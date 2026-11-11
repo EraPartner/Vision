@@ -1,7 +1,7 @@
 import Foundation
 
 /// A calendar-day helper refused its input (`TypeError` and `RangeError` in the TypeScript).
-struct CalendarDayError: Error, Equatable, Sendable {
+struct CalendarDaysError: Error, Equatable, Sendable {
     let message: String
 }
 
@@ -12,7 +12,7 @@ enum CalendarDays {
     /// The largest day number a JavaScript `Date` holds, either side of the epoch.
     static let dayLimit = 100_000_000
     /// A day or instant outside what a JavaScript `Date` holds (its `RangeError`).
-    static let outOfRange = CalendarDayError(message: "Invalid Date")
+    static let outOfRange = CalendarDaysError(message: "Invalid Date")
 
     static func floorDivide(_ value: Int, _ divisor: Int) -> Int {
         let quotient = value / divisor
@@ -43,14 +43,14 @@ enum CalendarDays {
         let bytes = Array(text.utf8)
         guard bytes.count == 10, bytes[4] == UInt8(ascii: "-"), bytes[7] == UInt8(ascii: "-"),
             let year = digits(bytes[0..<4]), let month = digits(bytes[5..<7]), let day = digits(bytes[8..<10])
-        else { throw CalendarDayError(message: "Expected YYYY-MM-DD, got: \(text)") }
+        else { throw CalendarDaysError(message: "Expected YYYY-MM-DD, got: \(text)") }
         return (year, month, day)
     }
 
     /// `ymdToEpochDay(text)`: the day number of a strict, real `YYYY-MM-DD`.
     static func epochDay(_ text: String) throws -> Int {
         let (year, month, day) = try parts(text)
-        guard ImportInterop.isCalendarDay(text) else { throw CalendarDayError(message: "Invalid calendar date: \(text)") }
+        guard ImportInterop.isCalendarDay(text) else { throw CalendarDaysError(message: "Invalid calendar date: \(text)") }
         return ImportInterop.daysFromCivil(year: year, month: month, day: day)
     }
 
