@@ -28,6 +28,9 @@
  * bank-import.jsonl holds calls of the bank statement adapters (`importPipeline/adapters`)
  * over generated statements, of the format detection and of the helpers the adapters share.
  *
+ * portfolio-import.jsonl holds calls of the portfolio statement adapters that read CSV: the
+ * sample statements of the backend tests and generated ones.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -138,6 +141,13 @@ import {
   normalizeToUppercase,
 } from "../apps/node-backend/src/lib/textNormalization.ts";
 import { ValidationError } from "../apps/node-backend/src/middleware/errorHandler.ts";
+import { parseWithConfig as parsePortfolioStatement } from "../apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import type { PortfolioParserConfig } from "../apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+import { normalizeType } from "../apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.ts";
+import {
+  __isLikelyPortfolioFile,
+  detectPortfolioFileFormat,
+} from "../apps/node-backend/src/lib/portfolioUpload.ts";
 import { detectBankImportFormats } from "../packages/shared-utils/src/bankImportDetection.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
@@ -180,6 +190,9 @@ const SQL_RULES = repoPath("apps/native/parity/plans/analysis-sql-rules.jsonl");
 const FORECAST = repoPath("apps/native/parity/plans/forecast.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 const BANK_IMPORT = repoPath("apps/native/parity/plans/bank-import.jsonl");
+const PORTFOLIO_IMPORT = repoPath(
+  "apps/native/parity/plans/portfolio-import.jsonl",
+);
 
 /** The columns of an adoption image the corpus compares, `null` when missing. */
 const IMAGE_COLUMNS = [
@@ -847,6 +860,67 @@ export async function evaluateBankImport(op: unknown[]): Promise<unknown> {
   }
 }
 
+/** Runs `read` over a temporary file holding the bytes a base64 text names. */
+async function withStatementFile<T>(
+  base64: string,
+  read: (file: string) => Promise<T>,
+): Promise<T> {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vision-parity-"));
+  const file = path.join(directory, "statement");
+  try {
+    fs.writeFileSync(file, Buffer.from(base64, "base64"));
+    return await read(file);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+/**
+ * One call of the portfolio statement adapters (`parseWithConfig`), of the type normaliser
+ * or of the upload checks that need no workbook reader. Statements travel as base64 and
+ * dates are recorded as day numbers, as for the bank adapters.
+ */
+export async function evaluatePortfolioImport(op: unknown[]): Promise<unknown> {
+  const [name, a, b, c] = op;
+  try {
+    switch (name) {
+      case "portfolio": {
+        const rows = await withStatementFile(a as string, (file) =>
+          parsePortfolioStatement(file, (b ?? {}) as PortfolioParserConfig),
+        );
+        return {
+          rows: rows.map(({ date, ...row }) => ({
+            day: dayNumber(date),
+            ...row,
+          })),
+          ...(rows.skipped !== undefined && { skipped: rows.skipped }),
+          ...(rows.sourceColumns !== undefined && {
+            sourceColumns: rows.sourceColumns,
+          }),
+        };
+      }
+      case "type":
+        return normalizeType(a, {
+          typeMapping: (b ?? undefined) as Record<string, string> | undefined,
+          defaultType: (c ?? undefined) as string | undefined,
+        });
+      case "format":
+        return await withStatementFile(a as string, detectPortfolioFileFormat);
+      case "likely":
+        return __isLikelyPortfolioFile({
+          ...(typeof a === "string" && { originalname: a }),
+          ...(typeof b === "string" && { mimetype: b }),
+        });
+      default:
+        throw new Error(`unknown portfolio import operation: ${String(name)}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("unknown "))
+      throw error;
+    return bankImportFailure(error);
+  }
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -931,6 +1005,14 @@ if (isEntrypoint(import.meta)) {
     async (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: await evaluateBankImport(op) };
+    },
+    check,
+  );
+  await rerecordAsync(
+    PORTFOLIO_IMPORT,
+    async (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: await evaluatePortfolioImport(op) };
     },
     check,
   );

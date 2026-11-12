@@ -15,7 +15,7 @@ enum CSVParse {
         case firstRecord
         /// `columns: (headers) => names`: the first record, renamed. A nil name disables the
         /// column.
-        case renamed(@Sendable ([String]) -> [String?])
+        case renamed(@Sendable ([String]) throws -> [String?])
     }
 
     struct Options: Sendable {
@@ -44,8 +44,10 @@ enum CSVParse {
         subscript(name: String) -> String? { fields[name] }
     }
 
-    struct Output: Equatable, Sendable {
+    struct Output: Sendable {
         var records: [Record] = []
+        /// With columns: their names, in source order.
+        var columns: [String?]?
         /// How often `on_skip` was called.
         var skipped = 0
     }
@@ -161,8 +163,9 @@ enum CSVParse {
             guard enabled else { return resetRecord() }
             if awaitingColumns {
                 let names: [String?]
-                if case .renamed(let rename) = options.columns { names = rename(record) } else { names = record }
+                if case .renamed(let rename) = options.columns { names = try rename(record) } else { names = record }
                 columns = names
+                output.columns = names
                 expectedLength = names.count
                 awaitingColumns = false
                 return resetRecord()

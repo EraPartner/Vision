@@ -680,12 +680,24 @@ literal source text of each record. One difference is deliberate: a date that do
 `YYYY-MM-DD` goes to the JavaScript engine's own date parser in the TypeScript, whose answer depends
 on the engine and on the machine's time zone; in Swift it is no date, so the row is skipped.
 
+`VisionBackend/PortfolioImport/PortfolioStatementAdapters.swift` and `PortfolioExchangeAdapters.swift`
+hold the portfolio statement adapters that read CSV (`PortfolioAdapters.parse`: the generic column
+mapping, IBKR transaction history, Kinesis, Nexo, Nexo Pro spot history and the Saxo CSV export),
+`PortfolioTypeNormalizer` and the upload checks of `portfolioUpload.ts` that need no workbook
+(`PortfolioUpload`). Known differences from the TypeScript: a date the TypeScript hands to the
+engine's own date parser is no date in Swift, and Nexo timestamps are read only as
+`YYYY-MM-DDTHH:mm:ss[.sss]Z`; a cell that reads as an infinite number fails the import; a Nexo Pro
+number beyond 1e±5000 is refused as exceeding the numeric limits; a type mapping looked up under a
+name of `Object.prototype` (`constructor`, `toString`) is an unknown transaction type. The workbook
+paths (Saxo XLSX, IBKR funding XLS/XLSX, the ZIP bounds check) are not ported: those calls fail with
+a message that says so.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, generated forecast and projection calls, generated bank statements, and
+generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, and
 sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests` and
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests` and
 `FoundationParityTests` replay them.
 `ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
 because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.

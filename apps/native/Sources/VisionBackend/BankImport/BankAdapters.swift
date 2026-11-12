@@ -153,7 +153,7 @@ enum BankAdapters {
             let sourceFits = (row.sourceReference ?? nil).map { !$0.isEmpty } ?? true
             guard !row.bankAccount.isEmpty, row.amount.isFinite, row.balance?.isFinite ?? true, currencyFits, sequenceFits,
                 sourceFits
-            else { throw BankImportError.contract(adapter: adapter) }
+            else { throw StatementImportError.contract(adapter: adapter) }
         }
         return parsed
     }
@@ -258,7 +258,7 @@ enum BankAdapters {
         guard let lastBalance, !rows.isEmpty else { return }
         // A balance or amount that is not finite breaks the row contract whatever is stamped.
         guard lastBalance.isFinite, rows.allSatisfy({ $0.row.amount.isFinite }) else {
-            throw BankImportError.contract(adapter: Bank.belfius.rawValue)
+            throw StatementImportError.contract(adapter: Bank.belfius.rawValue)
         }
         var order = Array(rows.indices)
         if rows.allSatisfy({ $0.statement.isFinite && $0.transaction.isFinite }) {
@@ -486,7 +486,7 @@ enum BankAdapters {
         var amount = gross
         if fee != 0 {
             // Past the finite numbers the difference is no amount at all: the row contract fails.
-            guard gross.isFinite, fee.isFinite else { throw BankImportError.contract(adapter: Bank.revolut.rawValue) }
+            guard gross.isFinite, fee.isFinite else { throw StatementImportError.contract(adapter: Bank.revolut.rawValue) }
             amount = DecimalMoney.roundMoney(try DecimalJS(gross).minus(try DecimalJS(fee)))
         }
         let balance = balanceText.isEmpty ? Double.nan : Text.decimal(balanceText)
@@ -738,7 +738,7 @@ enum BankAdapters {
         let format = try Text.numberFormat(config.numberFormat)
         let dateFormat = config.dateFormat ?? ""
         guard Text.supportedDateFormats.contains(where: { Text.same($0, dateFormat) }) else {
-            throw BankImportError.failed(
+            throw StatementImportError.failed(
                 "Unsupported date_format \"\(dateFormat)\". Supported: "
                     + Text.supportedDateFormats.joined(separator: ", "))
         }

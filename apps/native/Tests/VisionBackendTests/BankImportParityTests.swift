@@ -121,7 +121,7 @@ import Testing
             case "parseFloat": return number(BankImportText.parseFloat(text))
             default: throw UnknownOperation(name: name)
             }
-        } catch let error as BankImportError {
+        } catch let error as StatementImportError {
             switch error {
             case .validation(let message): return failure("validation", ("message", .string(message)))
             case .failed(let message): return failure("failed", ("message", .string(message)))

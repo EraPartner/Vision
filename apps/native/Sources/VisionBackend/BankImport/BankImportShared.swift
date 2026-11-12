@@ -55,7 +55,7 @@ struct ParsedBankTransactions: Equatable, Sendable {
     }
 }
 
-enum BankImportError: Error, Equatable, Sendable {
+enum StatementImportError: Error, Equatable, Sendable {
     /// A `ValidationError`: the message is shown to the user.
     case validation(String)
     /// A plain `Error` of the adapter (a missing or unsupported setting).
@@ -155,7 +155,7 @@ enum BankImportText {
         if name.isEmpty || name == "utf-8" || name == "utf8" { return .utf8 }
         if ["latin1", "latin-1", "iso-8859-1"].contains(name) { return .latin1 }
         if name == "windows-1252" { return .windows1252 }
-        throw BankImportError.validation("Unsupported CSV encoding \"\(value)\"")
+        throw StatementImportError.validation("Unsupported CSV encoding \"\(value)\"")
     }
 
     /// The code points of bytes 0x80...0x9F in windows-1252 (WHATWG).
@@ -354,7 +354,7 @@ enum BankImportText {
     static func numberFormat(_ value: JSValue?) throws -> NumberFormat {
         guard let value else { return .auto }
         guard case .string(let name) = value, let format = NumberFormat(rawValue: name) else {
-            throw BankImportError.validation("number_format must be auto, decimal_dot or decimal_comma")
+            throw StatementImportError.validation("number_format must be auto, decimal_dot or decimal_comma")
         }
         return format
     }
@@ -392,7 +392,7 @@ enum BankImportText {
             if let dot = try? DecimalJS(dotText), let comma = try? DecimalJS(commaText), !dot.eq(comma) {
                 let row = rowNumber.map { " at CSV data row \($0)" } ?? ""
                 let name = column.map { ", column \"\($0)\"" } ?? ""
-                throw BankImportError.validation(
+                throw StatementImportError.validation(
                     "Ambiguous number\(row)\(name). Select decimal_dot or decimal_comma number_format.")
             }
         }
