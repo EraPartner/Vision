@@ -588,7 +588,14 @@ settings area's `getSettings`, `getSetting`, `saveSetting` and `saveSettings` (`
 accounts area's `getAccounts`, `createAccount`, `updateAccount`, `deleteAccount` and
 `setAccountStatementBalance`. The account operations that write or read other areas' tables move
 with those areas: opening balance and reconcile (transactions), close, merge and their previews
-(transactions and portfolio lots), and totals (the portfolio summary). A refresh
+(transactions and portfolio lots), and totals (the portfolio summary). The categories area's
+`getCategoryTree`, `createCategoryNode`, `updateCategoryNode`, `deleteCategoryNode`,
+`mergeCategoryNode`, `getCategories` and `createCategory` follow (the reads and writes of one
+category by id and the recipient assignment are not in the client and stay on Bun). The hierarchy
+writes schedule the refill of `mv_monthly_summary` and `mv_category_totals` as `scheduleRefresh`
+does: `Areas/MaterializedViews.swift` runs the same 5-second trailing debounce, flushed within 10
+seconds, and refills both tables in one transaction with the fill SQL of
+`materializedViewService.ts`, which a test compares with the TypeScript text. A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.

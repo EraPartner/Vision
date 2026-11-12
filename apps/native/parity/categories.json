@@ -1,0 +1,1773 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, is_active, created_at,\n         updated_at) VALUES\n        (1, 'FOOD', '', 'FOOD', 1, 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'TRANSPORT', '', 'TRANSPORT', 1, 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO categories (id, general, detail, description, is_active, created_at, updated_at) VALUES\n        (3, 'FOOD', 'GROCERIES', 'Supermarkets', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 'FOOD', 'RESTAURANTS', NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, 'TRANSPORT', 'FUEL', NULL, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO categories (id, general, detail, name, parent_id, hierarchy_only, legacy_compatible, is_active,\n         created_at, updated_at) VALUES\n        (6, '__HIERARCHY_6', 'SNACKS', 'SNACKS', 3, 0, 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO categories (id, general, detail, is_active, created_at, updated_at) VALUES\n        (7, 'HOUSING', 'RENT', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "UPDATE categories SET created_at = '2025-03-01T09:00:00.000000Z', updated_at = '2025-03-01T09:00:00.000000Z'",
+    "INSERT INTO category_merge_aliases (general, detail, target_category_id, created_at) VALUES\n        ('FOOD', 'TAKEAWAY', 4, '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO category_root_aliases (general, target_category_id, created_at) VALUES\n        ('OLDTRANSPORT', 2, '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipients (id, name, normalized_name, default_category_id, created_at, updated_at) VALUES\n        (1, 'Shop', 'shop', 3, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, recipient_id, category_id, is_active, created_at,\n         updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, 4, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getCategoryTree",
+      "method": "GET",
+      "path": "/api/categories/tree",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "FOOD",
+              "parentId": null,
+              "pathIds": [
+                1
+              ],
+              "path": [
+                "FOOD"
+              ],
+              "category_name": "FOOD",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": true,
+              "legacyCompatible": false
+            },
+            {
+              "id": 3,
+              "name": "GROCERIES",
+              "parentId": 1,
+              "pathIds": [
+                1,
+                3
+              ],
+              "path": [
+                "FOOD",
+                "GROCERIES"
+              ],
+              "category_name": "FOOD:GROCERIES",
+              "depth": 2,
+              "description": "Supermarkets",
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 6,
+              "name": "SNACKS",
+              "parentId": 3,
+              "pathIds": [
+                1,
+                3,
+                6
+              ],
+              "path": [
+                "FOOD",
+                "GROCERIES",
+                "SNACKS"
+              ],
+              "category_name": "FOOD:GROCERIES:SNACKS",
+              "depth": 3,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": false
+            },
+            {
+              "id": 4,
+              "name": "RESTAURANTS",
+              "parentId": 1,
+              "pathIds": [
+                1,
+                4
+              ],
+              "path": [
+                "FOOD",
+                "RESTAURANTS"
+              ],
+              "category_name": "FOOD:RESTAURANTS",
+              "depth": 2,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 8,
+              "name": "HOUSING",
+              "parentId": null,
+              "pathIds": [
+                8
+              ],
+              "path": [
+                "HOUSING"
+              ],
+              "category_name": "HOUSING",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": true,
+              "legacyCompatible": false
+            },
+            {
+              "id": 7,
+              "name": "RENT",
+              "parentId": 8,
+              "pathIds": [
+                8,
+                7
+              ],
+              "path": [
+                "HOUSING",
+                "RENT"
+              ],
+              "category_name": "HOUSING:RENT",
+              "depth": 2,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 2,
+              "name": "TRANSPORT",
+              "parentId": null,
+              "pathIds": [
+                2
+              ],
+              "path": [
+                "TRANSPORT"
+              ],
+              "category_name": "TRANSPORT",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": true,
+              "legacyCompatible": false
+            },
+            {
+              "id": 5,
+              "name": "FUEL",
+              "parentId": 2,
+              "pathIds": [
+                2,
+                5
+              ],
+              "path": [
+                "TRANSPORT",
+                "FUEL"
+              ],
+              "category_name": "TRANSPORT:FUEL",
+              "depth": 2,
+              "description": null,
+              "is_active": false,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            }
+          ],
+          "total": 8
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "GROCERIES",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:GROCERIES",
+              "category_name": "FOOD:GROCERIES",
+              "links": []
+            },
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:RESTAURANTS",
+              "category_name": "FOOD:RESTAURANTS",
+              "links": []
+            },
+            {
+              "id": 7,
+              "general": "HOUSING",
+              "detail": "RENT",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.566Z",
+              "parent_id": 8,
+              "name": "RENT",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "HOUSING:RENT",
+              "category_name": "HOUSING:RENT",
+              "links": []
+            }
+          ],
+          "total": 3,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?active=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "GROCERIES",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:GROCERIES",
+              "category_name": "FOOD:GROCERIES",
+              "links": []
+            },
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:RESTAURANTS",
+              "category_name": "FOOD:RESTAURANTS",
+              "links": []
+            },
+            {
+              "id": 7,
+              "general": "HOUSING",
+              "detail": "RENT",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.566Z",
+              "parent_id": 8,
+              "name": "RENT",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "HOUSING:RENT",
+              "category_name": "HOUSING:RENT",
+              "links": []
+            },
+            {
+              "id": 5,
+              "general": "TRANSPORT",
+              "detail": "FUEL",
+              "description": null,
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 2,
+              "name": "FUEL",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "TRANSPORT:FUEL",
+              "category_name": "TRANSPORT:FUEL",
+              "links": []
+            }
+          ],
+          "total": 4,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?general=fo",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "GROCERIES",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:GROCERIES",
+              "category_name": "FOOD:GROCERIES",
+              "links": []
+            },
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:RESTAURANTS",
+              "category_name": "FOOD:RESTAURANTS",
+              "links": []
+            }
+          ],
+          "total": 2,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?detail=GRO&general=food",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "GROCERIES",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:GROCERIES",
+              "category_name": "FOOD:GROCERIES",
+              "links": []
+            }
+          ],
+          "total": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?search=market",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "GROCERIES",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:GROCERIES",
+              "category_name": "FOOD:GROCERIES",
+              "links": []
+            }
+          ],
+          "total": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?search=rest&limit=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:RESTAURANTS",
+              "category_name": "FOOD:RESTAURANTS",
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 1,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?active=0&limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:RESTAURANTS",
+              "category_name": "FOOD:RESTAURANTS",
+              "links": []
+            },
+            {
+              "id": 7,
+              "general": "HOUSING",
+              "detail": "RENT",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.566Z",
+              "parent_id": 8,
+              "name": "RENT",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "HOUSING:RENT",
+              "category_name": "HOUSING:RENT",
+              "links": []
+            }
+          ],
+          "total": 4,
+          "limit": 2,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?general=&detail=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "GROCERIES",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:GROCERIES",
+              "category_name": "FOOD:GROCERIES",
+              "links": []
+            },
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.565Z",
+              "parent_id": 1,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "FOOD:RESTAURANTS",
+              "category_name": "FOOD:RESTAURANTS",
+              "links": []
+            },
+            {
+              "id": 7,
+              "general": "HOUSING",
+              "detail": "RENT",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.566Z",
+              "parent_id": 8,
+              "name": "RENT",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "HOUSING:RENT",
+              "category_name": "HOUSING:RENT",
+              "links": []
+            }
+          ],
+          "total": 3,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "food",
+        "detail": " groceries "
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "general": "FOOD",
+          "detail": "GROCERIES",
+          "description": "Supermarkets",
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:20:57.565Z",
+          "parent_id": 1,
+          "name": "GROCERIES",
+          "hierarchy_only": false,
+          "legacy_compatible": true,
+          "path_name": "FOOD:GROCERIES",
+          "category_name": "FOOD:GROCERIES",
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "Travel",
+        "detail": "Hotel",
+        "description": "Stays"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 10,
+          "general": "TRAVEL",
+          "detail": "HOTEL",
+          "description": "Stays",
+          "is_active": true,
+          "created_at": "2026-11-12T11:20:57.825Z",
+          "updated_at": "2026-11-12T11:20:57.825Z",
+          "parent_id": 11,
+          "name": "HOTEL",
+          "hierarchy_only": false,
+          "legacy_compatible": true,
+          "path_name": "TRAVEL:HOTEL",
+          "category_name": "TRAVEL:HOTEL",
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "food",
+        "detail": "takeaway"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4,
+          "general": "FOOD",
+          "detail": "RESTAURANTS",
+          "description": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:20:57.565Z",
+          "parent_id": 1,
+          "name": "RESTAURANTS",
+          "hierarchy_only": false,
+          "legacy_compatible": true,
+          "path_name": "FOOD:RESTAURANTS",
+          "category_name": "FOOD:RESTAURANTS",
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: general, detail"
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": 5,
+        "detail": "x"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "general: Invalid input: expected string, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "",
+        "detail": "x"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: general, detail"
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "a",
+        "detail": "b",
+        "description": 7
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "description: Invalid input: expected string, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: general, detail"
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "Travel",
+        "detail": "Hotel",
+        "extra": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 10,
+          "general": "TRAVEL",
+          "detail": "HOTEL",
+          "description": "Stays",
+          "is_active": true,
+          "created_at": "2026-11-12T11:20:57.825Z",
+          "updated_at": "2026-11-12T11:20:57.825Z",
+          "parent_id": 11,
+          "name": "HOTEL",
+          "hierarchy_only": false,
+          "legacy_compatible": true,
+          "path_name": "TRAVEL:HOTEL",
+          "category_name": "TRAVEL:HOTEL",
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": " dessert ",
+        "parentId": 3
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "name": "DESSERT",
+          "parentId": 3,
+          "pathIds": [
+            1,
+            3,
+            13
+          ],
+          "path": [
+            "FOOD",
+            "GROCERIES",
+            "DESSERT"
+          ],
+          "category_name": "FOOD:GROCERIES:DESSERT",
+          "depth": 3,
+          "description": null,
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": false
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "x",
+        "parentId": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "An inactive category cannot be a parent"
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "x",
+        "parentId": 999
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Parent category does not exist"
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "oldtransport"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "This root name is reserved by a legacy category redirect",
+          "details": {
+            "reason": "CATEGORY_HIERARCHY_CONFLICT"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "food"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A category with this name already exists under the parent",
+          "details": {
+            "reason": "CATEGORY_HIERARCHY_CONFLICT"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "   "
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: Too small: expected string to have >=1 characters"
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: Too big: expected string to have <=100 characters"
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "y",
+        "extra": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unrecognized key: \"extra\""
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "z",
+        "parentId": 1.5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "parentId: Invalid input: expected int, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "z",
+        "parentId": null,
+        "description": null
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 14,
+          "name": "Z",
+          "parentId": null,
+          "pathIds": [
+            14
+          ],
+          "path": [
+            "Z"
+          ],
+          "category_name": "Z",
+          "depth": 1,
+          "description": null,
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": false
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": {
+        "name": "zz",
+        "parentId": "3",
+        "description": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "parentId: Invalid input: expected number, received string; description: Too big: expected string to have <=500 characters"
+        }
+      }
+    },
+    {
+      "operationId": "createCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/6",
+      "body": {
+        "name": "treats"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 6,
+          "name": "TREATS",
+          "parentId": 3,
+          "pathIds": [
+            1,
+            3,
+            6
+          ],
+          "path": [
+            "FOOD",
+            "GROCERIES",
+            "TREATS"
+          ],
+          "category_name": "FOOD:GROCERIES:TREATS",
+          "depth": 3,
+          "description": null,
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": false
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/3",
+      "body": {
+        "parentId": 6
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A category cannot be moved below itself or a descendant",
+          "details": {
+            "reason": "CATEGORY_HIERARCHY_CONFLICT"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/1",
+      "body": {
+        "is_active": false
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "Deactivate or move active children before deactivating a parent",
+          "details": {
+            "reason": "CATEGORY_HIERARCHY_CONFLICT"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/6",
+      "body": {
+        "is_active": false,
+        "description": "Sweet"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 6,
+          "name": "TREATS",
+          "parentId": 3,
+          "pathIds": [
+            1,
+            3,
+            6
+          ],
+          "path": [
+            "FOOD",
+            "GROCERIES",
+            "TREATS"
+          ],
+          "category_name": "FOOD:GROCERIES:TREATS",
+          "depth": 3,
+          "description": "Sweet",
+          "is_active": false,
+          "hierarchyOnly": false,
+          "legacyCompatible": false
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/999",
+      "body": {},
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Category 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/abc",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/2",
+      "body": {
+        "name": "vehicles"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "VEHICLES",
+          "parentId": null,
+          "pathIds": [
+            2
+          ],
+          "path": [
+            "VEHICLES"
+          ],
+          "category_name": "VEHICLES",
+          "depth": 1,
+          "description": null,
+          "is_active": true,
+          "hierarchyOnly": true,
+          "legacyCompatible": false
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/4",
+      "body": {
+        "description": "Eating out",
+        "parentId": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4,
+          "name": "RESTAURANTS",
+          "parentId": null,
+          "pathIds": [
+            4
+          ],
+          "path": [
+            "RESTAURANTS"
+          ],
+          "category_name": "RESTAURANTS",
+          "depth": 1,
+          "description": "Eating out",
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": true
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/3",
+      "body": {
+        "parentId": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "An inactive category cannot be a parent"
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/3",
+      "body": {
+        "bogus": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unrecognized key: \"bogus\""
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/3",
+      "body": {
+        "name": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: Too small: expected string to have >=1 characters"
+        }
+      }
+    },
+    {
+      "operationId": "updateCategoryNode",
+      "method": "PATCH",
+      "path": "/api/categories/tree/3",
+      "body": {
+        "name": "restaurants",
+        "parentId": 4
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "name": "RESTAURANTS",
+          "parentId": 4,
+          "pathIds": [
+            4,
+            3
+          ],
+          "path": [
+            "RESTAURANTS",
+            "RESTAURANTS"
+          ],
+          "category_name": "RESTAURANTS:RESTAURANTS",
+          "depth": 2,
+          "description": "Supermarkets",
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": true
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/6/merge",
+      "body": {
+        "targetId": 3
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "name": "RESTAURANTS",
+          "parentId": 4,
+          "pathIds": [
+            4,
+            3
+          ],
+          "path": [
+            "RESTAURANTS",
+            "RESTAURANTS"
+          ],
+          "category_name": "RESTAURANTS:RESTAURANTS",
+          "depth": 2,
+          "description": "Supermarkets",
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": true
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/3/merge",
+      "body": {
+        "targetId": 3
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Source and target must differ"
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/1/merge",
+      "body": {
+        "targetId": 3
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "name": "RESTAURANTS",
+          "parentId": 4,
+          "pathIds": [
+            4,
+            3
+          ],
+          "path": [
+            "RESTAURANTS",
+            "RESTAURANTS"
+          ],
+          "category_name": "RESTAURANTS:RESTAURANTS",
+          "depth": 2,
+          "description": "Supermarkets",
+          "is_active": true,
+          "hierarchyOnly": false,
+          "legacyCompatible": true
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/999/merge",
+      "body": {
+        "targetId": 3
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Source or target category not found"
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/4/merge",
+      "body": {
+        "targetId": "3"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "targetId: Invalid input: expected number, received string"
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/4/merge",
+      "body": {
+        "targetId": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Merge target must be active"
+        }
+      }
+    },
+    {
+      "operationId": "mergeCategoryNode",
+      "method": "POST",
+      "path": "/api/categories/tree/4/merge",
+      "body": {
+        "targetId": 3
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Merge target cannot be inside the source subtree"
+        }
+      }
+    },
+    {
+      "operationId": "deleteCategoryNode",
+      "method": "DELETE",
+      "path": "/api/categories/tree/3",
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "Move or delete children before deleting their parent",
+          "details": {
+            "reason": "CATEGORY_HIERARCHY_CONFLICT"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "deleteCategoryNode",
+      "method": "DELETE",
+      "path": "/api/categories/tree/5",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteCategoryNode",
+      "method": "DELETE",
+      "path": "/api/categories/tree/5",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Category 5 not found"
+        }
+      }
+    },
+    {
+      "operationId": "deleteCategoryNode",
+      "method": "DELETE",
+      "path": "/api/categories/tree/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getCategoryTree",
+      "method": "GET",
+      "path": "/api/categories/tree",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 8,
+              "name": "HOUSING",
+              "parentId": null,
+              "pathIds": [
+                8
+              ],
+              "path": [
+                "HOUSING"
+              ],
+              "category_name": "HOUSING",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": true,
+              "legacyCompatible": false
+            },
+            {
+              "id": 7,
+              "name": "RENT",
+              "parentId": 8,
+              "pathIds": [
+                8,
+                7
+              ],
+              "path": [
+                "HOUSING",
+                "RENT"
+              ],
+              "category_name": "HOUSING:RENT",
+              "depth": 2,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 4,
+              "name": "RESTAURANTS",
+              "parentId": null,
+              "pathIds": [
+                4
+              ],
+              "path": [
+                "RESTAURANTS"
+              ],
+              "category_name": "RESTAURANTS",
+              "depth": 1,
+              "description": "Eating out",
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 3,
+              "name": "RESTAURANTS",
+              "parentId": 4,
+              "pathIds": [
+                4,
+                3
+              ],
+              "path": [
+                "RESTAURANTS",
+                "RESTAURANTS"
+              ],
+              "category_name": "RESTAURANTS:RESTAURANTS",
+              "depth": 2,
+              "description": "Supermarkets",
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 13,
+              "name": "DESSERT",
+              "parentId": 3,
+              "pathIds": [
+                4,
+                3,
+                13
+              ],
+              "path": [
+                "RESTAURANTS",
+                "RESTAURANTS",
+                "DESSERT"
+              ],
+              "category_name": "RESTAURANTS:RESTAURANTS:DESSERT",
+              "depth": 3,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": false
+            },
+            {
+              "id": 11,
+              "name": "TRAVEL",
+              "parentId": null,
+              "pathIds": [
+                11
+              ],
+              "path": [
+                "TRAVEL"
+              ],
+              "category_name": "TRAVEL",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": true,
+              "legacyCompatible": false
+            },
+            {
+              "id": 10,
+              "name": "HOTEL",
+              "parentId": 11,
+              "pathIds": [
+                11,
+                10
+              ],
+              "path": [
+                "TRAVEL",
+                "HOTEL"
+              ],
+              "category_name": "TRAVEL:HOTEL",
+              "depth": 2,
+              "description": "Stays",
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": true
+            },
+            {
+              "id": 2,
+              "name": "VEHICLES",
+              "parentId": null,
+              "pathIds": [
+                2
+              ],
+              "path": [
+                "VEHICLES"
+              ],
+              "category_name": "VEHICLES",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": true,
+              "legacyCompatible": false
+            },
+            {
+              "id": 14,
+              "name": "Z",
+              "parentId": null,
+              "pathIds": [
+                14
+              ],
+              "path": [
+                "Z"
+              ],
+              "category_name": "Z",
+              "depth": 1,
+              "description": null,
+              "is_active": true,
+              "hierarchyOnly": false,
+              "legacyCompatible": false
+            }
+          ],
+          "total": 9
+        }
+      }
+    },
+    {
+      "operationId": "getCategories",
+      "method": "GET",
+      "path": "/api/categories?active=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "general": "FOOD",
+              "detail": "GROCERIES",
+              "description": "Supermarkets",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:58.040Z",
+              "parent_id": 4,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "RESTAURANTS:RESTAURANTS",
+              "category_name": "RESTAURANTS:RESTAURANTS",
+              "links": []
+            },
+            {
+              "id": 4,
+              "general": "FOOD",
+              "detail": "RESTAURANTS",
+              "description": "Eating out",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:58.018Z",
+              "parent_id": null,
+              "name": "RESTAURANTS",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "RESTAURANTS",
+              "category_name": "RESTAURANTS",
+              "links": []
+            },
+            {
+              "id": 7,
+              "general": "HOUSING",
+              "detail": "RENT",
+              "description": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:20:57.566Z",
+              "parent_id": 8,
+              "name": "RENT",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "HOUSING:RENT",
+              "category_name": "HOUSING:RENT",
+              "links": []
+            },
+            {
+              "id": 10,
+              "general": "TRAVEL",
+              "detail": "HOTEL",
+              "description": "Stays",
+              "is_active": true,
+              "created_at": "2026-11-12T11:20:57.825Z",
+              "updated_at": "2026-11-12T11:20:57.825Z",
+              "parent_id": 11,
+              "name": "HOTEL",
+              "hierarchy_only": false,
+              "legacy_compatible": true,
+              "path_name": "TRAVEL:HOTEL",
+              "category_name": "TRAVEL:HOTEL",
+              "links": []
+            }
+          ],
+          "total": 4,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createCategory",
+      "method": "POST",
+      "path": "/api/categories",
+      "body": {
+        "general": "food",
+        "detail": "restaurants"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4,
+          "general": "FOOD",
+          "detail": "RESTAURANTS",
+          "description": "Eating out",
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:20:58.018Z",
+          "parent_id": null,
+          "name": "RESTAURANTS",
+          "hierarchy_only": false,
+          "legacy_compatible": true,
+          "path_name": "RESTAURANTS",
+          "category_name": "RESTAURANTS",
+          "created": false,
+          "links": []
+        }
+      }
+    }
+  ]
+}

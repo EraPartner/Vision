@@ -202,6 +202,45 @@ const statementPut = (
   path: `/api/accounts/${id}/statement-balances/${currency}`,
   ...(body === undefined ? {} : { body }),
 });
+const categories = (query = ""): ParityStep => ({
+  operationId: "getCategories",
+  method: "GET",
+  path: `/api/categories${query}`,
+});
+const categoryCreate = (body?: unknown): ParityStep => ({
+  operationId: "createCategory",
+  method: "POST",
+  path: "/api/categories",
+  ...(body === undefined ? {} : { body }),
+});
+const categoryTree: ParityStep = {
+  operationId: "getCategoryTree",
+  method: "GET",
+  path: "/api/categories/tree",
+};
+const nodeCreate = (body: unknown): ParityStep => ({
+  operationId: "createCategoryNode",
+  method: "POST",
+  path: "/api/categories/tree",
+  body,
+});
+const nodeUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateCategoryNode",
+  method: "PATCH",
+  path: `/api/categories/tree/${id}`,
+  body,
+});
+const nodeDelete = (id: string): ParityStep => ({
+  operationId: "deleteCategoryNode",
+  method: "DELETE",
+  path: `/api/categories/tree/${id}`,
+});
+const nodeMerge = (id: string, body: unknown): ParityStep => ({
+  operationId: "mergeCategoryNode",
+  method: "POST",
+  path: `/api/categories/tree/${id}/merge`,
+  body,
+});
 const accountDelete = (id: string): ParityStep => ({
   operationId: "deleteAccount",
   method: "DELETE",
@@ -979,6 +1018,97 @@ export const AREAS: Record<string, ParityArea> = {
       accounts("?active=all"),
     ],
   },
+  categories: {
+    router: { module: "categories.ts", mountPath: "/api/categories" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, is_active, created_at,
+         updated_at) VALUES
+        (1, 'FOOD', '', 'FOOD', 1, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'TRANSPORT', '', 'TRANSPORT', 1, 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, description, is_active, created_at, updated_at) VALUES
+        (3, 'FOOD', 'GROCERIES', 'Supermarkets', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'FOOD', 'RESTAURANTS', NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'TRANSPORT', 'FUEL', NULL, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, name, parent_id, hierarchy_only, legacy_compatible, is_active,
+         created_at, updated_at) VALUES
+        (6, '__HIERARCHY_6', 'SNACKS', 'SNACKS', 3, 0, 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, is_active, created_at, updated_at) VALUES
+        (7, 'HOUSING', 'RENT', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `UPDATE categories SET created_at = '${SEED_TIME}', updated_at = '${SEED_TIME}'`,
+      `INSERT INTO category_merge_aliases (general, detail, target_category_id, created_at) VALUES
+        ('FOOD', 'TAKEAWAY', 4, '${SEED_TIME}')`,
+      `INSERT INTO category_root_aliases (general, target_category_id, created_at) VALUES
+        ('OLDTRANSPORT', 2, '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, created_at, updated_at) VALUES
+        (1, 'Shop', 'shop', 3, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, recipient_id, category_id, is_active, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, 4, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      categoryTree,
+      categories(),
+      categories("?active=false"),
+      categories("?general=fo"),
+      categories("?detail=GRO&general=food"),
+      categories("?search=market"),
+      categories("?search=rest&limit=1"),
+      categories("?active=0&limit=2&offset=1"),
+      categories("?general=&detail="),
+      categoryCreate({ general: "food", detail: " groceries " }),
+      categoryCreate({
+        general: "Travel",
+        detail: "Hotel",
+        description: "Stays",
+      }),
+      categoryCreate({ general: "food", detail: "takeaway" }),
+      categoryCreate({}),
+      categoryCreate({ general: 5, detail: "x" }),
+      categoryCreate({ general: "", detail: "x" }),
+      categoryCreate({ general: "a", detail: "b", description: 7 }),
+      categoryCreate([]),
+      categoryCreate(),
+      categoryCreate({ general: "Travel", detail: "Hotel", extra: 1 }),
+      nodeCreate({ name: " dessert ", parentId: 3 }),
+      nodeCreate({ name: "x", parentId: 5 }),
+      nodeCreate({ name: "x", parentId: 999 }),
+      nodeCreate({ name: "oldtransport" }),
+      nodeCreate({ name: "food" }),
+      nodeCreate({ name: "   " }),
+      nodeCreate({ name: "a".repeat(101) }),
+      nodeCreate({ name: "y", extra: 1 }),
+      nodeCreate({ name: "z", parentId: 1.5 }),
+      nodeCreate({ name: "z", parentId: null, description: null }),
+      nodeCreate({ name: "zz", parentId: "3", description: "d".repeat(501) }),
+      nodeCreate([]),
+      nodeUpdate("6", { name: "treats" }),
+      nodeUpdate("3", { parentId: 6 }),
+      nodeUpdate("1", { is_active: false }),
+      nodeUpdate("6", { is_active: false, description: "Sweet" }),
+      nodeUpdate("999", {}),
+      nodeUpdate("abc", {}),
+      nodeUpdate("2", { name: "vehicles" }),
+      nodeUpdate("4", { description: "Eating out", parentId: null }),
+      nodeUpdate("3", { parentId: 5 }),
+      nodeUpdate("3", { bogus: 1 }),
+      nodeUpdate("3", { name: "" }),
+      nodeUpdate("3", { name: "restaurants", parentId: 4 }),
+      nodeMerge("6", { targetId: 3 }),
+      nodeMerge("3", { targetId: 3 }),
+      nodeMerge("1", { targetId: 3 }),
+      nodeMerge("999", { targetId: 3 }),
+      nodeMerge("4", { targetId: "3" }),
+      nodeMerge("4", { targetId: 5 }),
+      nodeMerge("4", { targetId: 3 }),
+      nodeDelete("3"),
+      nodeDelete("5"),
+      nodeDelete("5"),
+      nodeDelete("abc"),
+      categoryTree,
+      categories("?active=false"),
+      categoryCreate({ general: "food", detail: "restaurants" }),
+    ],
+  },
   "exchange-rates-empty": {
     router: { module: "info/rates.ts", mountPath: "/api/info" },
     seed: [],
@@ -1000,11 +1130,13 @@ function mutationAreas(): Record<string, ParityArea> {
   const settings = AREAS.settings;
   const rates = AREAS["exchange-rates"];
   const accountArea = AREAS.accounts;
+  const categoryArea = AREAS.categories;
   if (
     tags === undefined ||
     settings === undefined ||
     rates === undefined ||
-    accountArea === undefined
+    accountArea === undefined ||
+    categoryArea === undefined
   )
     throw new Error("missing base area");
 
@@ -1146,7 +1278,43 @@ function mutationAreas(): Record<string, ParityArea> {
   }
   accountSteps.push(accounts("?active=all"));
 
+  // The category bodies mutated; node updates and merges sometimes aimed at
+  // random ids, with random list queries, tree reads and node deletes between.
+  const categoryRandom = new Random(0xca7e);
+  const categorySteps: ParityStep[] = [];
+  for (const step of mutatedSteps(categoryRandom, categoryArea.steps, 3)) {
+    if (step.operationId === "updateCategoryNode" && categoryRandom.chance(0.3))
+      categorySteps.push(nodeUpdate(categoryRandom.pick(ids), step.body));
+    else if (
+      step.operationId === "mergeCategoryNode" &&
+      categoryRandom.chance(0.3)
+    )
+      categorySteps.push(nodeMerge(categoryRandom.pick(ids), step.body));
+    else categorySteps.push(step);
+    if (categoryRandom.chance(0.12))
+      categorySteps.push(
+        categories(
+          randomQuery(categoryRandom, [
+            "active",
+            "general",
+            "detail",
+            "search",
+            "limit",
+            "offset",
+          ]),
+        ),
+      );
+    if (categoryRandom.chance(0.05)) categorySteps.push(categoryTree);
+    if (categoryRandom.chance(0.04))
+      categorySteps.push(nodeDelete(categoryRandom.pick(ids)));
+  }
+  categorySteps.push(categoryTree, categories("?active=false"));
+
   return {
+    "categories-mutations": {
+      ...categoryArea,
+      steps: asRecorded(categorySteps),
+    },
     "accounts-mutations": { ...accountArea, steps: asRecorded(accountSteps) },
     "tags-mutations": { ...tags, steps: asRecorded(tagSteps) },
     "settings-mutations": { ...settings, steps: asRecorded(settingSteps) },
