@@ -22,9 +22,64 @@ public struct InProcessRequest: Sendable {
     public let headers: [String: String]
     public let body: Data?
 
-    /// The query value of `name`; the last one wins, like Express's `req.query` for a repeated key.
+    /// The query value of `name` as the routes read it: Express's `req.query` holds an array for a
+    /// repeated key, which `String()`, `parseInt` and `looseString` see comma-joined.
     public func query(_ name: String) -> String? {
-        queryItems.last { $0.name == name }?.value
+        let values = queryItems.filter { $0.name == name }.map { $0.value ?? "" }
+        return values.isEmpty ? nil : values.joined(separator: ",")
+    }
+}
+
+/// `querystring.parse` of Node, Express 5's default query parser: pairs split on `&`, the first
+/// `=` splits name from value, `+` is a space, and `%XX` escapes decode as UTF-8 bytes (invalid
+/// sequences become U+FFFD and a malformed escape stays as written). Empty pairs (`&&`) are
+/// skipped; at most 1,000 pairs are read.
+enum NodeQueryString {
+    static func parse(_ query: String) -> [URLQueryItem] {
+        var items: [URLQueryItem] = []
+        for pair in query.split(separator: "&", omittingEmptySubsequences: true).prefix(1000) {
+            let name: Substring
+            let value: Substring
+            if let equals = pair.firstIndex(of: "=") {
+                name = pair[..<equals]
+                value = pair[pair.index(after: equals)...]
+            } else {
+                name = pair
+                value = ""
+            }
+            items.append(URLQueryItem(name: unescape(name), value: unescape(value)))
+        }
+        return items
+    }
+
+    static func unescape(_ text: Substring) -> String {
+        var bytes: [UInt8] = []
+        let source = Array(text.utf8)
+        var index = 0
+        while index < source.count {
+            let byte = source[index]
+            if byte == UInt8(ascii: "+") {
+                bytes.append(UInt8(ascii: " "))
+            } else if byte == UInt8(ascii: "%"), index + 2 < source.count,
+                let high = hexValue(source[index + 1]), let low = hexValue(source[index + 2])
+            {
+                bytes.append(high << 4 | low)
+                index += 2
+            } else {
+                bytes.append(byte)
+            }
+            index += 1
+        }
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
+    private static func hexValue(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case UInt8(ascii: "0")...UInt8(ascii: "9"): return byte - UInt8(ascii: "0")
+        case UInt8(ascii: "a")...UInt8(ascii: "f"): return byte - UInt8(ascii: "a") + 10
+        case UInt8(ascii: "A")...UInt8(ascii: "F"): return byte - UInt8(ascii: "A") + 10
+        default: return nil
+        }
     }
 }
 
@@ -123,7 +178,8 @@ public struct RoutingAPITransport: APITransport, APIStreamTransport {
         guard let (route, parameters) = backend.match(request), await backend.isActive() else {
             return try await fallback.send(request)
         }
-        let items = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.percentEncodedQuery ?? ""
+        let items = NodeQueryString.parse(query)
         return try await route.handler(
             InProcessRequest(
                 operationId: route.operationId, method: request.method, pathParameters: parameters,

@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-07
+date: 2026-11-12
 updated: 2026-11-07
 tags:
   [
@@ -618,8 +618,13 @@ body sent in the key order the recorder wrote, through
 `RoutingAPITransport` on the same database and compares the JSON semantically; timestamps the run
 created are compared by form. An area may record provider answers (`fetch`), which the recorder's
 `fetch` and the replay's fetcher both serve, and today's date in `APP_TIMEZONE` Europe/Brussels is
-recorded as `{{today}}`. `scripts/native-tests` checks that each corpus still holds the
-recorder's seed and requests.
+recorded as `{{today}}`. A step may replace the provider answers for the steps after it. The
+recorder turns the routes' rate limiters off (`VISION_DEV`), since the in-process backend has none.
+Each ported area also has a `*-mutations` corpus: a seeded generator
+(`scripts/lib/nativeParityMutations.ts`) changes the hand-written requests and provider answers at
+random (dropped, added and retyped fields, edge numbers, Unicode and whitespace text, malformed
+provider files), and the TypeScript answers to those are replayed the same way.
+`scripts/native-tests` checks that each corpus still holds the recorder's seed and requests.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from
