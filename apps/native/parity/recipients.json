@@ -1,0 +1,3476 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, created_at,\n         updated_at) VALUES (1, 'FOOD', '', 'FOOD', 1, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO categories (id, general, detail, created_at, updated_at) VALUES\n        (2, 'FOOD', 'GROCERIES', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'LEISURE', 'COFFEE', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "UPDATE categories SET created_at = '2025-03-01T09:00:00.000000Z', updated_at = '2025-03-01T09:00:00.000000Z'",
+    "INSERT INTO recipients (id, name, normalized_name, default_category_id, notes, is_active, created_at,\n         updated_at) VALUES\n        (1, 'SHOP', 'SHOP', 2, 'corner shop', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'CAFÉ ÉCLAIR', 'CAFÉ ÉCLAIR', 3, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'MARKET', 'MARKET', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 'TO DELETE', 'DELETE TO', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, 'ALBERT HEIJN 1234', '1234 ALBERT HEIJN', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (6, 'ALBERT HEIJN 5678', '5678 ALBERT HEIJN', NULL, 'branch', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (7, 'OLD', 'OLD', NULL, NULL, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipient_bank_accounts (id, recipient_id, account_number, is_primary, created_at, updated_at)\n        VALUES\n        (1, 1, 'BE12 3456', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 1, 'BE99 0000', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 3, 'NL01 ABCD', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 2, 'FR76 1111', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, recipient_id, category_id, is_active, created_at,\n         updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, '2024-01-06', vision_numeric('-3.2', 18, 4), 'EUR', 2, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, '2024-01-07', vision_numeric('-40', 18, 4), 'EUR', 3, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, '2024-01-08', vision_numeric('-9', 18, 4), 'EUR', 6, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transaction_splits (id, transaction_id, recipient_id, amount, created_at, updated_at) VALUES\n        (1, 3, 2, vision_numeric('10', 18, 4), '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO planned_transactions (id, planned_date, amount, currency, recipient_id, created_at, updated_at)\n        VALUES (1, '2024-02-01', vision_numeric('-5', 18, 4), 'EUR', 3, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipient_match_patterns (id, recipient_id, pattern, pattern_kind, case_sensitive, priority,\n         notes, created_at, updated_at) VALUES\n        (1, 1, 'SHOP', 'literal_prefix', 0, 100, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 1, 'SH?P*', 'glob', 1, 10, 'glob', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?active=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 7,
+              "name": "OLD",
+              "normalized_name": "OLD",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 7,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?name=sho",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?name=caf%C3%A9",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?search=groc",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?search=be12",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?search=%C3%A9clair",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?search=branch",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?uncategorized=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 2,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?default_category_id=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 1,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?default_category_id=abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "default_category_id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?default_category_id=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?sort_by=default_category_name&sort_dir=desc",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?sort_by=primary_bank_account",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?sort_by=bogus&sort_dir=up",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?sort_by=constructor",
+      "status": 500,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "message": "An internal server error occurred. Please try again later."
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?sort_by=__proto__&sort_dir=desc",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 2,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?limit=0&offset=-4",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": "FR76 1111",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": "NL01 ABCD",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP",
+              "normalized_name": "SHOP",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": "corner shop",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 4,
+              "name": "TO DELETE",
+              "normalized_name": "DELETE TO",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?name=a&name=b",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?search=a&search=b&default_category_id=x",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "search: must be a single value; default_category_id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipient",
+      "method": "GET",
+      "path": "/api/recipients/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "SHOP",
+          "normalized_name": "SHOP",
+          "default_category_id": 2,
+          "primary_recipient_id": null,
+          "notes": "corner shop",
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "default_category_name": "FOOD:GROCERIES",
+          "primary_bank_account": "BE12 3456",
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipient",
+      "method": "GET",
+      "path": "/api/recipients/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Recipient not found"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipient",
+      "method": "GET",
+      "path": "/api/recipients/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "  New  Shop "
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 8,
+          "name": "NEW  SHOP",
+          "normalized_name": "NEW SHOP",
+          "default_category_id": null,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2026-11-12T11:51:54.460Z",
+          "updated_at": "2026-11-12T11:51:54.460Z",
+          "default_category_name": null,
+          "primary_bank_account": null,
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "shop"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "SHOP",
+          "normalized_name": "SHOP",
+          "default_category_id": 2,
+          "primary_recipient_id": null,
+          "notes": "corner shop",
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "default_category_name": "FOOD:GROCERIES",
+          "primary_bank_account": "BE12 3456",
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "created": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "system"
+      },
+      "status": 500,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "message": "An internal server error occurred. Please try again later."
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: Missing required field"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: Missing required field"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: must be a string"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "Bakery",
+        "default_category_id": 3,
+        "notes": "fresh"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 9,
+          "name": "BAKERY",
+          "normalized_name": "BAKERY",
+          "default_category_id": 3,
+          "primary_recipient_id": null,
+          "notes": "fresh",
+          "is_active": true,
+          "created_at": "2026-11-12T11:51:54.495Z",
+          "updated_at": "2026-11-12T11:51:54.497Z",
+          "default_category_name": "LEISURE:COFFEE",
+          "primary_bank_account": null,
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "x",
+        "default_category_id": "abc"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "default_category_id: Invalid input"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "y",
+        "default_category_id": null,
+        "notes": null
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 10,
+          "name": "Y",
+          "normalized_name": "Y",
+          "default_category_id": null,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2026-11-12T11:51:54.513Z",
+          "updated_at": "2026-11-12T11:51:54.513Z",
+          "default_category_name": null,
+          "primary_bank_account": null,
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "created": true,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": {
+        "name": "z",
+        "notes": 7,
+        "default_category_id": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "default_category_id: Invalid input; notes: Invalid input: expected string, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipient",
+      "method": "POST",
+      "path": "/api/recipients",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/1",
+      "body": {
+        "name": "shop two",
+        "notes": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "SHOP TWO",
+          "normalized_name": "SHOP TWO",
+          "default_category_id": 2,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:51:54.544Z",
+          "default_category_name": "FOOD:GROCERIES",
+          "primary_bank_account": "BE12 3456",
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/1",
+      "body": {
+        "is_active": null,
+        "name": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "SHOP TWO",
+          "normalized_name": "SHOP TWO",
+          "default_category_id": 2,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:51:54.544Z",
+          "default_category_name": "FOOD:GROCERIES",
+          "primary_bank_account": "BE12 3456",
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/999",
+      "body": {
+        "notes": "x"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Recipient not found"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/3",
+      "body": {
+        "name": "System"
+      },
+      "status": 500,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "message": "An internal server error occurred. Please try again later."
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/3",
+      "body": {
+        "default_category_id": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "default_category_id: Invalid input"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/3",
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "name": "MARKET",
+          "normalized_name": "MARKET",
+          "default_category_id": null,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "default_category_name": null,
+          "primary_bank_account": "NL01 ABCD",
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/abc",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/3",
+      "body": {
+        "is_active": "yes"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "is_active: Invalid input: expected boolean, received string"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/7",
+      "body": {
+        "is_active": true,
+        "default_category_id": 2
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 7,
+          "name": "OLD",
+          "normalized_name": "OLD",
+          "default_category_id": 2,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:51:54.597Z",
+          "default_category_name": "FOOD:GROCERIES",
+          "primary_bank_account": null,
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipient",
+      "method": "PATCH",
+      "path": "/api/recipients/3",
+      "body": {
+        "name": "shop two"
+      },
+      "status": 500,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "message": "An internal server error occurred. Please try again later."
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/1/merge",
+      "body": {
+        "alias_ids": [
+          2,
+          3
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "primary": {
+            "id": 1,
+            "name": "SHOP TWO",
+            "normalized_name": "SHOP TWO",
+            "default_category_id": 2,
+            "primary_recipient_id": null,
+            "notes": null,
+            "is_active": true,
+            "created_at": "2025-03-01T09:00:00.000Z",
+            "updated_at": "2026-11-12T11:51:54.544Z",
+            "default_category_name": "FOOD:GROCERIES",
+            "primary_bank_account": "BE12 3456",
+            "primary_recipient_name": null,
+            "alias_count": 2,
+            "links": []
+          },
+          "merged_ids": [
+            2,
+            3
+          ],
+          "reassigned": {
+            "transactions": 2,
+            "splits": 1,
+            "planned": 1,
+            "bankAccounts": 2
+          },
+          "aliases": [
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR"
+            },
+            {
+              "id": 3,
+              "name": "MARKET"
+            }
+          ],
+          "patternSuggestion": null
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/1/merge",
+      "body": {
+        "alias_ids": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "alias_ids: Missing required field: alias_ids (array of recipient IDs)"
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/1/merge",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "alias_ids: Missing required field: alias_ids (array of recipient IDs)"
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/1/merge",
+      "body": {
+        "alias_ids": "2"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "alias_ids: Missing required field: alias_ids (array of recipient IDs)"
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/1/merge",
+      "body": {
+        "alias_ids": [
+          "x",
+          2
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "alias_ids.0: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/999/merge",
+      "body": {
+        "alias_ids": [
+          2
+        ]
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Primary recipient not found"
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/2/merge",
+      "body": {
+        "alias_ids": [
+          4
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Cannot merge into a recipient that is itself an alias. Use its primary instead."
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/1/merge",
+      "body": {
+        "alias_ids": [
+          1
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "primary": {
+            "id": 1,
+            "name": "SHOP TWO",
+            "normalized_name": "SHOP TWO",
+            "default_category_id": 2,
+            "primary_recipient_id": null,
+            "notes": null,
+            "is_active": true,
+            "created_at": "2025-03-01T09:00:00.000Z",
+            "updated_at": "2026-11-12T11:51:54.544Z",
+            "default_category_name": "FOOD:GROCERIES",
+            "primary_bank_account": "BE12 3456",
+            "primary_recipient_name": null,
+            "alias_count": 2,
+            "links": []
+          },
+          "merged_ids": [],
+          "reassigned": {
+            "transactions": 0,
+            "splits": 0,
+            "planned": 0,
+            "bankAccounts": 0
+          },
+          "aliases": [
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR"
+            },
+            {
+              "id": 3,
+              "name": "MARKET"
+            }
+          ],
+          "patternSuggestion": null
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/5/merge",
+      "body": {
+        "alias_ids": [
+          6,
+          999
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "primary": {
+            "id": 5,
+            "name": "ALBERT HEIJN 1234",
+            "normalized_name": "1234 ALBERT HEIJN",
+            "default_category_id": null,
+            "primary_recipient_id": null,
+            "notes": null,
+            "is_active": true,
+            "created_at": "2025-03-01T09:00:00.000Z",
+            "updated_at": "2025-03-01T09:00:00.000Z",
+            "default_category_name": null,
+            "primary_bank_account": null,
+            "primary_recipient_name": null,
+            "alias_count": 1,
+            "links": []
+          },
+          "merged_ids": [
+            6
+          ],
+          "reassigned": {
+            "transactions": 1,
+            "splits": 0,
+            "planned": 0,
+            "bankAccounts": 0
+          },
+          "aliases": [
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678"
+            }
+          ],
+          "patternSuggestion": {
+            "pattern": "ALBERT HEIJN",
+            "kind": "literal_prefix",
+            "matchCount": 2,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "mergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/abc/merge",
+      "body": {
+        "alias_ids": [
+          6
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipient",
+      "method": "GET",
+      "path": "/api/recipients/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "SHOP TWO",
+          "normalized_name": "SHOP TWO",
+          "default_category_id": 2,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:51:54.544Z",
+          "default_category_name": "FOOD:GROCERIES",
+          "primary_bank_account": "BE12 3456",
+          "primary_recipient_name": null,
+          "alias_count": 2,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getRecipient",
+      "method": "GET",
+      "path": "/api/recipients/2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "CAFÉ ÉCLAIR",
+          "normalized_name": "CAFÉ ÉCLAIR",
+          "default_category_id": 3,
+          "primary_recipient_id": 1,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:51:54.617Z",
+          "default_category_name": "LEISURE:COFFEE",
+          "primary_bank_account": null,
+          "primary_recipient_name": "SHOP TWO",
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "unmergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/2/unmerge",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "CAFÉ ÉCLAIR",
+          "normalized_name": "CAFÉ ÉCLAIR",
+          "default_category_id": 3,
+          "primary_recipient_id": null,
+          "notes": null,
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T11:51:54.705Z",
+          "default_category_name": "LEISURE:COFFEE",
+          "primary_bank_account": null,
+          "primary_recipient_name": null,
+          "alias_count": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "unmergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/999/unmerge",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Recipient not found"
+        }
+      }
+    },
+    {
+      "operationId": "unmergeRecipient",
+      "method": "POST",
+      "path": "/api/recipients/abc/unmerge",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deleteRecipient",
+      "method": "DELETE",
+      "path": "/api/recipients/4",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteRecipient",
+      "method": "DELETE",
+      "path": "/api/recipients/4",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Recipient not found"
+        }
+      }
+    },
+    {
+      "operationId": "deleteRecipient",
+      "method": "DELETE",
+      "path": "/api/recipients/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipientPatterns",
+      "method": "GET",
+      "path": "/api/recipients/1/patterns",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "pattern": "SH?P*",
+              "pattern_kind": "glob",
+              "case_sensitive": true,
+              "priority": 10,
+              "is_active": true,
+              "source": "user",
+              "notes": "glob",
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 1,
+              "pattern": "SHOP",
+              "pattern_kind": "literal_prefix",
+              "case_sensitive": false,
+              "priority": 100,
+              "is_active": true,
+              "source": "user",
+              "notes": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 2
+        }
+      }
+    },
+    {
+      "operationId": "getRecipientPatterns",
+      "method": "GET",
+      "path": "/api/recipients/999/patterns",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "SHOP"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "SH*P",
+        "pattern_kind": "glob",
+        "case_sensitive": true,
+        "priority": 5,
+        "notes": "n"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "pattern: Missing required field"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "   "
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Pattern must not be empty"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "pattern: Missing required field"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "pattern: must be a string"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "x",
+        "pattern_kind": "bogus"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "pattern_kind: Invalid option: expected one of \"literal_prefix\"|\"glob\"|\"regex\""
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "x",
+        "priority": 1.5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "priority: Invalid input: expected int, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "x",
+        "priority": 3000000000
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "priority: Too big: expected number to be <=2147483647"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "x",
+        "priority": "1"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "priority: Invalid input: expected number, received string"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "nulls",
+        "pattern_kind": null,
+        "case_sensitive": null,
+        "priority": null,
+        "notes": null
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 5
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Pattern must not exceed 500 characters"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "x",
+        "case_sensitive": "yes"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "case_sensitive: Invalid input: expected boolean, received string"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/abc/patterns",
+      "body": {
+        "pattern": "x"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "^SH(OP|IP)\\b",
+        "pattern_kind": "regex"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 6
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "(",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: missing )"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "[z-a]",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: range out of order in character class"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "(a+)+$",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Regex pattern contains nested quantifiers or quantified alternation that could cause catastrophic backtracking"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "(x|y)*",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Regex pattern contains nested quantifiers or quantified alternation that could cause catastrophic backtracking"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "[(a+)+]",
+        "pattern_kind": "regex"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 7
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "a{2,1}",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: numbers out of order in {} quantifier"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "(?<n>a)\\k<m>",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: invalid \\k<> named backreference"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "*",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: nothing to repeat"
+        }
+      }
+    },
+    {
+      "operationId": "createRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns",
+      "body": {
+        "pattern": "\\",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: \\ at end of pattern"
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "SHOP"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 1,
+          "recipientIds": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "albert"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 2,
+          "recipientIds": [
+            5,
+            6
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "albert",
+        "case_sensitive": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 0,
+          "recipientIds": []
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "*HEIJN ????",
+        "pattern_kind": "glob"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 2,
+          "recipientIds": [
+            5,
+            6
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "café",
+        "pattern_kind": "literal_prefix"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 0,
+          "recipientIds": []
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "pattern: Missing required field"
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "x",
+        "pattern_kind": null,
+        "case_sensitive": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 0,
+          "recipientIds": []
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "x",
+        "extra": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 0,
+          "recipientIds": []
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/abc/patterns/preview",
+      "body": {
+        "pattern": "x"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "\\d{4}$",
+        "pattern_kind": "regex"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 2,
+          "recipientIds": [
+            5,
+            6
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "^caf",
+        "pattern_kind": "regex"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 1,
+          "recipientIds": [
+            2
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "^caf",
+        "pattern_kind": "regex",
+        "case_sensitive": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 0,
+          "recipientIds": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "(?=.*HEIJN)A",
+        "pattern_kind": "regex"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 2,
+          "recipientIds": [
+            5,
+            6
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": ")",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: unmatched parentheses"
+        }
+      }
+    },
+    {
+      "operationId": "previewRecipientPattern",
+      "method": "POST",
+      "path": "/api/recipients/1/patterns/preview",
+      "body": {
+        "pattern": "^É",
+        "pattern_kind": "regex"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "matchCount": 0,
+          "recipientIds": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {
+        "priority": 7
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 1
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/2",
+      "body": {
+        "case_sensitive": false
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 2
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {
+        "pattern": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Pattern must not be empty"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/999",
+      "body": {
+        "pattern": "x"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Pattern 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/999",
+      "body": {
+        "priority": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 999
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {
+        "is_active": false,
+        "notes": "off"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 1
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {
+        "notes": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 1
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {
+        "pattern_kind": null
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "pattern_kind: Invalid option: expected one of \"literal_prefix\"|\"glob\"|\"regex\""
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {
+        "pattern_kind": "glob",
+        "pattern": "S*"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 1
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/1",
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 1
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/4",
+      "body": {
+        "pattern_kind": "regex"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 4
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/4",
+      "body": {
+        "pattern_kind": "regex",
+        "pattern": "SH*P("
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid pattern: Invalid regular expression: missing )"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/3",
+      "body": {
+        "pattern": "(b+)*",
+        "pattern_kind": "regex"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Regex pattern contains nested quantifiers or quantified alternation that could cause catastrophic backtracking"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/3",
+      "body": {
+        "pattern": "^SHOP\\s",
+        "pattern_kind": "regex",
+        "case_sensitive": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patternId": 3
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/1/patterns/abc",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "patternId: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updateRecipientPattern",
+      "method": "PATCH",
+      "path": "/api/recipients/abc/patterns/1",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deleteRecipientPattern",
+      "method": "DELETE",
+      "path": "/api/recipients/1/patterns/2",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteRecipientPattern",
+      "method": "DELETE",
+      "path": "/api/recipients/1/patterns/999",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteRecipientPattern",
+      "method": "DELETE",
+      "path": "/api/recipients/1/patterns/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "patternId: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getRecipientPatterns",
+      "method": "GET",
+      "path": "/api/recipients/1/patterns",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "pattern": "SH*P",
+              "pattern_kind": "regex",
+              "case_sensitive": true,
+              "priority": 5,
+              "is_active": true,
+              "source": "user",
+              "notes": "n",
+              "created_at": "2026-11-12T11:51:54.758Z",
+              "updated_at": "2026-11-12T11:51:54.991Z"
+            },
+            {
+              "id": 1,
+              "pattern": "S*",
+              "pattern_kind": "glob",
+              "case_sensitive": false,
+              "priority": 7,
+              "is_active": false,
+              "source": "user",
+              "notes": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:51:54.983Z"
+            },
+            {
+              "id": 3,
+              "pattern": "^SHOP\\s",
+              "pattern_kind": "regex",
+              "case_sensitive": true,
+              "priority": 100,
+              "is_active": true,
+              "source": "user",
+              "notes": null,
+              "created_at": "2026-11-12T11:51:54.751Z",
+              "updated_at": "2026-11-12T11:51:55.006Z"
+            },
+            {
+              "id": 5,
+              "pattern": "nulls",
+              "pattern_kind": "literal_prefix",
+              "case_sensitive": false,
+              "priority": 100,
+              "is_active": true,
+              "source": "user",
+              "notes": null,
+              "created_at": "2026-11-12T11:51:54.804Z",
+              "updated_at": "2026-11-12T11:51:54.804Z"
+            },
+            {
+              "id": 6,
+              "pattern": "^SH(OP|IP)\\b",
+              "pattern_kind": "regex",
+              "case_sensitive": false,
+              "priority": 100,
+              "is_active": true,
+              "source": "user",
+              "notes": null,
+              "created_at": "2026-11-12T11:51:54.823Z",
+              "updated_at": "2026-11-12T11:51:54.823Z"
+            },
+            {
+              "id": 7,
+              "pattern": "[(a+)+]",
+              "pattern_kind": "regex",
+              "case_sensitive": false,
+              "priority": 100,
+              "is_active": true,
+              "source": "user",
+              "notes": null,
+              "created_at": "2026-11-12T11:51:54.846Z",
+              "updated_at": "2026-11-12T11:51:54.846Z"
+            }
+          ],
+          "total": 6
+        }
+      }
+    },
+    {
+      "operationId": "getRecipients",
+      "method": "GET",
+      "path": "/api/recipients?active=false&limit=1000",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "ALBERT HEIJN 1234",
+              "normalized_name": "1234 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 1,
+              "links": []
+            },
+            {
+              "id": 6,
+              "name": "ALBERT HEIJN 5678",
+              "normalized_name": "5678 ALBERT HEIJN",
+              "default_category_id": null,
+              "primary_recipient_id": 5,
+              "notes": "branch",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:51:54.679Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": "ALBERT HEIJN 1234",
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 9,
+              "name": "BAKERY",
+              "normalized_name": "BAKERY",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": "fresh",
+              "is_active": true,
+              "created_at": "2026-11-12T11:51:54.495Z",
+              "updated_at": "2026-11-12T11:51:54.497Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 2,
+              "name": "CAFÉ ÉCLAIR",
+              "normalized_name": "CAFÉ ÉCLAIR",
+              "default_category_id": 3,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:51:54.705Z",
+              "default_category_name": "LEISURE:COFFEE",
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 3,
+              "name": "MARKET",
+              "normalized_name": "MARKET",
+              "default_category_id": null,
+              "primary_recipient_id": 1,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:51:54.617Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": "SHOP TWO",
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 8,
+              "name": "NEW  SHOP",
+              "normalized_name": "NEW SHOP",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2026-11-12T11:51:54.460Z",
+              "updated_at": "2026-11-12T11:51:54.460Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 7,
+              "name": "OLD",
+              "normalized_name": "OLD",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:51:54.597Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            },
+            {
+              "id": 1,
+              "name": "SHOP TWO",
+              "normalized_name": "SHOP TWO",
+              "default_category_id": 2,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T11:51:54.544Z",
+              "default_category_name": "FOOD:GROCERIES",
+              "primary_bank_account": "BE12 3456",
+              "primary_recipient_name": null,
+              "alias_count": 1,
+              "links": []
+            },
+            {
+              "id": 10,
+              "name": "Y",
+              "normalized_name": "Y",
+              "default_category_id": null,
+              "primary_recipient_id": null,
+              "notes": null,
+              "is_active": true,
+              "created_at": "2026-11-12T11:51:54.513Z",
+              "updated_at": "2026-11-12T11:51:54.513Z",
+              "default_category_name": null,
+              "primary_bank_account": null,
+              "primary_recipient_name": null,
+              "alias_count": 0,
+              "links": []
+            }
+          ],
+          "total": 9,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    }
+  ]
+}

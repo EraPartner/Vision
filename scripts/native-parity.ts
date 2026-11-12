@@ -241,6 +241,76 @@ const nodeMerge = (id: string, body: unknown): ParityStep => ({
   path: `/api/categories/tree/${id}/merge`,
   body,
 });
+const recipients = (query = ""): ParityStep => ({
+  operationId: "getRecipients",
+  method: "GET",
+  path: `/api/recipients${query}`,
+});
+const recipientRead = (id: string): ParityStep => ({
+  operationId: "getRecipient",
+  method: "GET",
+  path: `/api/recipients/${id}`,
+});
+const recipientCreate = (body?: unknown): ParityStep => ({
+  operationId: "createRecipient",
+  method: "POST",
+  path: "/api/recipients",
+  ...(body === undefined ? {} : { body }),
+});
+const recipientUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateRecipient",
+  method: "PATCH",
+  path: `/api/recipients/${id}`,
+  body,
+});
+const recipientDelete = (id: string): ParityStep => ({
+  operationId: "deleteRecipient",
+  method: "DELETE",
+  path: `/api/recipients/${id}`,
+});
+const recipientMerge = (id: string, body: unknown): ParityStep => ({
+  operationId: "mergeRecipient",
+  method: "POST",
+  path: `/api/recipients/${id}/merge`,
+  body,
+});
+const recipientUnmerge = (id: string): ParityStep => ({
+  operationId: "unmergeRecipient",
+  method: "POST",
+  path: `/api/recipients/${id}/unmerge`,
+});
+const patternList = (id: string): ParityStep => ({
+  operationId: "getRecipientPatterns",
+  method: "GET",
+  path: `/api/recipients/${id}/patterns`,
+});
+const patternCreate = (id: string, body: unknown): ParityStep => ({
+  operationId: "createRecipientPattern",
+  method: "POST",
+  path: `/api/recipients/${id}/patterns`,
+  body,
+});
+const patternPreview = (id: string, body: unknown): ParityStep => ({
+  operationId: "previewRecipientPattern",
+  method: "POST",
+  path: `/api/recipients/${id}/patterns/preview`,
+  body,
+});
+const patternUpdate = (
+  id: string,
+  patternId: string,
+  body: unknown,
+): ParityStep => ({
+  operationId: "updateRecipientPattern",
+  method: "PATCH",
+  path: `/api/recipients/${id}/patterns/${patternId}`,
+  body,
+});
+const patternDelete = (id: string, patternId: string): ParityStep => ({
+  operationId: "deleteRecipientPattern",
+  method: "DELETE",
+  path: `/api/recipients/${id}/patterns/${patternId}`,
+});
 const accountDelete = (id: string): ParityStep => ({
   operationId: "deleteAccount",
   method: "DELETE",
@@ -1109,6 +1179,205 @@ export const AREAS: Record<string, ParityArea> = {
       categoryCreate({ general: "food", detail: "restaurants" }),
     ],
   },
+  recipients: {
+    router: { module: "recipients.ts", mountPath: "/api/recipients" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, created_at,
+         updated_at) VALUES (1, 'FOOD', '', 'FOOD', 1, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, created_at, updated_at) VALUES
+        (2, 'FOOD', 'GROCERIES', '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'LEISURE', 'COFFEE', '${SEED_TIME}', '${SEED_TIME}')`,
+      `UPDATE categories SET created_at = '${SEED_TIME}', updated_at = '${SEED_TIME}'`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, notes, is_active, created_at,
+         updated_at) VALUES
+        (1, 'SHOP', 'SHOP', 2, 'corner shop', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'CAFÉ ÉCLAIR', 'CAFÉ ÉCLAIR', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'MARKET', 'MARKET', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'TO DELETE', 'DELETE TO', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'ALBERT HEIJN 1234', '1234 ALBERT HEIJN', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, 'ALBERT HEIJN 5678', '5678 ALBERT HEIJN', NULL, 'branch', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, 'OLD', 'OLD', NULL, NULL, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipient_bank_accounts (id, recipient_id, account_number, is_primary, created_at, updated_at)
+        VALUES
+        (1, 1, 'BE12 3456', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'BE99 0000', 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 3, 'NL01 ABCD', 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 2, 'FR76 1111', 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, recipient_id, category_id, is_active, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-06', vision_numeric('-3.2', 18, 4), 'EUR', 2, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-07', vision_numeric('-40', 18, 4), 'EUR', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-01-08', vision_numeric('-9', 18, 4), 'EUR', 6, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transaction_splits (id, transaction_id, recipient_id, amount, created_at, updated_at) VALUES
+        (1, 3, 2, vision_numeric('10', 18, 4), '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, recipient_id, created_at, updated_at)
+        VALUES (1, '2024-02-01', vision_numeric('-5', 18, 4), 'EUR', 3, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipient_match_patterns (id, recipient_id, pattern, pattern_kind, case_sensitive, priority,
+         notes, created_at, updated_at) VALUES
+        (1, 1, 'SHOP', 'literal_prefix', 0, 100, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'SH?P*', 'glob', 1, 10, 'glob', '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      recipients(),
+      recipients("?active=false"),
+      recipients("?name=sho"),
+      recipients("?name=caf%C3%A9"),
+      recipients("?search=groc"),
+      recipients("?search=be12"),
+      recipients("?search=%C3%A9clair"),
+      recipients("?search=branch"),
+      recipients("?uncategorized=true"),
+      recipients("?default_category_id=1"),
+      recipients("?default_category_id=abc"),
+      recipients("?default_category_id="),
+      recipients("?sort_by=default_category_name&sort_dir=desc"),
+      recipients("?sort_by=primary_bank_account"),
+      recipients("?sort_by=bogus&sort_dir=up"),
+      recipients("?sort_by=constructor"),
+      recipients("?sort_by=__proto__&sort_dir=desc"),
+      recipients("?limit=2&offset=1"),
+      recipients("?limit=0&offset=-4"),
+      recipients("?name=a&name=b"),
+      recipients("?search=a&search=b&default_category_id=x"),
+      recipientRead("1"),
+      recipientRead("999"),
+      recipientRead("abc"),
+      recipientCreate({ name: "  New  Shop " }),
+      recipientCreate({ name: "shop" }),
+      recipientCreate({ name: "system" }),
+      recipientCreate({ name: "" }),
+      recipientCreate({}),
+      recipientCreate({ name: 5 }),
+      recipientCreate({
+        name: "Bakery",
+        default_category_id: 3,
+        notes: "fresh",
+      }),
+      recipientCreate({ name: "x", default_category_id: "abc" }),
+      recipientCreate({ name: "y", default_category_id: null, notes: null }),
+      recipientCreate({ name: "z", notes: 7, default_category_id: 0 }),
+      recipientCreate([]),
+      recipientCreate(),
+      recipientUpdate("1", { name: "shop two", notes: null }),
+      recipientUpdate("1", { is_active: null, name: null }),
+      recipientUpdate("999", { notes: "x" }),
+      recipientUpdate("3", { name: "System" }),
+      recipientUpdate("3", { default_category_id: 0 }),
+      recipientUpdate("3", {}),
+      recipientUpdate("abc", {}),
+      recipientUpdate("3", { is_active: "yes" }),
+      recipientUpdate("7", { is_active: true, default_category_id: 2 }),
+      recipientUpdate("3", { name: "shop two" }),
+      recipientMerge("1", { alias_ids: [2, 3] }),
+      recipientMerge("1", { alias_ids: [] }),
+      recipientMerge("1", {}),
+      recipientMerge("1", { alias_ids: "2" }),
+      recipientMerge("1", { alias_ids: ["x", 2] }),
+      recipientMerge("999", { alias_ids: [2] }),
+      recipientMerge("2", { alias_ids: [4] }),
+      recipientMerge("1", { alias_ids: [1] }),
+      recipientMerge("5", { alias_ids: [6, 999] }),
+      recipientMerge("abc", { alias_ids: [6] }),
+      recipientRead("1"),
+      recipientRead("2"),
+      recipientUnmerge("2"),
+      recipientUnmerge("999"),
+      recipientUnmerge("abc"),
+      recipientDelete("4"),
+      recipientDelete("4"),
+      recipientDelete("abc"),
+      patternList("1"),
+      patternList("999"),
+      patternCreate("1", { pattern: "SHOP" }),
+      patternCreate("1", {
+        pattern: "SH*P",
+        pattern_kind: "glob",
+        case_sensitive: true,
+        priority: 5,
+        notes: "n",
+      }),
+      patternCreate("1", { pattern: "" }),
+      patternCreate("1", { pattern: "   " }),
+      patternCreate("1", {}),
+      patternCreate("1", { pattern: 5 }),
+      patternCreate("1", { pattern: "x", pattern_kind: "bogus" }),
+      patternCreate("1", { pattern: "x", priority: 1.5 }),
+      patternCreate("1", { pattern: "x", priority: 3000000000 }),
+      patternCreate("1", { pattern: "x", priority: "1" }),
+      patternCreate("1", {
+        pattern: "nulls",
+        pattern_kind: null,
+        case_sensitive: null,
+        priority: null,
+        notes: null,
+      }),
+      patternCreate("1", { pattern: "a".repeat(501) }),
+      patternCreate("1", { pattern: "x", case_sensitive: "yes" }),
+      patternCreate("abc", { pattern: "x" }),
+      patternCreate("1", { pattern: "^SH(OP|IP)\\b", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "[z-a]", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(a+)+$", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(x|y)*", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "[(a+)+]", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "a{2,1}", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(?<n>a)\\k<m>", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "*", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "\\", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: "SHOP" }),
+      patternPreview("1", { pattern: "albert" }),
+      patternPreview("1", { pattern: "albert", case_sensitive: true }),
+      patternPreview("1", { pattern: "*HEIJN ????", pattern_kind: "glob" }),
+      patternPreview("1", {
+        pattern: "caf\u00e9",
+        pattern_kind: "literal_prefix",
+      }),
+      patternPreview("1", { pattern: "" }),
+      patternPreview("1", {
+        pattern: "x",
+        pattern_kind: null,
+        case_sensitive: null,
+      }),
+      patternPreview("1", { pattern: "x", extra: 1 }),
+      patternPreview("abc", { pattern: "x" }),
+      patternPreview("1", { pattern: "\\d{4}$", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: "^caf", pattern_kind: "regex" }),
+      patternPreview("1", {
+        pattern: "^caf",
+        pattern_kind: "regex",
+        case_sensitive: true,
+      }),
+      patternPreview("1", { pattern: "(?=.*HEIJN)A", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: ")", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: "^É", pattern_kind: "regex" }),
+      patternUpdate("1", "1", { priority: 7 }),
+      patternUpdate("1", "2", { case_sensitive: false }),
+      patternUpdate("1", "1", { pattern: "" }),
+      patternUpdate("1", "999", { pattern: "x" }),
+      patternUpdate("1", "999", { priority: 1 }),
+      patternUpdate("1", "1", { is_active: false, notes: "off" }),
+      patternUpdate("1", "1", { notes: null }),
+      patternUpdate("1", "1", { pattern_kind: null }),
+      patternUpdate("1", "1", { pattern_kind: "glob", pattern: "S*" }),
+      patternUpdate("1", "1", {}),
+      patternUpdate("1", "4", { pattern_kind: "regex" }),
+      patternUpdate("1", "4", { pattern_kind: "regex", pattern: "SH*P(" }),
+      patternUpdate("1", "3", { pattern: "(b+)*", pattern_kind: "regex" }),
+      patternUpdate("1", "3", {
+        pattern: "^SHOP\\s",
+        pattern_kind: "regex",
+        case_sensitive: true,
+      }),
+      patternUpdate("1", "abc", {}),
+      patternUpdate("abc", "1", {}),
+      patternDelete("1", "2"),
+      patternDelete("1", "999"),
+      patternDelete("1", "abc"),
+      patternList("1"),
+      recipients("?active=false&limit=1000"),
+    ],
+  },
   "exchange-rates-empty": {
     router: { module: "info/rates.ts", mountPath: "/api/info" },
     seed: [],
@@ -1131,12 +1400,14 @@ function mutationAreas(): Record<string, ParityArea> {
   const rates = AREAS["exchange-rates"];
   const accountArea = AREAS.accounts;
   const categoryArea = AREAS.categories;
+  const recipientArea = AREAS.recipients;
   if (
     tags === undefined ||
     settings === undefined ||
     rates === undefined ||
     accountArea === undefined ||
-    categoryArea === undefined
+    categoryArea === undefined ||
+    recipientArea === undefined
   )
     throw new Error("missing base area");
 
@@ -1310,7 +1581,56 @@ function mutationAreas(): Record<string, ParityArea> {
   }
   categorySteps.push(categoryTree, categories("?active=false"));
 
+  // The recipient and pattern bodies mutated; writes sometimes aimed at random
+  // ids, with random list queries, reads, unmerges and deletes between.
+  const recipientRandom = new Random(0x2ec1);
+  const recipientSteps: ParityStep[] = [];
+  for (const step of mutatedSteps(recipientRandom, recipientArea.steps, 3)) {
+    const target = recipientRandom.chance(0.3)
+      ? recipientRandom.pick(ids)
+      : undefined;
+    if (target !== undefined && step.operationId === "updateRecipient")
+      recipientSteps.push(recipientUpdate(target, step.body));
+    else if (target !== undefined && step.operationId === "mergeRecipient")
+      recipientSteps.push(recipientMerge(target, step.body));
+    else if (
+      target !== undefined &&
+      step.operationId === "updateRecipientPattern"
+    )
+      recipientSteps.push(patternUpdate("1", target, step.body));
+    else recipientSteps.push(step);
+    if (recipientRandom.chance(0.12))
+      recipientSteps.push(
+        recipients(
+          randomQuery(recipientRandom, [
+            "active",
+            "name",
+            "search",
+            "sort_by",
+            "sort_dir",
+            "default_category_id",
+            "uncategorized",
+            "limit",
+            "offset",
+          ]),
+        ),
+      );
+    if (recipientRandom.chance(0.05))
+      recipientSteps.push(recipientRead(recipientRandom.pick(ids)));
+    if (recipientRandom.chance(0.04))
+      recipientSteps.push(recipientUnmerge(recipientRandom.pick(ids)));
+    if (recipientRandom.chance(0.03))
+      recipientSteps.push(recipientDelete(recipientRandom.pick(ids)));
+    if (recipientRandom.chance(0.03))
+      recipientSteps.push(patternList(recipientRandom.pick(ids)));
+  }
+  recipientSteps.push(recipients("?active=false&limit=1000"), patternList("1"));
+
   return {
+    "recipients-mutations": {
+      ...recipientArea,
+      steps: asRecorded(recipientSteps),
+    },
     "categories-mutations": {
       ...categoryArea,
       steps: asRecorded(categorySteps),

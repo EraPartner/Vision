@@ -157,7 +157,10 @@ import VisionNativeCore
         case (.string(let want), .string(let got)) where want == todayToken:
             return got == today ? nil : "\(path): \(got) is not today (\(today))"
         case (.string(let want), .string(let got)) where isTimestampForm(want) && !seedTimes.contains(want):
-            return isTimestampForm(got) ? nil : "\(path): \(got) is not a timestamp"
+            // A timestamp the run wrote must not be one the seed wrote: a write that skipped
+            // `updated_at = now()` would keep the seed's.
+            if !isTimestampForm(got) { return "\(path): \(got) is not a timestamp" }
+            return seedTimes.contains(got) ? "\(path): \(got) is the seed's timestamp, not a new one" : nil
         case (.int(let want), .double(let got)), (.double(let got), .int(let want)):
             return Double(want) == got ? nil : "\(path): \(want) != \(got)"
         default:
@@ -230,6 +233,10 @@ import VisionNativeCore
         try await Self.replay("categories")
     }
 
+    @Test func recipients() async throws {
+        try await Self.replay("recipients")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
@@ -238,6 +245,7 @@ import VisionNativeCore
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
+        "recipients-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
