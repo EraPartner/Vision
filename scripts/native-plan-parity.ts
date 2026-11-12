@@ -25,6 +25,9 @@
  * forecast.jsonl holds generated calls of the cash-flow forecast methods and of the
  * portfolio projection, with the seeded random draws as 32-bit integers.
  *
+ * bank-import.jsonl holds calls of the bank statement adapters (`importPipeline/adapters`)
+ * over generated statements, of the format detection and of the helpers the adapters share.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -33,6 +36,8 @@
  * and `historySourceIds` as its entries.
  */
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createRequire } from "node:module";
 import { buildPortfolioImportReconciliationPlan } from "../apps/node-backend/src/services/portfolioImportReconciliationService.ts";
 import {
@@ -107,6 +112,33 @@ import * as monteCarloParametric from "../apps/node-backend/src/services/calcula
 import * as monteCarloBlockBootstrap from "../apps/node-backend/src/services/calculations/forecast/methods/monteCarloBlockBootstrap.ts";
 import * as ensemble from "../apps/node-backend/src/services/calculations/forecast/methods/ensemble.ts";
 import { runPortfolioForecast } from "../apps/node-backend/src/services/research/projection/portfolioProjection.ts";
+import {
+  detectBank,
+  getAdapter,
+} from "../apps/node-backend/src/services/importPipeline/adapters/index.ts";
+import type { CustomTransactionParserConfig } from "../apps/node-backend/src/services/importPipeline/adapters/generic.ts";
+import {
+  canonicalIban,
+  decodeCsvBuffer,
+  normalizeIsoCurrency,
+  parseAmountField,
+  parseCommaDecimal,
+  parseCsvText,
+  parseCustomAmount,
+  parseDateFlexibleUtc,
+  parseDateWithFormat,
+  parseDayMonthYear,
+  parseDecimalSafe,
+  rawDataForCsvRecord,
+  splitCsvLines,
+} from "../apps/node-backend/src/services/importPipeline/adapters/_shared.ts";
+import {
+  cleanKbcRecipientName,
+  cleanRecipientName,
+  normalizeToUppercase,
+} from "../apps/node-backend/src/lib/textNormalization.ts";
+import { ValidationError } from "../apps/node-backend/src/middleware/errorHandler.ts";
+import { detectBankImportFormats } from "../packages/shared-utils/src/bankImportDetection.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -147,6 +179,7 @@ const TAX = repoPath("apps/native/parity/plans/belgian-tax.jsonl");
 const SQL_RULES = repoPath("apps/native/parity/plans/analysis-sql-rules.jsonl");
 const FORECAST = repoPath("apps/native/parity/plans/forecast.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
+const BANK_IMPORT = repoPath("apps/native/parity/plans/bank-import.jsonl");
 
 /** The columns of an adoption image the corpus compares, `null` when missing. */
 const IMAGE_COLUMNS = [
@@ -689,6 +722,131 @@ export async function evaluateForecast(op: unknown[]): Promise<unknown> {
   }
 }
 
+/** A JavaScript number as JSON keeps it: NaN and the infinities by name. */
+function numberText(value: number): number | string {
+  return Number.isFinite(value) ? value : String(value);
+}
+
+/** A parsed date as its day number, `null` when there is none. */
+function dayNumber(date: Date | null): number | null {
+  return date ? date.getTime() / 86_400_000 : null;
+}
+
+/** The failure of a bank import call, by the kind the Swift port tells apart. */
+function bankImportFailure(error: unknown): unknown {
+  if (error instanceof ValidationError)
+    return { error: "validation", message: error.message };
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === "string") return { error: "csv", code };
+  const message = error instanceof Error ? error.message : "";
+  if (message.startsWith("Data contract violated"))
+    return { error: "contract" };
+  return { error: "failed", message };
+}
+
+/**
+ * One call of the bank statement adapters or of a helper they share. A statement travels as
+ * the base64 of its bytes and is read from a temporary file, as an upload is; dates are
+ * recorded as day numbers.
+ */
+export async function evaluateBankImport(op: unknown[]): Promise<unknown> {
+  const [name, a, b, c, d] = op;
+  const text = a as string;
+  try {
+    switch (name) {
+      case "bank": {
+        const adapter = getAdapter(text);
+        if (!adapter) throw new Error(`unknown adapter: ${text}`);
+        const directory = fs.mkdtempSync(
+          path.join(os.tmpdir(), "vision-bank-parity-"),
+        );
+        const file = path.join(directory, "statement.csv");
+        try {
+          fs.writeFileSync(file, Buffer.from(b as string, "base64"));
+          const rows = await adapter.parse(
+            file,
+            (c ?? undefined) as CustomTransactionParserConfig | undefined,
+          );
+          return {
+            rows: rows.map(({ date, ...row }) => ({
+              day: dayNumber(date),
+              ...row,
+            })),
+            ...(rows.skipped !== undefined && { skipped: rows.skipped }),
+            ...(rows.excluded !== undefined && { excluded: rows.excluded }),
+            ...(rows.issues !== undefined && { issues: rows.issues }),
+          };
+        } finally {
+          fs.rmSync(directory, { recursive: true, force: true });
+        }
+      }
+      case "detect":
+        return { first: detectBank(text), all: detectBankImportFormats(text) };
+      case "adapter":
+        return getAdapter(text)?.name ?? null;
+      case "records": {
+        let skipped = 0;
+        const records = parseCsvText<string[] | Record<string, string>>(text, {
+          ...(b as Record<string, unknown>),
+          on_skip: () => {
+            skipped++;
+          },
+        });
+        return {
+          records: records.map((record) => ({
+            record,
+            raw: rawDataForCsvRecord(record),
+          })),
+          skipped,
+        };
+      }
+      case "decode":
+        return decodeCsvBuffer(Buffer.from(text, "base64"), b ?? undefined);
+      case "lines":
+        return splitCsvLines(text);
+      case "decimal":
+        return numberText(parseDecimalSafe(text));
+      case "commaDecimal":
+        return numberText(parseCommaDecimal(text));
+      case "amount":
+        return numberText(parseAmountField(text));
+      case "customAmount":
+        return numberText(
+          parseCustomAmount(text, b ?? undefined, {
+            ...(c !== null && c !== undefined && { rowNumber: c as number }),
+            ...(d !== null && d !== undefined && { column: d as string }),
+          }),
+        );
+      case "currency":
+        return normalizeIsoCurrency(text);
+      case "dayMonthYear":
+        return dayNumber(parseDayMonthYear(text));
+      case "flexibleDay":
+        return dayNumber(parseDateFlexibleUtc(text));
+      case "formatDay":
+        return dayNumber(parseDateWithFormat(text, b as string));
+      case "uppercase":
+        return normalizeToUppercase(text);
+      case "cleanRecipient":
+        return cleanRecipientName(text);
+      case "cleanKbcRecipient":
+        return cleanKbcRecipientName(text);
+      case "iban":
+        return canonicalIban(text);
+      case "parseInt":
+        return numberText(parseInt(text, 10));
+      case "parseFloat":
+        return numberText(parseFloat(text));
+      default:
+        throw new Error(`unknown bank import operation: ${String(name)}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("unknown "))
+      throw error;
+    return bankImportFailure(error);
+  }
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -765,6 +923,14 @@ if (isEntrypoint(import.meta)) {
     async (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: await evaluateForecast(op) };
+    },
+    check,
+  );
+  await rerecordAsync(
+    BANK_IMPORT,
+    async (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: await evaluateBankImport(op) };
     },
     check,
   );

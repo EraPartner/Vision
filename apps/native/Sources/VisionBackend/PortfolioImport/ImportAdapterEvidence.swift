@@ -98,7 +98,7 @@ enum IbkrStatementNumber {
     }
 
     /// `/^(?:\d+|\d{1,3}(?:G\d{3})+)(?:P\d*)?$|^P\d+$/` for grouping `G` and point `P`.
-    private static func isGroupedNumber(_ text: Substring, grouping: Character, point: Character) -> Bool {
+    static func isGroupedNumber(_ text: Substring, grouping: Character, point: Character) -> Bool {
         let parts = text.split(separator: point, maxSplits: 1, omittingEmptySubsequences: false)
         let whole = parts[0]
         let fraction = parts.count > 1 ? parts[1] : nil

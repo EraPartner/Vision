@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-11
+date: 2026-11-12
 updated: 2026-11-07
 tags:
   [
@@ -669,12 +669,24 @@ be real `YYYY-MM-DD` days and amounts finite, where the TypeScript would carry `
 forecast orchestration and caches of `forecast/index.ts`, the rolling backtest and the category
 breakdown are not ported yet.
 
+`VisionBackend/BankImport/` holds the bank statement adapters of `importPipeline/adapters`
+(`BankAdapters`: Belfius, Revolut, ING, BNP Paribas Fortis, KBC, Vision, SABB, Wise and the generic
+adapter with a custom column mapping), the format detection of
+`packages/shared-utils/src/bankImportDetection.ts` and the helpers the adapters share
+(`BankImportText`: decoding, amounts, dates, names). An adapter reads the bytes of a statement into
+`ParsedBankTransactions`, with the row contract of `parsedBankTransactionSchema` checked on the way
+out. `PortfolioImport/CSVParse.swift` is `csv-parse` for the options the adapters use, with the
+literal source text of each record. One difference is deliberate: a date that does not start with
+`YYYY-MM-DD` goes to the JavaScript engine's own date parser in the TypeScript, whose answer depends
+on the engine and on the machine's time zone; in Swift it is no date, so the row is skipped.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, generated forecast and projection calls, and sampled inputs of the shared helpers, each with what the TypeScript
-answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests`, `ForecastParityTests` and `FoundationParityTests` replay them.
+generated analysis SQL, generated forecast and projection calls, generated bank statements, and
+sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests` and
+`FoundationParityTests` replay them.
 `ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
 because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.
 
