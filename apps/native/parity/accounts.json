@@ -955,8 +955,8 @@
           "funding_account_id": null,
           "is_active": true,
           "closed_at": null,
-          "created_at": "2026-11-12T09:11:53.223Z",
-          "updated_at": "2026-11-12T09:11:53.223Z",
+          "created_at": "2026-11-12T10:52:47.243Z",
+          "updated_at": "2026-11-12T10:52:47.243Z",
           "links": []
         }
       }
@@ -1191,8 +1191,8 @@
           "funding_account_id": 4,
           "is_active": true,
           "closed_at": null,
-          "created_at": "2026-11-12T09:11:53.283Z",
-          "updated_at": "2026-11-12T09:11:53.283Z",
+          "created_at": "2026-11-12T10:52:47.333Z",
+          "updated_at": "2026-11-12T10:52:47.333Z",
           "links": []
         }
       }
@@ -1312,7 +1312,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T09:11:53.311Z",
+          "updated_at": "2026-11-12T10:52:47.379Z",
           "links": []
         }
       }
@@ -1343,9 +1343,9 @@
           "has_cash_sleeve": true,
           "funding_account_id": null,
           "is_active": false,
-          "closed_at": "2026-11-12T09:11:53.316Z",
+          "closed_at": "2026-11-12T10:52:47.391Z",
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T09:11:53.316Z",
+          "updated_at": "2026-11-12T10:52:47.391Z",
           "links": []
         }
       }
@@ -1377,9 +1377,9 @@
           "has_cash_sleeve": true,
           "funding_account_id": null,
           "is_active": false,
-          "closed_at": "2026-11-12T09:11:53.316Z",
+          "closed_at": "2026-11-12T10:52:47.391Z",
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T09:11:53.322Z",
+          "updated_at": "2026-11-12T10:52:47.399Z",
           "links": []
         }
       }
@@ -1412,7 +1412,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T09:11:53.326Z",
+          "updated_at": "2026-11-12T10:52:47.405Z",
           "links": []
         }
       }
@@ -1494,7 +1494,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T09:11:53.343Z",
+          "updated_at": "2026-11-12T10:52:47.428Z",
           "links": []
         }
       }
@@ -1671,7 +1671,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T09:11:53.397Z",
+          "updated_at": "2026-11-12T10:52:47.487Z",
           "links": []
         }
       }
@@ -1749,6 +1749,485 @@
       }
     },
     {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/1/statement-balances/EUR",
+      "body": {
+        "balance": 1200.25,
+        "date": "2024-04-30"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 1,
+          "currency": "EUR",
+          "balance": 1200.25,
+          "balance_date": "2024-04-30",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/1/statement-balances/usd",
+      "body": {
+        "balance": "-3.33335",
+        "date": "2024-02-29"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 1,
+          "currency": "USD",
+          "balance": -3.3334,
+          "balance_date": "2024-02-29",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/1/statement-balances/gbp%20",
+      "body": {
+        "balance": 0,
+        "date": "2024-01-01",
+        "extra": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 1,
+          "currency": "GBP",
+          "balance": 0,
+          "balance_date": "2024-01-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/JPY",
+      "body": {
+        "balance": "1e3",
+        "date": [
+          "2024-05-01"
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "JPY",
+          "balance": 1000,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": true,
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 1,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": "",
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 0,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": [
+          7
+        ],
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 7,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": 1e-7,
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 0,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": 123456.78905,
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 123456.7891,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": null,
+        "date": "2024-05-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance and date are required"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 5,
+        "date": null
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance and date are required"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "date": "2024-05-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": "abc",
+        "date": "2024-02-30"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 1000000000000,
+        "date": "0050-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 1000000000001,
+        "date": "2024-13-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be between -1000000000000 and 1000000000000; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": -1000000000000,
+        "date": " 2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": "Infinity",
+        "date": 20240101
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EURO",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/E1R",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/999/statement-balances/EUR",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/999/statement-balances/EURO",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/abc/statement-balances/EUR",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/%C3%A9ur",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
       "operationId": "getAccounts",
       "method": "GET",
       "path": "/api/accounts?active=all",
@@ -1809,8 +2288,8 @@
               "funding_account_id": 4,
               "is_active": true,
               "closed_at": null,
-              "created_at": "2026-11-12T09:11:53.283Z",
-              "updated_at": "2026-11-12T09:11:53.283Z",
+              "created_at": "2026-11-12T10:52:47.333Z",
+              "updated_at": "2026-11-12T10:52:47.333Z",
               "post_anchor_count": 0,
               "has_transactions": false,
               "statement_balances": [],
@@ -1840,7 +2319,7 @@
               "is_active": true,
               "closed_at": null,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2026-11-12T09:11:53.397Z",
+              "updated_at": "2026-11-12T10:52:47.487Z",
               "post_anchor_count": 1,
               "has_transactions": true,
               "statement_balances": [
@@ -1888,13 +2367,18 @@
               "statement_balances": [
                 {
                   "currency": "EUR",
-                  "balance": 1100.5,
-                  "balance_date": "2024-03-31"
+                  "balance": 1200.25,
+                  "balance_date": "2024-04-30"
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 0,
+                  "balance_date": "2024-01-01"
                 },
                 {
                   "currency": "USD",
-                  "balance": 3,
-                  "balance_date": "2024-03-30"
+                  "balance": -3.3334,
+                  "balance_date": "2024-02-29"
                 }
               ],
               "computed_balance": 999.98,
@@ -1908,7 +2392,7 @@
               "unconverted_currencies": [],
               "reconcilable_balance": 999.98,
               "reconcilable_currency": "EUR",
-              "drift": 100.52
+              "drift": 200.27
             },
             {
               "id": 3,
@@ -1962,8 +2446,8 @@
               "funding_account_id": null,
               "is_active": true,
               "closed_at": null,
-              "created_at": "2026-11-12T09:11:53.223Z",
-              "updated_at": "2026-11-12T09:11:53.223Z",
+              "created_at": "2026-11-12T10:52:47.243Z",
+              "updated_at": "2026-11-12T10:52:47.243Z",
               "post_anchor_count": 0,
               "has_transactions": false,
               "statement_balances": [],
@@ -1993,11 +2477,22 @@
               "is_active": true,
               "closed_at": null,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2026-11-12T09:11:53.326Z",
+              "updated_at": "2026-11-12T10:52:47.405Z",
               "anchor_date": "2024-03-04",
               "post_anchor_count": 1,
               "has_transactions": true,
-              "statement_balances": [],
+              "statement_balances": [
+                {
+                  "currency": "CHF",
+                  "balance": 123456.7891,
+                  "balance_date": "2024-05-01"
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 1000,
+                  "balance_date": "2024-05-01"
+                }
+              ],
               "computed_balance": 394.33,
               "balance_parts": [
                 {

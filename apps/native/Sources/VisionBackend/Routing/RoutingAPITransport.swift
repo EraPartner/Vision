@@ -8,6 +8,7 @@ public enum PortedOperations {
     public static let ids: Set<String> = [
         "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings", "getExchangeRates",
         "refreshExchangeRates", "getAccounts", "createAccount", "updateAccount", "deleteAccount",
+        "setAccountStatementBalance",
     ]
 }
 

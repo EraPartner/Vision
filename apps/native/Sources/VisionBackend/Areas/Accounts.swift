@@ -103,6 +103,14 @@ enum AccountsArea {
                 try AccountsArea.update(session, id: id, fields)
             }
         }
+        backend.serve(OpenAPIOperations.SetAccountStatementBalance.self) { request in
+            let body = try RequestBody.parseJavaScript(request.body)
+            let id = AccountID(rawValue: try RequestID.pathParameter(request))
+            let currency = request.pathParameters["currency"] ?? ""
+            return try await database.run { session in
+                try AccountsArea.setStatementBalance(session, id: id, currency: currency, body: body)
+            }
+        }
         backend.serve(OpenAPIOperations.DeleteAccount.self) { request in
             let id = AccountID(rawValue: try RequestID.pathParameter(request))
             return try await database.run { session in
@@ -587,5 +595,97 @@ enum AccountsArea {
         }
         guard removed != nil else { throw BackendHTTPError.notFound("Account \(id.rawValue) not found") }
         return .noContent
+    }
+
+    // MARK: - PUT /api/accounts/{id}/statement-balances/{currency}
+
+    /// `looseText` of `lib/looseText.ts`: arrays joined with commas (a null element is `null`),
+    /// objects as JSON, anything else `String(value)`; undefined is `undefined`.
+    static func looseText(_ value: JSValue?) -> String {
+        switch value {
+        case nil: return "undefined"
+        case .string(let text)?: return text
+        case .array(let items)?: return items.map { looseText($0) }.joined(separator: ",")
+        case .object?: return value?.jsonText ?? ""
+        case let other?: return other.javaScriptString
+        }
+    }
+
+    /// `statementBalanceField` unwrapped: null stays null, else `validateNumber` within ±1e12.
+    static let statementBalanceValue = Zod.transform(.unknown) { value, issues in
+        if value == .null { return .null }
+        let number = value?.javaScriptNumber ?? .nan
+        guard number.isFinite else {
+            issues.append(ZodIssue(message: "statement_balance must be a finite number"))
+            return nil
+        }
+        guard number >= -1e12, number <= 1e12 else {
+            issues.append(
+                ZodIssue(message: "statement_balance must be between -1000000000000 and 1000000000000"))
+            return nil
+        }
+        return .number(number)
+    }
+
+    /// `statementBalanceDateField` unwrapped: null stays null, else a real `YYYY-MM-DD` day. A
+    /// year below 100 fails, as `Date.UTC` reads it as 19xx.
+    static let statementDateValue = Zod.transform(.unknown) { value, issues in
+        if value == .null { return .null }
+        let text = looseText(value)
+        let year = Int(text.prefix(4)) ?? 0
+        guard Zod.isISODate(text), year >= 100 else {
+            issues.append(ZodIssue(message: "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"))
+            return nil
+        }
+        return .string(text)
+    }
+
+    static let statementReadingSchema = Zod.object(
+        [("balance", statementBalanceValue), ("date", statementDateValue)], .strip)
+
+    /// `accountService.setStatementBalance`: replace one currency's statement reading.
+    static func setStatementBalance(_ session: BackendSession, id: AccountID, currency: String, body: JSValue?) throws
+        -> HandlerResult
+    {
+        guard try getById(session, id) != nil else {
+            throw BackendHTTPError.notFound("Account \(id.rawValue) not found")
+        }
+        // `assertCurrency`: an empty code is the service's own refusal, with the same message.
+        let code = JavaScriptWhitespace.trim(currency.uppercased())
+        guard isCurrencyCode(code) else { throw BackendHTTPError.validation("currency must be a 3-letter ISO code") }
+        let balance: Double
+        let date: String
+        switch statementReadingSchema.parse(body) {
+        case .failure(let failure):
+            throw BackendHTTPError.validation(failure.issues.map(\.message).joined(separator: "; "))
+        case .success(let output):
+            guard case .object(let reading)? = output, case .number(let number)? = reading["balance"],
+                case .string(let day)? = reading["date"]
+            else { throw BackendHTTPError.validation("balance and date are required") }
+            balance = number
+            date = day
+        }
+        // `decimalText` then the writer's NUMERIC(18, 4) coercion.
+        guard
+            let row = try session.row(
+                """
+                INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
+                VALUES (?, ?, vision_numeric(?, 18, 4), ?)
+                ON CONFLICT (account_id, currency) DO UPDATE SET balance = excluded.balance,
+                  balance_date = excluded.balance_date
+                RETURNING account_id, currency, balance, to_char(balance_date, 'YYYY-MM-DD') AS balance_date
+                """,
+                [
+                    .integer(Int64(id.rawValue)), .text(code), .text(SQLArguments.javaScriptText(balance)),
+                    .text(date),
+                ])
+        else { throw SQLRowDecodingError(column: "account_statement_balances", problem: "the upsert returned no row") }
+        let stored = try DecimalJS.from(try row.text("balance"))
+        return HandlerResult(
+            data: .object([
+                "account_id": .int(try row.integerId("account_id")), "currency": .string(try row.text("currency")),
+                "balance": number(stored.toNumber), "balance_date": .string(try row.text("balance_date")),
+                "links": .array([]),
+            ]))
     }
 }
