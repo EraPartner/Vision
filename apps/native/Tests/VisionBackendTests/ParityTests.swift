@@ -194,7 +194,7 @@ import VisionNativeCore
         for (index, step) in corpus.steps.enumerated() {
             let label = "\(area) step \(index): \(step.method) \(step.path)"
             if let next = step.fetch { fetcher.replace(next) }
-            let url = try #require(URL(string: "http://127.0.0.1:3001\(step.path)"))
+            let url = try #require(URL(string: "http://127.0.0.1:3001" + Self.fetchEncoded(step.path)))
             let method = try #require(HTTPMethod(rawValue: step.method), "\(label)")
             let request = APIRequest(
                 method: method, url: url, headers: step.hasBody ? ["Content-Type": "application/json"] : [:],
@@ -215,6 +215,15 @@ import VisionNativeCore
                 #expect(response.headers["x-request-id"] != nil, "\(label)")
             }
         }
+    }
+
+    /// The path as `fetch` sends it: characters a URL cannot hold are percent-encoded and
+    /// existing `%XX` escapes are kept. `URL(string:)` alone re-encodes every `%` once a path
+    /// holds an invalid character such as a raw space.
+    static func fetchEncoded(_ path: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed.union(.urlPathAllowed)
+        allowed.insert(charactersIn: "%?&=#")
+        return path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path
     }
 
     @Test func tags() async throws {
