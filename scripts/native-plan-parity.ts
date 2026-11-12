@@ -22,6 +22,9 @@
  * analysis-sql-rules.jsonl holds analysis SQL (the cases of the executor's tests and generated
  * text) with what `checkAnalysisSql`, `scanSql` and the column-type rules answer.
  *
+ * forecast.jsonl holds generated calls of the cash-flow forecast methods and of the
+ * portfolio projection, with the seeded random draws as 32-bit integers.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -87,6 +90,23 @@ import {
   __validateAnalysisSql,
 } from "../apps/node-backend/src/services/analysisExecutor.ts";
 import { scanSql } from "../apps/node-backend/src/database/sqlite/sqlText.ts";
+import {
+  fnv1aHash,
+  gaussian,
+  makeRng,
+} from "../apps/node-backend/src/services/calculations/forecast/prng.ts";
+import { densifyDailyHistory } from "../apps/node-backend/src/services/calculations/forecast/_densify.ts";
+import { isBelgianHoliday } from "../apps/node-backend/src/services/calculations/forecast/holidays/be.ts";
+import { walkForwardBacktest } from "../apps/node-backend/src/services/calculations/forecast/backtest.ts";
+import * as simpleAverage from "../apps/node-backend/src/services/calculations/forecast/methods/simpleAverage.ts";
+import * as weightedAverage from "../apps/node-backend/src/services/calculations/forecast/methods/weightedAverage.ts";
+import * as ewma from "../apps/node-backend/src/services/calculations/forecast/methods/ewma.ts";
+import * as holtWinters from "../apps/node-backend/src/services/calculations/forecast/methods/holtWinters.ts";
+import * as prophetLite from "../apps/node-backend/src/services/calculations/forecast/methods/prophetLite.ts";
+import * as monteCarloParametric from "../apps/node-backend/src/services/calculations/forecast/methods/monteCarloParametric.ts";
+import * as monteCarloBlockBootstrap from "../apps/node-backend/src/services/calculations/forecast/methods/monteCarloBlockBootstrap.ts";
+import * as ensemble from "../apps/node-backend/src/services/calculations/forecast/methods/ensemble.ts";
+import { runPortfolioForecast } from "../apps/node-backend/src/services/research/projection/portfolioProjection.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -125,6 +145,7 @@ const FOUNDATIONS = repoPath("apps/native/parity/plans/foundations.jsonl");
 const TAX = repoPath("apps/native/parity/plans/belgian-tax.jsonl");
 
 const SQL_RULES = repoPath("apps/native/parity/plans/analysis-sql-rules.jsonl");
+const FORECAST = repoPath("apps/native/parity/plans/forecast.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 
 /** The columns of an adoption image the corpus compares, `null` when missing. */
@@ -552,6 +573,139 @@ export function evaluateSqlRule(op: unknown[]): unknown {
   }
 }
 
+type DailyHistory = Array<{ date: string; net: number }>;
+type ForecastOptions = {
+  paths?: number;
+  percentiles?: number[];
+  seed?: number | string;
+  alpha?: number;
+};
+const FORECAST_METHODS = {
+  simple_avg: simpleAverage,
+  weighted_avg: weightedAverage,
+  ewma,
+  holt_winters: holtWinters,
+  prophet_lite: prophetLite,
+  monte_carlo_parametric: monteCarloParametric,
+  monte_carlo_block_bootstrap: monteCarloBlockBootstrap,
+};
+type ForecastMethodId = keyof typeof FORECAST_METHODS;
+
+/**
+ * One call of the cash-flow forecast methods or of the portfolio projection. The random
+ * draws are recorded as their 32-bit integers, so the sequence is compared exactly. The
+ * projection's dependencies are the recorded summary, snapshots, date and provider data.
+ */
+export async function evaluateForecast(op: unknown[]): Promise<unknown> {
+  const [name, a, b, c, d, e] = op;
+  try {
+    switch (name) {
+      case "hash":
+        return fnv1aHash(a as string);
+      case "draws": {
+        const rng = makeRng(a as number | string);
+        return Array.from({ length: b as number }, () => rng() * 0x100000000);
+      }
+      case "gaussian": {
+        const rng = makeRng(a as number | string);
+        return Array.from({ length: b as number }, () => gaussian(rng));
+      }
+      case "densify":
+        return densifyDailyHistory(
+          a as DailyHistory,
+          (b as string | null) ?? undefined,
+        );
+      case "holiday":
+        return isBelgianHoliday(a as string);
+      case "method":
+        return FORECAST_METHODS[a as ForecastMethodId].forecast({
+          history: b as DailyHistory,
+          forecastDates: c as string[],
+          ...(d as ForecastOptions),
+        });
+      case "weights":
+        return [
+          ...ensemble.computeWeights(
+            a as Parameters<typeof ensemble.computeWeights>[0],
+            b as string[],
+          ),
+        ];
+      case "effective":
+        return [
+          ...ensemble.effectiveWeights(
+            new Map(a as Array<[string, number]>),
+            b as string[],
+          ),
+        ];
+      case "ensemble":
+        return ensemble.forecast({
+          forecastDates: a as string[],
+          methodOutputs: b as Parameters<
+            typeof ensemble.forecast
+          >[0]["methodOutputs"],
+          weights: new Map(c as Array<[string, number]>),
+        });
+      case "backtest":
+        return walkForwardBacktest({
+          history: a as DailyHistory,
+          methods: (b as ForecastMethodId[]).map((id) => ({
+            id,
+            label: id,
+            forecast: FORECAST_METHODS[id].forecast,
+          })),
+          asOfMonth: c as string,
+          windowMonths: d as number,
+        });
+      case "projection": {
+        const providers = (e ?? {}) as Record<
+          string,
+          Record<string, Record<string, unknown> | undefined> | undefined
+        >;
+        type Deps = NonNullable<Parameters<typeof runPortfolioForecast>[1]>;
+        // The recorded stand-ins carry only the fields the projection reads.
+        const deps = {
+          getPortfolioSummary: () => Promise.resolve(b),
+          getSnapshots: () => Promise.resolve(c),
+          today: () => d as string,
+          aggregator: {
+            fetch: (kind: string, query: { symbol: string }) => {
+              const data = providers[query.symbol]?.[kind];
+              return Promise.resolve(
+                data ? { source: "recorded", data } : { source: "unavailable" },
+              );
+            },
+          },
+        } as unknown as Deps;
+        return await runPortfolioForecast(
+          a as Parameters<typeof runPortfolioForecast>[0],
+          deps,
+        );
+      }
+      default:
+        throw new Error(`unknown forecast operation: ${String(name)}`);
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.name : "Error" };
+  }
+}
+
+async function rerecordAsync(
+  file: string,
+  line: (recorded: string) => Promise<unknown>,
+  check: boolean,
+): Promise<void> {
+  const recorded = fs.readFileSync(file, "utf8");
+  let next = "";
+  for (const text of recorded.split("\n")) {
+    if (text !== "") next += `${JSON.stringify(await line(text))}\n`;
+  }
+  if (!check) fs.writeFileSync(file, next);
+  else if (next !== recorded) {
+    console.error(`${file} is stale: run \`bun run native:parity-plans\``);
+    process.exitCode = 1;
+  }
+}
+
 function rerecord(
   file: string,
   line: (recorded: string) => unknown,
@@ -603,6 +757,14 @@ if (isEntrypoint(import.meta)) {
     (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: evaluateSqlRule(op) };
+    },
+    check,
+  );
+  await rerecordAsync(
+    FORECAST,
+    async (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: await evaluateForecast(op) };
     },
     check,
   );

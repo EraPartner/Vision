@@ -434,6 +434,12 @@ enum JavaScriptCase {
         return out
     }
 
+    /// `String.prototype.toUpperCase`: the Unicode default mapping.
+    static func uppercased(_ text: String) -> String {
+        text.unicodeScalars.allSatisfy(\.isASCII)
+            ? text.uppercased() : text.unicodeScalars.map(\.properties.uppercaseMapping).joined()
+    }
+
     /// Final_Sigma of the Unicode special-casing rules: a cased letter before (case-ignorable
     /// characters skipped) and none after.
     private static func isFinalSigma(_ scalars: [Unicode.Scalar], _ index: Int) -> Bool {

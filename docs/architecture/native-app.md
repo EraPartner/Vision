@@ -659,12 +659,24 @@ writes the same matches out by hand, so no other engine's case folding or word b
 is allowed. `analysisExecutor.ts` exports `__analysisSqlRules` for the recorder. The sandbox process
 itself, its row copies and its result typing are not ported yet.
 
+`VisionBackend/Forecast/` holds the cash-flow forecast methods of
+`services/calculations/forecast` (`PointForecast`: simple and weighted average, EWMA, Holt-Winters,
+Prophet-lite; `MonteCarloForecast`: parametric and block bootstrap; `ForecastEnsemble`;
+`ForecastBacktest.walkForward`) and the portfolio projection of `services/research/projection`
+(`PortfolioProjection.run`). `ForecastRandom` is the seeded xorshift generator of `prng.ts`: the same
+seed gives the same draws as the TypeScript, so a forecast repeats across both backends. Dates must
+be real `YYYY-MM-DD` days and amounts finite, where the TypeScript would carry `NaN` through. The
+forecast orchestration and caches of `forecast/index.ts`, the rolling backtest and the category
+breakdown are not ported yet.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, and sampled inputs of the shared helpers, each with what the TypeScript
+generated analysis SQL, generated forecast and projection calls, and sampled inputs of the shared helpers, each with what the TypeScript
 answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests` and `FoundationParityTests` replay them.
+`AnalysisSQLRulesParityTests`, `ForecastParityTests` and `FoundationParityTests` replay them.
+`ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
+because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.
 
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from
