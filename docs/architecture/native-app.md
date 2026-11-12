@@ -585,8 +585,10 @@ too. Areas move in the inventory's order; the ported list today is the tags area
 settings area's `getSettings`, `getSetting`, `saveSetting` and `saveSettings` (`DELETE
 /api/settings/:key` is not in the client and stays on Bun), and the exchange-rate area's
 `getExchangeRates` and `refreshExchangeRates` (the inflation-rate routes stay on Bun), and the
-accounts area's `getAccounts`, `createAccount`, `updateAccount` and `deleteAccount` (totals, close,
-merge, opening balance, statement balances and reconcile stay on Bun for now). A refresh
+accounts area's `getAccounts`, `createAccount`, `updateAccount`, `deleteAccount` and
+`setAccountStatementBalance`. The account operations that write or read other areas' tables move
+with those areas: opening balance and reconcile (transactions), close, merge and their previews
+(transactions and portfolio lots), and totals (the portfolio summary). A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.
