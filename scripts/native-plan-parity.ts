@@ -31,6 +31,10 @@
  * portfolio-import.jsonl holds calls of the portfolio statement adapters that read CSV: the
  * sample statements of the backend tests and generated ones.
  *
+ * workbook.jsonl holds calls of the XLSX reader (`packages/shared-utils/src/xlsx`) on
+ * generated documents and archives, of the workbook checks of `portfolioUpload.ts`, and of
+ * the Saxo workbook and IBKR funding adapters on generated workbooks.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -149,6 +153,18 @@ import {
   detectPortfolioFileFormat,
 } from "../apps/node-backend/src/lib/portfolioUpload.ts";
 import { detectBankImportFormats } from "../packages/shared-utils/src/bankImportDetection.ts";
+import {
+  excelSerialToTime,
+  isDateFormatTemplate,
+  readXlsxWorkbook,
+} from "../packages/shared-utils/src/xlsx/workbook.ts";
+import { parseXml } from "../packages/shared-utils/src/xlsx/xml.ts";
+import {
+  assertBoundedWorkbook,
+  readIbkrFundingWorkbook,
+  readPortfolioWorkbook,
+} from "../apps/node-backend/src/lib/portfolioUpload.ts";
+import { parseIbkrFundingHistory } from "../apps/node-backend/src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -190,6 +206,7 @@ const SQL_RULES = repoPath("apps/native/parity/plans/analysis-sql-rules.jsonl");
 const FORECAST = repoPath("apps/native/parity/plans/forecast.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 const BANK_IMPORT = repoPath("apps/native/parity/plans/bank-import.jsonl");
+const WORKBOOK = repoPath("apps/native/parity/plans/workbook.jsonl");
 const PORTFOLIO_IMPORT = repoPath(
   "apps/native/parity/plans/portfolio-import.jsonl",
 );
@@ -921,6 +938,119 @@ export async function evaluatePortfolioImport(op: unknown[]): Promise<unknown> {
   }
 }
 
+/** A workbook cell for the record: a date as its time value, a number as its raw text. */
+function workbookCell(cell: unknown): unknown {
+  if (cell instanceof Date) return { date: numberText(cell.getTime()) };
+  return cell;
+}
+
+/** A parsed portfolio statement with its dates as day numbers. */
+function portfolioRows(
+  rows: Awaited<ReturnType<typeof parsePortfolioStatement>>,
+): unknown {
+  return {
+    rows: rows.map(({ date, ...row }) => ({ day: dayNumber(date), ...row })),
+    ...(rows.skipped !== undefined && { skipped: rows.skipped }),
+    ...(rows.sourceColumns !== undefined && {
+      sourceColumns: rows.sourceColumns,
+    }),
+  };
+}
+
+/**
+ * One call of the workbook reader (`packages/shared-utils/src/xlsx`), of the workbook checks
+ * of `portfolioUpload.ts`, or of an adapter that reads a workbook. A workbook travels as
+ * base64. The IBKR funding workbook is read by SheetJS, which has no Swift port: its call
+ * records the sheets SheetJS read, and the Swift adapter starts from those.
+ */
+export async function evaluateWorkbook(op: unknown[]): Promise<unknown> {
+  const [name, a, b] = op;
+  const bytes = () => Buffer.from(a as string, "base64");
+  try {
+    switch (name) {
+      case "xml": {
+        const events: unknown[] = [];
+        try {
+          parseXml(a as string, {
+            onOpenTag: (tag, attributes) =>
+              events.push(["open", tag, Object.entries(attributes)]),
+            onCloseTag: (tag) => events.push(["close", tag]),
+            onText: (text) => events.push(["text", text]),
+          });
+        } catch {
+          return { error: "invalid", events };
+        }
+        return { events };
+      }
+      case "dateFormat":
+        return isDateFormatTemplate(a as string);
+      case "serial":
+        return numberText(
+          new Date(excelSerialToTime(Number(a), b === true)).getTime(),
+        );
+      case "sheets": {
+        let sheets;
+        try {
+          sheets = await readXlsxWorkbook(new Uint8Array(bytes()), {
+            trim: b !== false,
+            parseNumber: (raw) => ({ type: "number", raw }),
+          });
+        } catch {
+          return { error: "unreadable" };
+        }
+        return sheets.map(({ sheet, data }) => ({
+          sheet,
+          data: data.map((row) => row.map(workbookCell)),
+        }));
+      }
+      case "bounded":
+        assertBoundedWorkbook(bytes());
+        return true;
+      case "portfolioWorkbook": {
+        const sheets = await withStatementFile(
+          a as string,
+          readPortfolioWorkbook,
+        );
+        return sheets.map(({ sheet, data, sourceFileHash }) => ({
+          sheet,
+          sourceFileHash,
+          data: data.map((row) => row.map(workbookCell)),
+        }));
+      }
+      case "saxo":
+        return portfolioRows(
+          await withStatementFile(a as string, (file) =>
+            parsePortfolioStatement(file, {
+              format: "saxo_transaction_history",
+            }),
+          ),
+        );
+      case "ibkrFunding":
+        return await withStatementFile(a as string, async (file) => {
+          let sheets;
+          try {
+            sheets = await readIbkrFundingWorkbook(file);
+          } catch (error) {
+            return { reader: bankImportFailure(error) };
+          }
+          let result;
+          try {
+            result = portfolioRows(await parseIbkrFundingHistory(file));
+          } catch (error) {
+            result = bankImportFailure(error);
+          }
+          return { sheets, result };
+        });
+      default:
+        throw new Error(`unknown workbook operation: ${String(name)}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("unknown "))
+      throw error;
+    return bankImportFailure(error);
+  }
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -1013,6 +1143,14 @@ if (isEntrypoint(import.meta)) {
     async (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: await evaluatePortfolioImport(op) };
+    },
+    check,
+  );
+  await rerecordAsync(
+    WORKBOOK,
+    async (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: await evaluateWorkbook(op) };
     },
     check,
   );

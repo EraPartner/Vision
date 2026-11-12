@@ -688,16 +688,28 @@ mapping, IBKR transaction history, Kinesis, Nexo, Nexo Pro spot history and the 
 engine's own date parser is no date in Swift, and Nexo timestamps are read only as
 `YYYY-MM-DDTHH:mm:ss[.sss]Z`; a cell that reads as an infinite number fails the import; a Nexo Pro
 number beyond 1e±5000 is refused as exceeding the numeric limits; a type mapping looked up under a
-name of `Object.prototype` (`constructor`, `toString`) is an unknown transaction type. The workbook
-paths (Saxo XLSX, IBKR funding XLS/XLSX, the ZIP bounds check) are not ported: those calls fail with
-a message that says so.
+name of `Object.prototype` (`constructor`, `toString`) is an unknown transaction type.
+
+`VisionBackend/Workbook/` holds the XLSX reader of `packages/shared-utils/src/xlsx` (`XLSXWorkbook`
+over the XML event parser `XLSXMarkup`), a raw DEFLATE decoder and SHA-256 in plain Swift
+(`RawInflate`, `SHA256Digest`), and the workbook checks of `portfolioUpload.ts`
+(`PortfolioUpload.assertBounded`, `PortfolioUpload.workbook`). `SaxoWorkbook.swift` reads the
+detailed Saxo XLSX export, and `IbkrFundingHistory` turns the sheets of an IBKR funding workbook into
+rows. The TypeScript reads that funding workbook (XLS or XLSX) with SheetJS, which has no Swift
+port, so `PortfolioAdapters.parse` still refuses the `ibkr_funding_history` format. Known
+differences from the TypeScript: a date cell (`t="d"`) whose text is not one of the ISO 8601 forms
+of the language standard makes the workbook unreadable, where the TypeScript asks the engine's own
+date parser; text holding half a surrogate pair carries U+FFFD instead; a sheet with a row or
+column number past 4,000,000 is refused, where the TypeScript would build every row in memory; and a
+date cell in a column read as text is written as the engine writes a date in the machine's time
+zone, which is compared with the TypeScript under UTC only.
 
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, and
+generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, and
 sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests` and
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests` and
 `FoundationParityTests` replay them.
 `ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
 because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.

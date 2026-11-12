@@ -167,7 +167,7 @@ struct IbkrFundingFacts: Equatable, Sendable {
 
     /// `Intl.supportedValuesOf("currency")` as Bun 1.4 answers it (307 codes). Node's ICU
     /// build lists fewer; Bun is the backend's runtime (ADR-263).
-    private static let fundingCurrencies: Set<String> = Set(
+    static let fundingCurrencies: Set<String> = Set(
         """
         ADP AED AFA AFN ALK ALL AMD ANG AOA AOK AON AOR ARA ARL ARM ARP ARS ATS AUD AWG AZM AZN BAD BAM BAN BBD \
         BDT BEC BEF BEL BGL BGM BGN BGO BHD BIF BMD BND BOB BOL BOP BOV BRB BRC BRE BRL BRN BRR BRZ BSD BTN BUK \

@@ -632,35 +632,95 @@ enum NexoProSpotHistory {
 /// a decimal point or comma is read from the cells that have only one reading; a number
 /// that reads both ways with nothing to settle it makes its row unsupported.
 enum SaxoStatement {
-    private typealias Text = BankImportText
-    private typealias Record = CSVParse.Record
-    private typealias Format = BankImportText.NumberFormat
+    typealias Text = BankImportText
+    typealias Format = BankImportText.NumberFormat
 
-    private static let requiredColumns = [
+    /// Where a workbook record came from, kept for its provenance envelope.
+    struct Origin: Equatable, Sendable {
+        var sheet: String
+        var row: Int
+        var headers: [XLSXCell?]
+        var cells: [XLSXCell?]
+        var sourceFileHash: String
+    }
+
+    /// One Saxo record by column name: the text cells of a CSV line or the typed cells of a
+    /// workbook row.
+    struct Record: Sendable {
+        var cells: [String: XLSXCell]
+        var line: CSVParse.Record?
+        var origin: Origin?
+
+        subscript(column: String) -> XLSXCell? { cells[column] }
+    }
+
+    static let requiredColumns = [
         "Transactiedatum", "Rekening-ID", "Transactie-ID", "Bk Record Id", "Booking Id", "Transactietype", "Acties",
         "Boekingsbedrag", "Valuta", "Omrekeningskoers", "Totale kosten", "Instrument", "Instrumentsymbool",
         "Instrument ISIN", "Instrumentvaluta",
     ]
     private static let numberColumns = ["Boekingsbedrag", "Omrekeningskoers", "Totale kosten", "Conversion cost"]
 
-    private struct AmbiguousNumber: Error {
+    struct AmbiguousNumber: Error {
         let text: String
         var message: String {
             "Saxo number \(text) reads differently with a decimal point or comma, and the file does not show which it uses"
         }
     }
 
-    private struct TradeAction {
+    struct TradeAction {
         let buying: Bool
         let quantity: String
         let price: String
         let currency: String?
     }
 
-    private static func clean(_ record: Record, _ column: String) -> String { PortfolioAdapters.clean(record[column]) }
+    /// `String(date)` in the machine's time zone, as the engine writes it.
+    static func dateText(_ time: Double) -> String {
+        guard !time.isNaN else { return "Invalid Date" }
+        let zone = TimeZone.current
+        let moment = Date(timeIntervalSince1970: time / 1000)
+        let offset = zone.secondsFromGMT(for: moment)
+        let local = (time / 1000).rounded(.down) + Double(offset)
+        let days = Int((local / 86_400).rounded(.down))
+        let seconds = Int(local - Double(days) * 86_400)
+        let civil = XLSXWorkbook.civil(fromDays: days)
+        let weekday = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"][((days % 7) + 7) % 7]
+        let month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][civil.month - 1]
+        func pad(_ value: Int, _ width: Int = 2) -> String {
+            let digits = String(abs(value))
+            return (value < 0 ? "-" : "") + String(repeating: "0", count: max(0, width - digits.count)) + digits
+        }
+        let minutes = abs(offset) / 60
+        let name: String
+        if offset == 0, ["UTC", "GMT", "Etc/UTC", "Etc/GMT"].contains(zone.identifier) {
+            name = "Coordinated Universal Time"
+        } else {
+            name =
+                zone.localizedName(
+                    for: zone.isDaylightSavingTime(for: moment) ? .daylightSaving : .standard,
+                    locale: Locale(identifier: "en_US")) ?? zone.identifier
+        }
+        return "\(weekday) \(month) \(pad(civil.day)) \(pad(civil.year, 4)) \(pad(seconds / 3600)):\(pad(seconds / 60 % 60)):\(pad(seconds % 60))"
+            + " GMT\(offset < 0 ? "-" : "+")\(pad(minutes / 60))\(pad(minutes % 60)) (\(name))"
+    }
+
+    /// `cleanCell(value)`: a number as its trimmed raw text, anything else as `String(value)`
+    /// trimmed, a missing cell as nothing.
+    static func clean(_ cell: XLSXCell?) -> String {
+        switch cell {
+        case nil: return ""
+        case .text(let text): return Text.trim(text)
+        case .number(let raw): return Text.trim(raw)
+        case .boolean(let value): return value ? "true" : "false"
+        case .date(let time): return dateText(time)
+        }
+    }
+
+    static func clean(_ record: Record, _ column: String) -> String { clean(record[column]) }
 
     /// `normalizeHeader(value)`: trimmed, with no-break spaces as plain ones.
-    private static func header(_ value: String) -> String {
+    static func header(_ value: String) -> String {
         Text.text(Text.units(Text.trim(value)).map { $0 == 0xA0 ? 0x20 : $0 })
     }
 
@@ -669,7 +729,7 @@ enum SaxoStatement {
     }
 
     /// `/^(Koop|Verkoop|Buy|Sell)\s+([+-]?[\d.,]+)\s+@\s+([+-]?[\d.,]+)(?:\s+([A-Z]{3}))?$/i`.
-    private static func tradeAction(_ text: String) -> TradeAction? {
+    static func tradeAction(_ text: String) -> TradeAction? {
         var rest = Text.units(text)[...]
         func spaces() -> Bool {
             let run = rest.prefix(while: Text.isSpace)
@@ -718,19 +778,34 @@ enum SaxoStatement {
         return found.count == 1 ? found.first : nil
     }
 
-    private static func magnitude(_ value: String?, _ format: Format?) throws -> Double? {
-        let text = PortfolioAdapters.clean(value)
+    /// `number(value, format)`: a Saxo number in the export's own convention. A workbook
+    /// number is typed and always uses a dot. Without a convention, a text that reads
+    /// differently with either separator is ambiguous.
+    static func number(_ value: XLSXCell?, _ format: Format? = nil) throws -> Double? {
+        let text = clean(value)
         if text.isEmpty { return nil }
+        if case .number = value {
+            let parsed = IbkrStatementNumber.customAmount(text, .decimalDot)
+            return parsed.isFinite ? parsed : nil
+        }
         do {
             let parsed = try Text.customAmount(text, format ?? .auto)
-            return parsed.isFinite ? abs(parsed) : nil
+            return parsed.isFinite ? parsed : nil
         } catch is StatementImportError {
             throw AmbiguousNumber(text: text)
         }
     }
 
-    private static func currency(_ value: String?) -> String? {
-        let code = JavaScriptCase.uppercased(PortfolioAdapters.clean(value))
+    static func magnitude(_ value: XLSXCell?, _ format: Format? = nil) throws -> Double? {
+        try number(value, format).map(abs)
+    }
+
+    private static func magnitude(_ text: String, _ format: Format?) throws -> Double? {
+        try magnitude(.text(text), format)
+    }
+
+    static func currency(_ value: XLSXCell?) -> String? {
+        let code = JavaScriptCase.uppercased(clean(value))
         return Text.isoCurrency(code).flatMap { Text.same($0, code) ? $0 : nil }
     }
 
@@ -742,23 +817,38 @@ enum SaxoStatement {
         return nil
     }
 
-    private static func base(_ record: Record) -> ParsedPortfolioRow {
+    /// `date(record)`: a workbook date as its UTC calendar day, a text as `YYYY-MM-DD` with
+    /// either `-` or `/`.
+    private static func day(_ record: Record) -> Int? {
+        if case .date(let time)? = record["Transactiedatum"] {
+            guard !time.isNaN else { return nil }
+            let days = Int((time / 86_400_000).rounded(.down))
+            // `Date.UTC` reads a year from 0 to 99 as 1900 to 1999.
+            let civil = XLSXWorkbook.civil(fromDays: days)
+            guard (0...99).contains(civil.year) else { return days }
+            return XLSXWorkbook.days(fromCivil: civil.year + 1900, civil.month, 1) + civil.day - 1
+        }
         let date = Text.text(Text.units(clean(record, "Transactiedatum")).map { $0 == 0x2F ? 0x2D : $0 })
+        return Text.day(date, format: "%Y-%m-%d")
+    }
+
+    private static func base(_ record: Record) throws -> ParsedPortfolioRow {
         let account = clean(record, "Rekening-ID")
         return ParsedPortfolioRow(
-            day: Text.day(date, format: "%Y-%m-%d"),
+            day: day(record),
             symbolRaw: Text.trim(Text.split(clean(record, "Instrumentsymbool"), ":").first ?? ""),
             nameRaw: clean(record, "Instrument"), currency: currency(record["Valuta"]), note: clean(record, "Opmerking"),
-            rawData: Text.rawData(record), sourceAccountIdentity: account.isEmpty ? nil : account,
+            rawData: try record.origin != nil ? provenance([record]) : (record.line.map(Text.rawData) ?? ""),
+            sourceAccountIdentity: account.isEmpty ? nil : account,
             sourceReference: reference(record))
     }
 
-    private static func unsupported(_ record: Record, _ reason: String) -> ParsedPortfolioRow {
+    private static func unsupported(_ record: Record, _ reason: String) throws -> ParsedPortfolioRow {
         let action = clean(record, "Acties")
         let kind = clean(record, "Transactietype")
-        var row = base(record)
+        var row = try base(record)
         row.typeRaw = "Unsupported Saxo event: \(action.isEmpty ? (kind.isEmpty ? "unknown" : kind) : action)"
-        row.amount = (try? magnitude(record["Boekingsbedrag"], nil)) ?? nil
+        do { row.amount = try magnitude(record["Boekingsbedrag"]) } catch is AmbiguousNumber { row.amount = nil }
         row.note = reason
         return row
     }
@@ -781,20 +871,24 @@ enum SaxoStatement {
     private static func trade(_ record: Record, _ format: Format?) throws -> ParsedPortfolioRow {
         let actionText = clean(record, "Acties")
         guard let action = tradeAction(actionText) else {
-            return unsupported(record, "Saxo trade action could not be parsed safely")
+            return try unsupported(record, "Saxo trade action could not be parsed safely")
         }
         let units = try magnitude(action.quantity, format)
         let price = try magnitude(action.price, format)
-        let instrumentCurrency = currency(action.currency.flatMap { $0.isEmpty ? nil : $0 } ?? record["Instrumentvaluta"])
+        let instrumentCurrency = currency(
+            action.currency.flatMap { $0.isEmpty ? nil : XLSXCell.text($0) } ?? record["Instrumentvaluta"])
         guard let units, units != 0, let price, price != 0, let instrumentCurrency else {
-            return unsupported(record, "Saxo trade is missing units, price, or instrument currency")
+            return try unsupported(record, "Saxo trade is missing units, price, or instrument currency")
         }
         let accountCurrency = currency(record["Valuta"])
         let rate = try magnitude(record["Omrekeningskoers"], format)
         let accountFees = try magnitude(record["Totale kosten"], format)
-        guard try bookedValueAgrees(record, units: units, price: price, instrumentCurrency: instrumentCurrency, format)
+        // A workbook trade is checked against its own execution and booking details instead.
+        guard
+            try record.origin != nil
+                || bookedValueAgrees(record, units: units, price: price, instrumentCurrency: instrumentCurrency, format)
         else {
-            return unsupported(
+            return try unsupported(
                 record,
                 "Saxo trade \(actionText) does not agree with its booked amount; check the quantity and price before importing"
             )
@@ -805,7 +899,7 @@ enum SaxoStatement {
             fees = try DecimalJS(accountFees).dividedBy(try DecimalJS(rate)).toNumber
         }
         let remark = clean(record, "Opmerking")
-        var row = base(record)
+        var row = try base(record)
         row.typeRaw = action.buying ? "Buy" : "Sell"
         row.units = units
         row.pricePerUnit = price
@@ -825,7 +919,7 @@ enum SaxoStatement {
         let remark = clean(record, "Opmerking")
         if isKind("storting/opname", "cash transfer"), isAction("storting", "deposit", "opname", "withdrawal") {
             let deposit = isAction("storting", "deposit")
-            var row = base(record)
+            var row = try base(record)
             row.typeRaw = deposit ? "Deposit" : "Withdrawal"
             row.symbolRaw = ""
             row.nameRaw = ""
@@ -834,7 +928,7 @@ enum SaxoStatement {
             return row
         }
         if isKind("corporate action", "corporateaction"), isAction("cashdividend", "cash dividend") {
-            var row = base(record)
+            var row = try base(record)
             row.typeRaw = "Unsupported Saxo event: Cashdividend"
             row.amount = try magnitude(record["Boekingsbedrag"], format)
             row.fees = try magnitude(record["Totale kosten"], format)
@@ -842,10 +936,20 @@ enum SaxoStatement {
                 "Saxo CSV dividend contains only a net booking amount. Import the detailed XLSX workbook to retain gross dividends and withholding taxes."
             return row
         }
-        return unsupported(record, "Unsupported Saxo transaction type")
+        return try unsupported(record, "Unsupported Saxo transaction type")
+    }
+
+    /// `parseRecord(record, format)`: an ambiguous number makes the row an unsupported event.
+    static func row(_ record: Record, _ format: Format?) throws -> ParsedPortfolioRow {
+        do {
+            return try known(record, format)
+        } catch let ambiguous as AmbiguousNumber {
+            return try unsupported(record, ambiguous.message)
+        }
     }
 
     static func parse(_ bytes: [UInt8], _ config: PortfolioParserConfig) throws -> ParsedPortfolioRows {
+        if PortfolioUpload.format(of: bytes) == .xlsx { return try parseWorkbook(bytes) }
         var options = PortfolioAdapters.options(namedColumns: .renamed { $0.map(header) })
         options.columns = .renamed { $0.map(header) }
         let content = Text.withoutByteOrderMark(try PortfolioAdapters.decoded(bytes, config))
@@ -862,15 +966,11 @@ enum SaxoStatement {
         var rawOptions = options
         rawOptions.columns = .none
         let rawHeader = try CSVParse.parse(content, rawOptions).records.first?.cells
-        let format = fileFormat(output.records)
+        let records = output.records.map { Record(cells: $0.fields.mapValues(XLSXCell.text), line: $0) }
+        let format = fileFormat(records)
         var parsed = ParsedPortfolioRows(skipped: 0, sourceColumns: rawHeader)
-        for record in output.records {
-            let row: ParsedPortfolioRow
-            do {
-                row = try known(record, format)
-            } catch let ambiguous as AmbiguousNumber {
-                row = unsupported(record, ambiguous.message)
-            }
+        for record in records {
+            let row = try row(record, format)
             if row.day != nil { parsed.rows.append(row) } else { parsed.skipped = (parsed.skipped ?? 0) + 1 }
         }
         return parsed

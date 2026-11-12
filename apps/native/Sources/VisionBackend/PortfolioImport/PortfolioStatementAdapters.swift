@@ -207,8 +207,9 @@ enum PortfolioUpload {
 }
 
 /// The portfolio statement adapters that read CSV (`portfolioImportPipeline`): the generic
-/// column mapping and the IBKR, Kinesis, Nexo, Nexo Pro and Saxo statements. The workbook
-/// formats (Saxo XLSX, IBKR funding history) are not ported.
+/// column mapping and the IBKR, Kinesis, Nexo, Nexo Pro and Saxo statements, and the Saxo
+/// workbook. The IBKR funding workbook is read by SheetJS in the TypeScript, which has no
+/// Swift port; `IbkrFundingHistory` reads the sheets once something has read the file.
 enum PortfolioAdapters {
     typealias Text = BankImportText
 
@@ -221,11 +222,7 @@ enum PortfolioAdapters {
         case .kinesisTransactionHistory: parsed = try KinesisStatement.parse(bytes, config)
         case .nexoTransactionHistory: parsed = try NexoStatement.parse(bytes, config)
         case .nexoProSpotHistory: parsed = try NexoProSpotHistory.parse(bytes, config)
-        case .saxoTransactionHistory:
-            guard PortfolioUpload.format(of: bytes) != .xlsx else {
-                throw StatementImportError.failed("Saxo XLSX workbooks are not read by the Swift backend yet")
-            }
-            parsed = try SaxoStatement.parse(bytes, config)
+        case .saxoTransactionHistory: parsed = try SaxoStatement.parse(bytes, config)
         case .ibkrFundingHistory:
             throw StatementImportError.failed("IBKR funding workbooks are not read by the Swift backend yet")
         case nil: parsed = try generic(bytes, config)
