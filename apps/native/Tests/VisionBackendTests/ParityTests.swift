@@ -201,7 +201,8 @@ import VisionNativeCore
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
             #expect(response.status == step.status, "\(label)")
-            let body = try JSONDecoder().decode(JSONValue.self, from: response.body)
+            // A 204 has no body; the recorder writes it as `{}`.
+            let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let today = SQLTimestamps.formatDate(recorderTime.localDate(of: .init(ms: Int64(Date().timeIntervalSince1970 * 1000))))
             let found = difference(
                 step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
@@ -221,13 +222,17 @@ import VisionNativeCore
         try await Self.replay("settings")
     }
 
+    @Test func accounts() async throws {
+        try await Self.replay("accounts")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
     }
 
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
-    @Test(arguments: ["tags-mutations", "settings-mutations", "exchange-rates-mutations"])
+    @Test(arguments: ["tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations"])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
     }

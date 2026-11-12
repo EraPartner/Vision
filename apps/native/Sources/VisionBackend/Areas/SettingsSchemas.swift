@@ -66,7 +66,7 @@ enum SettingSchemas {
             }
             var ids: [JSValue] = []
             for item in items {
-                guard let id = validId(item) else {
+                guard let id = RequestID.valid(item) else {
                     issues.append(ZodIssue(message: "\(field) contains invalid value: \(item.javaScriptString)"))
                     return nil
                 }
@@ -74,22 +74,6 @@ enum SettingSchemas {
             }
             return .array(ids)
         }.optional
-    }
-
-    /// `validateId` of `lib/validation.ts`: a number, or a string of ASCII digits, that is an
-    /// integer from 1 to 2147483647.
-    static func validId(_ value: JSValue) -> Double? {
-        let number: Double
-        switch value {
-        case .number(let raw): number = raw
-        case .string(let text) where !text.isEmpty && text.utf8.allSatisfy({ (48...57).contains($0) }):
-            number = JavaScriptNumber.fromString(text)
-        default: return nil
-        }
-        guard number.isFinite, number.rounded(.towardZero) == number, number >= 1, number <= 2_147_483_647 else {
-            return nil
-        }
-        return number
     }
 
     private static let dashboardSettings = Zod.looseObject([

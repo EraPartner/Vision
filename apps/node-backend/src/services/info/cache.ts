@@ -4,6 +4,8 @@
  * the cache-warmer all share the same module-scoped caches.
  */
 
+import { externalWriteVersion } from "../../database/connection.ts";
+
 export const NET_WORTH_CACHE_TTL_MS = 300_000; // 5min
 export const PERF_CACHE_TTL_MS = 300_000; // 5min
 export const PORTFOLIO_SUMMARY_CACHE_TTL_MS = 60_000; // 1min — realtime-ish
@@ -56,6 +58,30 @@ export function invalidatePortfolioCaches(): void {
   netWorthResponseCache.clear();
   perfResponseCache.clear();
   bankBalancesResponseCache.clear();
+}
+
+// `externalWriteVersion` when the caches were last checked.
+let checkedWriteVersion: number | null = null;
+
+/**
+ * Clear every info cache when another connection has committed since the last
+ * check: the Swift app's in-process backend writes the tables these responses
+ * read (accounts, ADR-270 decision 4), and Bun's own write funnels clear the
+ * caches themselves.
+ */
+function revalidateAgainstExternalWrites(): void {
+  let version: number;
+  try {
+    version = externalWriteVersion();
+  } catch {
+    // No database to compare against: the caches stay as they are.
+    return;
+  }
+  if (checkedWriteVersion !== null && version !== checkedWriteVersion) {
+    invalidatePortfolioCaches();
+    invalidateStatisticsCaches();
+  }
+  checkedWriteVersion = version;
 }
 
 /**
@@ -167,7 +193,7 @@ function setInflightCache(
   cache.set(key, {
     data: keepPreviousData ? current?.data : undefined,
     inflight,
-    expiresAt: keepPreviousData ? current?.expiresAt ?? 0 : 0,
+    expiresAt: keepPreviousData ? (current?.expiresAt ?? 0) : 0,
   });
   enforceCacheSizeLimit(cache);
 }
@@ -198,6 +224,7 @@ export async function resolveCacheWithInflight<T>(
     loader: () => Promise<T>;
   },
 ): Promise<T> {
+  revalidateAgainstExternalWrites();
   // Every entry of one cache holds what that route's loader resolves (see
   // above), so the stored payload is the loader's T.
   const cachedData = getFreshCachedData(cache, key, {

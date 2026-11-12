@@ -65,6 +65,8 @@ indirect enum Zod: Sendable {
     case string
     case number
     case boolean
+    /// `z.never()`: every value fails.
+    case never
     case literal(JSValue)
     case enumeration([String])
     case arrayOf(Zod)
@@ -76,6 +78,10 @@ indirect enum Zod: Sendable {
     case checked(Zod, [ZodCheck])
     /// `schema.transform(fn)`: fn may add issues and returns the new value.
     case transform(Zod, @Sendable (JSValue?, inout [ZodIssue]) -> JSValue?)
+    /// A schema built with `{ error: message }`: the issues its own parse raises carry the
+    /// message instead of zod's. Wrap only a schema without children or checks, whose issues
+    /// are all its own (`z.string({ error })`, `z.enum(values, { error })`).
+    case errored(Zod, String)
 
     enum UnknownKeys: Sendable {
         case strip
@@ -104,7 +110,7 @@ indirect enum Zod: Sendable {
     var acceptsAbsent: Bool {
         switch self {
         case .optionalOf: return true
-        case .nullableOf(let inner), .checked(let inner, _): return inner.acceptsAbsent
+        case .nullableOf(let inner), .checked(let inner, _), .errored(let inner, _): return inner.acceptsAbsent
         case .transform(let inner, _): return inner.acceptsAbsent
         default: return false
         }
@@ -115,7 +121,7 @@ indirect enum Zod: Sendable {
     var mayOmit: Bool {
         switch self {
         case .optionalOf: return true
-        case .nullableOf(let inner), .checked(let inner, _): return inner.mayOmit
+        case .nullableOf(let inner), .checked(let inner, _), .errored(let inner, _): return inner.mayOmit
         default: return false
         }
     }
@@ -142,6 +148,12 @@ indirect enum Zod: Sendable {
         case .boolean:
             if case .bool? = payload.value { return payload }
             payload.issues.append(Self.invalidType("boolean", payload.value))
+        case .never:
+            payload.issues.append(Self.invalidType("never", payload.value))
+        case .errored(let inner, let message):
+            let start = payload.issues.count
+            payload = inner.run(payload)
+            for index in payload.issues.indices[start...] { payload.issues[index].message = message }
         case .literal(let literal):
             if payload.value == literal { return payload }
             payload.issues.append(ZodIssue(message: "Invalid input: expected \(Self.primitive(literal))"))
