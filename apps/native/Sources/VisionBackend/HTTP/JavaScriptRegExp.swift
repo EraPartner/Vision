@@ -1,6 +1,5 @@
 import Foundation
 import JavaScriptCore
-import Synchronization
 
 /// JavaScript's `RegExp`, for user-written patterns (ADR-270). The TypeScript backend runs on
 /// Bun, whose engine is JavaScriptCore, so compiling and testing a pattern here gives the same
@@ -9,7 +8,8 @@ import Synchronization
 ///
 /// One context serves every call, under a lock; patterns are compiled per call, as the
 /// TypeScript code builds a fresh `RegExp` for each validation and preview.
-final class JavaScriptRegExp: Sendable {
+// lint:allow unchecked-sendable every access to the engine holds the lock
+final class JavaScriptRegExp: @unchecked Sendable {
     static let shared = JavaScriptRegExp()
 
     private final class Engine {
@@ -47,10 +47,11 @@ final class JavaScriptRegExp: Sendable {
             """#
     }
 
-    private let engine = Mutex<Engine?>(nil)
+    private let lock = NSLock()
+    private var engine: Engine?
 
     private func withEngine<T>(_ body: (Engine) -> T) -> T {
-        engine.withLock { engine in
+        lock.withLock {
             let current = engine ?? Engine()
             engine = current
             return body(current)
