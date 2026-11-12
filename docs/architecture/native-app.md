@@ -595,7 +595,15 @@ category by id and the recipient assignment are not in the client and stay on Bu
 writes schedule the refill of `mv_monthly_summary` and `mv_category_totals` as `scheduleRefresh`
 does: `Areas/MaterializedViews.swift` runs the same 5-second trailing debounce, flushed within 10
 seconds, and refills both tables in one transaction with the fill SQL of
-`materializedViewService.ts`, which a test compares with the TypeScript text. A refresh
+`materializedViewService.ts`, which a test compares with the TypeScript text. The recipients
+area's `getRecipients`, `getRecipient`, `createRecipient`, `updateRecipient`, `deleteRecipient`,
+`mergeRecipient`, `unmergeRecipient` and the match-pattern operations (`getRecipientPatterns`,
+`createRecipientPattern`, `previewRecipientPattern`, `updateRecipientPattern`,
+`deleteRecipientPattern`) follow; the clusters, aliases and bank-account routes are not in the client
+and stay on Bun. Recipient updates, deletes, merges and unmerges schedule the same refill. Regex
+patterns compile and match in JavaScriptCore (`HTTP/JavaScriptRegExp.swift`), the engine Bun runs, so
+their syntax, matches and error messages are Bun's; the recipient name and search filters use the
+Unicode ILIKE regular expression of `recipientRepository.ts` (`Areas/RecipientText.swift`). A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.

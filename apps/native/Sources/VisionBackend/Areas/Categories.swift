@@ -471,7 +471,7 @@ enum CategoriesArea {
             }
             do {
                 _ = try session.rows(
-                    "UPDATE categories SET parent_id = ? WHERE parent_id = ?", [targetId.sqlValue, sourceId.sqlValue])
+                    "UPDATE categories SET parent_id = ?, updated_at = now() WHERE parent_id = ?", [targetId.sqlValue, sourceId.sqlValue])
                 // Every single-column foreign key that references categories, from the schema.
                 let references = try session.rows(
                     """

@@ -157,7 +157,10 @@ import VisionNativeCore
         case (.string(let want), .string(let got)) where want == todayToken:
             return got == today ? nil : "\(path): \(got) is not today (\(today))"
         case (.string(let want), .string(let got)) where isTimestampForm(want) && !seedTimes.contains(want):
-            return isTimestampForm(got) ? nil : "\(path): \(got) is not a timestamp"
+            // A timestamp the run wrote must not be one the seed wrote: a write that skipped
+            // `updated_at = now()` would keep the seed's.
+            if !isTimestampForm(got) { return "\(path): \(got) is not a timestamp" }
+            return seedTimes.contains(got) ? "\(path): \(got) is the seed's timestamp, not a new one" : nil
         case (.int(let want), .double(let got)), (.double(let got), .int(let want)):
             return Double(want) == got ? nil : "\(path): \(want) != \(got)"
         default:
@@ -191,7 +194,7 @@ import VisionNativeCore
         for (index, step) in corpus.steps.enumerated() {
             let label = "\(area) step \(index): \(step.method) \(step.path)"
             if let next = step.fetch { fetcher.replace(next) }
-            let url = try #require(URL(string: "http://127.0.0.1:3001\(step.path)"))
+            let url = try #require(URL(string: "http://127.0.0.1:3001" + Self.fetchEncoded(step.path)))
             let method = try #require(HTTPMethod(rawValue: step.method), "\(label)")
             let request = APIRequest(
                 method: method, url: url, headers: step.hasBody ? ["Content-Type": "application/json"] : [:],
@@ -214,6 +217,15 @@ import VisionNativeCore
         }
     }
 
+    /// The path as `fetch` sends it: characters a URL cannot hold are percent-encoded and
+    /// existing `%XX` escapes are kept. `URL(string:)` alone re-encodes every `%` once a path
+    /// holds an invalid character such as a raw space.
+    static func fetchEncoded(_ path: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed.union(.urlPathAllowed)
+        allowed.insert(charactersIn: "%?&=#")
+        return path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path
+    }
+
     @Test func tags() async throws {
         try await Self.replay("tags")
     }
@@ -230,6 +242,10 @@ import VisionNativeCore
         try await Self.replay("categories")
     }
 
+    @Test func recipients() async throws {
+        try await Self.replay("recipients")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
@@ -238,6 +254,7 @@ import VisionNativeCore
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
+        "recipients-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
