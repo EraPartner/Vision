@@ -35,6 +35,9 @@
  * generated documents and archives, of the workbook checks of `portfolioUpload.ts`, and of
  * the Saxo workbook and IBKR funding adapters on generated workbooks.
  *
+ * prices.jsonl holds calls of the price layer's rules: history points, provider settings,
+ * and the provider strategies over generated provider answers.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -165,6 +168,35 @@ import {
   readPortfolioWorkbook,
 } from "../apps/node-backend/src/lib/portfolioUpload.ts";
 import { parseIbkrFundingHistory } from "../apps/node-backend/src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
+import {
+  __toDateOnly,
+  countChangedPointPrices,
+  dateOnlyToTimestampMs,
+  filterPointsByRange,
+  isValidPrice,
+  needsHistoryRefresh,
+  normalizeHistoryPoints,
+  toNumber as priceNumber,
+} from "../apps/node-backend/src/services/prices/priceCache.ts";
+import type {
+  PricePoint,
+  RawPricePoint,
+} from "../apps/node-backend/src/services/prices/priceCache.ts";
+import {
+  PROVIDERS,
+  _parseKinesisTrendlinePoints,
+  getHistoricalPriceAt,
+  parseCustomHistoryPoints,
+  resolveCustomHistoryConfig,
+  resolveKinesisConfig,
+  resolveYahooSymbol,
+  sanitizeKinesisIsolatedSpikes,
+} from "../apps/node-backend/src/services/prices/priceProviderRegistry.ts";
+import type {
+  CustomHistoryConfig,
+  InvestmentRow,
+} from "../apps/node-backend/src/services/prices/priceProviderRegistry.ts";
+import { getYahooClient } from "../apps/node-backend/src/services/prices/yahooClient.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -206,6 +238,7 @@ const SQL_RULES = repoPath("apps/native/parity/plans/analysis-sql-rules.jsonl");
 const FORECAST = repoPath("apps/native/parity/plans/forecast.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 const BANK_IMPORT = repoPath("apps/native/parity/plans/bank-import.jsonl");
+const PRICES = repoPath("apps/native/parity/plans/prices.jsonl");
 const WORKBOOK = repoPath("apps/native/parity/plans/workbook.jsonl");
 const PORTFOLIO_IMPORT = repoPath(
   "apps/native/parity/plans/portfolio-import.jsonl",
@@ -1051,6 +1084,119 @@ export async function evaluateWorkbook(op: unknown[]): Promise<unknown> {
   }
 }
 
+/** A price point for the record: a non-finite number by name. */
+function pricePoints(points: readonly PricePoint[]): unknown {
+  return points.map((point) => ({
+    timestampMs: numberText(point.timestampMs),
+    price: numberText(point.price),
+  }));
+}
+
+/** `undefined` for the `null` a recorded call carries where a bound is absent. */
+function optional<T>(value: T | null | undefined): T | undefined {
+  return value ?? undefined;
+}
+
+/** Runs a provider strategy with `fetch` answering one JSON payload. */
+async function withFetchAnswer<T>(
+  payload: unknown,
+  run: () => Promise<T>,
+): Promise<T> {
+  const real = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response(JSON.stringify(payload), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+/**
+ * One call of the price layer's rules (`services/prices`): the history point rules of
+ * `priceCache.ts`, the settings and payload readers of `priceProviderRegistry.ts`, and the
+ * Binance, Yahoo and Kinesis strategies over a given provider answer (no network: `fetch`
+ * and the Yahoo client answer the recorded payload).
+ */
+export async function evaluatePrices(op: unknown[]): Promise<unknown> {
+  const [name, a, b, c] = op;
+  const points = a as RawPricePoint[] | null | undefined;
+  const range = { fromMs: optional(b as number), toMs: optional(c as number) };
+  switch (name) {
+    case "normalize":
+      try {
+        return pricePoints(normalizeHistoryPoints(points));
+      } catch {
+        return { error: "range" };
+      }
+    case "filter":
+      return pricePoints(filterPointsByRange(a as PricePoint[], range));
+    case "refresh":
+      try {
+        return needsHistoryRefresh(points, range);
+      } catch {
+        return { error: "range" };
+      }
+    case "changed":
+      return countChangedPointPrices(points, b as RawPricePoint[]);
+    case "number":
+      return optional(priceNumber(a)) ?? null;
+    case "valid":
+      return isValidPrice(a);
+    case "dateOnly":
+      try {
+        return __toDateOnly(Number(a)) ?? null;
+      } catch {
+        return { error: "range" };
+      }
+    case "noon":
+      return numberText(dateOnlyToTimestampMs(a as string));
+    case "yahooSymbol":
+      return resolveYahooSymbol(a as Partial<InvestmentRow>);
+    case "customHistory":
+      return resolveCustomHistoryConfig(a as Partial<InvestmentRow>);
+    case "kinesis":
+      return resolveKinesisConfig(a as Partial<InvestmentRow>);
+    case "customPoints":
+      return pricePoints(parseCustomHistoryPoints(a, b as CustomHistoryConfig));
+    case "spikes":
+      return pricePoints(sanitizeKinesisIsolatedSpikes(a as PricePoint[]));
+    case "trendline":
+      return pricePoints(_parseKinesisTrendlinePoints(a));
+    case "priceAt":
+      return getHistoricalPriceAt(a as PricePoint[], Number(b)) ?? null;
+    case "binance":
+      return await withFetchAnswer(a, () => PROVIDERS.binance(b as string[]));
+    case "yahoo": {
+      const client = await getYahooClient();
+      const charts = (c ?? {}) as Record<string, unknown>;
+      const real = { quote: client.quote, chart: client.chart };
+      Object.assign(client, {
+        quote: () => Promise.resolve(a),
+        chart: (symbol: string) =>
+          Object.hasOwn(charts, symbol)
+            ? Promise.resolve(charts[symbol])
+            : Promise.reject(new Error("no chart")),
+      });
+      try {
+        return await PROVIDERS.yahoo(b as string[]);
+      } finally {
+        Object.assign(client, real);
+      }
+    }
+    case "kinesisLive":
+      return await withFetchAnswer(b, () =>
+        PROVIDERS.kinesis([a as InvestmentRow]),
+      );
+    default:
+      throw new Error(`unknown price operation: ${String(name)}`);
+  }
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -1143,6 +1289,14 @@ if (isEntrypoint(import.meta)) {
     async (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: await evaluatePortfolioImport(op) };
+    },
+    check,
+  );
+  await rerecordAsync(
+    PRICES,
+    async (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: await evaluatePrices(op) };
     },
     check,
   );

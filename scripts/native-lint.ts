@@ -43,9 +43,11 @@ const API_LAYER = "/VisionNativeCore/API/";
 /**
  * The backend's Belgian tax engine is a port of packages/shared-utils/src/belgianTax, which
  * computes in JavaScript numbers; it has to use Double to give the same answers bit for bit
- * (apps/native/parity/plans/belgian-tax.jsonl replays them).
+ * (apps/native/parity/plans/belgian-tax.jsonl replays them). The price layer cores are a port of
+ * services/prices, which reads and repairs provider prices as JavaScript numbers
+ * (apps/native/parity/plans/prices.jsonl replays them).
  */
-const JS_NUMBER_PARITY = "/VisionBackend/Tax/";
+const JS_NUMBER_PARITY = ["/VisionBackend/Tax/", "/VisionBackend/Prices/"];
 
 export const RULES: Rule[] = [
   {
@@ -128,7 +130,8 @@ export const RULES: Rule[] = [
     kind: "strict",
     description: "Double in money-named files",
     find: (c, file) =>
-      MONEY_FILE.test(path.basename(file)) && !file.includes(JS_NUMBER_PARITY)
+      MONEY_FILE.test(path.basename(file)) &&
+      !JS_NUMBER_PARITY.some((folder) => file.includes(folder))
         ? matches(/\bDouble\b/g, c)
         : [],
   },

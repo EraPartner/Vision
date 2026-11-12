@@ -704,12 +704,27 @@ column number past 4,000,000 is refused, where the TypeScript would build every 
 date cell in a column read as text is written as the engine writes a date in the machine's time
 zone, which is compared with the TypeScript under UTC only.
 
+`VisionBackend/Prices/` holds the rules of the price layer that need no network or database:
+`PriceHistory` (the history point rules of `services/prices/priceCache.ts`: one valid point per UTC
+day, range filter, refresh test, changed-price count), `PriceMemoryCache` (its five minute memory
+cache, with the clock passed in) and `PriceProviders` (of `priceProviderRegistry.ts` and
+`priceProviderService.ts`: provider settings for Yahoo, custom and Kinesis sources, the custom
+history path reader, stale-run removal, the Kinesis spike repair and trendline reader, and the
+Binance, Yahoo and Kinesis answers turned into quotes). It computes in `Double`, as the TypeScript
+computes in JavaScript numbers, so `native-lint` exempts the folder from its `double-money` rule.
+Fetching (the Yahoo client, redirect and size checks, Binance paging), the stored history and its
+backfill, and the conversion of a Kinesis price at a stored exchange rate are not ported and stay
+on Bun. Known differences from the TypeScript: a custom path naming an inherited member of a
+JavaScript object (`constructor`, `toString`) reads nothing; a Kinesis `createdAt` that is not ISO
+8601 text is dropped, where the TypeScript asks the engine's date parser; and day keys are ordered
+by a fixed rule (`-`, then `+`, then digits) where the TypeScript uses the machine's collation.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, and
+generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, generated price layer calls, and
 sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests` and
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests`, `PriceParityTests` and
 `FoundationParityTests` replay them.
 `ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
 because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.
