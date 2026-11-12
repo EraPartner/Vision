@@ -7,7 +7,7 @@ import VisionNativeCore
 public enum PortedOperations {
     public static let ids: Set<String> = [
         "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings", "getExchangeRates",
-        "refreshExchangeRates",
+        "refreshExchangeRates", "getAccounts", "createAccount", "updateAccount", "deleteAccount",
     ]
 }
 
@@ -115,6 +115,7 @@ public struct InProcessBackend: Sendable {
         TagsArea.register(&backend, database: database)
         SettingsArea.register(&backend, database: database)
         ExchangeRatesArea.register(&backend, database: database, fetcher: fetcher)
+        AccountsArea.register(&backend, database: database)
         return backend
     }
 

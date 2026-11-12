@@ -584,7 +584,9 @@ too. Areas move in the inventory's order; the ported list today is the tags area
 `createTag` (`updateTag` and `deleteTag` are not in the generated client and stay on Bun) and the
 settings area's `getSettings`, `getSetting`, `saveSetting` and `saveSettings` (`DELETE
 /api/settings/:key` is not in the client and stays on Bun), and the exchange-rate area's
-`getExchangeRates` and `refreshExchangeRates` (the inflation-rate routes stay on Bun). A refresh
+`getExchangeRates` and `refreshExchangeRates` (the inflation-rate routes stay on Bun), and the
+accounts area's `getAccounts`, `createAccount`, `updateAccount` and `deleteAccount` (totals, close,
+merge, opening balance, statement balances and reconcile stay on Bun for now). A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.
@@ -610,7 +612,13 @@ its ported operations go to that backend. Bun keeps no cache over `tags` or `use
 2-second filtered transaction count cache joins `tags` but the TypeScript tag writes do not clear it
 either. Bun's latest-rate and historical-rate-index caches compare `externalWriteVersion()` (the
 writer connection's `PRAGMA data_version`, which only another connection's commit changes) and
-reload after a Swift write.
+reload after a Swift write. The `/api/info` response caches (net worth, performance, portfolio
+summary, bank balances, statistics) do the same in `resolveCacheWithInflight`, so an account written
+in Swift is not hidden behind a cached response.
+
+The account list ports the anchor + delta balance SQL verbatim (`Areas/AccountBalanceSQL.swift`)
+and does the conversion, rounding and drift with `Numeric/DecimalJS.swift`, the `decimal.js`
+arithmetic of `money.ts` (30 significant digits, half-even), not the NUMERIC rules of `ExactDecimal`.
 
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each

@@ -175,6 +175,28 @@ const ratesList = (query = ""): ParityStep => ({
   method: "GET",
   path: `/api/info/exchange-rates${query}`,
 });
+const accounts = (query = ""): ParityStep => ({
+  operationId: "getAccounts",
+  method: "GET",
+  path: `/api/accounts${query}`,
+});
+const accountCreate = (body: unknown): ParityStep => ({
+  operationId: "createAccount",
+  method: "POST",
+  path: "/api/accounts",
+  body,
+});
+const accountUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateAccount",
+  method: "PATCH",
+  path: `/api/accounts/${id}`,
+  body,
+});
+const accountDelete = (id: string): ParityStep => ({
+  operationId: "deleteAccount",
+  method: "DELETE",
+  path: `/api/accounts/${id}`,
+});
 const ratesRefresh: ParityStep = {
   operationId: "refreshExchangeRates",
   method: "POST",
@@ -780,6 +802,142 @@ export const AREAS: Record<string, ParityArea> = {
       ratesList("?db_only=true"),
     ],
   },
+  accounts: {
+    router: { module: "accounts.ts", mountPath: "/api/accounts" },
+    seed: [
+      `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
+        (1, 'Shop', 'shop', '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001'),
+        (2, 'Travel', NULL, NULL, 'USD', 'savings', 'semi_liquid', 0, 1, 'none', 'joint', 1, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000002'),
+        (3, 'Old', NULL, NULL, 'EUR', 'checking', 'liquid', 1, 0, 'none', 'partner', 0, 1, NULL, 0,
+         '2025-02-01T08:00:00.000000Z', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000003'),
+        (4, 'Broker', NULL, 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'tax_advantaged', 'me', 0, 1, 1, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000004'),
+        (5, 'Empty', NULL, NULL, 'GBP', 'wallet', 'illiquid', 0, 1, 'none', 'me', 0, 0, 4, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000005'),
+        (6, 'Loan', NULL, NULL, 'EUR', 'liability', 'illiquid', 0, 1, 'pension', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000006')`,
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("USD", "0.9", "2025-01-02", 1)},
+        ${RATE_ROW("GBP", "1.15", "2025-01-02", 1)},
+        ${RATE_ROW("JPY", "0", "2025-01-02", 1)}`,
+      `INSERT INTO transactions (id, date, amount, currency, balance, recipient_id, account_id, is_active, bank_sequence,
+         created_at, updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('100', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-10', vision_numeric('-20.125', 18, 4), 'EUR', vision_numeric('1000', 18, 4), 1, 1, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-10', vision_numeric('5.005', 18, 4), 'EUR', NULL, 1, 1, 1, vision_numeric('7', 18, 0),
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-02-01', vision_numeric('-0.015', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, '2024-02-02', vision_numeric('999', 18, 4), 'EUR', NULL, 1, 1, 0, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, '2099-01-01', vision_numeric('50', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '2024-03-01', vision_numeric('250.5', 18, 4), 'USD', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (8, '2024-03-02', vision_numeric('40', 18, 4), 'EUR', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (9, '2024-03-03', vision_numeric('12', 18, 4), 'CHF', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (10, '2024-03-04', vision_numeric('-3.3333', 18, 4), 'GBP', vision_numeric('77.7777', 18, 4), 1, 2, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (11, '2024-03-05', vision_numeric('8', 18, 4), 'JPY', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (12, '2024-04-01', vision_numeric('-1500', 18, 4), 'EUR', NULL, 1, 6, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (13, '2024-05-01', vision_numeric('0', 18, 4), 'EUR', NULL, 1, 3, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (14, '2024-05-02', vision_numeric('0.004', 18, 4), 'USD', NULL, 1, 4, 1, NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date) VALUES
+        (1, 'EUR', vision_numeric('1100.5', 18, 4), '2024-03-31'),
+        (1, 'USD', vision_numeric('3', 18, 4), '2024-03-30'),
+        (6, 'USD', vision_numeric('-10', 18, 4), '2024-04-30')`,
+    ],
+    steps: [
+      accounts(),
+      accounts("?active=all"),
+      accounts("?active=false"),
+      accounts("?active=all&limit=2&offset=1"),
+      accounts("?offset=4"),
+      accounts("?limit=0"),
+      accountCreate({
+        name: "  Savings Two  ",
+        currency: "usd",
+        type: "savings",
+        owner: "partner",
+        spendable: false,
+      }),
+      accountCreate({ name: "main" }),
+      accountCreate({ name: " MAIN " }),
+      accountCreate({}),
+      accountCreate({ name: "   " }),
+      accountCreate({ name: 5 }),
+      accountCreate({
+        name: "Bad",
+        type: "stock",
+        owner: "kids",
+        liquidity_class: 1,
+        tax_wrapper: null,
+      }),
+      accountCreate({ name: "Cur", currency: null }),
+      accountCreate({ name: "Cur", currency: "EURO" }),
+      accountCreate({ name: "Cur", currency: "" }),
+      accountCreate({ name: "Fund", funding_account_id: "1e3" }),
+      accountCreate({ name: "Fund", funding_account_id: true }),
+      accountCreate({ name: "Fund", funding_account_id: 999 }),
+      accountCreate({
+        name: "Fund",
+        funding_account_id: "4",
+        display_name: null,
+        institution: "  ING ",
+      }),
+      accountCreate({
+        name: "Stmt",
+        statement_balance: 1,
+        statement_balance_date: "2024-01-01",
+      }),
+      accountCreate({
+        name: "Flags",
+        spendable: "yes",
+        in_net_worth: 1,
+        is_active: false,
+        extra: { a: 1 },
+      }),
+      accountCreate({ name: "Clear", display_name: 5, institution: [] }),
+      accountCreate([]),
+      { operationId: "createAccount", method: "POST", path: "/api/accounts" },
+      accountUpdate("2", {
+        name: "Travel USD",
+        display_name: "  ",
+        institution: null,
+      }),
+      accountUpdate("2", { is_active: false }),
+      accountUpdate("2", { is_active: false, in_net_worth: true }),
+      accountUpdate("2", { is_active: true }),
+      accountUpdate("1", { funding_account_id: 5 }),
+      accountUpdate("1", { funding_account_id: 1 }),
+      accountUpdate("1", { funding_account_id: "abc" }),
+      accountUpdate("5", { funding_account_id: null, owner: "joint" }),
+      accountUpdate("4", { name: "travel usd" }),
+      accountUpdate("4", {}),
+      accountUpdate("999", { name: "Nobody" }),
+      accountUpdate("999", {}),
+      accountUpdate("999", { is_active: true }),
+      accountUpdate("abc", { name: "x" }),
+      accountUpdate("0", { name: "x" }),
+      accountUpdate("6", { statement_balance: 5 }),
+      accountUpdate("6", {
+        type: "checking",
+        currency: "gbp",
+        has_cash_sleeve: false,
+        multi_currency_cash: true,
+      }),
+      accountDelete("1"),
+      accountDelete("3"),
+      accountDelete("5"),
+      accountDelete("5"),
+      accountDelete("abc"),
+      accountDelete("1.5"),
+      accounts("?active=all"),
+    ],
+  },
   "exchange-rates-empty": {
     router: { module: "info/rates.ts", mountPath: "/api/info" },
     seed: [],
@@ -800,7 +958,13 @@ function mutationAreas(): Record<string, ParityArea> {
   const tags = AREAS.tags;
   const settings = AREAS.settings;
   const rates = AREAS["exchange-rates"];
-  if (tags === undefined || settings === undefined || rates === undefined)
+  const accountArea = AREAS.accounts;
+  if (
+    tags === undefined ||
+    settings === undefined ||
+    rates === undefined ||
+    accountArea === undefined
+  )
     throw new Error("missing base area");
 
   const tagRandom = new Random(0x7a65);
@@ -905,7 +1069,44 @@ function mutationAreas(): Record<string, ParityArea> {
     );
   }
 
+  // The create and update bodies mutated, between random list queries and
+  // updates or deletes of random ids, so later steps meet what earlier ones wrote.
+  const accountRandom = new Random(0xacc7);
+  const ids = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "0",
+    "999",
+    "abc",
+    "1.5",
+    "01",
+    "2147483648",
+  ];
+  const accountSteps: ParityStep[] = [];
+  for (const step of mutatedSteps(accountRandom, accountArea.steps, 3)) {
+    accountSteps.push(
+      step.method === "PATCH" && accountRandom.chance(0.3)
+        ? accountUpdate(accountRandom.pick(ids), step.body)
+        : step,
+    );
+    if (accountRandom.chance(0.15))
+      accountSteps.push(
+        accounts(randomQuery(accountRandom, ["active", "limit", "offset"])),
+      );
+    if (accountRandom.chance(0.04))
+      accountSteps.push(accountDelete(accountRandom.pick(ids)));
+  }
+  accountSteps.push(accounts("?active=all"));
+
   return {
+    "accounts-mutations": { ...accountArea, steps: asRecorded(accountSteps) },
     "tags-mutations": { ...tags, steps: asRecorded(tagSteps) },
     "settings-mutations": { ...settings, steps: asRecorded(settingSteps) },
     "exchange-rates-mutations": { ...rates, steps: asRecorded(rateSteps) },

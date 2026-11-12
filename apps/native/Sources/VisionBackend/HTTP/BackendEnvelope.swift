@@ -41,6 +41,9 @@ public struct HandlerResult: Sendable, Equatable {
         self.status = status
         self.data = data
     }
+
+    /// `res.status(204).send()`: no envelope and no body.
+    public static let noContent = HandlerResult(status: 204, data: .null)
 }
 
 /// The ADR-026 envelope as the data plane's middleware writes it: `requestId`, `wrapResponse`
@@ -84,7 +87,10 @@ enum BackendEnvelope {
     /// `res.ok(data)`: `{ ok: true, data, meta: { requestId } }`.
     // lint:allow raw-id the envelope's opaque request correlation token
     static func success(_ result: HandlerResult, requestId: String) throws -> APIResponse {
-        try response(
+        if result.status == 204 {
+            return APIResponse(status: 204, body: Data(), headers: ["x-request-id": requestId])
+        }
+        return try response(
             status: result.status,
             body: .object(["ok": .bool(true), "data": result.data, "meta": .object(["requestId": .string(requestId)])]),
             requestId: requestId)
