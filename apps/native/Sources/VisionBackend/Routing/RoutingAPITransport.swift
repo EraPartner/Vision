@@ -8,7 +8,8 @@ public enum PortedOperations {
     public static let ids: Set<String> = [
         "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings", "getExchangeRates",
         "refreshExchangeRates", "getAccounts", "createAccount", "updateAccount", "deleteAccount",
-        "setAccountStatementBalance",
+        "setAccountStatementBalance", "getCategoryTree", "createCategoryNode", "updateCategoryNode",
+        "deleteCategoryNode", "mergeCategoryNode", "getCategories", "createCategory",
     ]
 }
 
@@ -112,11 +113,18 @@ public struct InProcessBackend: Sendable {
     public static func live(
         database: BackendDatabase, fetcher: any ProviderFetching = URLSessionProviderFetcher()
     ) -> InProcessBackend {
+        live(database: database, fetcher: fetcher, views: MaterializedViewRefresher(database: database))
+    }
+
+    static func live(
+        database: BackendDatabase, fetcher: any ProviderFetching, views: MaterializedViewRefresher
+    ) -> InProcessBackend {
         var backend = InProcessBackend(isActive: { await database.isConfigured })
         TagsArea.register(&backend, database: database)
         SettingsArea.register(&backend, database: database)
         ExchangeRatesArea.register(&backend, database: database, fetcher: fetcher)
         AccountsArea.register(&backend, database: database)
+        CategoriesArea.register(&backend, database: database, views: views)
         return backend
     }
 
