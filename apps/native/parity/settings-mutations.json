@@ -138,7 +138,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines&withBaselines=true",
+      "path": "/api/settings?withBaselines&withBaselines=false",
       "status": 400,
       "response": {
         "ok": false,
@@ -1445,124 +1445,53 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines=true",
+      "path": "/api/settings?withBaselines=false",
       "status": 200,
       "response": {
         "ok": true,
         "data": {
-          "settings": {
-            "9": [
-              {
-                "a": {
-                  "y": null
-                },
-                "z": 1
-              }
-            ],
-            "10": 1.5,
-            "app_settings": {
-              "nested": {
-                "a": [
-                  2,
-                  {
-                    "c": 3
-                  }
-                ]
+          "9": [
+            {
+              "a": {
+                "y": null
               },
-              "defaultCurrency": "EUR"
-            },
-            "cost_basis_method": "lifo",
-            "legacy_blob": {
+              "z": 1
+            }
+          ],
+          "10": 1.5,
+          "app_settings": {
+            "nested": {
               "a": [
-                1,
-                2.5,
-                null
+                2,
+                {
+                  "c": 3
+                }
               ]
             },
-            "legacy_text": "not json {",
-            "onboarding_complete": true,
-            "portfolio_tax_adjustments_v1": {
-              "7": {},
-              "2024:1": {
-                "amount": 5
-              }
-            },
-            "theme_settings": {
-              "mode": "light"
-            },
-            "widget_visibility": {
-              "2": 0.5,
-              "c": true
+            "defaultCurrency": "EUR"
+          },
+          "cost_basis_method": "lifo",
+          "legacy_blob": {
+            "a": [
+              1,
+              2.5,
+              null
+            ]
+          },
+          "legacy_text": "not json {",
+          "onboarding_complete": true,
+          "portfolio_tax_adjustments_v1": {
+            "7": {},
+            "2024:1": {
+              "amount": 5
             }
           },
-          "expected": {
-            "9": {
-              "exists": true,
-              "value": [
-                {
-                  "a": {
-                    "y": null
-                  },
-                  "z": 1
-                }
-              ]
-            },
-            "10": {
-              "exists": true,
-              "value": 1.5
-            },
-            "app_settings": {
-              "exists": true,
-              "value": {
-                "nested": {
-                  "a": [
-                    2,
-                    {
-                      "c": 3
-                    }
-                  ]
-                },
-                "defaultCurrency": "EUR"
-              }
-            },
-            "cost_basis_method": {
-              "exists": true,
-              "value": "lifo"
-            },
-            "legacy_blob": {
-              "exists": true,
-              "value": "{\"a\":[1,2.5,null]}"
-            },
-            "legacy_text": {
-              "exists": true,
-              "value": "not json {"
-            },
-            "onboarding_complete": {
-              "exists": true,
-              "value": true
-            },
-            "portfolio_tax_adjustments_v1": {
-              "exists": true,
-              "value": {
-                "7": {},
-                "2024:1": {
-                  "amount": 5
-                }
-              }
-            },
-            "theme_settings": {
-              "exists": true,
-              "value": {
-                "mode": "light"
-              }
-            },
-            "widget_visibility": {
-              "exists": true,
-              "value": {
-                "2": 0.5,
-                "c": true
-              }
-            }
+          "theme_settings": {
+            "mode": "light"
+          },
+          "widget_visibility": {
+            "2": 0.5,
+            "c": true
           }
         }
       }
@@ -1902,7 +1831,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines=null&other=&withBaselines",
+      "path": "/api/settings?withBaselines=%zz&other=&withBaselines",
       "status": 400,
       "response": {
         "ok": false,
@@ -3976,7 +3905,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines=0x10&withBaselines=",
+      "path": "/api/settings?withBaselines=%2B1&withBaselines=",
       "status": 400,
       "response": {
         "ok": false,
@@ -4764,7 +4693,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines=-1&withBaselines=2",
+      "path": "/api/settings?withBaselines=1e2&withBaselines=1e2",
       "status": 400,
       "response": {
         "ok": false,
@@ -8314,7 +8243,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines= 3&other=%20",
+      "path": "/api/settings?withBaselines=0x10&other=-0",
       "status": 400,
       "response": {
         "ok": false,
@@ -9528,7 +9457,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines=0",
+      "path": "/api/settings?withBaselines=all",
       "status": 400,
       "response": {
         "ok": false,
@@ -9762,7 +9691,7 @@
     {
       "operationId": "getSettings",
       "method": "GET",
-      "path": "/api/settings?withBaselines=false&withBaselines=%C3%A9",
+      "path": "/api/settings?withBaselines=false&withBaselines=+1",
       "status": 400,
       "response": {
         "ok": false,

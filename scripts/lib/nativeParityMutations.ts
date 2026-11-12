@@ -286,6 +286,12 @@ const QUERY_VALUES = [
   "2.7",
   "-0",
   "null",
+  "+1",
+  "%2B1",
+  "tr+ue",
+  "%E0%A4",
+  "%zz",
+  "%74rue",
 ];
 
 /** A query string of up to three `name=value` pairs drawn from `names`, repeats allowed. */

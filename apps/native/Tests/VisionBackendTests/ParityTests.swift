@@ -289,6 +289,18 @@ import VisionNativeCore
         for (input, value) in cases { #expect(JavaScriptInteger.parse(input) == value, "\(input)") }
     }
 
+    /// Node's `querystring.parse`, the parser behind Express 5's `req.query`.
+    @Test func queryParsingMatchesNode() {
+        let cases: [(String, [String])] = [
+            ("=x", ["=x"]), ("&&a", ["a="]), ("a", ["a="]), ("a=%E0%A4&b=%zz", ["a=\u{FFFD}", "b=%zz"]),
+            ("a=+1+", ["a= 1 "]), ("a=1=2", ["a=1=2"]), ("=", ["="]), ("a=%", ["a=%"]), ("a=%4", ["a=%4"]),
+            ("a=%e2%82%ac", ["a=€"]), ("%61=1", ["a=1"]),
+        ]
+        for (query, pairs) in cases {
+            #expect(NodeQueryString.parse(query).map { "\($0.name)=\($0.value ?? "")" } == pairs, "\(query)")
+        }
+    }
+
     @Test func parseFloatMatchesJavaScript() {
         let cases: [(String, String)] = [
             ("1.2.3", "1.2"), (".", "NaN"), (".5", "0.5"), ("5.", "5"), ("007", "7"), ("..5", "NaN"), ("162.2.5", "162.2"),
