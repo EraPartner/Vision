@@ -36,10 +36,13 @@ public struct BackendHTTPError: Error, Equatable, Sendable {
 public struct HandlerResult: Sendable, Equatable {
     public let status: Int
     public let data: JSONValue
+    /// Headers the route sets beside the envelope's, such as `Idempotent-Replay`.
+    public let headers: [String: String]
 
-    public init(status: Int = 200, data: JSONValue) {
+    public init(status: Int = 200, data: JSONValue, headers: [String: String] = [:]) {
         self.status = status
         self.data = data
+        self.headers = headers
     }
 
     /// `res.status(204).send()`: no envelope and no body.
@@ -90,10 +93,16 @@ enum BackendEnvelope {
         if result.status == 204 {
             return APIResponse(status: 204, body: Data(), headers: ["x-request-id": requestId])
         }
-        return try response(
+        var response = try response(
             status: result.status,
             body: .object(["ok": .bool(true), "data": result.data, "meta": .object(["requestId": .string(requestId)])]),
             requestId: requestId)
+        if !result.headers.isEmpty {
+            response = APIResponse(
+                status: response.status, body: response.body,
+                headers: response.headers.merging(result.headers) { _, route in route })
+        }
+        return response
     }
 
     /// `createErrorHandler(() => true)`: a `BackendHTTPError` keeps its status, code and
