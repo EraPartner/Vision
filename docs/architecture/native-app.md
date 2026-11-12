@@ -603,7 +603,12 @@ area's `getRecipients`, `getRecipient`, `createRecipient`, `updateRecipient`, `d
 and stay on Bun. Recipient updates, deletes, merges and unmerges schedule the same refill. Regex
 patterns compile and match in JavaScriptCore (`HTTP/JavaScriptRegExp.swift`), the engine Bun runs, so
 their syntax, matches and error messages are Bun's; the recipient name and search filters use the
-Unicode ILIKE regular expression of `recipientRepository.ts` (`Areas/RecipientText.swift`). A refresh
+Unicode ILIKE regular expression of `recipientRepository.ts` (`Areas/RecipientText.swift`). The
+transaction reads `getTransactions` and `getTransaction` follow (`Areas/Transactions.swift`): every
+list filter of `buildTransactionWhere` (`Areas/TransactionWhere.swift`), the uncategorised queue,
+per-account running balances and `normalize_to_eur` at the latest stored rates. The list count is
+exact on every request; the TypeScript repository caches it for 2 seconds. Transaction writes,
+transfers, bulk actions and exports stay on Bun until their own phases. A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.
