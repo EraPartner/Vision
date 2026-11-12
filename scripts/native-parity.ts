@@ -316,6 +316,44 @@ const accountDelete = (id: string): ParityStep => ({
   method: "DELETE",
   path: `/api/accounts/${id}`,
 });
+const transactions = (query = ""): ParityStep => ({
+  operationId: "getTransactions",
+  method: "GET",
+  path: `/api/transactions${query}`,
+});
+const transactionRead = (id: string): ParityStep => ({
+  operationId: "getTransaction",
+  method: "GET",
+  path: `/api/transactions/${id}`,
+});
+const TRANSACTION_QUERY_KEYS = [
+  "transaction_id",
+  "start_date",
+  "end_date",
+  "account_id",
+  "bank_account",
+  "category_id",
+  "category_ids",
+  "recipient_id",
+  "recipient_group_id",
+  "recipient_name",
+  "search",
+  "active",
+  "sort_by",
+  "sort_dir",
+  "include_balance",
+  "transaction_type",
+  "amount_min",
+  "amount_max",
+  "amount_exact",
+  "amount_signed",
+  "tags",
+  "uncategorised",
+  "normalize_to_eur",
+  "target_currency",
+  "limit",
+  "offset",
+] as const;
 const ratesRefresh: ParityStep = {
   operationId: "refreshExchangeRates",
   method: "POST",
@@ -1387,6 +1425,162 @@ export const AREAS: Record<string, ParityArea> = {
     },
     steps: [ratesList("?db_only=true"), ratesRefresh, ratesList("?db_only=1")],
   },
+  transactions: {
+    router: { module: "transactions.ts", mountPath: "/api/transactions" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, created_at,
+         updated_at) VALUES (1, 'FOOD', '', 'FOOD', 1, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, created_at, updated_at) VALUES
+        (2, 'FOOD', 'GROCERIES', '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'LEISURE', 'COFFEE', '${SEED_TIME}', '${SEED_TIME}'),
+        (10, 'TRAVEL', 'HOTEL', '${SEED_TIME}', '${SEED_TIME}')`,
+      `UPDATE categories SET created_at = '${SEED_TIME}', updated_at = '${SEED_TIME}'`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, primary_recipient_id, is_active,
+         created_at, updated_at) VALUES
+        (1, 'SHOP', 'SHOP', 2, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'CAFÉ ÉCLAIR', 'CAFÉ ÉCLAIR', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'MARKET', 'MARKET', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'MARKET NORTH', 'MARKET NORTH', NULL, 3, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'SHOP 2', '2 SHOP', NULL, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, 'CAFÉ BIS', 'BIS CAFÉ', 10, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '', '', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001'),
+        (2, 'Travel', 'USD', 'savings', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000002')`,
+      `INSERT INTO tags (id, slug, color, is_active, created_at, updated_at) VALUES
+        (1, 'holiday', '#00aaff', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'work', NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'old', '#999999', 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("USD", "0.9", "2025-01-02", 1)},
+        ${RATE_ROW("USD", "0.95", "2024-12-31", 0)},
+        ${RATE_ROW("GBP", "1.15", "2025-01-02", 1)},
+        ${RATE_ROW("JPY", "0", "2025-01-02", 1)}`,
+      `INSERT INTO transactions (id, date, amount, currency, balance, memo, comment, recipient_id, category_id,
+         account_id, is_active, bank_sequence, is_transfer, transfer_peer_id, transfer_source, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', NULL, 'CARD 1234', NULL, 1, NULL, 1, 1, NULL, 0,
+         NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-06', vision_numeric('-3.2', 18, 4), 'EUR', vision_numeric('500', 18, 4), NULL, 'latte', 2,
+         NULL, 1, 1, NULL, 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-06', vision_numeric('-40', 18, 4), 'EUR', NULL, 'WEEKLY', NULL, 3, NULL, 1, 1,
+         vision_numeric('3', 18, 0), 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-01-07', vision_numeric('2500', 18, 4), 'EUR', NULL, 'SALARY', NULL, 4, 10, 1, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, '2024-02-01', vision_numeric('-9.99', 18, 4), 'EUR', NULL, NULL, NULL, 5, NULL, 1, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, '2024-02-02', vision_numeric('-4.5', 18, 4), 'EUR', NULL, NULL, 'bis', 6, NULL, 1, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '2024-03-01', vision_numeric('250.5', 18, 4), 'USD', vision_numeric('1250.5', 18, 4), 'TOP UP', NULL, 3,
+         NULL, 2, 1, NULL, 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (8, '2024-03-02', vision_numeric('-75', 18, 4), 'GBP', NULL, 'HOTEL', NULL, 7, 10, 2, 1, NULL, 0, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (9, '2024-03-03', vision_numeric('-1000', 18, 4), 'JPY', NULL, NULL, NULL, 3, NULL, 2, 1, NULL, 0, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (10, '2024-03-04', vision_numeric('-12', 18, 4), 'CHF', NULL, NULL, NULL, 3, NULL, 2, 1, NULL, 0, NULL, NULL,
+         NULL, '${SEED_TIME}'),
+        (11, '2024-03-05', vision_numeric('-100', 18, 4), 'EUR', NULL, 'TO SAVINGS', NULL, 3, NULL, 1, 1, NULL, 1,
+         12, 'manual', '${SEED_TIME}', '${SEED_TIME}'),
+        (12, '2024-03-05', vision_numeric('100', 18, 4), 'EUR', NULL, 'FROM MAIN', NULL, 3, NULL, 2, 1, NULL, 1, 11,
+         'manual', '${SEED_TIME}', '${SEED_TIME}'),
+        (13, '2024-03-06', vision_numeric('-7.25', 18, 4), 'EUR', NULL, 'OLD ROW', NULL, 1, 3, 1, 0, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (14, '2024-01-06', vision_numeric('1.005', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, 1, 1,
+         vision_numeric('1', 18, 0), 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (15, '2024-04-01', vision_numeric('-20', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, NULL, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (1, 1), (1, 2), (3, 3), (5, 2), (8, 1)`,
+    ],
+    steps: [
+      transactions(),
+      transactions("?limit=3&offset=2"),
+      transactions("?limit=0&offset=-1"),
+      transactions("?limit=99999"),
+      transactions("?active=false"),
+      transactions("?start_date=2024-01-06&end_date=2024-02-01"),
+      transactions("?start_date=2024-13-01"),
+      transactions("?start_date=2024/01/01"),
+      transactions("?start_date=2024-02-30&end_date=2024-01-00"),
+      transactions("?start_date=a&start_date=b"),
+      transactions("?account_id=2"),
+      transactions("?account_id=abc"),
+      transactions("?account_id="),
+      transactions("?account_id=1&account_id=2"),
+      transactions("?bank_account=trav"),
+      transactions("?bank_account=a&bank_account=b"),
+      transactions("?category_id=1"),
+      transactions("?category_id=3"),
+      transactions("?category_id=10"),
+      transactions("?category_ids=2,3"),
+      transactions("?category_ids=2,x"),
+      transactions("?category_ids="),
+      transactions("?category_ids=5,"),
+      transactions("?category_ids=2&category_ids=10"),
+      transactions("?recipient_id=3"),
+      transactions("?recipient_group_id=4"),
+      transactions("?recipient_group_id=6"),
+      transactions("?recipient_name=caf%C3%A9"),
+      transactions("?recipient_name=shop"),
+      transactions("?search=groc"),
+      transactions("?search=12.5"),
+      transactions("?search=2024-03"),
+      transactions("?search=holi"),
+      transactions("?search=%C3%A9clair"),
+      transactions("?search=trav"),
+      transactions("?search=gbp"),
+      transactions("?search=a"),
+      transactions("?search=%20%20x%20"),
+      transactions("?sort_by=amount&sort_dir=asc"),
+      transactions("?sort_by=recipient"),
+      transactions("?sort_by=category&sort_dir=desc"),
+      transactions("?sort_by=bank&sort_dir=asc"),
+      transactions("?sort_by=constructor"),
+      transactions("?sort_by=currency&sort_dir=up"),
+      transactions("?sort_by=memo&sort_dir=asc"),
+      transactions("?include_balance=true"),
+      transactions("?include_balance=true&account_id=1&sort_by=amount"),
+      transactions("?include_balance=1&limit=2&offset=1"),
+      transactions("?transaction_type=income"),
+      transactions("?transaction_type=expense"),
+      transactions("?transaction_type=x"),
+      transactions("?amount_min=10&amount_max=50"),
+      transactions("?amount_min=-50&amount_signed=true"),
+      transactions("?amount_exact=12.5"),
+      transactions("?amount_exact=-12.5&amount_signed=true"),
+      transactions("?amount_min=abc"),
+      transactions("?amount_max=1e2"),
+      transactions("?tags=holiday"),
+      transactions("?tags=HOLIDAY,%20work"),
+      transactions("?tags=old"),
+      transactions("?tags=,"),
+      transactions("?uncategorised=true"),
+      transactions("?uncategorised=true&include_balance=true"),
+      transactions("?uncategorised=true&category_id=2"),
+      transactions("?uncategorised=true&limit=1&offset=99"),
+      transactions("?uncategorised=true&active=false&sort_by=amount"),
+      transactions("?normalize_to_eur=true"),
+      transactions("?normalize_to_eur=true&target_currency=usd"),
+      transactions("?normalize_to_eur=true&target_currency=GBP"),
+      transactions("?normalize_to_eur=true&target_currency=XYZ"),
+      transactions(
+        "?normalize_to_eur=true&target_currency=a&target_currency=b",
+      ),
+      transactions("?normalize_to_eur=true&uncategorised=true"),
+      transactions("?transaction_id=3"),
+      transactions("?transaction_id=0"),
+      transactions("?transaction_id=1.5"),
+      transactions(
+        "?transaction_id=x&start_date=bad&sort_by=a&sort_by=b&category_ids=y",
+      ),
+      transactionRead("1"),
+      transactionRead("6"),
+      transactionRead("13"),
+      transactionRead("999"),
+      transactionRead("abc"),
+      transactionRead("0"),
+      transactionRead("2147483648"),
+    ],
+  },
 };
 
 /** Steps as the corpus stores them: JSON round-tripped, so `-0` and dropped keys compare equal. */
@@ -1401,13 +1595,15 @@ function mutationAreas(): Record<string, ParityArea> {
   const accountArea = AREAS.accounts;
   const categoryArea = AREAS.categories;
   const recipientArea = AREAS.recipients;
+  const transactionArea = AREAS.transactions;
   if (
     tags === undefined ||
     settings === undefined ||
     rates === undefined ||
     accountArea === undefined ||
     categoryArea === undefined ||
-    recipientArea === undefined
+    recipientArea === undefined ||
+    transactionArea === undefined
   )
     throw new Error("missing base area");
 
@@ -1626,7 +1822,22 @@ function mutationAreas(): Record<string, ParityArea> {
   }
   recipientSteps.push(recipients("?active=false&limit=1000"), patternList("1"));
 
+  // Reads only: random list queries and reads of random ids.
+  const transactionRandom = new Random(0x7a11);
+  const transactionSteps: ParityStep[] = [];
+  for (let i = 0; i < 200; i++) {
+    transactionSteps.push(
+      transactions(randomQuery(transactionRandom, TRANSACTION_QUERY_KEYS)),
+    );
+    if (transactionRandom.chance(0.1))
+      transactionSteps.push(transactionRead(transactionRandom.pick(ids)));
+  }
+
   return {
+    "transactions-mutations": {
+      ...transactionArea,
+      steps: asRecorded(transactionSteps),
+    },
     "recipients-mutations": {
       ...recipientArea,
       steps: asRecorded(recipientSteps),

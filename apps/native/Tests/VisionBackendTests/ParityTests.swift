@@ -246,6 +246,10 @@ import VisionNativeCore
         try await Self.replay("recipients")
     }
 
+    @Test func transactions() async throws {
+        try await Self.replay("transactions")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
@@ -254,7 +258,7 @@ import VisionNativeCore
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
-        "recipients-mutations",
+        "recipients-mutations", "transactions-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
