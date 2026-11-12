@@ -552,7 +552,7 @@ enum AccountsArea {
             // Closing stamps `closed_at` (a repeated close keeps it) and leaves net worth unless
             // the body says otherwise; reopening clears it.
             if fields["is_active"] == .integer(0), current?.isActive == true {
-                fields["closed_at"] = .text(try SQLTimestamps.formatInstant(currentInstant()))
+                fields["closed_at"] = .text(try SQLTimestamps.formatInstant(session.currentInstant()))
                 if !fields.has("in_net_worth") { fields["in_net_worth"] = .integer(0) }
             } else if fields["is_active"] == .integer(1) {
                 fields["closed_at"] = SQLValue.null
@@ -576,11 +576,6 @@ enum AccountsArea {
         var data = account.json
         data["links"] = .array([])
         return HandlerResult(data: .object(data))
-    }
-
-    /// `new Date()` as the timestamp writer binds it: milliseconds.
-    static func currentInstant() -> SQLTimestamps.Instant {
-        SQLTimestamps.Instant(ms: Int64((Date().timeIntervalSince1970 * 1000).rounded(.down)))
     }
 
     /// `accountService.remove`: 204, 404 when absent, 409 while rows still reference it.

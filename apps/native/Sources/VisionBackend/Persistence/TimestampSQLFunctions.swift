@@ -5,14 +5,22 @@ import Foundation
 public final class SQLConnectionClock {
     public var transactionStart: SQLTimestamps.Instant?
     public var statementStart: SQLTimestamps.Instant?
+    /// The wall clock: the system's, or a fixed instant for a replay recorded at one.
+    public let wall: @Sendable () -> SQLTimestamps.Instant
 
-    public init() {}
+    public init(wall: @escaping @Sendable () -> SQLTimestamps.Instant = SQLConnectionClock.systemNow) {
+        self.wall = wall
+    }
+
+    /// `new Date()` in milliseconds.
+    public static let systemNow: @Sendable () -> SQLTimestamps.Instant = {
+        SQLTimestamps.Instant(ms: Int64((Date().timeIntervalSince1970 * 1000).rounded(.down)))
+    }
 
     public var now: SQLTimestamps.Instant {
         if let transactionStart { return transactionStart }
         if let statementStart { return statementStart }
-        let ms = Int64((Date().timeIntervalSince1970 * 1000).rounded(.down))
-        return SQLTimestamps.Instant(ms: ms)
+        return wall()
     }
 }
 
