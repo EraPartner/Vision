@@ -807,7 +807,14 @@ enum AnalysisFormulaEngine {
     /// `evaluateAnalysisFormulas(input)`. Throws `AnalysisFormulaError` for a request the
     /// engine refuses as a whole, and `FormulaStringLiteralError` for a string literal
     /// `JSON.parse` refuses.
+    ///
+    /// The work runs on a thread with a large stack (`DeepStack`): parsing descends once per
+    /// nested parenthesis.
     static func evaluate(_ request: AnalysisFormulaRequest) throws -> AnalysisFormulaEvaluation {
+        try DeepStack.run { try evaluateOnThisStack(request) }
+    }
+
+    private static func evaluateOnThisStack(_ request: AnalysisFormulaRequest) throws -> AnalysisFormulaEvaluation {
         if request.rows.count > maximumRows {
             throw AnalysisFormulaError(.rowLimit, "Formula evaluation is limited to \(maximumRows) rows")
         }
