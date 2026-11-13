@@ -564,6 +564,61 @@ const DEFAULT_TAX_SECTIONS = reconcile(
   "tax",
 );
 
+const NO_SECTIONS_HTML = `
+      <div class="page placeholder-notice">
+        <strong>No sections selected</strong>
+        Select sections in the export dialog to include them in this report.
+      </div>`;
+
+const PAGE_BREAK_SEPARATOR = '\n<div class="page-break"></div>\n';
+
+/** The requested sections (or the type's defaults) that have a renderer, in order. */
+function selectSections<D>(
+  renderers: Record<string, SectionRenderer<D>>,
+  defaultSections: string[],
+  sections: string[],
+): { id: string; render: SectionRenderer<D> }[] {
+  const requested = sections.length > 0 ? sections : defaultSections;
+  // Own keys only: `in` also accepted inherited names such as `constructor`
+  // or `__proto__` and then called them as renderers.
+  return requested.flatMap((id) => {
+    const render = Object.hasOwn(renderers, id) ? renderers[id] : undefined;
+    return render ? [{ id, render }] : [];
+  });
+}
+
+/**
+ * The body of a report from data already fetched: the same sections, order and
+ * separators as the fetching builders below. `data` is the report type's payload.
+ */
+export function renderReportSections(
+  type: GenerateReportOpts["type"],
+  sections: string[],
+  data: unknown,
+  context: SectionContext,
+): string {
+  const join = <D,>(
+    renderers: Record<string, SectionRenderer<D>>,
+    defaultSections: string[],
+    separator: string,
+  ): string => {
+    const selected = selectSections(renderers, defaultSections, sections);
+    if (selected.length === 0) return NO_SECTIONS_HTML;
+    return selected
+      .map(({ render }) => render(data as D, context))
+      .join(separator);
+  };
+  if (type === "financial")
+    return join(FINANCIAL_SECTION_RENDERERS, DEFAULT_FINANCIAL_SECTIONS, "\n");
+  if (type === "portfolio")
+    return join(
+      PORTFOLIO_SECTION_RENDERERS,
+      DEFAULT_PORTFOLIO_SECTIONS,
+      PAGE_BREAK_SEPARATOR,
+    );
+  return join(TAX_SECTION_RENDERERS, DEFAULT_TAX_SECTIONS, PAGE_BREAK_SEPARATOR);
+}
+
 /**
  * Shared report-body builder. Picks the requested sections (or the type's
  * defaults), renders each with the type's renderer map, and joins them.
@@ -587,24 +642,10 @@ async function buildBody<D>({
   fetchData: (sections: string[]) => Promise<D>;
   separator?: string;
 }): Promise<string> {
-  const requested = sections.length > 0 ? sections : defaultSections;
-  // Own keys only: `in` also accepted inherited names such as `constructor`
-  // or `__proto__` and then called them as renderers.
-  const selected = requested.flatMap((id) => {
-    const render = Object.hasOwn(renderers, id) ? renderers[id] : undefined;
-    return render ? [{ id, render }] : [];
-  });
-  const valid = selected.map(({ id }) => id);
+  const selected = selectSections(renderers, defaultSections, sections);
+  if (selected.length === 0) return NO_SECTIONS_HTML;
 
-  if (valid.length === 0) {
-    return `
-      <div class="page placeholder-notice">
-        <strong>No sections selected</strong>
-        Select sections in the export dialog to include them in this report.
-      </div>`;
-  }
-
-  const data = await fetchData(valid);
+  const data = await fetchData(selected.map(({ id }) => id));
 
   return selected
     .map(({ render }) => render(data, { currency, period }))
@@ -657,7 +698,7 @@ function buildPortfolioBody({
     defaultSections: DEFAULT_PORTFOLIO_SECTIONS,
     fetchData: (validSections) =>
       fetchPortfolioData(currency, period, { sections: validSections }),
-    separator: '\n<div class="page-break"></div>\n',
+    separator: PAGE_BREAK_SEPARATOR,
   });
 }
 
@@ -691,7 +732,7 @@ function buildTaxBody({
         household,
         precomputedHousehold,
       }),
-    separator: '\n<div class="page-break"></div>\n',
+    separator: PAGE_BREAK_SEPARATOR,
   });
 }
 
@@ -723,6 +764,55 @@ ${body}
 </html>`;
 }
 
+/**
+ * The print-ready document around a rendered body: theme, cover, footer
+ * template and filename. Nothing is fetched.
+ */
+export function assembleReportDocument(
+  {
+    type,
+    currency,
+    period,
+    theme,
+    generatedAt,
+    pricesAsOf,
+    excludedCategoryIds = [],
+    excludedRecipientIds = [],
+  }: Pick<GenerateReportOpts, "type" | "currency" | "period" | "theme"> & {
+    /** ISO 8601 instant the report was generated at. */
+    generatedAt: string;
+    pricesAsOf: Date | string | null;
+    excludedCategoryIds?: number[] | undefined;
+    excludedRecipientIds?: number[] | undefined;
+  },
+  bodyHtml: string,
+): ReportDocument {
+  const coverHtml = buildCoverHtml({
+    type,
+    currency,
+    period,
+    generatedAt,
+    excludedCategoryIds,
+    excludedRecipientIds,
+    pricesAsOf,
+  });
+  const html = buildDocument({
+    themeCss: buildThemeCss(theme),
+    baseCss: buildBaseCss(),
+    body: coverHtml + "\n" + bodyHtml,
+    mode: theme.mode ?? "light",
+  });
+
+  // App-timezone date for the filename — the UTC slice named a report
+  // generated shortly after local midnight with yesterday's date.
+  const date = toAppDateString(new Date(generatedAt));
+  return {
+    filename: `vision-${type}-${date}.pdf`,
+    html,
+    footerTemplate: buildFooterTemplate(theme),
+  };
+}
+
 /** Generate a print-ready report document for the HTTP route to send. */
 async function generateReportInner({
   signal,
@@ -739,25 +829,12 @@ async function generateReportInner({
   precomputedHousehold,
 }: GenerateReportOpts): Promise<ReportDocument> {
   const generatedAt = new Date().toISOString();
-  const mode = theme.mode ?? "light";
-
-  const themeCss = buildThemeCss(theme);
-  const baseCss = buildBaseCss();
   const pricesAsOf =
     type === "portfolio" || type === "tax"
       ? await investmentRepository
           .getLatestPriceUpdatedAt()
           .catch((): Date | null => null)
       : null;
-  const coverHtml = buildCoverHtml({
-    type,
-    currency,
-    period,
-    generatedAt,
-    excludedCategoryIds,
-    excludedRecipientIds,
-    pricesAsOf,
-  });
 
   let bodyHtml: string;
   if (type === "financial") {
@@ -783,21 +860,19 @@ async function generateReportInner({
   }
 
   signal?.throwIfAborted();
-  const html = buildDocument({
-    themeCss,
-    baseCss,
-    body: coverHtml + "\n" + bodyHtml,
-    mode,
-  });
-
-  const footerTemplate = buildFooterTemplate(theme);
-
-  // App-timezone date for the filename — the UTC slice named a report
-  // generated shortly after local midnight with yesterday's date.
-  const date = toAppDateString(new Date(generatedAt));
-  const filename = `vision-${type}-${date}.pdf`;
-
-  return { filename, html, footerTemplate };
+  return assembleReportDocument(
+    {
+      type,
+      currency,
+      period,
+      theme,
+      generatedAt,
+      pricesAsOf,
+      excludedCategoryIds,
+      excludedRecipientIds,
+    },
+    bodyHtml,
+  );
 }
 
 export function generateReport(

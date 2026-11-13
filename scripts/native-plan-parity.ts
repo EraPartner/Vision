@@ -213,6 +213,16 @@ import {
   writePreMigrationBackup,
 } from "../apps/node-backend/src/database/migrate.ts";
 import { booleanInput } from "../apps/node-backend/src/database/sqlite/values.ts";
+import {
+  assembleReportDocument,
+  renderReportSections,
+} from "../apps/node-backend/src/services/reports/index.ts";
+import type {
+  GenerateReportOpts,
+  SectionContext,
+  ThemeTokens,
+} from "../apps/node-backend/src/services/reports/index.ts";
+import { buildThemeCss } from "../apps/node-backend/src/services/reports/themeCss.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -256,6 +266,7 @@ const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 const BANK_IMPORT = repoPath("apps/native/parity/plans/bank-import.jsonl");
 const PRICES = repoPath("apps/native/parity/plans/prices.jsonl");
 const MIGRATIONS = repoPath("apps/native/parity/plans/migrations.jsonl");
+const REPORTS = repoPath("apps/native/parity/plans/reports.jsonl");
 const WORKBOOK = repoPath("apps/native/parity/plans/workbook.jsonl");
 const PORTFOLIO_IMPORT = repoPath(
   "apps/native/parity/plans/portfolio-import.jsonl",
@@ -1274,6 +1285,69 @@ function atInstant<T>(epochMs: number, run: () => T): T {
   }
 }
 
+/** The shared print CSS inside a report document; a recorded document names it instead. */
+function reportBaseCss(html: string, theme: ThemeTokens): string {
+  const start = `<style>\n${buildThemeCss(theme)}\n`;
+  return html.slice(
+    html.indexOf(start) + start.length,
+    html.indexOf("\n  </style>"),
+  );
+}
+
+/**
+ * One call of the report renderers (`services/reports`) on given data: a report body, a
+ * whole document (with the shared CSS written as `<base-css>`), or the shared CSS itself.
+ * `nowMs` is the instant the clock reads. A thrown error is recorded as `{ error }`.
+ */
+export function evaluateReports(op: unknown[]): unknown {
+  const [name, ...args] = op;
+  try {
+    switch (name) {
+      case "body":
+        return atInstant(args[4] as number, () =>
+          renderReportSections(
+            args[0] as GenerateReportOpts["type"],
+            args[1] as string[],
+            args[2],
+            args[3] as SectionContext,
+          ),
+        );
+      case "document": {
+        const options = args[0] as Parameters<typeof assembleReportDocument>[0];
+        const document = atInstant(args[2] as number, () =>
+          assembleReportDocument(options, args[1] as string),
+        );
+        return {
+          ...document,
+          html: document.html.replace(
+            reportBaseCss(document.html, options.theme),
+            () => "<base-css>",
+          ),
+        };
+      }
+      case "baseCss": {
+        const theme: ThemeTokens = {};
+        const document = assembleReportDocument(
+          {
+            type: "financial",
+            currency: "EUR",
+            period: { kind: "ytd" },
+            theme,
+            generatedAt: "2026-01-01T12:00:00.000Z",
+            pricesAsOf: null,
+          },
+          "",
+        );
+        return reportBaseCss(document.html, theme);
+      }
+      default:
+        throw new Error(`Unknown report operation: ${String(name)}`);
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 /**
  * One call of the migration runner's rules (`database/migrate.ts`) or of the boolean input
  * of `sqlite/values.ts`. A thrown error is recorded as `{ error }`, with the temporary
@@ -1580,6 +1654,14 @@ if (isEntrypoint(import.meta)) {
     async (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: await evaluateMigrations(op) };
+    },
+    check,
+  );
+  rerecord(
+    REPORTS,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluateReports(op) };
     },
     check,
   );

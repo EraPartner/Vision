@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-12
+date: 2026-11-13
 updated: 2026-11-07
 tags:
   [
@@ -732,12 +732,28 @@ by the collation of printable ASCII, where the TypeScript uses the machine's col
 text; and of two down files without a migration, the first by name is reported, where the
 TypeScript reports the first the directory lists.
 
+`VisionBackend/Reports` renders the print-ready report documents of `services/reports` from data
+already fetched: `ReportFormat` and `ReportMarkup` are the formatting helpers and SVG charts of
+`sectionHelpers.ts`, `ReportFinancialSections`, `ReportPortfolioSections` and `ReportTaxSections`
+are the twenty section renderers, `ReportStyles.base` is a copy of the print CSS, and
+`ReportDocument` selects and joins the sections (`body`) and builds the theme CSS, cover, footer
+template and filename (`assemble`). The TypeScript exports the same two steps
+(`renderReportSections`, `assembleReportDocument`) so both can be given the same data. The data
+fetchers are not ported, so the renderers read the fetched data as JSON and nothing calls them
+yet. The printed text is fixed to what the TypeScript prints today: `en-US` number grouping
+(where the TypeScript's `toLocaleString()` uses the machine's locale), and `en-GB` dates with
+September as "Sept". Known differences from the TypeScript: a date that is not ISO 8601 text
+prints as a dash, where the TypeScript asks the engine's date parser; a chart label cut at 24
+UTF-16 units inside a surrogate pair ends in a replacement character; a theme token key that is
+a canonical array index keeps its place; and a TOB bracket named like a built-in member of a
+JavaScript object (`constructor`) is labelled by its own name.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, generated price layer calls, generated migration runner calls, and
+generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, generated price layer calls, generated migration runner calls, generated report data, and
 sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests`, `PriceParityTests`, `MigrationRulesParityTests` and
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests`, `PriceParityTests`, `MigrationRulesParityTests`, `ReportParityTests` and
 `FoundationParityTests` replay them.
 `ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
 because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.

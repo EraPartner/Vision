@@ -45,9 +45,15 @@ const API_LAYER = "/VisionNativeCore/API/";
  * computes in JavaScript numbers; it has to use Double to give the same answers bit for bit
  * (apps/native/parity/plans/belgian-tax.jsonl replays them). The price layer cores are a port of
  * services/prices, which reads and repairs provider prices as JavaScript numbers
- * (apps/native/parity/plans/prices.jsonl replays them).
+ * (apps/native/parity/plans/prices.jsonl replays them). The report renderers are a port of
+ * services/reports, which formats the fetched JavaScript numbers into the printed text
+ * (apps/native/parity/plans/reports.jsonl replays them).
  */
-const JS_NUMBER_PARITY = ["/VisionBackend/Tax/", "/VisionBackend/Prices/"];
+const JS_NUMBER_PARITY = [
+  "/VisionBackend/Tax/",
+  "/VisionBackend/Prices/",
+  "/VisionBackend/Reports/",
+];
 
 export const RULES: Rule[] = [
   {
