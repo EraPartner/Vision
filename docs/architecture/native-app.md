@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-12
+date: 2026-11-13
 updated: 2026-11-07
 tags:
   [
@@ -656,6 +656,143 @@ random (dropped, added and retyped fields, edge numbers, Unicode and whitespace 
 provider files), and the TypeScript answers to those are replayed the same way.
 `scripts/native-tests` checks that each corpus still holds the recorder's seed and requests.
 
+`VisionBackend/PortfolioImport/` holds the pure portfolio import reconciliation planner
+(`PortfolioImportReconciliation.buildPlan`, a port of `buildPortfolioImportReconciliationPlan`) with
+the cross-format rules (`PortfolioImportCrossFormat`), the custody previews and the JavaScript
+behaviours they depend on: csv-parse (`CSVRecords`), `Date.parse` day arithmetic and the identity
+text rule (`ImportInterop`). No route calls it yet: reconciliation preview and commit stay on Bun
+until the portfolio repositories move.
+
+`VisionBackend/Analysis/` holds the analysis formula engine (`AnalysisFormulaEngine.evaluate`, a port
+of `evaluateAnalysisFormulas`): the parser, unit inference and the evaluator. No route calls it yet.
+A unit field that names an `Object.prototype` member (a `currencyColumn` called `constructor`) reads
+as absent there, where the TypeScript reads the inherited function.
+
+`VisionBackend/Numeric/` and `VisionBackend/Time/` hold the shared helpers those ports and later ones
+build on: decimal.js at the money module's settings (`DecimalJS`, with powers, square roots and
+radix parsing), the money helpers of `packages/shared-utils/src/money.ts` (`DecimalMoney`, `MoneyAmount`),
+JavaScript number rendering (`JavaScriptNumber.toFixed`, `toPrecision`, `round`), `lib/math.ts`
+(`RobustStatistics`) and `lib/timezone.ts` (`AppTimeZone`, `CalendarDays`).
+
+`VisionBackend/Tax/` holds the Belgian tax engine of `packages/shared-utils/src/belgianTax`: the
+household computation (`HouseholdTax.compute`, with assessment, exemptions, marital quotient, own-home
+credit, social security and property tax), the flat calculation (`BelgianTaxCalculation.json`), the
+version 1 profile and version 2 household conversions (`HouseholdMigration`), the settings loader and
+overview (`HouseholdTaxSettings`), recorded-income attribution and the portfolio tax dashboard
+(`PortfolioTaxDashboard.build`). It computes in `Double`, as the TypeScript computes in JavaScript
+numbers, so `native-lint` exempts the folder from its `double-money` rule. The year tables are
+generated from `constants.ts` (`bun run native:generate-tax-tables`). The version 1 `computeBelgianPIT`
+of `pit.ts` is not ported: only tests call it. No route calls the engine yet; the database-bound
+services of `apps/node-backend/src/services/tax/` stay on Bun.
+
+The same folder holds the rules that decide which SQL an analysis may run
+(`AnalysisSQLRules`, a port of `checkAnalysisSql`, `maskSql`, `referencedViews`, `columnKind`,
+`storedValueHint` and `checkParameters` of `services/analysisExecutor.ts`) and `SQLStatementScan`
+(`scanSql` of `database/sqlite/sqlText.ts`, by which the sandbox refuses a write or a second
+statement). The TypeScript rules are JavaScript regular expressions over UTF-16 code units; the Swift
+writes the same matches out by hand, so no other engine's case folding or word boundaries decide what
+is allowed. `analysisExecutor.ts` exports `__analysisSqlRules` for the recorder. The sandbox process
+itself, its row copies and its result typing are not ported yet.
+
+`VisionBackend/Forecast/` holds the cash-flow forecast methods of
+`services/calculations/forecast` (`PointForecast`: simple and weighted average, EWMA, Holt-Winters,
+Prophet-lite; `MonteCarloForecast`: parametric and block bootstrap; `ForecastEnsemble`;
+`ForecastBacktest.walkForward`) and the portfolio projection of `services/research/projection`
+(`PortfolioProjection.run`). `ForecastRandom` is the seeded xorshift generator of `prng.ts`: the same
+seed gives the same draws as the TypeScript, so a forecast repeats across both backends. Dates must
+be real `YYYY-MM-DD` days and amounts finite, where the TypeScript would carry `NaN` through. The
+forecast orchestration and caches of `forecast/index.ts`, the rolling backtest and the category
+breakdown are not ported yet.
+
+`VisionBackend/BankImport/` holds the bank statement adapters of `importPipeline/adapters`
+(`BankAdapters`: Belfius, Revolut, ING, BNP Paribas Fortis, KBC, Vision, SABB, Wise and the generic
+adapter with a custom column mapping), the format detection of
+`packages/shared-utils/src/bankImportDetection.ts` and the helpers the adapters share
+(`BankImportText`: decoding, amounts, dates, names). An adapter reads the bytes of a statement into
+`ParsedBankTransactions`, with the row contract of `parsedBankTransactionSchema` checked on the way
+out. `PortfolioImport/CSVParse.swift` is `csv-parse` for the options the adapters use, with the
+literal source text of each record. One difference is deliberate: a date that does not start with
+`YYYY-MM-DD` goes to the JavaScript engine's own date parser in the TypeScript, whose answer depends
+on the engine and on the machine's time zone; in Swift it is no date, so the row is skipped.
+
+`VisionBackend/PortfolioImport/PortfolioStatementAdapters.swift` and `PortfolioExchangeAdapters.swift`
+hold the portfolio statement adapters that read CSV (`PortfolioAdapters.parse`: the generic column
+mapping, IBKR transaction history, Kinesis, Nexo, Nexo Pro spot history and the Saxo CSV export),
+`PortfolioTypeNormalizer` and the upload checks of `portfolioUpload.ts` that need no workbook
+(`PortfolioUpload`). Known differences from the TypeScript: a date the TypeScript hands to the
+engine's own date parser is no date in Swift, and Nexo timestamps are read only as
+`YYYY-MM-DDTHH:mm:ss[.sss]Z`; a cell that reads as an infinite number fails the import; a Nexo Pro
+number beyond 1e±5000 is refused as exceeding the numeric limits; a type mapping looked up under a
+name of `Object.prototype` (`constructor`, `toString`) is an unknown transaction type.
+
+`VisionBackend/Workbook/` holds the XLSX reader of `packages/shared-utils/src/xlsx` (`XLSXWorkbook`
+over the XML event parser `XLSXMarkup`), a raw DEFLATE decoder and SHA-256 in plain Swift
+(`RawInflate`, `SHA256Digest`), and the workbook checks of `portfolioUpload.ts`
+(`PortfolioUpload.assertBounded`, `PortfolioUpload.workbook`). `SaxoWorkbook.swift` reads the
+detailed Saxo XLSX export, and `IbkrFundingHistory` turns the sheets of an IBKR funding workbook into
+rows. The TypeScript reads that funding workbook (XLS or XLSX) with SheetJS, which has no Swift
+port, so `PortfolioAdapters.parse` still refuses the `ibkr_funding_history` format. Known
+differences from the TypeScript: a date cell (`t="d"`) whose text is not one of the ISO 8601 forms
+of the language standard makes the workbook unreadable, where the TypeScript asks the engine's own
+date parser; text holding half a surrogate pair carries U+FFFD instead; a sheet with a row or
+column number past 4,000,000 is refused, where the TypeScript would build every row in memory; and a
+date cell in a column read as text is written as the engine writes a date in the machine's time
+zone, which is compared with the TypeScript under UTC only.
+
+`VisionBackend/Prices/` holds the rules of the price layer that need no network or database:
+`PriceHistory` (the history point rules of `services/prices/priceCache.ts`: one valid point per UTC
+day, range filter, refresh test, changed-price count), `PriceMemoryCache` (its five minute memory
+cache, with the clock passed in) and `PriceProviders` (of `priceProviderRegistry.ts` and
+`priceProviderService.ts`: provider settings for Yahoo, custom and Kinesis sources, the custom
+history path reader, stale-run removal, the Kinesis spike repair and trendline reader, and the
+Binance, Yahoo and Kinesis answers turned into quotes). It computes in `Double`, as the TypeScript
+computes in JavaScript numbers, so `native-lint` exempts the folder from its `double-money` rule.
+Fetching (the Yahoo client, redirect and size checks, Binance paging), the stored history and its
+backfill, and the conversion of a Kinesis price at a stored exchange rate are not ported and stay
+on Bun. Known differences from the TypeScript: a custom path naming an inherited member of a
+JavaScript object (`constructor`, `toString`) reads nothing; a Kinesis `createdAt` that is not ISO
+8601 text is dropped, where the TypeScript asks the engine's date parser; and day keys are ordered
+by a fixed rule (`-`, then `+`, then digits) where the TypeScript uses the machine's collation.
+
+`VisionBackend/Persistence/MigrationRules.swift` holds the rules of `database/migrate.ts` that need
+no database: which files of `db/migrations` are migrations (`MigrationRules.load`), what a ledger
+allows (`pending`), what a run applies and whether it writes a pre-migration copy (`run`), what a
+revert undoes (`revert`), the name and folder of a pre-migration copy and which copies are removed
+(`backupName`, `backupDirectory`, `copiesToRemove`), the foreign key violation text and the schema
+fingerprint, with the TypeScript's messages. `SQLBooleanInput` is the boolean input of
+`sqlite/values.ts`. Nothing calls them yet: the Bun backend still applies migrations
+([[docs/adr/270-swift-backend-in-process]] decision 3), and the Swift library only checks the
+ledger. Known differences from the TypeScript: two copies with one modification time are ordered
+by the collation of printable ASCII, where the TypeScript uses the machine's collation for any
+text; and of two down files without a migration, the first by name is reported, where the
+TypeScript reports the first the directory lists.
+
+`VisionBackend/Reports` renders the print-ready report documents of `services/reports` from data
+already fetched: `ReportFormat` and `ReportMarkup` are the formatting helpers and SVG charts of
+`sectionHelpers.ts`, `ReportFinancialSections`, `ReportPortfolioSections` and `ReportTaxSections`
+are the twenty section renderers, `ReportStyles.base` is a copy of the print CSS, and
+`ReportDocument` selects and joins the sections (`body`) and builds the theme CSS, cover, footer
+template and filename (`assemble`). The TypeScript exports the same two steps
+(`renderReportSections`, `assembleReportDocument`) so both can be given the same data. The data
+fetchers are not ported, so the renderers read the fetched data as JSON and nothing calls them
+yet. The printed text is fixed to what the TypeScript prints today: `en-US` number grouping
+(where the TypeScript's `toLocaleString()` uses the machine's locale), and `en-GB` dates with
+September as "Sept". Known differences from the TypeScript: a date that is not ISO 8601 text
+prints as a dash, where the TypeScript asks the engine's date parser; a chart label cut at 24
+UTF-16 units inside a surrogate pair ends in a replacement character; a theme token key that is
+a canonical array index keeps its place; and a TOB bracket named like a built-in member of a
+JavaScript object (`constructor`) is labelled by its own name.
+
+`bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
+inputs captured from the TypeScript unit and database tests, formula requests captured from the
+analysis tests, tax engine calls captured from its tests, generated variations of all three,
+generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, generated price layer calls, generated migration runner calls, generated report data, and
+sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests`, `PriceParityTests`, `MigrationRulesParityTests`, `ReportParityTests` and
+`FoundationParityTests` replay them.
+`ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
+because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.
+
 `VisionDatabase.open` opens the database file with the pragmas of `connection.ts`, registers every
 SQL function the schema calls, and refuses a file whose `vision_migrations` ledger differs from
 `MigrationLedger.expected`. The SQL functions replay the TypeScript golden fixtures
@@ -884,7 +1021,7 @@ inflow legs, and links them with `markTransfer`. A `409` shows the duplicate pro
 anyway, and the form persists across Cancel until a create succeeds, guarded by the leave guard
 while dirty. The payee picker offers "Add {name}" (`POST /api/recipients`). The Split dialog
 (`SplitDialogModel`) splits equally, lets others pay all or takes custom amounts, rounding with
-`MoneyMath` (banker's rounding, like `ROUND_HALF_EVEN`); a created split, single or bulk,
+`DecimalMoney` (banker's rounding, like `ROUND_HALF_EVEN`); a created split, single or bulk,
 invalidates the `/owes` summary and person detail like `splitKeys.all`. The bulk bar (`TransactionsModel+Actions`)
 acts on the checked ids or, after "Select all {n} matching filter", on the filter with
 `expected_count`; tag and split stay id-only. `/owes` (`OwesModel`, `OwesView`) shows the total

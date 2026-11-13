@@ -665,6 +665,15 @@ function checkParameters(values: unknown): SandboxValue[] {
   return values.map((value) => toSqlParam(value) as SandboxValue);
 }
 
+/** Test and parity-recorder hook: the SQL rules that need no database. */
+export const __analysisSqlRules = {
+  maskSql,
+  referencedViews,
+  columnKind,
+  storedValueHint,
+  checkParameters,
+};
+
 export async function executeAnalysisSql({
   requestId,
   sql,
