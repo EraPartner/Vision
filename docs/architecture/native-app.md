@@ -584,7 +584,31 @@ too. Areas move in the inventory's order; the ported list today is the tags area
 `createTag` (`updateTag` and `deleteTag` are not in the generated client and stay on Bun) and the
 settings area's `getSettings`, `getSetting`, `saveSetting` and `saveSettings` (`DELETE
 /api/settings/:key` is not in the client and stays on Bun), and the exchange-rate area's
-`getExchangeRates` and `refreshExchangeRates` (the inflation-rate routes stay on Bun). A refresh
+`getExchangeRates` and `refreshExchangeRates` (the inflation-rate routes stay on Bun), and the
+accounts area's `getAccounts`, `createAccount`, `updateAccount`, `deleteAccount` and
+`setAccountStatementBalance`. The account operations that write or read other areas' tables move
+with those areas: opening balance and reconcile (transactions), close, merge and their previews
+(transactions and portfolio lots), and totals (the portfolio summary). The categories area's
+`getCategoryTree`, `createCategoryNode`, `updateCategoryNode`, `deleteCategoryNode`,
+`mergeCategoryNode`, `getCategories` and `createCategory` follow (the reads and writes of one
+category by id and the recipient assignment are not in the client and stay on Bun). The hierarchy
+writes schedule the refill of `mv_monthly_summary` and `mv_category_totals` as `scheduleRefresh`
+does: `Areas/MaterializedViews.swift` runs the same 5-second trailing debounce, flushed within 10
+seconds, and refills both tables in one transaction with the fill SQL of
+`materializedViewService.ts`, which a test compares with the TypeScript text. The recipients
+area's `getRecipients`, `getRecipient`, `createRecipient`, `updateRecipient`, `deleteRecipient`,
+`mergeRecipient`, `unmergeRecipient` and the match-pattern operations (`getRecipientPatterns`,
+`createRecipientPattern`, `previewRecipientPattern`, `updateRecipientPattern`,
+`deleteRecipientPattern`) follow; the clusters, aliases and bank-account routes are not in the client
+and stay on Bun. Recipient updates, deletes, merges and unmerges schedule the same refill. Regex
+patterns compile and match in JavaScriptCore (`HTTP/JavaScriptRegExp.swift`), the engine Bun runs, so
+their syntax, matches and error messages are Bun's; the recipient name and search filters use the
+Unicode ILIKE regular expression of `recipientRepository.ts` (`Areas/RecipientText.swift`). The
+transaction reads `getTransactions` and `getTransaction` follow (`Areas/Transactions.swift`): every
+list filter of `buildTransactionWhere` (`Areas/TransactionWhere.swift`), the uncategorised queue,
+per-account running balances and `normalize_to_eur` at the latest stored rates. The list count is
+exact on every request; the TypeScript repository caches it for 2 seconds. Transaction writes,
+transfers, bulk actions and exports stay on Bun until their own phases. A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.
@@ -610,7 +634,13 @@ its ported operations go to that backend. Bun keeps no cache over `tags` or `use
 2-second filtered transaction count cache joins `tags` but the TypeScript tag writes do not clear it
 either. Bun's latest-rate and historical-rate-index caches compare `externalWriteVersion()` (the
 writer connection's `PRAGMA data_version`, which only another connection's commit changes) and
-reload after a Swift write.
+reload after a Swift write. The `/api/info` response caches (net worth, performance, portfolio
+summary, bank balances, statistics) do the same in `resolveCacheWithInflight`, so an account written
+in Swift is not hidden behind a cached response.
+
+The account list ports the anchor + delta balance SQL verbatim (`Areas/AccountBalanceSQL.swift`)
+and does the conversion, rounding and drift with `Numeric/DecimalJS.swift`, the `decimal.js`
+arithmetic of `money.ts` (30 significant digits, half-even), not the NUMERIC rules of `ExactDecimal`.
 
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each
@@ -618,8 +648,13 @@ body sent in the key order the recorder wrote, through
 `RoutingAPITransport` on the same database and compares the JSON semantically; timestamps the run
 created are compared by form. An area may record provider answers (`fetch`), which the recorder's
 `fetch` and the replay's fetcher both serve, and today's date in `APP_TIMEZONE` Europe/Brussels is
-recorded as `{{today}}`. `scripts/native-tests` checks that each corpus still holds the
-recorder's seed and requests.
+recorded as `{{today}}`. A step may replace the provider answers for the steps after it. The
+recorder turns the routes' rate limiters off (`VISION_DEV`), since the in-process backend has none.
+Each ported area also has a `*-mutations` corpus: a seeded generator
+(`scripts/lib/nativeParityMutations.ts`) changes the hand-written requests and provider answers at
+random (dropped, added and retyped fields, edge numbers, Unicode and whitespace text, malformed
+provider files), and the TypeScript answers to those are replayed the same way.
+`scripts/native-tests` checks that each corpus still holds the recorder's seed and requests.
 
 `VisionBackend/PortfolioImport/` holds the pure portfolio import reconciliation planner
 (`PortfolioImportReconciliation.buildPlan`, a port of `buildPortfolioImportReconciliationPlan`) with

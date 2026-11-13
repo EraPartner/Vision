@@ -30,6 +30,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { REPO_ROOT, repoPath } from "./lib/nativeCodegen.ts";
+import {
+  Random,
+  mutatedSteps,
+  randomEcbXml,
+  randomErApi,
+  randomQuery,
+  randomText,
+  randomValue,
+} from "./lib/nativeParityMutations.ts";
 
 export const PARITY_DIR = repoPath("apps/native/parity");
 
@@ -41,6 +50,8 @@ interface ParityStep {
   path: string;
   /** JSON body; absent for none. */
   body?: unknown;
+  /** Provider answers from this step on, replacing the area's `fetch`. */
+  fetch?: Record<string, { status: number; body: string }>;
 }
 
 interface ParityArea {
@@ -62,7 +73,10 @@ export const TODAY_TOKEN = "{{today}}";
 const SEED_TIME = "2025-03-01T09:00:00.000000Z";
 
 /** A complete, valid Belgian tax household (ADR-200) for the settings corpus. */
-function household(taxYear: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function household(
+  taxYear: number,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   const reductions = {
     personalPensionContributions: 0,
     lifeInsurancePremiums: 0,
@@ -80,8 +94,17 @@ function household(taxYear: number, overrides: Record<string, unknown> = {}): Re
       {
         id: "A",
         isDisabled: false,
-        activities: [{ id: "act_main", kind: "employee", grossIncome: 52000, startDate: "2024-02-29" }],
-        professionalExpenses: { remuneration: { method: "lump_sum", actualAmount: 0 } },
+        activities: [
+          {
+            id: "act_main",
+            kind: "employee",
+            grossIncome: 52000,
+            startDate: "2024-02-29",
+          },
+        ],
+        professionalExpenses: {
+          remuneration: { method: "lump_sum", actualAmount: 0 },
+        },
         unionDues: 0,
         otherTaxableIncome: 0,
         alimonyPaid: 0,
@@ -96,35 +119,241 @@ function household(taxYear: number, overrides: Record<string, unknown> = {}): Re
 }
 
 /** A partner of `household` with the given id and activities. */
-function partner(id: string, activities: unknown[], extra: Record<string, unknown> = {}): Record<string, unknown> {
+function partner(
+  id: string,
+  activities: unknown[],
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
   const base = (household(2024).partners as Record<string, unknown>[])[0] ?? {};
   return { ...base, id, activities, ...extra };
 }
 
 const NEW = { exists: false };
 /** A single-key save of `value` against an absent baseline (validation runs first). */
-const save = (key: string, value: unknown, expected: unknown = NEW): ParityStep => ({
+const save = (
+  key: string,
+  value: unknown,
+  expected: unknown = NEW,
+): ParityStep => ({
   operationId: "saveSetting",
   method: "PUT",
   path: `/api/settings/${key}`,
   body: { value, expected },
 });
-const bulk = (body: unknown): ParityStep => ({ operationId: "saveSettings", method: "PUT", path: "/api/settings", body });
-const read = (key: string): ParityStep => ({ operationId: "getSetting", method: "GET", path: `/api/settings/${key}` });
-const list = (query = ""): ParityStep => ({ operationId: "getSettings", method: "GET", path: `/api/settings${query}` });
+const bulk = (body: unknown): ParityStep => ({
+  operationId: "saveSettings",
+  method: "PUT",
+  path: "/api/settings",
+  body,
+});
+const read = (key: string): ParityStep => ({
+  operationId: "getSetting",
+  method: "GET",
+  path: `/api/settings/${key}`,
+});
+const list = (query = ""): ParityStep => ({
+  operationId: "getSettings",
+  method: "GET",
+  path: `/api/settings${query}`,
+});
 const LONG_KEY = "k".repeat(101);
 const jsonText = (text: string): unknown => JSON.parse(text);
 
-
-const ECB_DAILY = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+const ECB_DAILY =
+  "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 const ER_API_LATEST = "https://open.er-api.com/v6/latest/EUR";
-const RATE_ROW = (code: string, rate: string, date: string, latest: number, fetched = SEED_TIME) =>
+const RATE_ROW = (
+  code: string,
+  rate: string,
+  date: string,
+  latest: number,
+  fetched = SEED_TIME,
+) =>
   `('${code}', vision_numeric('${rate}', 20, 10), '${date}', ${latest}, '${fetched}', '${SEED_TIME}')`;
 const ratesList = (query = ""): ParityStep => ({
   operationId: "getExchangeRates",
   method: "GET",
   path: `/api/info/exchange-rates${query}`,
 });
+const accounts = (query = ""): ParityStep => ({
+  operationId: "getAccounts",
+  method: "GET",
+  path: `/api/accounts${query}`,
+});
+const accountCreate = (body: unknown): ParityStep => ({
+  operationId: "createAccount",
+  method: "POST",
+  path: "/api/accounts",
+  body,
+});
+const accountUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateAccount",
+  method: "PATCH",
+  path: `/api/accounts/${id}`,
+  body,
+});
+const statementPut = (
+  id: string,
+  currency: string,
+  body?: unknown,
+): ParityStep => ({
+  operationId: "setAccountStatementBalance",
+  method: "PUT",
+  path: `/api/accounts/${id}/statement-balances/${currency}`,
+  ...(body === undefined ? {} : { body }),
+});
+const categories = (query = ""): ParityStep => ({
+  operationId: "getCategories",
+  method: "GET",
+  path: `/api/categories${query}`,
+});
+const categoryCreate = (body?: unknown): ParityStep => ({
+  operationId: "createCategory",
+  method: "POST",
+  path: "/api/categories",
+  ...(body === undefined ? {} : { body }),
+});
+const categoryTree: ParityStep = {
+  operationId: "getCategoryTree",
+  method: "GET",
+  path: "/api/categories/tree",
+};
+const nodeCreate = (body: unknown): ParityStep => ({
+  operationId: "createCategoryNode",
+  method: "POST",
+  path: "/api/categories/tree",
+  body,
+});
+const nodeUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateCategoryNode",
+  method: "PATCH",
+  path: `/api/categories/tree/${id}`,
+  body,
+});
+const nodeDelete = (id: string): ParityStep => ({
+  operationId: "deleteCategoryNode",
+  method: "DELETE",
+  path: `/api/categories/tree/${id}`,
+});
+const nodeMerge = (id: string, body: unknown): ParityStep => ({
+  operationId: "mergeCategoryNode",
+  method: "POST",
+  path: `/api/categories/tree/${id}/merge`,
+  body,
+});
+const recipients = (query = ""): ParityStep => ({
+  operationId: "getRecipients",
+  method: "GET",
+  path: `/api/recipients${query}`,
+});
+const recipientRead = (id: string): ParityStep => ({
+  operationId: "getRecipient",
+  method: "GET",
+  path: `/api/recipients/${id}`,
+});
+const recipientCreate = (body?: unknown): ParityStep => ({
+  operationId: "createRecipient",
+  method: "POST",
+  path: "/api/recipients",
+  ...(body === undefined ? {} : { body }),
+});
+const recipientUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateRecipient",
+  method: "PATCH",
+  path: `/api/recipients/${id}`,
+  body,
+});
+const recipientDelete = (id: string): ParityStep => ({
+  operationId: "deleteRecipient",
+  method: "DELETE",
+  path: `/api/recipients/${id}`,
+});
+const recipientMerge = (id: string, body: unknown): ParityStep => ({
+  operationId: "mergeRecipient",
+  method: "POST",
+  path: `/api/recipients/${id}/merge`,
+  body,
+});
+const recipientUnmerge = (id: string): ParityStep => ({
+  operationId: "unmergeRecipient",
+  method: "POST",
+  path: `/api/recipients/${id}/unmerge`,
+});
+const patternList = (id: string): ParityStep => ({
+  operationId: "getRecipientPatterns",
+  method: "GET",
+  path: `/api/recipients/${id}/patterns`,
+});
+const patternCreate = (id: string, body: unknown): ParityStep => ({
+  operationId: "createRecipientPattern",
+  method: "POST",
+  path: `/api/recipients/${id}/patterns`,
+  body,
+});
+const patternPreview = (id: string, body: unknown): ParityStep => ({
+  operationId: "previewRecipientPattern",
+  method: "POST",
+  path: `/api/recipients/${id}/patterns/preview`,
+  body,
+});
+const patternUpdate = (
+  id: string,
+  patternId: string,
+  body: unknown,
+): ParityStep => ({
+  operationId: "updateRecipientPattern",
+  method: "PATCH",
+  path: `/api/recipients/${id}/patterns/${patternId}`,
+  body,
+});
+const patternDelete = (id: string, patternId: string): ParityStep => ({
+  operationId: "deleteRecipientPattern",
+  method: "DELETE",
+  path: `/api/recipients/${id}/patterns/${patternId}`,
+});
+const accountDelete = (id: string): ParityStep => ({
+  operationId: "deleteAccount",
+  method: "DELETE",
+  path: `/api/accounts/${id}`,
+});
+const transactions = (query = ""): ParityStep => ({
+  operationId: "getTransactions",
+  method: "GET",
+  path: `/api/transactions${query}`,
+});
+const transactionRead = (id: string): ParityStep => ({
+  operationId: "getTransaction",
+  method: "GET",
+  path: `/api/transactions/${id}`,
+});
+const TRANSACTION_QUERY_KEYS = [
+  "transaction_id",
+  "start_date",
+  "end_date",
+  "account_id",
+  "bank_account",
+  "category_id",
+  "category_ids",
+  "recipient_id",
+  "recipient_group_id",
+  "recipient_name",
+  "search",
+  "active",
+  "sort_by",
+  "sort_dir",
+  "include_balance",
+  "transaction_type",
+  "amount_min",
+  "amount_max",
+  "amount_exact",
+  "amount_signed",
+  "tags",
+  "uncategorised",
+  "normalize_to_eur",
+  "target_currency",
+  "limit",
+  "offset",
+] as const;
 const ratesRefresh: ParityStep = {
   operationId: "refreshExchangeRates",
   method: "POST",
@@ -147,26 +376,89 @@ export const AREAS: Record<string, ParityArea> = {
       { operationId: "getTags", method: "GET", path: "/api/tags?active=false" },
       { operationId: "getTags", method: "GET", path: "/api/tags?active=0" },
       { operationId: "getTags", method: "GET", path: "/api/tags?active=bogus" },
-      { operationId: "getTags", method: "GET", path: "/api/tags?active=all&limit=2&offset=1" },
+      {
+        operationId: "getTags",
+        method: "GET",
+        path: "/api/tags?active=all&limit=2&offset=1",
+      },
       { operationId: "getTags", method: "GET", path: "/api/tags?limit=2" },
       { operationId: "getTags", method: "GET", path: "/api/tags?offset=1" },
-      { operationId: "getTags", method: "GET", path: "/api/tags?limit=abc&offset=-3" },
+      {
+        operationId: "getTags",
+        method: "GET",
+        path: "/api/tags?limit=abc&offset=-3",
+      },
       { operationId: "getTags", method: "GET", path: "/api/tags?limit=5000" },
       { operationId: "getTags", method: "GET", path: "/api/tags?limit=" },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "  Groceries   Weekly!! ", color: "#ff0000" } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "groceries-weekly", color: "#00ff00" } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "Archived" } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "rome 2020", color: "#123456" } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "Café İstanbul", color: null } },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "  Groceries   Weekly!! ", color: "#ff0000" },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "groceries-weekly", color: "#00ff00" },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "Archived" },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "rome 2020", color: "#123456" },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "Café İstanbul", color: null },
+      },
       { operationId: "createTag", method: "POST", path: "/api/tags", body: {} },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "" } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "!!!" } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: 5 } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "x", color: 5 } },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: true, color: [] } },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "" },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "!!!" },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: 5 },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "x", color: 5 },
+      },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: true, color: [] },
+      },
       { operationId: "createTag", method: "POST", path: "/api/tags", body: [] },
       { operationId: "createTag", method: "POST", path: "/api/tags" },
-      { operationId: "createTag", method: "POST", path: "/api/tags", body: { slug: "extra", unknown: 1 } },
+      {
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body: { slug: "extra", unknown: 1 },
+      },
       { operationId: "getTags", method: "GET", path: "/api/tags?active=all" },
     ],
   },
@@ -209,31 +501,70 @@ export const AREAS: Record<string, ParityArea> = {
       save("includeTransfers", true),
       save("includeTransfers", false, { exists: true, value: true }),
       save("includeTransfers", true, { exists: true, value: true }),
-      save("app_settings", { defaultCurrency: "EUR", nested: { b: 1, a: [2, { c: 3 }] } }, {
-        exists: true,
-        value: { adminMode: true, defaultPageSize: 25.0, defaultCurrency: "USD" },
-      }),
+      save(
+        "app_settings",
+        { defaultCurrency: "EUR", nested: { b: 1, a: [2, { c: 3 }] } },
+        {
+          exists: true,
+          value: {
+            adminMode: true,
+            defaultPageSize: 25.0,
+            defaultCurrency: "USD",
+          },
+        },
+      ),
       read("app_settings"),
       save("onboarding_complete", true, { exists: true, value: "true" }),
       read("onboarding_complete"),
       save("cost_basis_method", "lifo", { exists: true, value: "fifo" }),
-      save("widget_visibility", jsonText('{"__proto__":{"x":1},"c":true,"2":false}'), {
-        exists: true,
-        value: { b: false, a: true },
-      }),
+      save(
+        "widget_visibility",
+        jsonText('{"__proto__":{"x":1},"c":true,"2":false}'),
+        {
+          exists: true,
+          value: { b: false, a: true },
+        },
+      ),
       read("widget_visibility"),
-      save("portfolio_tax_adjustments_v1", jsonText('{"__proto__":{},"2024:1":{"amount":5},"7":{}}')),
+      save(
+        "portfolio_tax_adjustments_v1",
+        jsonText('{"__proto__":{},"2024:1":{"amount":5},"7":{}}'),
+      ),
       read("portfolio_tax_adjustments_v1"),
       // Key and body guards.
       save("bogus_key", 1),
       save("constructor", 1),
       save("prototype", 1),
       save(LONG_KEY, 1),
-      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers", body: { expected: NEW } },
-      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers", body: {} },
-      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers", body: [] },
-      { operationId: "saveSetting", method: "PUT", path: "/api/settings/includeTransfers" },
-      { operationId: "saveSetting", method: "PUT", path: "/api/settings/bogus", body: {} },
+      {
+        operationId: "saveSetting",
+        method: "PUT",
+        path: "/api/settings/includeTransfers",
+        body: { expected: NEW },
+      },
+      {
+        operationId: "saveSetting",
+        method: "PUT",
+        path: "/api/settings/includeTransfers",
+        body: {},
+      },
+      {
+        operationId: "saveSetting",
+        method: "PUT",
+        path: "/api/settings/includeTransfers",
+        body: [],
+      },
+      {
+        operationId: "saveSetting",
+        method: "PUT",
+        path: "/api/settings/includeTransfers",
+      },
+      {
+        operationId: "saveSetting",
+        method: "PUT",
+        path: "/api/settings/bogus",
+        body: {},
+      },
       save("includeTransfers", true, { exists: true }),
       save("includeTransfers", true, { exists: false, value: true }),
       save("includeTransfers", true, { exists: "yes" }),
@@ -252,13 +583,26 @@ export const AREAS: Record<string, ParityArea> = {
       save("dashboard_settings", { excludedCategoryIds: [1.5] }),
       save("dashboard_settings", { excludedCategoryIds: ["1e3"] }),
       save("dashboard_settings", { excludedCategoryIds: [true] }),
-      save("dashboard_settings", { excludedRecipientIds: 7, excludeHiddenCategories: "yes", exclusionScope: "x" }),
+      save("dashboard_settings", {
+        excludedRecipientIds: 7,
+        excludeHiddenCategories: "yes",
+        exclusionScope: "x",
+      }),
       save("dashboard_settings", []),
-      save("dashboard_settings", { excludedCategoryIds: ["03", 4, "2147483647"], extra: { keep: [true] } }),
+      save("dashboard_settings", {
+        excludedCategoryIds: ["03", 4, "2147483647"],
+        extra: { keep: [true] },
+      }),
       read("dashboard_settings"),
-      save("theme_settings", { mode: "dim", schedule: { lightFrom: "7:00", darkFrom: "24:00" }, variant: 5 }),
+      save("theme_settings", {
+        mode: "dim",
+        schedule: { lightFrom: "7:00", darkFrom: "24:00" },
+        variant: 5,
+      }),
       save("theme_settings", { schedule: null }),
-      save("theme_settings", { schedule: { lightFrom: "23:59", darkFrom: "19:60" } }),
+      save("theme_settings", {
+        schedule: { lightFrom: "23:59", darkFrom: "19:60" },
+      }),
       save("theme_settings", "dark"),
       save("cost_basis_method", "avg"),
       save("cost_basis_method", 5),
@@ -270,20 +614,56 @@ export const AREAS: Record<string, ParityArea> = {
       save("services_settings", "x"),
       save("dismissed_recurring_patterns", {}),
       save("dismissed_recurring_patterns", [1, "a", null, { b: 2 }]),
-      save("brokerage_cash_category_ids", { dividend: 1.5, interest: 0, fee: null, tax: 2147483648, extra: 1 }),
+      save("brokerage_cash_category_ids", {
+        dividend: 1.5,
+        interest: 0,
+        fee: null,
+        tax: 2147483648,
+        extra: 1,
+      }),
       save("brokerage_cash_category_ids", { dividend: null }),
-      save("brokerage_cash_category_ids", { dividend: 9007199254740993, interest: -9007199254740993, fee: "1", tax: true }),
-      save("brokerage_cash_category_ids", jsonText('{"dividend":1,"interest":2,"fee":3,"tax":4,"__proto__":5,"z":6}')),
-      save("brokerage_cash_category_ids", { dividend: 1, interest: null, fee: 3, tax: null }),
-      save("rebalance_plans", [{ id: "", name: "   ", targetWeights: {}, cashCap: -1 }]),
-      save("rebalance_plans", [{ id: "p1", name: "x".repeat(81), targetWeights: { a: "abc", b: 1 } }]),
-      save("rebalance_plans", [{ id: "p1", name: "ok", targetWeights: { a: 0, b: "0", c: null } }]),
+      save("brokerage_cash_category_ids", {
+        dividend: 9007199254740993,
+        interest: -9007199254740993,
+        fee: "1",
+        tax: true,
+      }),
+      save(
+        "brokerage_cash_category_ids",
+        jsonText(
+          '{"dividend":1,"interest":2,"fee":3,"tax":4,"__proto__":5,"z":6}',
+        ),
+      ),
+      save("brokerage_cash_category_ids", {
+        dividend: 1,
+        interest: null,
+        fee: 3,
+        tax: null,
+      }),
+      save("rebalance_plans", [
+        { id: "", name: "   ", targetWeights: {}, cashCap: -1 },
+      ]),
+      save("rebalance_plans", [
+        { id: "p1", name: "x".repeat(81), targetWeights: { a: "abc", b: 1 } },
+      ]),
+      save("rebalance_plans", [
+        { id: "p1", name: "ok", targetWeights: { a: 0, b: "0", c: null } },
+      ]),
       save("rebalance_plans", [{ id: "p1", name: "ok", targetWeights: [1] }]),
-      save("rebalance_plans", [{ id: "p1", name: "  ﻿", targetWeights: { a: [2] }, cashCap: "x" }]),
+      save("rebalance_plans", [
+        { id: "p1", name: "  ﻿", targetWeights: { a: [2] }, cashCap: "x" },
+      ]),
       save("rebalance_plans", [{ id: 1, name: null }]),
-      save("rebalance_plans", [{ name: "n", targetWeights: { a: "Infinity" } }]),
-      save("rebalance_plans", [{ id: "p", name: "n", targetWeights: { a: "-0x10", b: "0x10" } }]),
-      save("rebalance_plans", Array.from({ length: 51 }, () => ({ id: "" }))),
+      save("rebalance_plans", [
+        { name: "n", targetWeights: { a: "Infinity" } },
+      ]),
+      save("rebalance_plans", [
+        { id: "p", name: "n", targetWeights: { a: "-0x10", b: "0x10" } },
+      ]),
+      save(
+        "rebalance_plans",
+        Array.from({ length: 51 }, () => ({ id: "" })),
+      ),
       save("rebalance_plans", [
         {
           id: "p1",
@@ -303,12 +683,24 @@ export const AREAS: Record<string, ParityArea> = {
         taxYear: 1800,
         cadastralCentimesOverride: 100001,
         selfEmployedIncomeKind: "wages",
-        additionalResidences: [{ cadastralIncome: "x", centimesOverride: null }, 3],
+        additionalResidences: [
+          { cadastralIncome: "x", centimesOverride: null },
+          3,
+        ],
         unknownField: "kept",
       }),
-      save("belgian_tax_profile", { grossAnnualIncome: null, taxYear: 2024, selfEmployedIncomeKind: "fees", extra: "keep" }),
+      save("belgian_tax_profile", {
+        grossAnnualIncome: null,
+        taxYear: 2024,
+        selfEmployedIncomeKind: "fees",
+        extra: "keep",
+      }),
       save("belgian_tax_profile", null),
-      save("belgian_tax_profile_snapshots_v1", { "2024": { taxYear: "x" }, abc: 5, "1": { mortgageStartYear: 2201 } }),
+      save("belgian_tax_profile_snapshots_v1", {
+        "2024": { taxYear: "x" },
+        abc: 5,
+        "1": { mortgageStartYear: 2201 },
+      }),
       save("belgian_tax_profile_snapshots_v1", []),
       save("belgian_tax_profile_snapshot_meta_v1", {
         "2024": { frozenCalculation: { federalPITTotal: 1 } },
@@ -316,29 +708,75 @@ export const AREAS: Record<string, ParityArea> = {
         x: { frozenHouseholdResult: null },
         y: [],
       }),
-      save("belgian_tax_profile_snapshot_meta_v1", { "2024": { frozenCalculation: { federalPITBeforeExemption: 1 } } }),
+      save("belgian_tax_profile_snapshot_meta_v1", {
+        "2024": { frozenCalculation: { federalPITBeforeExemption: 1 } },
+      }),
       save("portfolio_tax_classifications_v1", { "12": 5, "13": {} }),
       // Household (ADR-200).
       save("belgian_tax_household_v2", household(2024)),
       read("belgian_tax_household_v2"),
       save("belgian_tax_household_v2", {}),
       save("belgian_tax_household_v2", []),
-      save("belgian_tax_household_v2", household(2024.5, { version: 3, region: "x", communalSurchargePercent: 10 })),
+      save(
+        "belgian_tax_household_v2",
+        household(2024.5, {
+          version: 3,
+          region: "x",
+          communalSurchargePercent: 10,
+        }),
+      ),
       save("belgian_tax_household_v2", household(2024, { partners: [] })),
-      save("belgian_tax_household_v2", household(2024, { partners: [partner("A", []), partner("B", []), partner("B", [])] })),
+      save(
+        "belgian_tax_household_v2",
+        household(2024, {
+          partners: [partner("A", []), partner("B", []), partner("B", [])],
+        }),
+      ),
       save(
         "belgian_tax_household_v2",
         household(2024, {
           partners: [
             partner("B", [
-              { id: "act_x", kind: "employee", grossIncome: 1, netProfessionalIncome: 5, pensionKind: "other" },
-              { id: "act_x", kind: "pension", grossIncome: 1, pensionKind: "other" },
+              {
+                id: "act_x",
+                kind: "employee",
+                grossIncome: 1,
+                netProfessionalIncome: 5,
+                pensionKind: "other",
+              },
+              {
+                id: "act_x",
+                kind: "pension",
+                grossIncome: 1,
+                pensionKind: "other",
+              },
             ]),
-            partner("B", [{ id: "act_y", kind: "net_professional_amount", grossIncome: 1, netProfessionalIncome: 1 }]),
+            partner("B", [
+              {
+                id: "act_y",
+                kind: "net_professional_amount",
+                grossIncome: 1,
+                netProfessionalIncome: 1,
+              },
+            ]),
           ],
-          relationship: { events: [{ id: "e1", kind: "death", date: "2024-01-01" }, { id: "e2", kind: "marriage", date: "2024-01-02", partnerId: "A" }] },
+          relationship: {
+            events: [
+              { id: "e1", kind: "death", date: "2024-01-01" },
+              {
+                id: "e2",
+                kind: "marriage",
+                date: "2024-01-02",
+                partnerId: "A",
+              },
+            ],
+          },
           dependents: { children: 1, otherPersons: 0, claimantPartnerId: "A" },
-          home: { cadastralIncome: 0, mortgageInterestPaid: 0, mortgageCreditPartnerId: "A" },
+          home: {
+            cadastralIncome: 0,
+            mortgageInterestPaid: 0,
+            mortgageCreditPartnerId: "A",
+          },
         }),
       ),
       save(
@@ -357,32 +795,67 @@ export const AREAS: Record<string, ParityArea> = {
                   label: "é".repeat(201),
                   sourceRefs: Array.from({ length: 101 }, () => 5),
                 },
-                { id: `act_${"a".repeat(65)}`, kind: "wizard", grossIncome: -1, startDate: "2000-02-29" },
+                {
+                  id: `act_${"a".repeat(65)}`,
+                  kind: "wizard",
+                  grossIncome: -1,
+                  startDate: "2000-02-29",
+                },
               ],
               {
-                professionalExpenses: { remuneration: { method: "actual", actualAmount: 5 }, bogus: {}, fees: { method: "x" } },
-                reductions: { personalPensionContributions: 1, pensionScheme: "1000" },
+                professionalExpenses: {
+                  remuneration: { method: "actual", actualAmount: 5 },
+                  bogus: {},
+                  fees: { method: "x" },
+                },
+                reductions: {
+                  personalPensionContributions: 1,
+                  pensionScheme: "1000",
+                },
                 displayName: "n".repeat(81),
                 birthYear: 1899,
               },
             ),
           ],
-          relationship: { events: Array.from({ length: 51 }, () => 1), deathYearElection: "x" },
+          relationship: {
+            events: Array.from({ length: 51 }, () => 1),
+            deathYearElection: "x",
+          },
           dependents: { children: -1 },
           home: {
             cadastralIncome: 0,
             mortgageInterestPaid: 0,
-            additionalResidences: [{ cadastralIncome: 1, region: "mars", label: 5 }],
+            additionalResidences: [
+              { cadastralIncome: 1, region: "mars", label: 5 },
+            ],
             mortgageSharePartnerB: 101,
           },
           taxIncomeCategoryIds: [1, 0, 2.5],
-          migratedFrom: { fromVersion: 2, unmappedFields: [{ field: "x" }, { field: "y", note: "n", value: { any: 1 } }] },
+          migratedFrom: {
+            fromVersion: 2,
+            unmappedFields: [
+              { field: "x" },
+              { field: "y", note: "n", value: { any: 1 } },
+            ],
+          },
         }),
       ),
-      save("belgian_tax_household_v2", household(2024, { partners: Array.from({ length: 3 }, () => 1) })),
-      save("belgian_tax_household_snapshots_v2", { "2024": household(2025), "24": household(24) }),
-      save("belgian_tax_household_snapshots_v2", { "2024": household(2025), "2023": household(2023) }),
-      save("belgian_tax_household_snapshots_v2", { "2025": household(2025, { partners: [] }), "2026": household(2027) }),
+      save(
+        "belgian_tax_household_v2",
+        household(2024, { partners: Array.from({ length: 3 }, () => 1) }),
+      ),
+      save("belgian_tax_household_snapshots_v2", {
+        "2024": household(2025),
+        "24": household(24),
+      }),
+      save("belgian_tax_household_snapshots_v2", {
+        "2024": household(2025),
+        "2023": household(2023),
+      }),
+      save("belgian_tax_household_snapshots_v2", {
+        "2025": household(2025, { partners: [] }),
+        "2026": household(2027),
+      }),
       save("belgian_tax_household_snapshots_v2", { "2024": household(2024) }),
       // Bulk saves.
       bulk({}),
@@ -391,22 +864,41 @@ export const AREAS: Record<string, ParityArea> = {
       bulk({ settings: [], expected: [] }),
       bulk({ settings: { nope: 1, includeTransfers: true }, expected: {} }),
       bulk(jsonText('{"settings":{"__proto__":1}}')),
-      bulk({ settings: { includeTransfers: true, constructor: 1 }, expected: {} }),
+      bulk({
+        settings: { includeTransfers: true, constructor: 1 },
+        expected: {},
+      }),
       bulk({ settings: { [LONG_KEY]: 1 }, expected: {} }),
       bulk({ settings: { includeTransfers: true }, expected: {} }),
-      bulk({ settings: { includeTransfers: true }, expected: { includeTransfers: { exists: true } } }),
+      bulk({
+        settings: { includeTransfers: true },
+        expected: { includeTransfers: { exists: true } },
+      }),
       bulk({
         settings: { onboarding_complete: 1, includeTransfers: "x" },
         expected: { includeTransfers: NEW, onboarding_complete: NEW },
       }),
       bulk({ settings: {}, expected: {} }),
       bulk({
-        settings: { widget_visibility: { d: 1 }, services_settings: { keepServicesOnQuit: true } },
-        expected: { services_settings: NEW, widget_visibility: { exists: true, value: { c: true, "2": false } }, extra: 1 },
+        settings: {
+          widget_visibility: { d: 1 },
+          services_settings: { keepServicesOnQuit: true },
+        },
+        expected: {
+          services_settings: NEW,
+          widget_visibility: { exists: true, value: { c: true, "2": false } },
+          extra: 1,
+        },
       }),
       bulk({
-        settings: { theme_settings: { mode: "dark" }, backup_settings: { backupDir: "/x" } },
-        expected: { backup_settings: NEW, theme_settings: { exists: true, value: { mode: "dark" } } },
+        settings: {
+          theme_settings: { mode: "dark" },
+          backup_settings: { backupDir: "/x" },
+        },
+        expected: {
+          backup_settings: NEW,
+          theme_settings: { exists: true, value: { mode: "dark" } },
+        },
       }),
       read("backup_settings"),
       read("services_settings"),
@@ -443,7 +935,16 @@ export const AREAS: Record<string, ParityArea> = {
         status: 200,
         body: JSON.stringify({
           result: "success",
-          rates: { EUR: 1, USD: 1.09, AED: 3.97, "123": 2, KWD: "0.33", ZWL: 1e6, XAU: 0.00005, QAR: 3.93 },
+          rates: {
+            EUR: 1,
+            USD: 1.09,
+            AED: 3.97,
+            "123": 2,
+            KWD: "0.33",
+            ZWL: 1e6,
+            XAU: 0.00005,
+            QAR: 3.93,
+          },
         }),
       },
     },
@@ -458,6 +959,463 @@ export const AREAS: Record<string, ParityArea> = {
       ratesList("?db_only=true"),
     ],
   },
+  accounts: {
+    router: { module: "accounts.ts", mountPath: "/api/accounts" },
+    seed: [
+      `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
+        (1, 'Shop', 'shop', '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001'),
+        (2, 'Travel', NULL, NULL, 'USD', 'savings', 'semi_liquid', 0, 1, 'none', 'joint', 1, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000002'),
+        (3, 'Old', NULL, NULL, 'EUR', 'checking', 'liquid', 1, 0, 'none', 'partner', 0, 1, NULL, 0,
+         '2025-02-01T08:00:00.000000Z', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000003'),
+        (4, 'Broker', NULL, 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'tax_advantaged', 'me', 0, 1, 1, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000004'),
+        (5, 'Empty', NULL, NULL, 'GBP', 'wallet', 'illiquid', 0, 1, 'none', 'me', 0, 0, 4, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000005'),
+        (6, 'Loan', NULL, NULL, 'EUR', 'liability', 'illiquid', 0, 1, 'pension', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000006')`,
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("USD", "0.9", "2025-01-02", 1)},
+        ${RATE_ROW("GBP", "1.15", "2025-01-02", 1)},
+        ${RATE_ROW("JPY", "0", "2025-01-02", 1)}`,
+      `INSERT INTO transactions (id, date, amount, currency, balance, recipient_id, account_id, is_active, bank_sequence,
+         created_at, updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('100', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-10', vision_numeric('-20.125', 18, 4), 'EUR', vision_numeric('1000', 18, 4), 1, 1, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-10', vision_numeric('5.005', 18, 4), 'EUR', NULL, 1, 1, 1, vision_numeric('7', 18, 0),
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-02-01', vision_numeric('-0.015', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, '2024-02-02', vision_numeric('999', 18, 4), 'EUR', NULL, 1, 1, 0, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, '2099-01-01', vision_numeric('50', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '2024-03-01', vision_numeric('250.5', 18, 4), 'USD', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (8, '2024-03-02', vision_numeric('40', 18, 4), 'EUR', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (9, '2024-03-03', vision_numeric('12', 18, 4), 'CHF', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (10, '2024-03-04', vision_numeric('-3.3333', 18, 4), 'GBP', vision_numeric('77.7777', 18, 4), 1, 2, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (11, '2024-03-05', vision_numeric('8', 18, 4), 'JPY', NULL, 1, 2, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (12, '2024-04-01', vision_numeric('-1500', 18, 4), 'EUR', NULL, 1, 6, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (13, '2024-05-01', vision_numeric('0', 18, 4), 'EUR', NULL, 1, 3, 1, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (14, '2024-05-02', vision_numeric('0.004', 18, 4), 'USD', NULL, 1, 4, 1, NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO account_statement_balances (account_id, currency, balance, balance_date) VALUES
+        (1, 'EUR', vision_numeric('1100.5', 18, 4), '2024-03-31'),
+        (1, 'USD', vision_numeric('3', 18, 4), '2024-03-30'),
+        (6, 'USD', vision_numeric('-10', 18, 4), '2024-04-30')`,
+    ],
+    steps: [
+      accounts(),
+      accounts("?active=all"),
+      accounts("?active=false"),
+      accounts("?active=all&limit=2&offset=1"),
+      accounts("?offset=4"),
+      accounts("?limit=0"),
+      accountCreate({
+        name: "  Savings Two  ",
+        currency: "usd",
+        type: "savings",
+        owner: "partner",
+        spendable: false,
+      }),
+      accountCreate({ name: "main" }),
+      accountCreate({ name: " MAIN " }),
+      accountCreate({}),
+      accountCreate({ name: "   " }),
+      accountCreate({ name: 5 }),
+      accountCreate({
+        name: "Bad",
+        type: "stock",
+        owner: "kids",
+        liquidity_class: 1,
+        tax_wrapper: null,
+      }),
+      accountCreate({ name: "Cur", currency: null }),
+      accountCreate({ name: "Cur", currency: "EURO" }),
+      accountCreate({ name: "Cur", currency: "" }),
+      accountCreate({ name: "Fund", funding_account_id: "1e3" }),
+      accountCreate({ name: "Fund", funding_account_id: true }),
+      accountCreate({ name: "Fund", funding_account_id: 999 }),
+      accountCreate({
+        name: "Fund",
+        funding_account_id: "4",
+        display_name: null,
+        institution: "  ING ",
+      }),
+      accountCreate({
+        name: "Stmt",
+        statement_balance: 1,
+        statement_balance_date: "2024-01-01",
+      }),
+      accountCreate({
+        name: "Flags",
+        spendable: "yes",
+        in_net_worth: 1,
+        is_active: false,
+        extra: { a: 1 },
+      }),
+      accountCreate({ name: "Clear", display_name: 5, institution: [] }),
+      accountCreate([]),
+      { operationId: "createAccount", method: "POST", path: "/api/accounts" },
+      accountUpdate("2", {
+        name: "Travel USD",
+        display_name: "  ",
+        institution: null,
+      }),
+      accountUpdate("2", { is_active: false }),
+      accountUpdate("2", { is_active: false, in_net_worth: true }),
+      accountUpdate("2", { is_active: true }),
+      accountUpdate("1", { funding_account_id: 5 }),
+      accountUpdate("1", { funding_account_id: 1 }),
+      accountUpdate("1", { funding_account_id: "abc" }),
+      accountUpdate("5", { funding_account_id: null, owner: "joint" }),
+      accountUpdate("4", { name: "travel usd" }),
+      accountUpdate("4", {}),
+      accountUpdate("999", { name: "Nobody" }),
+      accountUpdate("999", {}),
+      accountUpdate("999", { is_active: true }),
+      accountUpdate("abc", { name: "x" }),
+      accountUpdate("0", { name: "x" }),
+      accountUpdate("6", { statement_balance: 5 }),
+      accountUpdate("6", {
+        type: "checking",
+        currency: "gbp",
+        has_cash_sleeve: false,
+        multi_currency_cash: true,
+      }),
+      accountDelete("1"),
+      accountDelete("3"),
+      accountDelete("5"),
+      accountDelete("5"),
+      accountDelete("abc"),
+      accountDelete("1.5"),
+      statementPut("1", "EUR", { balance: 1200.25, date: "2024-04-30" }),
+      statementPut("1", "usd", { balance: "-3.33335", date: "2024-02-29" }),
+      statementPut("1", "gbp%20", {
+        balance: 0,
+        date: "2024-01-01",
+        extra: true,
+      }),
+      statementPut("2", "JPY", { balance: "1e3", date: ["2024-05-01"] }),
+      statementPut("2", "CHF", { balance: true, date: "2024-05-01" }),
+      statementPut("2", "CHF", { balance: "", date: "2024-05-01" }),
+      statementPut("2", "CHF", { balance: [7], date: "2024-05-01" }),
+      statementPut("2", "CHF", { balance: 1e-7, date: "2024-05-01" }),
+      statementPut("2", "CHF", { balance: 123456.78905, date: "2024-05-01" }),
+      statementPut("6", "EUR", { balance: null, date: "2024-05-01" }),
+      statementPut("6", "EUR", { balance: 5, date: null }),
+      statementPut("6", "EUR", { balance: 5 }),
+      statementPut("6", "EUR", { date: "2024-05-01" }),
+      statementPut("6", "EUR", {}),
+      statementPut("6", "EUR", []),
+      statementPut("6", "EUR"),
+      statementPut("6", "EUR", { balance: "abc", date: "2024-02-30" }),
+      statementPut("6", "EUR", { balance: 1e12, date: "0050-01-01" }),
+      statementPut("6", "EUR", { balance: 1e12 + 1, date: "2024-13-01" }),
+      statementPut("6", "EUR", { balance: -1e12, date: " 2024-01-01" }),
+      statementPut("6", "EUR", { balance: "Infinity", date: 20240101 }),
+      statementPut("6", "EURO", { balance: 1, date: "2024-01-01" }),
+      statementPut("6", "E1R", { balance: 1, date: "2024-01-01" }),
+      statementPut("999", "EUR", { balance: 1, date: "2024-01-01" }),
+      statementPut("999", "EURO", { balance: 1, date: "2024-01-01" }),
+      statementPut("abc", "EUR", { balance: 1, date: "2024-01-01" }),
+      statementPut("6", "%C3%A9ur", { balance: 1, date: "2024-01-01" }),
+      accounts("?active=all"),
+    ],
+  },
+  categories: {
+    router: { module: "categories.ts", mountPath: "/api/categories" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, is_active, created_at,
+         updated_at) VALUES
+        (1, 'FOOD', '', 'FOOD', 1, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'TRANSPORT', '', 'TRANSPORT', 1, 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, description, is_active, created_at, updated_at) VALUES
+        (3, 'FOOD', 'GROCERIES', 'Supermarkets', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'FOOD', 'RESTAURANTS', NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'TRANSPORT', 'FUEL', NULL, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, name, parent_id, hierarchy_only, legacy_compatible, is_active,
+         created_at, updated_at) VALUES
+        (6, '__HIERARCHY_6', 'SNACKS', 'SNACKS', 3, 0, 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, is_active, created_at, updated_at) VALUES
+        (7, 'HOUSING', 'RENT', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `UPDATE categories SET created_at = '${SEED_TIME}', updated_at = '${SEED_TIME}'`,
+      `INSERT INTO category_merge_aliases (general, detail, target_category_id, created_at) VALUES
+        ('FOOD', 'TAKEAWAY', 4, '${SEED_TIME}')`,
+      `INSERT INTO category_root_aliases (general, target_category_id, created_at) VALUES
+        ('OLDTRANSPORT', 2, '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, created_at, updated_at) VALUES
+        (1, 'Shop', 'shop', 3, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, recipient_id, category_id, is_active, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, 4, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      categoryTree,
+      categories(),
+      categories("?active=false"),
+      categories("?general=fo"),
+      categories("?detail=GRO&general=food"),
+      categories("?search=market"),
+      categories("?search=rest&limit=1"),
+      categories("?active=0&limit=2&offset=1"),
+      categories("?general=&detail="),
+      categoryCreate({ general: "food", detail: " groceries " }),
+      categoryCreate({
+        general: "Travel",
+        detail: "Hotel",
+        description: "Stays",
+      }),
+      categoryCreate({ general: "food", detail: "takeaway" }),
+      categoryCreate({}),
+      categoryCreate({ general: 5, detail: "x" }),
+      categoryCreate({ general: "", detail: "x" }),
+      categoryCreate({ general: "a", detail: "b", description: 7 }),
+      categoryCreate([]),
+      categoryCreate(),
+      categoryCreate({ general: "Travel", detail: "Hotel", extra: 1 }),
+      nodeCreate({ name: " dessert ", parentId: 3 }),
+      nodeCreate({ name: "x", parentId: 5 }),
+      nodeCreate({ name: "x", parentId: 999 }),
+      nodeCreate({ name: "oldtransport" }),
+      nodeCreate({ name: "food" }),
+      nodeCreate({ name: "   " }),
+      nodeCreate({ name: "a".repeat(101) }),
+      nodeCreate({ name: "y", extra: 1 }),
+      nodeCreate({ name: "z", parentId: 1.5 }),
+      nodeCreate({ name: "z", parentId: null, description: null }),
+      nodeCreate({ name: "zz", parentId: "3", description: "d".repeat(501) }),
+      nodeCreate([]),
+      nodeUpdate("6", { name: "treats" }),
+      nodeUpdate("3", { parentId: 6 }),
+      nodeUpdate("1", { is_active: false }),
+      nodeUpdate("6", { is_active: false, description: "Sweet" }),
+      nodeUpdate("999", {}),
+      nodeUpdate("abc", {}),
+      nodeUpdate("2", { name: "vehicles" }),
+      nodeUpdate("4", { description: "Eating out", parentId: null }),
+      nodeUpdate("3", { parentId: 5 }),
+      nodeUpdate("3", { bogus: 1 }),
+      nodeUpdate("3", { name: "" }),
+      nodeUpdate("3", { name: "restaurants", parentId: 4 }),
+      nodeMerge("6", { targetId: 3 }),
+      nodeMerge("3", { targetId: 3 }),
+      nodeMerge("1", { targetId: 3 }),
+      nodeMerge("999", { targetId: 3 }),
+      nodeMerge("4", { targetId: "3" }),
+      nodeMerge("4", { targetId: 5 }),
+      nodeMerge("4", { targetId: 3 }),
+      nodeDelete("3"),
+      nodeDelete("5"),
+      nodeDelete("5"),
+      nodeDelete("abc"),
+      categoryTree,
+      categories("?active=false"),
+      categoryCreate({ general: "food", detail: "restaurants" }),
+    ],
+  },
+  recipients: {
+    router: { module: "recipients.ts", mountPath: "/api/recipients" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, created_at,
+         updated_at) VALUES (1, 'FOOD', '', 'FOOD', 1, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, created_at, updated_at) VALUES
+        (2, 'FOOD', 'GROCERIES', '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'LEISURE', 'COFFEE', '${SEED_TIME}', '${SEED_TIME}')`,
+      `UPDATE categories SET created_at = '${SEED_TIME}', updated_at = '${SEED_TIME}'`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, notes, is_active, created_at,
+         updated_at) VALUES
+        (1, 'SHOP', 'SHOP', 2, 'corner shop', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'CAFÉ ÉCLAIR', 'CAFÉ ÉCLAIR', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'MARKET', 'MARKET', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'TO DELETE', 'DELETE TO', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'ALBERT HEIJN 1234', '1234 ALBERT HEIJN', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, 'ALBERT HEIJN 5678', '5678 ALBERT HEIJN', NULL, 'branch', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, 'OLD', 'OLD', NULL, NULL, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipient_bank_accounts (id, recipient_id, account_number, is_primary, created_at, updated_at)
+        VALUES
+        (1, 1, 'BE12 3456', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'BE99 0000', 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 3, 'NL01 ABCD', 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 2, 'FR76 1111', 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, recipient_id, category_id, is_active, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-06', vision_numeric('-3.2', 18, 4), 'EUR', 2, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-07', vision_numeric('-40', 18, 4), 'EUR', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-01-08', vision_numeric('-9', 18, 4), 'EUR', 6, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transaction_splits (id, transaction_id, recipient_id, amount, created_at, updated_at) VALUES
+        (1, 3, 2, vision_numeric('10', 18, 4), '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, recipient_id, created_at, updated_at)
+        VALUES (1, '2024-02-01', vision_numeric('-5', 18, 4), 'EUR', 3, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipient_match_patterns (id, recipient_id, pattern, pattern_kind, case_sensitive, priority,
+         notes, created_at, updated_at) VALUES
+        (1, 1, 'SHOP', 'literal_prefix', 0, 100, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'SH?P*', 'glob', 1, 10, 'glob', '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      recipients(),
+      recipients("?active=false"),
+      recipients("?name=sho"),
+      recipients("?name=caf%C3%A9"),
+      recipients("?search=groc"),
+      recipients("?search=be12"),
+      recipients("?search=%C3%A9clair"),
+      recipients("?search=branch"),
+      recipients("?uncategorized=true"),
+      recipients("?default_category_id=1"),
+      recipients("?default_category_id=abc"),
+      recipients("?default_category_id="),
+      recipients("?sort_by=default_category_name&sort_dir=desc"),
+      recipients("?sort_by=primary_bank_account"),
+      recipients("?sort_by=bogus&sort_dir=up"),
+      recipients("?sort_by=constructor"),
+      recipients("?sort_by=__proto__&sort_dir=desc"),
+      recipients("?limit=2&offset=1"),
+      recipients("?limit=0&offset=-4"),
+      recipients("?name=a&name=b"),
+      recipients("?search=a&search=b&default_category_id=x"),
+      recipientRead("1"),
+      recipientRead("999"),
+      recipientRead("abc"),
+      recipientCreate({ name: "  New  Shop " }),
+      recipientCreate({ name: "shop" }),
+      recipientCreate({ name: "system" }),
+      recipientCreate({ name: "" }),
+      recipientCreate({}),
+      recipientCreate({ name: 5 }),
+      recipientCreate({
+        name: "Bakery",
+        default_category_id: 3,
+        notes: "fresh",
+      }),
+      recipientCreate({ name: "x", default_category_id: "abc" }),
+      recipientCreate({ name: "y", default_category_id: null, notes: null }),
+      recipientCreate({ name: "z", notes: 7, default_category_id: 0 }),
+      recipientCreate([]),
+      recipientCreate(),
+      recipientUpdate("1", { name: "shop two", notes: null }),
+      recipientUpdate("1", { is_active: null, name: null }),
+      recipientUpdate("999", { notes: "x" }),
+      recipientUpdate("3", { name: "System" }),
+      recipientUpdate("3", { default_category_id: 0 }),
+      recipientUpdate("3", {}),
+      recipientUpdate("abc", {}),
+      recipientUpdate("3", { is_active: "yes" }),
+      recipientUpdate("7", { is_active: true, default_category_id: 2 }),
+      recipientUpdate("3", { name: "shop two" }),
+      recipientMerge("1", { alias_ids: [2, 3] }),
+      recipientMerge("1", { alias_ids: [] }),
+      recipientMerge("1", {}),
+      recipientMerge("1", { alias_ids: "2" }),
+      recipientMerge("1", { alias_ids: ["x", 2] }),
+      recipientMerge("999", { alias_ids: [2] }),
+      recipientMerge("2", { alias_ids: [4] }),
+      recipientMerge("1", { alias_ids: [1] }),
+      recipientMerge("5", { alias_ids: [6, 999] }),
+      recipientMerge("abc", { alias_ids: [6] }),
+      recipientRead("1"),
+      recipientRead("2"),
+      recipientUnmerge("2"),
+      recipientUnmerge("999"),
+      recipientUnmerge("abc"),
+      recipientDelete("4"),
+      recipientDelete("4"),
+      recipientDelete("abc"),
+      patternList("1"),
+      patternList("999"),
+      patternCreate("1", { pattern: "SHOP" }),
+      patternCreate("1", {
+        pattern: "SH*P",
+        pattern_kind: "glob",
+        case_sensitive: true,
+        priority: 5,
+        notes: "n",
+      }),
+      patternCreate("1", { pattern: "" }),
+      patternCreate("1", { pattern: "   " }),
+      patternCreate("1", {}),
+      patternCreate("1", { pattern: 5 }),
+      patternCreate("1", { pattern: "x", pattern_kind: "bogus" }),
+      patternCreate("1", { pattern: "x", priority: 1.5 }),
+      patternCreate("1", { pattern: "x", priority: 3000000000 }),
+      patternCreate("1", { pattern: "x", priority: "1" }),
+      patternCreate("1", {
+        pattern: "nulls",
+        pattern_kind: null,
+        case_sensitive: null,
+        priority: null,
+        notes: null,
+      }),
+      patternCreate("1", { pattern: "a".repeat(501) }),
+      patternCreate("1", { pattern: "x", case_sensitive: "yes" }),
+      patternCreate("abc", { pattern: "x" }),
+      patternCreate("1", { pattern: "^SH(OP|IP)\\b", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "[z-a]", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(a+)+$", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(x|y)*", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "[(a+)+]", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "a{2,1}", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "(?<n>a)\\k<m>", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "*", pattern_kind: "regex" }),
+      patternCreate("1", { pattern: "\\", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: "SHOP" }),
+      patternPreview("1", { pattern: "albert" }),
+      patternPreview("1", { pattern: "albert", case_sensitive: true }),
+      patternPreview("1", { pattern: "*HEIJN ????", pattern_kind: "glob" }),
+      patternPreview("1", {
+        pattern: "caf\u00e9",
+        pattern_kind: "literal_prefix",
+      }),
+      patternPreview("1", { pattern: "" }),
+      patternPreview("1", {
+        pattern: "x",
+        pattern_kind: null,
+        case_sensitive: null,
+      }),
+      patternPreview("1", { pattern: "x", extra: 1 }),
+      patternPreview("abc", { pattern: "x" }),
+      patternPreview("1", { pattern: "\\d{4}$", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: "^caf", pattern_kind: "regex" }),
+      patternPreview("1", {
+        pattern: "^caf",
+        pattern_kind: "regex",
+        case_sensitive: true,
+      }),
+      patternPreview("1", { pattern: "(?=.*HEIJN)A", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: ")", pattern_kind: "regex" }),
+      patternPreview("1", { pattern: "^É", pattern_kind: "regex" }),
+      patternUpdate("1", "1", { priority: 7 }),
+      patternUpdate("1", "2", { case_sensitive: false }),
+      patternUpdate("1", "1", { pattern: "" }),
+      patternUpdate("1", "999", { pattern: "x" }),
+      patternUpdate("1", "999", { priority: 1 }),
+      patternUpdate("1", "1", { is_active: false, notes: "off" }),
+      patternUpdate("1", "1", { notes: null }),
+      patternUpdate("1", "1", { pattern_kind: null }),
+      patternUpdate("1", "1", { pattern_kind: "glob", pattern: "S*" }),
+      patternUpdate("1", "1", {}),
+      patternUpdate("1", "4", { pattern_kind: "regex" }),
+      patternUpdate("1", "4", { pattern_kind: "regex", pattern: "SH*P(" }),
+      patternUpdate("1", "3", { pattern: "(b+)*", pattern_kind: "regex" }),
+      patternUpdate("1", "3", {
+        pattern: "^SHOP\\s",
+        pattern_kind: "regex",
+        case_sensitive: true,
+      }),
+      patternUpdate("1", "abc", {}),
+      patternUpdate("abc", "1", {}),
+      patternDelete("1", "2"),
+      patternDelete("1", "999"),
+      patternDelete("1", "abc"),
+      patternList("1"),
+      recipients("?active=false&limit=1000"),
+    ],
+  },
   "exchange-rates-empty": {
     router: { module: "info/rates.ts", mountPath: "/api/info" },
     seed: [],
@@ -467,7 +1425,435 @@ export const AREAS: Record<string, ParityArea> = {
     },
     steps: [ratesList("?db_only=true"), ratesRefresh, ratesList("?db_only=1")],
   },
+  transactions: {
+    router: { module: "transactions.ts", mountPath: "/api/transactions" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, created_at,
+         updated_at) VALUES (1, 'FOOD', '', 'FOOD', 1, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO categories (id, general, detail, created_at, updated_at) VALUES
+        (2, 'FOOD', 'GROCERIES', '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'LEISURE', 'COFFEE', '${SEED_TIME}', '${SEED_TIME}'),
+        (10, 'TRAVEL', 'HOTEL', '${SEED_TIME}', '${SEED_TIME}')`,
+      `UPDATE categories SET created_at = '${SEED_TIME}', updated_at = '${SEED_TIME}'`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, primary_recipient_id, is_active,
+         created_at, updated_at) VALUES
+        (1, 'SHOP', 'SHOP', 2, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'CAFÉ ÉCLAIR', 'CAFÉ ÉCLAIR', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'MARKET', 'MARKET', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'MARKET NORTH', 'MARKET NORTH', NULL, 3, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'SHOP 2', '2 SHOP', NULL, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, 'CAFÉ BIS', 'BIS CAFÉ', 10, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '', '', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001'),
+        (2, 'Travel', 'USD', 'savings', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000002')`,
+      `INSERT INTO tags (id, slug, color, is_active, created_at, updated_at) VALUES
+        (1, 'holiday', '#00aaff', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'work', NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'old', '#999999', 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("USD", "0.9", "2025-01-02", 1)},
+        ${RATE_ROW("USD", "0.95", "2024-12-31", 0)},
+        ${RATE_ROW("GBP", "1.15", "2025-01-02", 1)},
+        ${RATE_ROW("JPY", "0", "2025-01-02", 1)}`,
+      `INSERT INTO transactions (id, date, amount, currency, balance, memo, comment, recipient_id, category_id,
+         account_id, is_active, bank_sequence, is_transfer, transfer_peer_id, transfer_source, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', NULL, 'CARD 1234', NULL, 1, NULL, 1, 1, NULL, 0,
+         NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-06', vision_numeric('-3.2', 18, 4), 'EUR', vision_numeric('500', 18, 4), NULL, 'latte', 2,
+         NULL, 1, 1, NULL, 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-06', vision_numeric('-40', 18, 4), 'EUR', NULL, 'WEEKLY', NULL, 3, NULL, 1, 1,
+         vision_numeric('3', 18, 0), 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-01-07', vision_numeric('2500', 18, 4), 'EUR', NULL, 'SALARY', NULL, 4, 10, 1, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, '2024-02-01', vision_numeric('-9.99', 18, 4), 'EUR', NULL, NULL, NULL, 5, NULL, 1, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, '2024-02-02', vision_numeric('-4.5', 18, 4), 'EUR', NULL, NULL, 'bis', 6, NULL, 1, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '2024-03-01', vision_numeric('250.5', 18, 4), 'USD', vision_numeric('1250.5', 18, 4), 'TOP UP', NULL, 3,
+         NULL, 2, 1, NULL, 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (8, '2024-03-02', vision_numeric('-75', 18, 4), 'GBP', NULL, 'HOTEL', NULL, 7, 10, 2, 1, NULL, 0, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (9, '2024-03-03', vision_numeric('-1000', 18, 4), 'JPY', NULL, NULL, NULL, 3, NULL, 2, 1, NULL, 0, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (10, '2024-03-04', vision_numeric('-12', 18, 4), 'CHF', NULL, NULL, NULL, 3, NULL, 2, 1, NULL, 0, NULL, NULL,
+         NULL, '${SEED_TIME}'),
+        (11, '2024-03-05', vision_numeric('-100', 18, 4), 'EUR', NULL, 'TO SAVINGS', NULL, 3, NULL, 1, 1, NULL, 1,
+         12, 'manual', '${SEED_TIME}', '${SEED_TIME}'),
+        (12, '2024-03-05', vision_numeric('100', 18, 4), 'EUR', NULL, 'FROM MAIN', NULL, 3, NULL, 2, 1, NULL, 1, 11,
+         'manual', '${SEED_TIME}', '${SEED_TIME}'),
+        (13, '2024-03-06', vision_numeric('-7.25', 18, 4), 'EUR', NULL, 'OLD ROW', NULL, 1, 3, 1, 0, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (14, '2024-01-06', vision_numeric('1.005', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, 1, 1,
+         vision_numeric('1', 18, 0), 0, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (15, '2024-04-01', vision_numeric('-20', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, NULL, 1, NULL, 0, NULL,
+         NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (1, 1), (1, 2), (3, 3), (5, 2), (8, 1)`,
+    ],
+    steps: [
+      transactions(),
+      transactions("?limit=3&offset=2"),
+      transactions("?limit=0&offset=-1"),
+      transactions("?limit=99999"),
+      transactions("?active=false"),
+      transactions("?start_date=2024-01-06&end_date=2024-02-01"),
+      transactions("?start_date=2024-13-01"),
+      transactions("?start_date=2024/01/01"),
+      transactions("?start_date=2024-02-30&end_date=2024-01-00"),
+      transactions("?start_date=a&start_date=b"),
+      transactions("?account_id=2"),
+      transactions("?account_id=abc"),
+      transactions("?account_id="),
+      transactions("?account_id=1&account_id=2"),
+      transactions("?bank_account=trav"),
+      transactions("?bank_account=a&bank_account=b"),
+      transactions("?category_id=1"),
+      transactions("?category_id=3"),
+      transactions("?category_id=10"),
+      transactions("?category_ids=2,3"),
+      transactions("?category_ids=2,x"),
+      transactions("?category_ids="),
+      transactions("?category_ids=5,"),
+      transactions("?category_ids=2&category_ids=10"),
+      transactions("?recipient_id=3"),
+      transactions("?recipient_group_id=4"),
+      transactions("?recipient_group_id=6"),
+      transactions("?recipient_name=caf%C3%A9"),
+      transactions("?recipient_name=shop"),
+      transactions("?search=groc"),
+      transactions("?search=12.5"),
+      transactions("?search=2024-03"),
+      transactions("?search=holi"),
+      transactions("?search=%C3%A9clair"),
+      transactions("?search=trav"),
+      transactions("?search=gbp"),
+      transactions("?search=a"),
+      transactions("?search=%20%20x%20"),
+      transactions("?sort_by=amount&sort_dir=asc"),
+      transactions("?sort_by=recipient"),
+      transactions("?sort_by=category&sort_dir=desc"),
+      transactions("?sort_by=bank&sort_dir=asc"),
+      transactions("?sort_by=constructor"),
+      transactions("?sort_by=currency&sort_dir=up"),
+      transactions("?sort_by=memo&sort_dir=asc"),
+      transactions("?include_balance=true"),
+      transactions("?include_balance=true&account_id=1&sort_by=amount"),
+      transactions("?include_balance=1&limit=2&offset=1"),
+      transactions("?transaction_type=income"),
+      transactions("?transaction_type=expense"),
+      transactions("?transaction_type=x"),
+      transactions("?amount_min=10&amount_max=50"),
+      transactions("?amount_min=-50&amount_signed=true"),
+      transactions("?amount_exact=12.5"),
+      transactions("?amount_exact=-12.5&amount_signed=true"),
+      transactions("?amount_min=abc"),
+      transactions("?amount_max=1e2"),
+      transactions("?tags=holiday"),
+      transactions("?tags=HOLIDAY,%20work"),
+      transactions("?tags=old"),
+      transactions("?tags=,"),
+      transactions("?uncategorised=true"),
+      transactions("?uncategorised=true&include_balance=true"),
+      transactions("?uncategorised=true&category_id=2"),
+      transactions("?uncategorised=true&limit=1&offset=99"),
+      transactions("?uncategorised=true&active=false&sort_by=amount"),
+      transactions("?normalize_to_eur=true"),
+      transactions("?normalize_to_eur=true&target_currency=usd"),
+      transactions("?normalize_to_eur=true&target_currency=GBP"),
+      transactions("?normalize_to_eur=true&target_currency=XYZ"),
+      transactions(
+        "?normalize_to_eur=true&target_currency=a&target_currency=b",
+      ),
+      transactions("?normalize_to_eur=true&uncategorised=true"),
+      transactions("?transaction_id=3"),
+      transactions("?transaction_id=0"),
+      transactions("?transaction_id=1.5"),
+      transactions(
+        "?transaction_id=x&start_date=bad&sort_by=a&sort_by=b&category_ids=y",
+      ),
+      transactionRead("1"),
+      transactionRead("6"),
+      transactionRead("13"),
+      transactionRead("999"),
+      transactionRead("abc"),
+      transactionRead("0"),
+      transactionRead("2147483648"),
+    ],
+  },
 };
+
+/** Steps as the corpus stores them: JSON round-tripped, so `-0` and dropped keys compare equal. */
+const asRecorded = (steps: ParityStep[]): ParityStep[] =>
+  JSON.parse(JSON.stringify(steps)) as ParityStep[];
+
+/** A seeded run of mutated requests per area (scripts/lib/nativeParityMutations.ts). */
+function mutationAreas(): Record<string, ParityArea> {
+  const tags = AREAS.tags;
+  const settings = AREAS.settings;
+  const rates = AREAS["exchange-rates"];
+  const accountArea = AREAS.accounts;
+  const categoryArea = AREAS.categories;
+  const recipientArea = AREAS.recipients;
+  const transactionArea = AREAS.transactions;
+  if (
+    tags === undefined ||
+    settings === undefined ||
+    rates === undefined ||
+    accountArea === undefined ||
+    categoryArea === undefined ||
+    recipientArea === undefined ||
+    transactionArea === undefined
+  )
+    throw new Error("missing base area");
+
+  const tagRandom = new Random(0x7a65);
+  const colors = [
+    "#00aaff",
+    "#FFF",
+    "#12345g",
+    "red",
+    "",
+    null,
+    5,
+    [],
+    {},
+    "#123456 ",
+    "#abcdef",
+  ];
+  const tagSteps: ParityStep[] = [];
+  for (let i = 0; i < 160; i++) {
+    if (tagRandom.chance(0.65)) {
+      const body: Record<string, unknown> = {};
+      if (tagRandom.chance(0.92))
+        body.slug = tagRandom.chance(0.85)
+          ? randomText(tagRandom)
+          : randomValue(tagRandom, 1);
+      if (tagRandom.chance(0.6)) body.color = tagRandom.pick(colors);
+      if (tagRandom.chance(0.1))
+        body[tagRandom.pick(["extra", "is_active", "id"])] = randomValue(
+          tagRandom,
+          0,
+        );
+      tagSteps.push({
+        operationId: "createTag",
+        method: "POST",
+        path: "/api/tags",
+        body,
+      });
+    } else {
+      const query = randomQuery(tagRandom, ["active", "limit", "offset"]);
+      tagSteps.push({
+        operationId: "getTags",
+        method: "GET",
+        path: `/api/tags${query}`,
+      });
+    }
+  }
+  tagSteps.push({
+    operationId: "getTags",
+    method: "GET",
+    path: "/api/tags?active=all&limit=1000",
+  });
+
+  const settingRandom = new Random(0x5e77);
+  const settingSteps: ParityStep[] = [];
+  const keys = [
+    ...new Set(
+      settings.steps.map((step) =>
+        decodeURIComponent(step.path.split("/")[3] ?? ""),
+      ),
+    ),
+  ].filter((key) => key !== "" && !key.startsWith("?"));
+  for (const step of mutatedSteps(settingRandom, settings.steps, 3)) {
+    settingSteps.push(step);
+    if (settingRandom.chance(0.15)) {
+      const key = settingRandom.chance(0.8)
+        ? settingRandom.pick(keys)
+        : randomText(settingRandom, 3);
+      settingSteps.push(read(encodeURIComponent(key)));
+    }
+    if (settingRandom.chance(0.03))
+      settingSteps.push(list(randomQuery(settingRandom, ["withBaselines"])));
+  }
+  settingSteps.push(list("?withBaselines=true"));
+
+  const rateRandom = new Random(0xfe);
+  const ecbStatus = [200, 200, 200, 200, 404, 500];
+  if (rates.fetch === undefined)
+    throw new Error("exchange-rates has no provider answers");
+  const rateSteps: ParityStep[] = [
+    { ...ratesRefresh, fetch: rates.fetch },
+    ratesList("?db_only=true"),
+  ];
+  for (let i = 0; i < 80; i++) {
+    rateSteps.push({
+      ...ratesRefresh,
+      fetch: {
+        [ECB_DAILY]: {
+          status: rateRandom.pick(ecbStatus),
+          body: randomEcbXml(rateRandom),
+        },
+        [ER_API_LATEST]: {
+          status: rateRandom.pick(ecbStatus),
+          body: randomErApi(rateRandom),
+        },
+      },
+    });
+    rateSteps.push(
+      ratesList(
+        rateRandom.chance(0.8)
+          ? "?db_only=true"
+          : randomQuery(rateRandom, ["db_only"]),
+      ),
+    );
+  }
+
+  // The create and update bodies mutated, between random list queries and
+  // updates or deletes of random ids, so later steps meet what earlier ones wrote.
+  const accountRandom = new Random(0xacc7);
+  const ids = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "0",
+    "999",
+    "abc",
+    "1.5",
+    "01",
+    "2147483648",
+  ];
+  const accountSteps: ParityStep[] = [];
+  for (const step of mutatedSteps(accountRandom, accountArea.steps, 3)) {
+    accountSteps.push(
+      step.method === "PATCH" && accountRandom.chance(0.3)
+        ? accountUpdate(accountRandom.pick(ids), step.body)
+        : step,
+    );
+    if (accountRandom.chance(0.15))
+      accountSteps.push(
+        accounts(randomQuery(accountRandom, ["active", "limit", "offset"])),
+      );
+    if (accountRandom.chance(0.04))
+      accountSteps.push(accountDelete(accountRandom.pick(ids)));
+  }
+  accountSteps.push(accounts("?active=all"));
+
+  // The category bodies mutated; node updates and merges sometimes aimed at
+  // random ids, with random list queries, tree reads and node deletes between.
+  const categoryRandom = new Random(0xca7e);
+  const categorySteps: ParityStep[] = [];
+  for (const step of mutatedSteps(categoryRandom, categoryArea.steps, 3)) {
+    if (step.operationId === "updateCategoryNode" && categoryRandom.chance(0.3))
+      categorySteps.push(nodeUpdate(categoryRandom.pick(ids), step.body));
+    else if (
+      step.operationId === "mergeCategoryNode" &&
+      categoryRandom.chance(0.3)
+    )
+      categorySteps.push(nodeMerge(categoryRandom.pick(ids), step.body));
+    else categorySteps.push(step);
+    if (categoryRandom.chance(0.12))
+      categorySteps.push(
+        categories(
+          randomQuery(categoryRandom, [
+            "active",
+            "general",
+            "detail",
+            "search",
+            "limit",
+            "offset",
+          ]),
+        ),
+      );
+    if (categoryRandom.chance(0.05)) categorySteps.push(categoryTree);
+    if (categoryRandom.chance(0.04))
+      categorySteps.push(nodeDelete(categoryRandom.pick(ids)));
+  }
+  categorySteps.push(categoryTree, categories("?active=false"));
+
+  // The recipient and pattern bodies mutated; writes sometimes aimed at random
+  // ids, with random list queries, reads, unmerges and deletes between.
+  const recipientRandom = new Random(0x2ec1);
+  const recipientSteps: ParityStep[] = [];
+  for (const step of mutatedSteps(recipientRandom, recipientArea.steps, 3)) {
+    const target = recipientRandom.chance(0.3)
+      ? recipientRandom.pick(ids)
+      : undefined;
+    if (target !== undefined && step.operationId === "updateRecipient")
+      recipientSteps.push(recipientUpdate(target, step.body));
+    else if (target !== undefined && step.operationId === "mergeRecipient")
+      recipientSteps.push(recipientMerge(target, step.body));
+    else if (
+      target !== undefined &&
+      step.operationId === "updateRecipientPattern"
+    )
+      recipientSteps.push(patternUpdate("1", target, step.body));
+    else recipientSteps.push(step);
+    if (recipientRandom.chance(0.12))
+      recipientSteps.push(
+        recipients(
+          randomQuery(recipientRandom, [
+            "active",
+            "name",
+            "search",
+            "sort_by",
+            "sort_dir",
+            "default_category_id",
+            "uncategorized",
+            "limit",
+            "offset",
+          ]),
+        ),
+      );
+    if (recipientRandom.chance(0.05))
+      recipientSteps.push(recipientRead(recipientRandom.pick(ids)));
+    if (recipientRandom.chance(0.04))
+      recipientSteps.push(recipientUnmerge(recipientRandom.pick(ids)));
+    if (recipientRandom.chance(0.03))
+      recipientSteps.push(recipientDelete(recipientRandom.pick(ids)));
+    if (recipientRandom.chance(0.03))
+      recipientSteps.push(patternList(recipientRandom.pick(ids)));
+  }
+  recipientSteps.push(recipients("?active=false&limit=1000"), patternList("1"));
+
+  // Reads only: random list queries and reads of random ids.
+  const transactionRandom = new Random(0x7a11);
+  const transactionSteps: ParityStep[] = [];
+  for (let i = 0; i < 200; i++) {
+    transactionSteps.push(
+      transactions(randomQuery(transactionRandom, TRANSACTION_QUERY_KEYS)),
+    );
+    if (transactionRandom.chance(0.1))
+      transactionSteps.push(transactionRead(transactionRandom.pick(ids)));
+  }
+
+  return {
+    "transactions-mutations": {
+      ...transactionArea,
+      steps: asRecorded(transactionSteps),
+    },
+    "recipients-mutations": {
+      ...recipientArea,
+      steps: asRecorded(recipientSteps),
+    },
+    "categories-mutations": {
+      ...categoryArea,
+      steps: asRecorded(categorySteps),
+    },
+    "accounts-mutations": { ...accountArea, steps: asRecorded(accountSteps) },
+    "tags-mutations": { ...tags, steps: asRecorded(tagSteps) },
+    "settings-mutations": { ...settings, steps: asRecorded(settingSteps) },
+    "exchange-rates-mutations": { ...rates, steps: asRecorded(rateSteps) },
+  };
+}
+
+Object.assign(AREAS, mutationAreas());
 
 interface RecordedStep extends ParityStep {
   status: number;
@@ -476,11 +1862,14 @@ interface RecordedStep extends ParityStep {
 
 /** Drops `meta.requestId`, and `meta` itself when nothing else is in it. */
 function withoutRequestId(body: unknown): unknown {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) return body;
+  if (typeof body !== "object" || body === null || Array.isArray(body))
+    return body;
   const { meta, ...rest } = body as { meta?: Record<string, unknown> };
   if (meta === undefined) return rest;
   const { requestId: _requestId, ...otherMeta } = meta;
-  return Object.keys(otherMeta).length > 0 ? { ...rest, meta: otherMeta } : rest;
+  return Object.keys(otherMeta).length > 0
+    ? { ...rest, meta: otherMeta }
+    : rest;
 }
 
 /** The parts of the backend's route-test helpers the recorder uses. */
@@ -488,61 +1877,103 @@ interface AgentRequest extends PromiseLike<{ status: number; body: unknown }> {
   set(name: string, value: string): AgentRequest;
   send(body: string): AgentRequest;
 }
-type Agent = Record<"get" | "post" | "put" | "patch" | "delete", (url: string) => AgentRequest>;
+type Agent = Record<
+  "get" | "post" | "put" | "patch" | "delete",
+  (url: string) => AgentRequest
+>;
 interface RouteAppModule {
-  createRouteApp: (router: unknown, options: { mountPath: string; isProduction: () => boolean }) => unknown;
+  createRouteApp: (
+    router: unknown,
+    options: { mountPath: string; isProduction: () => boolean },
+  ) => unknown;
 }
 interface HttpAgentModule {
   httpAgent: (app: unknown) => Agent;
 }
 
-async function recordArea(name: string, area: ParityArea): Promise<RecordedStep[]> {
+async function recordArea(
+  name: string,
+  area: ParityArea,
+): Promise<RecordedStep[]> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `vision-parity-${name}-`));
   const file = path.join(dir, "vision.sqlite3");
   // Before any backend module loads its settings.
   process.env.VISION_DATABASE_PATH = file;
   process.env.NODE_ENV = "test";
   process.env.APP_TIMEZONE = "Europe/Brussels";
-  const stubs = area.fetch;
-  if (stubs !== undefined) {
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  // The routes' rate limiters guard a network listener; the in-process Swift backend has
+  // none (ADR-270), so a long corpus must not record their 429s.
+  process.env.VISION_DEV = "true";
+  let stubs = area.fetch ?? {};
+  if (
+    area.fetch !== undefined ||
+    area.steps.some((step) => step.fetch !== undefined)
+  ) {
+    globalThis.fetch = (input: string | URL | Request) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
       const stub = stubs[url];
-      if (stub === undefined) return Promise.reject(new TypeError(`fetch failed: ${url}`));
+      if (stub === undefined)
+        return Promise.reject(new TypeError(`fetch failed: ${url}`));
       return Promise.resolve(new Response(stub.body, { status: stub.status }));
-    });
+    };
   }
-  const { runMigrations } = await import("../apps/node-backend/src/database/migrate.ts");
+  const { runMigrations } =
+    await import("../apps/node-backend/src/database/migrate.ts");
   await runMigrations(file, { skipBackup: true });
-  const { openDatabase } = await import("../apps/node-backend/src/database/connection.ts");
+  const { openDatabase } =
+    await import("../apps/node-backend/src/database/connection.ts");
   const seedDb = openDatabase(file, "writer");
   for (const statement of area.seed) seedDb.exec(statement);
   seedDb.close();
 
   // The test helpers and routers load by path: routeApp.ts also holds vitest helpers,
   // which this script's program does not type.
-  const backendModule = (...parts: string[]) => repoPath("apps/node-backend", ...parts);
-  const { createRouteApp } = (await import(backendModule("tests/helpers/routeApp.ts"))) as RouteAppModule;
-  const { httpAgent } = (await import(backendModule("tests/helpers/httpAgent.ts"))) as HttpAgentModule;
-  const { default: router } = (await import(backendModule("src/routes", area.router.module))) as {
+  const backendModule = (...parts: string[]) =>
+    repoPath("apps/node-backend", ...parts);
+  const { createRouteApp } = (await import(
+    backendModule("tests/helpers/routeApp.ts")
+  )) as RouteAppModule;
+  const { httpAgent } = (await import(
+    backendModule("tests/helpers/httpAgent.ts")
+  )) as HttpAgentModule;
+  const { default: router } = (await import(
+    backendModule("src/routes", area.router.module)
+  )) as {
     default: unknown;
   };
   // The packaged backend runs in production, which masks 5xx messages.
   const agent = httpAgent(
-    createRouteApp(router, { mountPath: area.router.mountPath, isProduction: () => true }),
+    createRouteApp(router, {
+      mountPath: area.router.mountPath,
+      isProduction: () => true,
+    }),
   );
-  const { todayAppDateString } = (await import(backendModule("src/lib/timezone.ts"))) as {
+  const { todayAppDateString } = (await import(
+    backendModule("src/lib/timezone.ts")
+  )) as {
     todayAppDateString: () => string;
   };
   const recorded: RecordedStep[] = [];
   for (const step of area.steps) {
-    const method = step.method.toLowerCase() as "get" | "post" | "put" | "patch" | "delete";
+    if (step.fetch !== undefined) stubs = step.fetch;
+    const method = step.method.toLowerCase() as
+      "get" | "post" | "put" | "patch" | "delete";
     const request = agent[method](step.path);
-    if ("body" in step) request.set("Content-Type", "application/json").send(JSON.stringify(step.body));
+    if ("body" in step)
+      request
+        .set("Content-Type", "application/json")
+        .send(JSON.stringify(step.body));
     const res = await request;
     const today = todayAppDateString();
     const response = JSON.parse(
-      JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) => (value === today ? TODAY_TOKEN : value)),
+      JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) =>
+        value === today ? TODAY_TOKEN : value,
+      ),
     ) as unknown;
     recorded.push({ ...step, status: res.status, response });
   }
@@ -552,7 +1983,12 @@ async function recordArea(name: string, area: ParityArea): Promise<RecordedStep[
 
 /** The corpus file of one area: the seed and the recorded steps. */
 function corpusText(area: ParityArea, steps: RecordedStep[]): string {
-  const corpus = { generatedBy: "bun run native:parity", seed: area.seed, fetch: area.fetch, steps };
+  const corpus = {
+    generatedBy: "bun run native:parity",
+    seed: area.seed,
+    fetch: area.fetch,
+    steps,
+  };
   return `${JSON.stringify(corpus, null, 2)}\n`;
 }
 
@@ -568,17 +2004,24 @@ async function main(): Promise<void> {
     if (area === undefined) throw new Error(`unknown parity area: ${name}`);
     const steps = await recordArea(name, area);
     fs.mkdirSync(PARITY_DIR, { recursive: true });
-    fs.writeFileSync(path.join(PARITY_DIR, `${name}.json`), corpusText(area, steps));
+    fs.writeFileSync(
+      path.join(PARITY_DIR, `${name}.json`),
+      corpusText(area, steps),
+    );
     console.log(`${name}: ${steps.length} steps`);
     // The routers' modules keep timers and connections open.
     process.exit(0);
   }
   for (const name of Object.keys(AREAS)) {
     if (args.length > 0 && !args.includes(name)) continue;
-    const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--record", name], {
-      cwd: REPO_ROOT,
-      stdio: "inherit",
-    });
+    const child = spawnSync(
+      process.execPath,
+      [fileURLToPath(import.meta.url), "--record", name],
+      {
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+      },
+    );
     if (child.status !== 0) throw new Error(`recording ${name} failed`);
   }
 }

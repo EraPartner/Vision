@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import VisionNativeCore
 
@@ -17,8 +18,10 @@ import VisionNativeCore
         let hasBody: Bool
         let status: Int
         let response: JSONValue
+        /// Provider answers from this step on, replacing the corpus's.
+        let fetch: [String: Stub]?
 
-        enum CodingKeys: String, CodingKey { case operationId, method, path, body, status, response }
+        enum CodingKeys: String, CodingKey { case operationId, method, path, body, status, response, fetch }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -28,6 +31,7 @@ import VisionNativeCore
             hasBody = container.contains(.body)
             status = try container.decode(Int.self, forKey: .status)
             response = try container.decode(JSONValue.self, forKey: .response)
+            fetch = try container.decodeIfPresent([String: Stub].self, forKey: .fetch)
         }
     }
 
@@ -43,13 +47,18 @@ import VisionNativeCore
         let body: String
     }
 
-    /// The recorder's `fetch`: a recorded answer by URL, anything else unreachable.
-    struct StubFetcher: ProviderFetching {
+    /// The recorder's `fetch`: a recorded answer by URL, anything else unreachable. A step can
+    /// replace the answers for the steps from it on.
+    final class StubFetcher: ProviderFetching {
         struct Unreachable: Error { let url: URL }
-        let stubs: [String: Stub]
+        private let stubs: Mutex<[String: Stub]>
+
+        init(stubs: [String: Stub]) { self.stubs = Mutex(stubs) }
+
+        func replace(_ next: [String: Stub]) { stubs.withLock { $0 = next } }
 
         func get(_ url: URL, timeout: TimeInterval) async throws -> ProviderResponse {
-            guard let stub = stubs[url.absoluteString] else { throw Unreachable(url: url) }
+            guard let stub = stubs.withLock({ $0[url.absoluteString] }) else { throw Unreachable(url: url) }
             return ProviderResponse(status: stub.status, body: Data(stub.body.utf8))
         }
     }
@@ -148,7 +157,10 @@ import VisionNativeCore
         case (.string(let want), .string(let got)) where want == todayToken:
             return got == today ? nil : "\(path): \(got) is not today (\(today))"
         case (.string(let want), .string(let got)) where isTimestampForm(want) && !seedTimes.contains(want):
-            return isTimestampForm(got) ? nil : "\(path): \(got) is not a timestamp"
+            // A timestamp the run wrote must not be one the seed wrote: a write that skipped
+            // `updated_at = now()` would keep the seed's.
+            if !isTimestampForm(got) { return "\(path): \(got) is not a timestamp" }
+            return seedTimes.contains(got) ? "\(path): \(got) is the seed's timestamp, not a new one" : nil
         case (.int(let want), .double(let got)), (.double(let got), .int(let want)):
             return Double(want) == got ? nil : "\(path): \(want) != \(got)"
         default:
@@ -170,7 +182,8 @@ import VisionNativeCore
         let file = try migratedDatabase(seed: corpus.seed)
         defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
         let database = BackendDatabase(path: file.path, time: recorderTime)
-        let backend = InProcessBackend.live(database: database, fetcher: StubFetcher(stubs: corpus.fetch ?? [:]))
+        let fetcher = StubFetcher(stubs: corpus.fetch ?? [:])
+        let backend = InProcessBackend.live(database: database, fetcher: fetcher)
         let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
         let seedTimes = seedTimestamps(corpus.seed)
         // The bodies go out as `JSON.stringify` wrote them: key order decides issue order.
@@ -180,7 +193,8 @@ import VisionNativeCore
         }
         for (index, step) in corpus.steps.enumerated() {
             let label = "\(area) step \(index): \(step.method) \(step.path)"
-            let url = try #require(URL(string: "http://127.0.0.1:3001\(step.path)"))
+            if let next = step.fetch { fetcher.replace(next) }
+            let url = try #require(URL(string: "http://127.0.0.1:3001" + Self.fetchEncoded(step.path)))
             let method = try #require(HTTPMethod(rawValue: step.method), "\(label)")
             let request = APIRequest(
                 method: method, url: url, headers: step.hasBody ? ["Content-Type": "application/json"] : [:],
@@ -190,7 +204,8 @@ import VisionNativeCore
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
             #expect(response.status == step.status, "\(label)")
-            let body = try JSONDecoder().decode(JSONValue.self, from: response.body)
+            // A 204 has no body; the recorder writes it as `{}`.
+            let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let today = SQLTimestamps.formatDate(recorderTime.localDate(of: .init(ms: Int64(Date().timeIntervalSince1970 * 1000))))
             let found = difference(
                 step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
@@ -202,6 +217,15 @@ import VisionNativeCore
         }
     }
 
+    /// The path as `fetch` sends it: characters a URL cannot hold are percent-encoded and
+    /// existing `%XX` escapes are kept. `URL(string:)` alone re-encodes every `%` once a path
+    /// holds an invalid character such as a raw space.
+    static func fetchEncoded(_ path: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed.union(.urlPathAllowed)
+        allowed.insert(charactersIn: "%?&=#")
+        return path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path
+    }
+
     @Test func tags() async throws {
         try await Self.replay("tags")
     }
@@ -210,9 +234,34 @@ import VisionNativeCore
         try await Self.replay("settings")
     }
 
+    @Test func accounts() async throws {
+        try await Self.replay("accounts")
+    }
+
+    @Test func categories() async throws {
+        try await Self.replay("categories")
+    }
+
+    @Test func recipients() async throws {
+        try await Self.replay("recipients")
+    }
+
+    @Test func transactions() async throws {
+        try await Self.replay("transactions")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
+    }
+
+    /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
+    @Test(arguments: [
+        "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
+        "recipients-mutations", "transactions-mutations",
+    ])
+    func mutations(_ area: String) async throws {
+        try await Self.replay(area)
     }
 
     /// A stale list without `db_only` starts `warmCache` in the background, which the corpus
@@ -270,6 +319,18 @@ import VisionNativeCore
             ("99999999999999999999", 1e20), ("9007199254740993", 9_007_199_254_740_992), ("-5", -5),
         ]
         for (input, value) in cases { #expect(JavaScriptInteger.parse(input) == value, "\(input)") }
+    }
+
+    /// Node's `querystring.parse`, the parser behind Express 5's `req.query`.
+    @Test func queryParsingMatchesNode() {
+        let cases: [(String, [String])] = [
+            ("=x", ["=x"]), ("&&a", ["a="]), ("a", ["a="]), ("a=%E0%A4&b=%zz", ["a=\u{FFFD}", "b=%zz"]),
+            ("a=+1+", ["a= 1 "]), ("a=1=2", ["a=1=2"]), ("=", ["="]), ("a=%", ["a=%"]), ("a=%4", ["a=%4"]),
+            ("a=%e2%82%ac", ["a=€"]), ("%61=1", ["a=1"]),
+        ]
+        for (query, pairs) in cases {
+            #expect(NodeQueryString.parse(query).map { "\($0.name)=\($0.value ?? "")" } == pairs, "\(query)")
+        }
     }
 
     @Test func parseFloatMatchesJavaScript() {

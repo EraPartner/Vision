@@ -1,0 +1,2535 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES\n        (1, 'Shop', 'shop', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n         closed_at, created_at, updated_at, import_identity) VALUES\n        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000001'),\n        (2, 'Travel', NULL, NULL, 'USD', 'savings', 'semi_liquid', 0, 1, 'none', 'joint', 1, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000002'),\n        (3, 'Old', NULL, NULL, 'EUR', 'checking', 'liquid', 1, 0, 'none', 'partner', 0, 1, NULL, 0,\n         '2025-02-01T08:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000003'),\n        (4, 'Broker', NULL, 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'tax_advantaged', 'me', 0, 1, 1, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000004'),\n        (5, 'Empty', NULL, NULL, 'GBP', 'wallet', 'illiquid', 0, 1, 'none', 'me', 0, 0, 4, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000005'),\n        (6, 'Loan', NULL, NULL, 'EUR', 'liability', 'illiquid', 0, 1, 'pension', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000006')",
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('USD', vision_numeric('0.9', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.15', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('JPY', vision_numeric('0', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, balance, recipient_id, account_id, is_active, bank_sequence,\n         created_at, updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('100', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, '2024-01-10', vision_numeric('-20.125', 18, 4), 'EUR', vision_numeric('1000', 18, 4), 1, 1, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, '2024-01-10', vision_numeric('5.005', 18, 4), 'EUR', NULL, 1, 1, 1, vision_numeric('7', 18, 0),\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, '2024-02-01', vision_numeric('-0.015', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, '2024-02-02', vision_numeric('999', 18, 4), 'EUR', NULL, 1, 1, 0, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (6, '2099-01-01', vision_numeric('50', 18, 4), 'EUR', NULL, 1, 1, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (7, '2024-03-01', vision_numeric('250.5', 18, 4), 'USD', NULL, 1, 2, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (8, '2024-03-02', vision_numeric('40', 18, 4), 'EUR', NULL, 1, 2, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (9, '2024-03-03', vision_numeric('12', 18, 4), 'CHF', NULL, 1, 2, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (10, '2024-03-04', vision_numeric('-3.3333', 18, 4), 'GBP', vision_numeric('77.7777', 18, 4), 1, 2, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (11, '2024-03-05', vision_numeric('8', 18, 4), 'JPY', NULL, 1, 2, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (12, '2024-04-01', vision_numeric('-1500', 18, 4), 'EUR', NULL, 1, 6, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (13, '2024-05-01', vision_numeric('0', 18, 4), 'EUR', NULL, 1, 3, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (14, '2024-05-02', vision_numeric('0.004', 18, 4), 'USD', NULL, 1, 4, 1, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO account_statement_balances (account_id, currency, balance, balance_date) VALUES\n        (1, 'EUR', vision_numeric('1100.5', 18, 4), '2024-03-31'),\n        (1, 'USD', vision_numeric('3', 18, 4), '2024-03-30'),\n        (6, 'USD', vision_numeric('-10', 18, 4), '2024-04-30')"
+  ],
+  "steps": [
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "name": "Broker",
+              "display_name": null,
+              "institution": "Bolero",
+              "currency": "EUR",
+              "type": "brokerage",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "tax_advantaged",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": 1,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "USD",
+                  "balance": 0.004
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 5,
+              "name": "Empty",
+              "display_name": null,
+              "institution": null,
+              "currency": "GBP",
+              "type": "wallet",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": false,
+              "funding_account_id": 4,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "GBP",
+              "drift": null
+            },
+            {
+              "id": 6,
+              "name": "Loan",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "liability",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "pension",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "USD",
+                  "balance": -10,
+                  "balance_date": "2024-04-30"
+                }
+              ],
+              "computed_balance": -1500,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": -1500
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": -1500,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 1,
+              "name": "Main",
+              "display_name": "Main account",
+              "institution": "KBC",
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-01-10",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "EUR",
+                  "balance": 1100.5,
+                  "balance_date": "2024-03-31"
+                },
+                {
+                  "currency": "USD",
+                  "balance": 3,
+                  "balance_date": "2024-03-30"
+                }
+              ],
+              "computed_balance": 999.98,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 999.985
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 999.98,
+              "reconcilable_currency": "EUR",
+              "drift": 100.52
+            },
+            {
+              "id": 2,
+              "name": "Travel",
+              "display_name": null,
+              "institution": null,
+              "currency": "USD",
+              "type": "savings",
+              "liquidity_class": "semi_liquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "joint",
+              "multi_currency_cash": true,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-03-04",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 394.33,
+              "balance_parts": [
+                {
+                  "currency": "CHF",
+                  "balance": 12
+                },
+                {
+                  "currency": "EUR",
+                  "balance": 40
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 77.7777
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 8
+                },
+                {
+                  "currency": "USD",
+                  "balance": 250.5
+                }
+              ],
+              "balance_incomplete": true,
+              "unconverted_currencies": [
+                "CHF",
+                "JPY"
+              ],
+              "reconcilable_balance": 250.5,
+              "reconcilable_currency": "USD",
+              "drift": null
+            }
+          ],
+          "total": 5,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts?active=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "name": "Broker",
+              "display_name": null,
+              "institution": "Bolero",
+              "currency": "EUR",
+              "type": "brokerage",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "tax_advantaged",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": 1,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "USD",
+                  "balance": 0.004
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 5,
+              "name": "Empty",
+              "display_name": null,
+              "institution": null,
+              "currency": "GBP",
+              "type": "wallet",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": false,
+              "funding_account_id": 4,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "GBP",
+              "drift": null
+            },
+            {
+              "id": 6,
+              "name": "Loan",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "liability",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "pension",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "USD",
+                  "balance": -10,
+                  "balance_date": "2024-04-30"
+                }
+              ],
+              "computed_balance": -1500,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": -1500
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": -1500,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 1,
+              "name": "Main",
+              "display_name": "Main account",
+              "institution": "KBC",
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-01-10",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "EUR",
+                  "balance": 1100.5,
+                  "balance_date": "2024-03-31"
+                },
+                {
+                  "currency": "USD",
+                  "balance": 3,
+                  "balance_date": "2024-03-30"
+                }
+              ],
+              "computed_balance": 999.98,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 999.985
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 999.98,
+              "reconcilable_currency": "EUR",
+              "drift": 100.52
+            },
+            {
+              "id": 3,
+              "name": "Old",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": false,
+              "tax_wrapper": "none",
+              "owner": "partner",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": false,
+              "closed_at": "2025-02-01T08:00:00.000Z",
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 0
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 2,
+              "name": "Travel",
+              "display_name": null,
+              "institution": null,
+              "currency": "USD",
+              "type": "savings",
+              "liquidity_class": "semi_liquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "joint",
+              "multi_currency_cash": true,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-03-04",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 394.33,
+              "balance_parts": [
+                {
+                  "currency": "CHF",
+                  "balance": 12
+                },
+                {
+                  "currency": "EUR",
+                  "balance": 40
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 77.7777
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 8
+                },
+                {
+                  "currency": "USD",
+                  "balance": 250.5
+                }
+              ],
+              "balance_incomplete": true,
+              "unconverted_currencies": [
+                "CHF",
+                "JPY"
+              ],
+              "reconcilable_balance": 250.5,
+              "reconcilable_currency": "USD",
+              "drift": null
+            }
+          ],
+          "total": 6,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts?active=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "name": "Old",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": false,
+              "tax_wrapper": "none",
+              "owner": "partner",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": false,
+              "closed_at": "2025-02-01T08:00:00.000Z",
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 0
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            }
+          ],
+          "total": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts?active=all&limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "name": "Empty",
+              "display_name": null,
+              "institution": null,
+              "currency": "GBP",
+              "type": "wallet",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": false,
+              "funding_account_id": 4,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "GBP",
+              "drift": null
+            },
+            {
+              "id": 6,
+              "name": "Loan",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "liability",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "pension",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "USD",
+                  "balance": -10,
+                  "balance_date": "2024-04-30"
+                }
+              ],
+              "computed_balance": -1500,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": -1500
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": -1500,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            }
+          ],
+          "total": 6,
+          "limit": 2,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts?offset=4",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "name": "Travel",
+              "display_name": null,
+              "institution": null,
+              "currency": "USD",
+              "type": "savings",
+              "liquidity_class": "semi_liquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "joint",
+              "multi_currency_cash": true,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-03-04",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 394.33,
+              "balance_parts": [
+                {
+                  "currency": "CHF",
+                  "balance": 12
+                },
+                {
+                  "currency": "EUR",
+                  "balance": 40
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 77.7777
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 8
+                },
+                {
+                  "currency": "USD",
+                  "balance": 250.5
+                }
+              ],
+              "balance_incomplete": true,
+              "unconverted_currencies": [
+                "CHF",
+                "JPY"
+              ],
+              "reconcilable_balance": 250.5,
+              "reconcilable_currency": "USD",
+              "drift": null
+            }
+          ],
+          "total": 5,
+          "limit": 1000,
+          "offset": 4,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts?limit=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "name": "Broker",
+              "display_name": null,
+              "institution": "Bolero",
+              "currency": "EUR",
+              "type": "brokerage",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "tax_advantaged",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": 1,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "USD",
+                  "balance": 0.004
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 5,
+              "name": "Empty",
+              "display_name": null,
+              "institution": null,
+              "currency": "GBP",
+              "type": "wallet",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": false,
+              "funding_account_id": 4,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "GBP",
+              "drift": null
+            },
+            {
+              "id": 6,
+              "name": "Loan",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "liability",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "pension",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "USD",
+                  "balance": -10,
+                  "balance_date": "2024-04-30"
+                }
+              ],
+              "computed_balance": -1500,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": -1500
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": -1500,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 1,
+              "name": "Main",
+              "display_name": "Main account",
+              "institution": "KBC",
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-01-10",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "EUR",
+                  "balance": 1100.5,
+                  "balance_date": "2024-03-31"
+                },
+                {
+                  "currency": "USD",
+                  "balance": 3,
+                  "balance_date": "2024-03-30"
+                }
+              ],
+              "computed_balance": 999.98,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 999.985
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 999.98,
+              "reconcilable_currency": "EUR",
+              "drift": 100.52
+            },
+            {
+              "id": 2,
+              "name": "Travel",
+              "display_name": null,
+              "institution": null,
+              "currency": "USD",
+              "type": "savings",
+              "liquidity_class": "semi_liquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "joint",
+              "multi_currency_cash": true,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-03-04",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 394.33,
+              "balance_parts": [
+                {
+                  "currency": "CHF",
+                  "balance": 12
+                },
+                {
+                  "currency": "EUR",
+                  "balance": 40
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 77.7777
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 8
+                },
+                {
+                  "currency": "USD",
+                  "balance": 250.5
+                }
+              ],
+              "balance_incomplete": true,
+              "unconverted_currencies": [
+                "CHF",
+                "JPY"
+              ],
+              "reconcilable_balance": 250.5,
+              "reconcilable_currency": "USD",
+              "drift": null
+            }
+          ],
+          "total": 5,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "  Savings Two  ",
+        "currency": "usd",
+        "type": "savings",
+        "owner": "partner",
+        "spendable": false
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 7,
+          "name": "Savings Two",
+          "display_name": null,
+          "institution": null,
+          "currency": "USD",
+          "type": "savings",
+          "liquidity_class": "liquid",
+          "spendable": false,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "partner",
+          "multi_currency_cash": false,
+          "has_cash_sleeve": true,
+          "funding_account_id": null,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2026-11-12T10:52:47.243Z",
+          "updated_at": "2026-11-12T10:52:47.243Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "main"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "An account named \"main\" already exists"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": " MAIN "
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "An account named \"MAIN\" already exists"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: name is required and must be a non-empty string"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "   "
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: name is required and must be a non-empty string"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "name: name is required and must be a non-empty string"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Bad",
+        "type": "stock",
+        "owner": "kids",
+        "liquidity_class": 1,
+        "tax_wrapper": null
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: type must be one of: checking, savings, brokerage, crypto_exchange, wallet, pension, liability; liquidity_class: liquidity_class must be one of: liquid, semi_liquid, illiquid; tax_wrapper: tax_wrapper must be one of: none, pension, tax_advantaged; owner: owner must be one of: me, partner, joint"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Cur",
+        "currency": null
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Cur",
+        "currency": "EURO"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Cur",
+        "currency": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Fund",
+        "funding_account_id": "1e3"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "funding_account_id: funding_account_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Fund",
+        "funding_account_id": true
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "funding_account_id: funding_account_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Fund",
+        "funding_account_id": 999
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "funding_account_id 999 does not reference an existing account"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Fund",
+        "funding_account_id": "4",
+        "display_name": null,
+        "institution": "  ING "
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 8,
+          "name": "Fund",
+          "display_name": null,
+          "institution": "ING",
+          "currency": "EUR",
+          "type": "checking",
+          "liquidity_class": "liquid",
+          "spendable": true,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "me",
+          "multi_currency_cash": false,
+          "has_cash_sleeve": true,
+          "funding_account_id": 4,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2026-11-12T10:52:47.333Z",
+          "updated_at": "2026-11-12T10:52:47.333Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Stmt",
+        "statement_balance": 1,
+        "statement_balance_date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance: Invalid input: expected never, received number; statement_balance_date: Invalid input: expected never, received string"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Flags",
+        "spendable": "yes",
+        "in_net_worth": 1,
+        "is_active": false,
+        "extra": {
+          "a": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "spendable: spendable must be a boolean; in_net_worth: in_net_worth must be a boolean"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Clear",
+        "display_name": 5,
+        "institution": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "display_name: display_name must be a string; institution: institution must be a string"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/2",
+      "body": {
+        "name": "Travel USD",
+        "display_name": "  ",
+        "institution": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "Travel USD",
+          "display_name": "",
+          "institution": null,
+          "currency": "USD",
+          "type": "savings",
+          "liquidity_class": "semi_liquid",
+          "spendable": false,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "joint",
+          "multi_currency_cash": true,
+          "has_cash_sleeve": true,
+          "funding_account_id": null,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T10:52:47.379Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/2",
+      "body": {
+        "is_active": false
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "Travel USD",
+          "display_name": "",
+          "institution": null,
+          "currency": "USD",
+          "type": "savings",
+          "liquidity_class": "semi_liquid",
+          "spendable": false,
+          "in_net_worth": false,
+          "tax_wrapper": "none",
+          "owner": "joint",
+          "multi_currency_cash": true,
+          "has_cash_sleeve": true,
+          "funding_account_id": null,
+          "is_active": false,
+          "closed_at": "2026-11-12T10:52:47.391Z",
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T10:52:47.391Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/2",
+      "body": {
+        "is_active": false,
+        "in_net_worth": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "Travel USD",
+          "display_name": "",
+          "institution": null,
+          "currency": "USD",
+          "type": "savings",
+          "liquidity_class": "semi_liquid",
+          "spendable": false,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "joint",
+          "multi_currency_cash": true,
+          "has_cash_sleeve": true,
+          "funding_account_id": null,
+          "is_active": false,
+          "closed_at": "2026-11-12T10:52:47.391Z",
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T10:52:47.399Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/2",
+      "body": {
+        "is_active": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "name": "Travel USD",
+          "display_name": "",
+          "institution": null,
+          "currency": "USD",
+          "type": "savings",
+          "liquidity_class": "semi_liquid",
+          "spendable": false,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "joint",
+          "multi_currency_cash": true,
+          "has_cash_sleeve": true,
+          "funding_account_id": null,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T10:52:47.405Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/1",
+      "body": {
+        "funding_account_id": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "funding_account_id 5 would create a funding cycle"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/1",
+      "body": {
+        "funding_account_id": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "funding_account_id cannot reference the account itself"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/1",
+      "body": {
+        "funding_account_id": "abc"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "funding_account_id: funding_account_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/5",
+      "body": {
+        "funding_account_id": null,
+        "owner": "joint"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 5,
+          "name": "Empty",
+          "display_name": null,
+          "institution": null,
+          "currency": "GBP",
+          "type": "wallet",
+          "liquidity_class": "illiquid",
+          "spendable": false,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "joint",
+          "multi_currency_cash": false,
+          "has_cash_sleeve": false,
+          "funding_account_id": null,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T10:52:47.428Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/4",
+      "body": {
+        "name": "travel usd"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "An account named \"travel usd\" already exists"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/4",
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4,
+          "name": "Broker",
+          "display_name": null,
+          "institution": "Bolero",
+          "currency": "EUR",
+          "type": "brokerage",
+          "liquidity_class": "liquid",
+          "spendable": true,
+          "in_net_worth": true,
+          "tax_wrapper": "tax_advantaged",
+          "owner": "me",
+          "multi_currency_cash": false,
+          "has_cash_sleeve": true,
+          "funding_account_id": 1,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/999",
+      "body": {
+        "name": "Nobody"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/999",
+      "body": {},
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/999",
+      "body": {
+        "is_active": true
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/abc",
+      "body": {
+        "name": "x"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/0",
+      "body": {
+        "name": "x"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/6",
+      "body": {
+        "statement_balance": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance: Invalid input: expected never, received number"
+        }
+      }
+    },
+    {
+      "operationId": "updateAccount",
+      "method": "PATCH",
+      "path": "/api/accounts/6",
+      "body": {
+        "type": "checking",
+        "currency": "gbp",
+        "has_cash_sleeve": false,
+        "multi_currency_cash": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 6,
+          "name": "Loan",
+          "display_name": null,
+          "institution": null,
+          "currency": "GBP",
+          "type": "checking",
+          "liquidity_class": "illiquid",
+          "spendable": false,
+          "in_net_worth": true,
+          "tax_wrapper": "pension",
+          "owner": "me",
+          "multi_currency_cash": true,
+          "has_cash_sleeve": false,
+          "funding_account_id": null,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-12T10:52:47.487Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "deleteAccount",
+      "method": "DELETE",
+      "path": "/api/accounts/1",
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "Account 1 still has activity referencing it and cannot be deleted. Close the account instead."
+        }
+      }
+    },
+    {
+      "operationId": "deleteAccount",
+      "method": "DELETE",
+      "path": "/api/accounts/3",
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "Account 3 still has activity referencing it and cannot be deleted. Close the account instead."
+        }
+      }
+    },
+    {
+      "operationId": "deleteAccount",
+      "method": "DELETE",
+      "path": "/api/accounts/5",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteAccount",
+      "method": "DELETE",
+      "path": "/api/accounts/5",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 5 not found"
+        }
+      }
+    },
+    {
+      "operationId": "deleteAccount",
+      "method": "DELETE",
+      "path": "/api/accounts/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deleteAccount",
+      "method": "DELETE",
+      "path": "/api/accounts/1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/1/statement-balances/EUR",
+      "body": {
+        "balance": 1200.25,
+        "date": "2024-04-30"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 1,
+          "currency": "EUR",
+          "balance": 1200.25,
+          "balance_date": "2024-04-30",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/1/statement-balances/usd",
+      "body": {
+        "balance": "-3.33335",
+        "date": "2024-02-29"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 1,
+          "currency": "USD",
+          "balance": -3.3334,
+          "balance_date": "2024-02-29",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/1/statement-balances/gbp%20",
+      "body": {
+        "balance": 0,
+        "date": "2024-01-01",
+        "extra": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 1,
+          "currency": "GBP",
+          "balance": 0,
+          "balance_date": "2024-01-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/JPY",
+      "body": {
+        "balance": "1e3",
+        "date": [
+          "2024-05-01"
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "JPY",
+          "balance": 1000,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": true,
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 1,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": "",
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 0,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": [
+          7
+        ],
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 7,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": 1e-7,
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 0,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/2/statement-balances/CHF",
+      "body": {
+        "balance": 123456.78905,
+        "date": "2024-05-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "currency": "CHF",
+          "balance": 123456.7891,
+          "balance_date": "2024-05-01",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": null,
+        "date": "2024-05-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance and date are required"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 5,
+        "date": null
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance and date are required"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "date": "2024-05-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": "abc",
+        "date": "2024-02-30"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 1000000000000,
+        "date": "0050-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": 1000000000001,
+        "date": "2024-13-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be between -1000000000000 and 1000000000000; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": -1000000000000,
+        "date": " 2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EUR",
+      "body": {
+        "balance": "Infinity",
+        "date": 20240101
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "statement_balance must be a finite number; statement_balance_date must be a valid ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/EURO",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/E1R",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/999/statement-balances/EUR",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/999/statement-balances/EURO",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/abc/statement-balances/EUR",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountStatementBalance",
+      "method": "PUT",
+      "path": "/api/accounts/6/statement-balances/%C3%A9ur",
+      "body": {
+        "balance": 1,
+        "date": "2024-01-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "getAccounts",
+      "method": "GET",
+      "path": "/api/accounts?active=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 4,
+              "name": "Broker",
+              "display_name": null,
+              "institution": "Bolero",
+              "currency": "EUR",
+              "type": "brokerage",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "tax_advantaged",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": 1,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "USD",
+                  "balance": 0.004
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 8,
+              "name": "Fund",
+              "display_name": null,
+              "institution": "ING",
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": 4,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2026-11-12T10:52:47.333Z",
+              "updated_at": "2026-11-12T10:52:47.333Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 6,
+              "name": "Loan",
+              "display_name": null,
+              "institution": null,
+              "currency": "GBP",
+              "type": "checking",
+              "liquidity_class": "illiquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "pension",
+              "owner": "me",
+              "multi_currency_cash": true,
+              "has_cash_sleeve": false,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T10:52:47.487Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "USD",
+                  "balance": -10,
+                  "balance_date": "2024-04-30"
+                }
+              ],
+              "computed_balance": -1304.35,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": -1500
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": -1500,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 1,
+              "name": "Main",
+              "display_name": "Main account",
+              "institution": "KBC",
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "me",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "anchor_date": "2024-01-10",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "EUR",
+                  "balance": 1200.25,
+                  "balance_date": "2024-04-30"
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 0,
+                  "balance_date": "2024-01-01"
+                },
+                {
+                  "currency": "USD",
+                  "balance": -3.3334,
+                  "balance_date": "2024-02-29"
+                }
+              ],
+              "computed_balance": 999.98,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 999.985
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 999.98,
+              "reconcilable_currency": "EUR",
+              "drift": 200.27
+            },
+            {
+              "id": 3,
+              "name": "Old",
+              "display_name": null,
+              "institution": null,
+              "currency": "EUR",
+              "type": "checking",
+              "liquidity_class": "liquid",
+              "spendable": true,
+              "in_net_worth": false,
+              "tax_wrapper": "none",
+              "owner": "partner",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": false,
+              "closed_at": "2025-02-01T08:00:00.000Z",
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [
+                {
+                  "currency": "EUR",
+                  "balance": 0
+                }
+              ],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "EUR",
+              "drift": null
+            },
+            {
+              "id": 7,
+              "name": "Savings Two",
+              "display_name": null,
+              "institution": null,
+              "currency": "USD",
+              "type": "savings",
+              "liquidity_class": "liquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "partner",
+              "multi_currency_cash": false,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2026-11-12T10:52:47.243Z",
+              "updated_at": "2026-11-12T10:52:47.243Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
+              "statement_balances": [],
+              "computed_balance": 0,
+              "balance_parts": [],
+              "balance_incomplete": false,
+              "unconverted_currencies": [],
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "USD",
+              "drift": null
+            },
+            {
+              "id": 2,
+              "name": "Travel USD",
+              "display_name": "",
+              "institution": null,
+              "currency": "USD",
+              "type": "savings",
+              "liquidity_class": "semi_liquid",
+              "spendable": false,
+              "in_net_worth": true,
+              "tax_wrapper": "none",
+              "owner": "joint",
+              "multi_currency_cash": true,
+              "has_cash_sleeve": true,
+              "funding_account_id": null,
+              "is_active": true,
+              "closed_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-12T10:52:47.405Z",
+              "anchor_date": "2024-03-04",
+              "post_anchor_count": 1,
+              "has_transactions": true,
+              "statement_balances": [
+                {
+                  "currency": "CHF",
+                  "balance": 123456.7891,
+                  "balance_date": "2024-05-01"
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 1000,
+                  "balance_date": "2024-05-01"
+                }
+              ],
+              "computed_balance": 394.33,
+              "balance_parts": [
+                {
+                  "currency": "CHF",
+                  "balance": 12
+                },
+                {
+                  "currency": "EUR",
+                  "balance": 40
+                },
+                {
+                  "currency": "GBP",
+                  "balance": 77.7777
+                },
+                {
+                  "currency": "JPY",
+                  "balance": 8
+                },
+                {
+                  "currency": "USD",
+                  "balance": 250.5
+                }
+              ],
+              "balance_incomplete": true,
+              "unconverted_currencies": [
+                "CHF",
+                "JPY"
+              ],
+              "reconcilable_balance": 250.5,
+              "reconcilable_currency": "USD",
+              "drift": null
+            }
+          ],
+          "total": 7,
+          "links": []
+        }
+      }
+    }
+  ]
+}

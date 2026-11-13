@@ -213,3 +213,31 @@ func slugify(_ input: String) -> String {
     if slug.hasSuffix("-") { slug.removeLast() }
     return slug
 }
+
+/// Ids as `lib/validation.ts` checks them.
+enum RequestID {
+    /// `validateId`: a number, or a string of ASCII digits, that is an integer from 1 to
+    /// 2147483647.
+    static func valid(_ value: JSValue) -> Double? {
+        let number: Double
+        switch value {
+        case .number(let raw): number = raw
+        case .string(let text) where !text.isEmpty && text.utf8.allSatisfy({ (48...57).contains($0) }):
+            number = JavaScriptNumber.fromString(text)
+        default: return nil
+        }
+        guard number.isFinite, number.rounded(.towardZero) == number, number >= 1, number <= 2_147_483_647 else {
+            return nil
+        }
+        return number
+    }
+
+    /// `parseInput(z.object({ id: idSchema() }), req.params)`: the id, else the 400
+    /// `id: must be a positive integer`.
+    static func pathParameter(_ request: InProcessRequest) throws -> Int {
+        guard let raw = request.pathParameters["id"], let id = valid(.string(raw)) else {
+            throw BackendHTTPError.validation("id: must be a positive integer")
+        }
+        return Int(id)
+    }
+}
