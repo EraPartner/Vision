@@ -234,6 +234,7 @@ describe("computeCashflowForecastRolling", () => {
       (point) => point.date === isoOffsetFromToday(3),
     )?.value;
 
-    expect(must(scheduledDay, "scheduledDay").value - must(previousDay, "previousDay").value - must(dailyForecast, "dailyForecast")).toBe(-75);
+    // Three doubles subtracted: the last bit depends on the day's balances, so compare to 9 digits.
+    expect(must(scheduledDay, "scheduledDay").value - must(previousDay, "previousDay").value - must(dailyForecast, "dailyForecast")).toBeCloseTo(-75, 9);
   });
 });
