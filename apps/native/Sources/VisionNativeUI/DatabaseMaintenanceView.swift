@@ -129,33 +129,29 @@ public struct DatabaseMaintenanceView: View {
 
     @ViewBuilder
     private var table: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
-            GridRow {
-                ForEach(headers) { header in
-                    Text(strings.t(header.key))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(theme.secondaryLabel)
-                        .padding(.vertical, 8)
-                        .gridColumnAlignment(header.trailing ? .trailing : .leading)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                // `sr-only`: read by VoiceOver, not drawn.
-                Text(strings.t("dbMaintenance.col.actions"))
-                    .font(.caption)
-                    .foregroundStyle(Color.clear)
-                    .gridColumnAlignment(.trailing)
+        // `<Table>`: full width; the actions column keeps its button's width.
+        VisionTable(columns: headers.map { $0.trailing ? .trailing : .leading } + [.trailing], fixedColumns: [5]) {
+            ForEach(headers) { header in
+                Text(strings.t(header.key))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.secondaryLabel)
+                    .padding(.vertical, 8)
                     .accessibilityAddTraits(.isHeader)
             }
+            // `sr-only`: read by VoiceOver, not drawn.
+            Text(strings.t("dbMaintenance.col.actions"))
+                .font(.caption)
+                .foregroundStyle(Color.clear)
+                .frame(width: 1)
+                .accessibilityAddTraits(.isHeader)
             if model.isLoading {
                 ForEach(0..<5, id: \.self) { _ in
-                    Divider().gridCellUnsizedAxes(.horizontal)
-                    GridRow {
-                        ForEach(0..<7, id: \.self) { _ in SkeletonBar(width: 72, height: 14).padding(.vertical, 10) }
-                    }
+                    VisionTableDivider()
+                    ForEach(0..<6, id: \.self) { _ in SkeletonBar(width: 72, height: 14).padding(.vertical, 10) }
                 }
             } else {
                 ForEach(model.rows(settings: shell.settings)) { row in
-                    Divider().gridCellUnsizedAxes(.horizontal)
+                    VisionTableDivider()
                     tableRow(row)
                 }
             }
@@ -173,8 +169,8 @@ public struct DatabaseMaintenanceView: View {
         }
     }
 
-    private func tableRow(_ row: DatabaseTableRow) -> GridRow<some View> {
-        GridRow {
+    private func tableRow(_ row: DatabaseTableRow) -> some View {
+        Group {
             Button {
                 shell.navigate(to: row.editorRoute)
             } label: {

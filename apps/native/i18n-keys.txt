@@ -55,6 +55,8 @@ nav.transactions
 nav.watchlist
 nav.wealth
 nav.whoOwesYou
+nav.hideSection
+nav.showSection
 
 # Admin > Exchange rates
 exchangeRates.col.currency

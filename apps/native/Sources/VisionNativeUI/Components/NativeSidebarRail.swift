@@ -161,13 +161,6 @@ struct NativeSidebarRail: View {
                 .font(.system(size: 15))
                 .foregroundStyle(Color(token: theme.glass.icon))
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.chip)
-                        .fill(
-                            isActive
-                                ? Color(token: theme.glass.selection, opacity: theme.glass.selectionOpacity)
-                                : Color.clear)
-                )
                 .overlay(alignment: .topTrailing) { countPill(badge) }
                 // The update-ready dot, collapsed: `h-[7px] w-[7px]` primary at `right-1 top-1`.
                 .overlay(alignment: .topTrailing) {
@@ -177,7 +170,7 @@ struct NativeSidebarRail: View {
                 }
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SidebarRowButtonStyle(isActive: isActive))
         .help(tooltip)
         .accessibilityLabel(label)
         .accessibilityValue(badgeLabel)

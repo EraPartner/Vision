@@ -45,6 +45,10 @@ struct VisionCardLayerStyle: Equatable {
     private let host = CALayer()
     private let shadowLayer = CALayer()
     private let liftLayer = CALayer()
+    /// Holds the two shadows and cuts the card's own shape out of them: a CSS `box-shadow` is
+    /// not painted under its box, so the translucent surface stays as clear as the web card's.
+    private let shadowHost = CALayer()
+    private let shadowMask = CAShapeLayer()
     private let fillLayer = CAGradientLayer()
     private let edgeLayer = CAGradientLayer()
     private let edgeMask = CAShapeLayer()
@@ -57,10 +61,15 @@ struct VisionCardLayerStyle: Equatable {
         layer = host
         wantsLayer = true
         host.masksToBounds = false
-        for shadow in [shadowLayer, liftLayer] {
-            shadow.shadowOpacity = 1
-            host.addSublayer(shadow)
-        }
+        shadowMask.fillRule = .evenOdd
+        shadowMask.fillColor = CGColor(gray: 0, alpha: 1)
+        shadowHost.mask = shadowMask
+        host.addSublayer(shadowHost)
+        shadowLayer.shadowOpacity = 1
+        // No colour is not "no shadow" to Core Animation (it falls back to opaque black), so
+        // the lift stays off until a card has one.
+        liftLayer.shadowOpacity = 0
+        for shadow in [shadowLayer, liftLayer] { shadowHost.addSublayer(shadow) }
         for gradient in [fillLayer, edgeLayer] {
             gradient.startPoint = CGPoint(x: 0.5, y: 1)
             gradient.endPoint = CGPoint(x: 0.5, y: 0)
@@ -89,7 +98,7 @@ struct VisionCardLayerStyle: Equatable {
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         let scale = window?.backingScaleFactor ?? 2
-        for layer in [host, shadowLayer, liftLayer, fillLayer, edgeLayer, edgeMask, frameLayer] {
+        for layer in [host, shadowHost, shadowMask, shadowLayer, liftLayer, fillLayer, edgeLayer, edgeMask, frameLayer] {
             layer.contentsScale = scale
         }
     }
@@ -114,8 +123,9 @@ struct VisionCardLayerStyle: Equatable {
         Self.setShadow(shadowLayer, style.shadow)
         if let lift = style.lift {
             Self.setShadow(liftLayer, lift)
+            liftLayer.shadowOpacity = 1
         } else {
-            liftLayer.shadowColor = nil
+            liftLayer.shadowOpacity = 0
         }
         CATransaction.commit()
         needsLayout = true
@@ -134,6 +144,14 @@ struct VisionCardLayerStyle: Equatable {
         }
         shadowLayer.shadowPath = outline
         liftLayer.shadowPath = outline
+        // Everything around the card, far enough out for the widest shadow, minus the card.
+        let reach = bounds.insetBy(dx: -Self.shadowReach, dy: -Self.shadowReach)
+        let around = CGMutablePath()
+        around.addRect(reach)
+        around.addPath(outline)
+        shadowHost.frame = bounds
+        shadowMask.frame = bounds
+        shadowMask.path = around
         fillLayer.cornerRadius = radius
         frameLayer.cornerRadius = radius
         // `shape.inset(by: 1).strokeBorder(…, lineWidth: 1)`: a 1 pt line just inside 1 pt of inset.
@@ -141,6 +159,9 @@ struct VisionCardLayerStyle: Equatable {
         edgeMask.path = Self.path(bounds.insetBy(dx: 1.5, dy: 1.5), radius: max(0, radius - 1.5))
         CATransaction.commit()
     }
+
+    /// How far outside the card a shadow may paint (offset plus blur of the largest lift).
+    private static let shadowReach: CGFloat = 96
 
     /// SwiftUI's `.shadow(color:radius:x:y:)`: y grows downward there and upward here.
     private static func setShadow(_ layer: CALayer, _ shadow: VisionCardShadow) {

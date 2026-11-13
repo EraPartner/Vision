@@ -90,8 +90,8 @@ struct VisionCardBackground: View {
         }
     }
 
-    /// `glass-thin`'s surface for `VisionCardLayers`. SwiftUI shades a view's shadow by the view's
-    /// own alpha, so the shadows are scaled by the surface's alpha at the bottom edge, where they show.
+    /// `glass-thin`'s surface for `VisionCardLayers`. The layers cut the card's shape out of its
+    /// shadows, as CSS does for a `box-shadow`, so the shadows keep their token alphas.
     private func layerStyle(frame: Color, highlightAlpha: Double, lift: ShadowLayer?, liftAlpha: Double)
         -> VisionCardLayerStyle
     {
@@ -114,11 +114,11 @@ struct VisionCardBackground: View {
             edgeBottom: NSColor(Color(token: palette.glassShadow, opacity: dark ? 0 : 0.05)).cgColor,
             frame: NSColor(frame).cgColor,
             shadow: VisionCardShadow(
-                color: NSColor(Color(token: palette.glassShadow, opacity: (dark ? 0.2 : 0.04) * bottomAlpha)).cgColor,
+                color: NSColor(Color(token: palette.glassShadow, opacity: dark ? 0.2 : 0.04)).cgColor,
                 radius: dark ? 8 : 6, x: 0, y: dark ? 5 : 4),
             lift: interactive
                 ? VisionCardShadow(
-                    color: NSColor(Color(token: palette.glassShadow, opacity: liftAlpha * bottomAlpha)).cgColor,
+                    color: NSColor(Color(token: palette.glassShadow, opacity: liftAlpha)).cgColor,
                     radius: CGFloat((lift?.blur ?? 0) / 2), x: CGFloat(lift?.x ?? 0), y: CGFloat(lift?.y ?? 0))
                 : nil,
             transitionDuration: hoverAnimation == nil ? nil : DesignTokens.Duration.normal,

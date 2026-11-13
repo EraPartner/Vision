@@ -721,7 +721,9 @@ struct PlannedHistorySheet: View {
                 GridRow {
                     headerText("plannedPage.history.colExecutedOn")
                     headerText("plannedPage.history.colPlanned")
+                    // `<Table>` is `w-full`: this column takes the spare width.
                     headerText("plannedPage.history.colTransaction")
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     headerText("plannedPage.col.amount")
                         .gridColumnAlignment(.trailing)
                 }

@@ -198,30 +198,36 @@ struct PortfolioBreakdownView: View {
                 description: shell.strings.t("performance.heatmapDesc"), large: true
             ) {
                 let monthNames = (1...12).map { monthLabel($0) }
+                // `<table className="w-full">`: the year column is `w-16`, the months and the
+                // year-to-date column share the card; a narrow card scrolls sideways.
                 ScrollView(.horizontal) {
-                    Grid(horizontalSpacing: 5, verticalSpacing: 5) {
-                        GridRow {
-                            Text(shell.strings.t("performance.year"))
+                    VisionTable(
+                        columns: [.leading] + Array(repeating: .center, count: 13), columnSpacing: 8,
+                        fixedColumns: [0]
+                    ) {
+                        Group {
+                            Text(shell.strings.t("performance.year")).frame(width: 48, alignment: .leading)
                             ForEach(1...12, id: \.self) { month in Text(monthNames[month - 1]).frame(minWidth: 48) }
-                            Text(shell.strings.t("performance.ytd")).frame(minWidth: 58)
-                        }.font(.caption.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                            Text(shell.strings.t("performance.ytd")).frame(minWidth: 56)
+                        }
+                        .font(.caption.weight(.medium)).foregroundStyle(theme.secondaryLabel).padding(.vertical, 8)
                         ForEach(data.heatmap.years, id: \.self) { year in
                             if let months = data.heatmap.data[String(year)] {
-                                GridRow {
-                                    Text(String(year)).font(.caption.weight(.medium)).monospacedDigit()
-                                    ForEach(0..<12, id: \.self) { index in
-                                        let cell: Decimal? = index < months.count ? months[index] : nil
-                                        let cellText = cell.map { signedPercent($0, digits: 2) }
-                                        heatCell(cell, text: cellText)
-                                            .accessibilityLabel("\(monthNames[index]) \(year)")
-                                            .accessibilityValue(cellText ?? shell.strings.t("common.noData2"))
-                                    }
-                                    let yearly = yearReturn(months)
-                                    heatCell(yearly, text: yearly.map { signedPercent($0, digits: 2) })
+                                Text(String(year)).font(.caption.weight(.medium)).monospacedDigit()
+                                    .padding(.vertical, 4)
+                                ForEach(0..<12, id: \.self) { index in
+                                    let cell: Decimal? = index < months.count ? months[index] : nil
+                                    let cellText = cell.map { signedPercent($0, digits: 2) }
+                                    heatCell(cell, text: cellText)
+                                        .accessibilityLabel("\(monthNames[index]) \(year)")
+                                        .accessibilityValue(cellText ?? shell.strings.t("common.noData2"))
                                 }
+                                let yearly = yearReturn(months)
+                                heatCell(yearly, text: yearly.map { signedPercent($0, digits: 2) })
                             }
                         }
                     }
+                    .containerRelativeFrame(.horizontal, alignment: .leading) { length, _ in max(length, 760) }
                 }
                 HStack(spacing: 4) {
                     Text(shell.strings.t("performance.loss"))
@@ -292,8 +298,9 @@ struct PortfolioBreakdownView: View {
             ? theme.foreground.opacity(0.04)
             : (amount >= 0 ? theme.gain : theme.loss).opacity(opacity)
         return Text(text ?? "—")
-            .font(.caption.monospaced()).frame(minWidth: 48).padding(.vertical, 8)
+            .font(.caption.monospaced()).frame(minWidth: 48, maxWidth: .infinity).padding(.vertical, 8)
             .background(color, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm))
+            .padding(.vertical, 2)
             .visionTooltip(text ?? shell.strings.t("common.noData2"))
     }
     private func yearReturn(_ months: [Decimal?]) -> Decimal? {
