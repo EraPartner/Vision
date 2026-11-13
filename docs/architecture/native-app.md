@@ -719,12 +719,25 @@ JavaScript object (`constructor`, `toString`) reads nothing; a Kinesis `createdA
 8601 text is dropped, where the TypeScript asks the engine's date parser; and day keys are ordered
 by a fixed rule (`-`, then `+`, then digits) where the TypeScript uses the machine's collation.
 
+`VisionBackend/Persistence/MigrationRules.swift` holds the rules of `database/migrate.ts` that need
+no database: which files of `db/migrations` are migrations (`MigrationRules.load`), what a ledger
+allows (`pending`), what a run applies and whether it writes a pre-migration copy (`run`), what a
+revert undoes (`revert`), the name and folder of a pre-migration copy and which copies are removed
+(`backupName`, `backupDirectory`, `copiesToRemove`), the foreign key violation text and the schema
+fingerprint, with the TypeScript's messages. `SQLBooleanInput` is the boolean input of
+`sqlite/values.ts`. Nothing calls them yet: the Bun backend still applies migrations
+([[docs/adr/270-swift-backend-in-process]] decision 3), and the Swift library only checks the
+ledger. Known differences from the TypeScript: two copies with one modification time are ordered
+by the collation of printable ASCII, where the TypeScript uses the machine's collation for any
+text; and of two down files without a migration, the first by name is reported, where the
+TypeScript reports the first the directory lists.
+
 `bun run native:parity-plans` re-records `apps/native/parity/plans/*.jsonl`: reconciliation plan
 inputs captured from the TypeScript unit and database tests, formula requests captured from the
 analysis tests, tax engine calls captured from its tests, generated variations of all three,
-generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, generated price layer calls, and
+generated analysis SQL, generated forecast and projection calls, generated bank statements, portfolio statements varied from the test fixtures, generated workbooks, generated price layer calls, generated migration runner calls, and
 sampled inputs of the shared helpers, each with what the TypeScript answered. `PortfolioImportPlanParityTests`, `AnalysisFormulaParityTests`, `BelgianTaxParityTests`,
-`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests`, `PriceParityTests` and
+`AnalysisSQLRulesParityTests`, `ForecastParityTests`, `BankImportParityTests`, `PortfolioAdapterParityTests`, `WorkbookParityTests`, `PriceParityTests`, `MigrationRulesParityTests` and
 `FoundationParityTests` replay them.
 `ForecastParityTests` compares the random draws exactly and the other numbers to nine digits,
 because `Math.log`, `Math.cos` and `Math.exp` need not round alike in every engine.

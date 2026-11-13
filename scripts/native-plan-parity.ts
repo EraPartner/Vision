@@ -38,6 +38,10 @@
  * prices.jsonl holds calls of the price layer's rules: history points, provider settings,
  * and the provider strategies over generated provider answers.
  *
+ * migrations.jsonl holds calls of the migration runner's rules (`database/migrate.ts`): which
+ * files are migrations, what a ledger allows, what a run applies and backs up, the names and
+ * pruning of pre-migration copies, the schema fingerprint, and the boolean input.
+ *
  * foundations.jsonl samples the shared helpers (money, number rendering, `lib/math.ts`,
  * `lib/timezone.ts`).
  *
@@ -197,6 +201,18 @@ import type {
   InvestmentRow,
 } from "../apps/node-backend/src/services/prices/priceProviderRegistry.ts";
 import { getYahooClient } from "../apps/node-backend/src/services/prices/yahooClient.ts";
+import { DatabaseSync } from "node:sqlite";
+import {
+  LEDGER_TABLE,
+  loadMigrations,
+  migrateConnection,
+  planMigrations,
+  revertLatestMigration,
+  runMigrations,
+  schemaFingerprint,
+  writePreMigrationBackup,
+} from "../apps/node-backend/src/database/migrate.ts";
+import { booleanInput } from "../apps/node-backend/src/database/sqlite/values.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -239,6 +255,7 @@ const FORECAST = repoPath("apps/native/parity/plans/forecast.jsonl");
 const INTEROP = repoPath("apps/native/parity/plans/import-interop.jsonl");
 const BANK_IMPORT = repoPath("apps/native/parity/plans/bank-import.jsonl");
 const PRICES = repoPath("apps/native/parity/plans/prices.jsonl");
+const MIGRATIONS = repoPath("apps/native/parity/plans/migrations.jsonl");
 const WORKBOOK = repoPath("apps/native/parity/plans/workbook.jsonl");
 const PORTFOLIO_IMPORT = repoPath(
   "apps/native/parity/plans/portfolio-import.jsonl",
@@ -1197,6 +1214,264 @@ export async function evaluatePrices(op: unknown[]): Promise<unknown> {
   }
 }
 
+type LedgerRows = [number, string, string][];
+
+/** A temporary directory for one call, removed afterwards. */
+async function withScratch<T>(
+  run: (directory: string) => Promise<T>,
+): Promise<T> {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vision-parity-"));
+  try {
+    return await run(directory);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+/** Writes the migration files of a call; `null` stands for a missing directory. */
+function migrationDirectory(
+  root: string,
+  files: Record<string, string> | null,
+): string {
+  const directory = path.join(root, "migrations");
+  if (files === null) return directory;
+  fs.mkdirSync(directory);
+  for (const [name, text] of Object.entries(files))
+    fs.writeFileSync(path.join(directory, name), text);
+  return directory;
+}
+
+/** An in-memory database with the given ledger (`null`: no ledger table) and tables. */
+function ledgerDatabase(
+  ledger: LedgerRows | null,
+  hasObjects: boolean,
+): DatabaseSync {
+  const db = new DatabaseSync(":memory:");
+  if (hasObjects) db.exec("CREATE TABLE parity_existing (x)");
+  if (ledger !== null) {
+    db.exec(
+      `CREATE TABLE ${LEDGER_TABLE} (version INTEGER PRIMARY KEY, name TEXT NOT NULL, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL)`,
+    );
+    const insert = db.prepare(
+      `INSERT INTO ${LEDGER_TABLE} VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z')`,
+    );
+    for (const row of ledger) insert.run(...row);
+  }
+  return db;
+}
+
+/** Runs `run` with `new Date()` answering one instant. */
+function atInstant<T>(epochMs: number, run: () => T): T {
+  const RealDate = Date;
+  globalThis.Date = new Proxy(RealDate, {
+    construct: (target, args: unknown[]) =>
+      Reflect.construct(target, args.length === 0 ? [epochMs] : args) as Date,
+  });
+  try {
+    return run();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
+
+/**
+ * One call of the migration runner's rules (`database/migrate.ts`) or of the boolean input
+ * of `sqlite/values.ts`. A thrown error is recorded as `{ error }`, with the temporary
+ * directory written as `<dir>`.
+ */
+export async function evaluateMigrations(op: unknown[]): Promise<unknown> {
+  const [name, ...args] = op;
+  return withScratch(async (root) => {
+    const failure = (error: unknown): { error: string } => ({
+      error: (error instanceof Error ? error.message : String(error))
+        .split(root)
+        .join("<dir>"),
+    });
+    try {
+      switch (name) {
+        case "load":
+          return {
+            migrations: loadMigrations(
+              migrationDirectory(
+                root,
+                args[0] as Record<string, string> | null,
+              ),
+            ).map((m) => ({
+              version: m.version,
+              name: m.name,
+              sha256: m.sha256,
+              down: m.downSql ?? null,
+            })),
+          };
+        case "plan": {
+          const [files, ledger, hasObjects] = args as [
+            Record<string, string>,
+            LedgerRows | null,
+            boolean,
+          ];
+          const db = ledgerDatabase(ledger, hasObjects);
+          try {
+            return {
+              pending: planMigrations(
+                db,
+                loadMigrations(migrationDirectory(root, files)),
+              ).map((m) => m.name),
+            };
+          } finally {
+            db.close();
+          }
+        }
+        case "run": {
+          const [files, ledger, hasObjects, target, skipBackup, onDisk] =
+            args as [
+              Record<string, string>,
+              LedgerRows | null,
+              boolean,
+              number | null,
+              boolean,
+              boolean,
+            ];
+          const db = ledgerDatabase(ledger, hasObjects);
+          try {
+            const result = migrateConnection(
+              db,
+              onDisk ? path.join(root, "vision.sqlite3") : ":memory:",
+              {
+                dir: migrationDirectory(root, files),
+                skipBackup,
+                backupDir: path.join(root, "copies"),
+                ...(target === null ? {} : { targetVersion: target }),
+              },
+            );
+            return {
+              revision: result.revision ?? null,
+              applied: result.applied,
+              backup: result.backupFile !== undefined,
+            };
+          } finally {
+            db.close();
+          }
+        }
+        case "revert": {
+          const [files, applied] = args as [Record<string, string>, number];
+          const dir = migrationDirectory(root, files);
+          const file = path.join(root, "vision.sqlite3");
+          await runMigrations(file, {
+            dir,
+            skipBackup: true,
+            targetVersion: applied,
+          });
+          return {
+            revision: (await revertLatestMigration(file, { dir })) ?? null,
+          };
+        }
+        case "violations": {
+          // The rows SQLite reports for the SQL, and the refusal of a run that leaves them.
+          const sql = String(args[0]);
+          const probe = new DatabaseSync(":memory:", {
+            enableForeignKeyConstraints: false,
+          });
+          const db = new DatabaseSync(":memory:");
+          try {
+            probe.exec(sql);
+            const rows = (
+              probe.prepare("PRAGMA foreign_key_check").all() as {
+                table: string;
+                rowid: number | null;
+                parent: string;
+              }[]
+            ).map((r) => [r.table, r.rowid, r.parent]);
+            let message: string | null = null;
+            try {
+              migrateConnection(db, ":memory:", {
+                dir: migrationDirectory(root, { "0001_parity.sql": sql }),
+              });
+            } catch (error) {
+              message = failure(error).error;
+            }
+            return { rows, message };
+          } finally {
+            probe.close();
+            db.close();
+          }
+        }
+        case "backup": {
+          const [relative, from, to, epochMs] = args as [
+            string,
+            number,
+            number,
+            number,
+          ];
+          const db = new DatabaseSync(":memory:");
+          try {
+            const target = atInstant(epochMs, () =>
+              writePreMigrationBackup(db, path.join(root, relative), from, to),
+            );
+            return {
+              name: path.basename(target),
+              directory: path.dirname(target).split(root).join("<dir>"),
+            };
+          } finally {
+            db.close();
+          }
+        }
+        case "prune": {
+          const copies = args[0] as [string, number][];
+          const directory = path.join(root, "copies");
+          fs.mkdirSync(directory);
+          for (const [file, modifiedMs] of copies) {
+            fs.writeFileSync(path.join(directory, file), "");
+            fs.utimesSync(
+              path.join(directory, file),
+              modifiedMs / 1000,
+              modifiedMs / 1000,
+            );
+          }
+          const db = new DatabaseSync(":memory:");
+          try {
+            const written = path.basename(
+              writePreMigrationBackup(
+                db,
+                path.join(root, "vision.sqlite3"),
+                1,
+                2,
+                directory,
+              ),
+            );
+            return fs
+              .readdirSync(directory)
+              .filter((file) => file !== written)
+              .sort();
+          } finally {
+            db.close();
+          }
+        }
+        case "fingerprint": {
+          const rows = (
+            args[0] as [string, string, string, string | null][]
+          ).map(([type, objectName, table, sql]) => ({
+            type,
+            name: objectName,
+            tbl_name: table,
+            sql,
+          }));
+          // The function reads four columns of every row; the rows stand in for the query.
+          const db = {
+            prepare: () => ({ all: () => rows }),
+          } as unknown as DatabaseSync;
+          return schemaFingerprint(db);
+        }
+        case "boolean":
+          return { value: booleanInput(args[0]) };
+        default:
+          throw new Error(`unknown migration operation: ${String(name)}`);
+      }
+    } catch (error) {
+      return failure(error);
+    }
+  });
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -1297,6 +1572,14 @@ if (isEntrypoint(import.meta)) {
     async (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: await evaluatePrices(op) };
+    },
+    check,
+  );
+  await rerecordAsync(
+    MIGRATIONS,
+    async (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: await evaluateMigrations(op) };
     },
     check,
   );
