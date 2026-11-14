@@ -60,7 +60,6 @@ struct PortfolioAssetCard: View {
             ).day ?? 0
         }
     }
-    private var nearingMaturity: Bool { days.map { $0 <= 30 } ?? false }
     private var currency: CurrencyCode { shell.settings.portfolioCurrency }
     private func money(_ amount: Decimal, signed: Bool = false) -> String {
         MoneyText.text(amount, currency: currency, settings: shell.settings, signed: signed)
@@ -97,25 +96,103 @@ struct PortfolioAssetCard: View {
             actionsMenu
         }
     }
+    private var isSavings: Bool { holding.assetClass == .savings }
+    private var isMatured: Bool { days.map { $0 <= 0 } ?? false }
+    private var maturingSoon: Bool { days.map { $0 > 0 && $0 <= 30 } ?? false }
+    /// SavingsPage `CardHeader`: a 40 pt tinted tile (PiggyBank on primary for savings, Shield on
+    /// accent for bonds), the title, then the type badge and the accent `x % p.a.` rate.
     private var savingsHeader: some View {
-        HStack(alignment: .top) {
-            Image(systemName: holding.assetClass == .bond ? "shield" : "banknote")
-                .font(.title2).foregroundStyle(theme.primary).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Button(holding.name) { Task { await model.openDetail(id: holding.id) } }
-                    .buttonStyle(.plain).font(.headline)
-                VisionBadge(text: strings.t("portfolio.assetClass." + holding.assetClass.rawValue))
-                if holding.interestRate != 0 {
-                    let rate = holding.interestRate
-                    Text(
-                        VisionFormat.percent(rate, digits: 2, locale: shell.settings.numberFormat.locale)
-                            + " " + strings.t("savings.pa")
+        let tint = isSavings ? theme.primary : theme.accent
+        return HStack(alignment: .top, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: isSavings ? "banknote" : "shield").font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(tint).frame(width: 40, height: 40)
+                    .background(
+                        tint.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
                     )
-                    .font(.caption).foregroundStyle(theme.secondaryLabel)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Button(holding.name) { Task { await model.openDetail(id: holding.id) } }
+                        .buttonStyle(.plain).font(Font.visionTitle3).lineLimit(1)
+                    HStack(spacing: 8) {
+                        VisionBadge(text: strings.t(isSavings ? "portfolio.savings" : "portfolio.bond"), small: true)
+                        if holding.interestRate != 0 {
+                            Text(
+                                VisionFormat.percent(
+                                    holding.interestRate, digits: 2, locale: shell.settings.numberFormat.locale)
+                                    + " " + strings.t("savings.pa")
+                            )
+                            .font(.callout).monospacedDigit().foregroundStyle(theme.accent)
+                        }
+                    }
                 }
             }
-            Spacer()
+            Spacer(minLength: 0)
             actionsMenu
+        }
+    }
+    /// SavingsPage `CardContent`: the balance and the interest earned side by side as `type-title-2`
+    /// amounts, then the `FactRow` list between hairlines.
+    @ViewBuilder private var savingsBody: some View {
+        let earned = holding.totalIncome
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(strings.t("portfolio.currentBalance")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+                MoneyText(
+                    amount: holding.currentValue, currency: currency, settings: shell.settings, signed: false,
+                    colored: false
+                ).font(.visionCardTitle)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(strings.t("portfolio.interestEarned")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+                Text(money(earned, signed: true)).font(.visionCardTitle).monospacedDigit()
+                    .foregroundStyle(earned > 0 ? theme.gain : earned < 0 ? theme.loss : theme.foreground)
+            }.frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        let projects = holding.interestRate != 0 && holding.projectedAnnualInterest > 0
+        let charged = holding.totalFees > 0 || holding.totalTaxes > 0
+        if projects || holding.maturityDate != nil || charged {
+            VStack(spacing: 0) {
+                Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1)
+                if projects {
+                    factRow(
+                        strings.t("portfolio.projectedAnnualInterest"),
+                        money(holding.projectedAnnualInterest, signed: true), tone: theme.primary)
+                    if holding.accruedInterest > 0 {
+                        factRow(
+                            strings.t("portfolio.accruedUnpaid"), money(holding.accruedInterest, signed: true),
+                            tone: theme.gain)
+                    }
+                }
+                if let date = holding.maturityDate {
+                    maturityRow(date)
+                }
+                if charged {
+                    factRow(
+                        strings.t("portfolio.feesAndTaxesPaid"), money(-(holding.feesAndTaxes ?? 0), signed: true),
+                        tone: theme.loss)
+                }
+            }
+        }
+    }
+    private func maturityRow(_ date: String) -> some View {
+        let tone: Color? = isMatured ? theme.accent : maturingSoon ? theme.primary : nil
+        let label = strings.t(isMatured ? "portfolio.matured" : "portfolio.matures")
+        let detail = !isMatured ? days.map { strings.t("portfolio.daysRemaining", ["days": String($0)]) } : nil
+        return VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 16) {
+                Label(label, systemImage: "calendar").font(.footnote).foregroundStyle(theme.secondaryLabel)
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(VisionFormat.appDate(date, format: shell.settings.dateFormat)).font(.body)
+                        .monospacedDigit().foregroundStyle(tone ?? theme.foreground)
+                    if let detail {
+                        Text(detail).font(.caption).monospacedDigit().foregroundStyle(theme.tertiaryLabel)
+                    }
+                }.multilineTextAlignment(.trailing)
+            }.padding(.vertical, 8)
+            Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1)
         }
     }
     /// The web property body: purchase price and current value side by side as large serif
@@ -204,45 +281,11 @@ struct PortfolioAssetCard: View {
         AdminCard {
             VStack(alignment: .leading, spacing: 16) {
                 if isProperty { propertyHeader } else { savingsHeader }
-                if isProperty {
-                    propertyBody
-                } else {
-                    TaxMoneyRow(
-                        title: strings.t("portfolio.currentBalance"), amount: holding.currentValue, shell: shell,
-                        strong: true)
-                    TaxMoneyRow(title: strings.t("portfolio.interestEarned"), amount: holding.totalIncome, shell: shell)
-                    if holding.interestRate != 0 {
-                        Divider()
-                        TaxMoneyRow(
-                            title: strings.t("portfolio.projectedAnnualInterest"),
-                            amount: holding.projectedAnnualInterest, shell: shell, tone: theme.gain)
-                        if holding.accruedInterest > 0 {
-                            TaxMoneyRow(
-                                title: strings.t("portfolio.accruedUnpaid"), amount: holding.accruedInterest,
-                                shell: shell)
-                        }
-                    }
-                    if let date = holding.maturityDate {
-                        HStack {
-                            Text(strings.t((days ?? 1) <= 0 ? "portfolio.matured" : "portfolio.matures"))
-                            Spacer(minLength: 0)
-                            Text(VisionFormat.appDate(date, format: shell.settings.dateFormat))
-                        }
-                        .foregroundStyle(nearingMaturity ? theme.warning : theme.secondaryLabel)
-                        if let days, days > 0 {
-                            Text(strings.t("portfolio.daysRemaining", ["days": String(days)]))
-                                .font(.caption).foregroundStyle(nearingMaturity ? theme.warning : theme.secondaryLabel)
-                        }
-                    }
-                }
-                if !isProperty, holding.totalFees + holding.totalTaxes > 0 {
-                    TaxMoneyRow(
-                        title: strings.t("portfolio.feesAndTaxesPaid"),
-                        amount: -(holding.feesAndTaxes ?? 0), shell: shell, signed: true, tone: theme.loss)
-                }
+                if isProperty { propertyBody } else { savingsBody }
             }
         }.overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(
-                nearingMaturity ? theme.warning.opacity(0.6) : .clear))
+                isProperty ? Color.clear : isMatured ? theme.accent.opacity(0.6)
+                    : maturingSoon ? theme.primary.opacity(0.6) : .clear))
     }
 }

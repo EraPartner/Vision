@@ -32,7 +32,11 @@ public struct PortfolioHoldingsView: View {
         default: "chart.line.uptrend.xyaxis"
         }
     }
-    private var holdings: [PortfolioHolding] { model.active.filter { classes.contains($0.assetClass) } }
+    /// `byAssetClass([...classes])`: grouped in the page's class order (savings before bonds).
+    private var holdings: [PortfolioHolding] {
+        let active = model.active
+        return classes.flatMap { assetClass in active.filter { $0.assetClass == assetClass } }
+    }
     private var isUnitBased: Bool { ![.realEstate, .savings, .bond].contains(assetClass) }
     private var isRealEstate: Bool { assetClass == .realEstate }
     /// `findHoldingTotals`: the page figures are the server's totals of these classes (ADR-216).
