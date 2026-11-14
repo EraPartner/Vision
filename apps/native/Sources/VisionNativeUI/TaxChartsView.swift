@@ -270,7 +270,9 @@ struct TaxYearComparisonView: View {
                 TaxTableViewport(isPrinting: printLayout) {
                     Grid(alignment: .leading, horizontalSpacing: printLayout ? 10 : 24, verticalSpacing: 12) {
                         GridRow {
+                            // `<Table>` is `w-full`: the metric column takes the spare width.
                             Text(shell.strings.t("tax.comparison.header.metric"))
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             Text(String(overview.year)).gridColumnAlignment(.trailing)
                             HStack {
                                 Text(String(selected.year))

@@ -37,7 +37,7 @@ public struct HomeView: View {
                 if let notifications = shell.shellNotifications, notifications.upcoming.shouldShow {
                     ShellUpcomingPaymentsBanner(model: notifications.upcoming, shell: shell)
                 }
-                VisionPageHeader(title: greeting, subtitle: todayLong, symbol: "house") {
+                VisionPageHeader(title: greeting, subtitle: todayLong, symbol: "square.grid.2x2") {
                     Menu {
                         Button(strings.t("home.customize")) { customize = true }
                     } label: {

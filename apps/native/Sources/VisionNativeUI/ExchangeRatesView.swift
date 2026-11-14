@@ -198,25 +198,20 @@ public struct ExchangeRatesView: View {
                         .foregroundStyle(theme.secondaryLabel)
                 }
                 .padding(VisionPageLayout.padding)
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
-                    GridRow {
-                        ForEach(Array(columns.enumerated()), id: \.offset) { index, column in
-                            Text(column)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(theme.secondaryLabel)
-                                .padding(.vertical, 8)
-                                .gridColumnAlignment(index == 0 ? .leading : .trailing)
-                                .accessibilityAddTraits(.isHeader)
-                        }
+                VisionTable(columns: [.leading] + Array(repeating: .trailing, count: max(0, columns.count - 1))) {
+                    ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
+                        Text(column)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(theme.secondaryLabel)
+                            .padding(.vertical, 8)
+                            .accessibilityAddTraits(.isHeader)
                     }
                     ForEach(table.rows) { row in
-                        Divider().gridCellUnsizedAxes(.horizontal)
-                        GridRow {
-                            cell(row.currency.rawValue, font: .body.monospaced().weight(.medium))
-                            cell(row.rate, font: .body.monospaced())
-                            cell(row.inverse, font: .body.monospaced())
-                            cell(row.hundredInEuro, font: .body)
-                        }
+                        VisionTableDivider()
+                        cell(row.currency.rawValue, font: .body.monospaced().weight(.medium))
+                        cell(row.rate, font: .body.monospaced())
+                        cell(row.inverse, font: .body.monospaced())
+                        cell(row.hundredInEuro, font: .body)
                     }
                 }
                 .padding(.horizontal, 16)

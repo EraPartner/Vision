@@ -8,10 +8,12 @@ struct ResearchCompareStatisticsView: View {
     var body: some View {
         ResearchCard(title: shell.strings.t("research.compare.metrics")) {
             Text(shell.strings.t("research.compare.historyHint")).font(.callout).foregroundStyle(theme.secondaryLabel)
-            ScrollView(.horizontal) {
+            TaxTableViewport(isPrinting: false) {
                 Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 14) {
                     GridRow {
+                        // `<Table>` is `w-full`: the symbol column takes the spare width.
                         Text(shell.strings.t("research.compare.symbol"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Text(shell.strings.t("research.compare.return")).gridColumnAlignment(.trailing)
                         Text(shell.strings.t("research.compare.volatility")).gridColumnAlignment(.trailing)
                         Text(shell.strings.t("research.compare.maxDrawdown")).gridColumnAlignment(.trailing)

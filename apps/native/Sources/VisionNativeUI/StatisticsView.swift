@@ -940,8 +940,10 @@ public struct StatisticsView: View {
                 Group {
                     StatisticsFlowView(
                         flow: flow, settings: settings, currency: currency, strings: strings,
-                        initialNode: model.printLocalState.selection["flowNode"],
-                        initialLink: model.printLocalState.selection["flowLink"],
+                        // Read only for a print: on screen the chart owns its hover, and reading
+                        // it here would redraw the whole page on every pointer move.
+                        initialNode: isPrinting ? model.printLocalState.selection["flowNode"] : nil,
+                        initialLink: isPrinting ? model.printLocalState.selection["flowLink"] : nil,
                         onHoverChange: { node, link in
                             if !isPrinting {
                                 model.printLocalState.selection["flowNode"] = node
@@ -949,7 +951,8 @@ public struct StatisticsView: View {
                             }
                         }
                     ).frame(minWidth: isPrinting ? 0 : 720)
-                }.frame(height: 440)
+                    // `SankeyChart height = 420`.
+                }.frame(height: 420)
             }
         } else if let error = model.flowError {
             Text(error).foregroundStyle(theme.destructive)
