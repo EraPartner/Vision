@@ -903,7 +903,7 @@ public struct StatisticsView: View {
         cardWithControls(
             "statsPage.sankey.title",
             subtitle: strings.t("statsPage.sankey.description", ["year": String(model.flowYear)]),
-            graph: "sankey"
+            graph: "sankey", exclusionLeading: true
         ) {
             if !isPrinting {
                 VisionSelect(
@@ -1168,8 +1168,11 @@ public struct StatisticsView: View {
             title, subtitle: subtitle, graph: graph, fillsHeight: fillsHeight, controls: { EmptyView() },
             content: content)
     }
+    /// `exclusionLeading`: SankeyTab puts its exclusion chip before the year select; ChartCard
+    /// puts it after the card's own controls.
     @ViewBuilder private func cardWithControls<Controls: View, Content: View>(
         _ title: String, subtitle: String? = nil, graph: String? = nil, fillsHeight: Bool = false,
+        exclusionLeading: Bool = false,
         @ViewBuilder controls: @escaping () -> Controls, @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         if isPrinting {
@@ -1178,8 +1181,9 @@ public struct StatisticsView: View {
             InsightsCard(
                 title: strings.t(title), subtitle: subtitle, fillsHeight: fillsHeight,
                 actions: {
+                    if exclusionLeading { exclusionToggle(graph) }
                     controls()
-                    exclusionToggle(graph)
+                    if !exclusionLeading { exclusionToggle(graph) }
                 },
                 content: content)
         }

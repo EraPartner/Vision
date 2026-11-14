@@ -165,31 +165,46 @@ struct PortfolioBreakdownView: View {
     let data: PortfolioPerformanceData
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
-    private var groups: [OpenAPI.AssetClass: [PortfolioPerformanceBreakdown]] {
-        Dictionary(grouping: data.breakdownSummary, by: \.assetClass)
+    /// The holdings grouped by asset class, in the order each class first appears in the
+    /// breakdown (`Map` insertion order in PerformanceBreakdown.tsx), not alphabetically.
+    private var groups: [(OpenAPI.AssetClass, [PortfolioPerformanceBreakdown])] {
+        var order: [OpenAPI.AssetClass] = []
+        var rows: [OpenAPI.AssetClass: [PortfolioPerformanceBreakdown]] = [:]
+        for row in data.breakdownSummary {
+            if rows[row.assetClass] == nil { order.append(row.assetClass) }
+            rows[row.assetClass, default: []].append(row)
+        }
+        return order.map { ($0, rows[$0] ?? []) }
     }
     var body: some View {
-        let groups = self.groups
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading) {
-            ForEach(groups.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { group in
-                let rows = groups[group] ?? []
+        // `grid gap-4 sm:grid-cols-2 lg:grid-cols-3` of compact (`p-4`) cards.
+        VisionResponsiveGrid(columns: 3, spacing: 16) {
+            ForEach(groups, id: \.0) { group, rows in
                 let value = rows.reduce(0) { $0 + $1.currentValue }
                 let gain = rows.reduce(0) { $0 + $1.gainLoss }
                 let invested = rows.reduce(0) { $0 + $1.totalInvested }
-                PortfolioCard(title: shell.strings.t("portfolio.assetClass." + group.rawValue)) {
-                    Text(shell.strings.tc("performance.holdings", rows.count)).font(.caption).foregroundStyle(
-                        theme.secondaryLabel)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(shell.strings.t("performance." + group.rawValue))
+                            .font(.caption).foregroundStyle(theme.tertiaryLabel)
+                        Spacer(minLength: 8)
+                        Text(shell.strings.tc("performance.holdings", rows.count))
+                            .font(.caption).foregroundStyle(theme.secondaryLabel)
+                    }
+                    .padding(.bottom, 4)
                     MoneyText(
                         amount: value, currency: data.currency, settings: shell.settings, signed: false, colored: false
                     )
-                    .font(.title2.weight(.semibold))
-                    HStack {
+                    .font(.visionTitle3).monospacedDigit().foregroundStyle(theme.foreground)
+                    HStack(spacing: 4) {
                         MoneyText(amount: gain, currency: data.currency, settings: shell.settings)
-                        Text(signedPercent(invested > 0 ? gain / invested * 100 : 0)).monospacedDigit()
-                    }.foregroundStyle(gain >= 0 ? theme.gain : theme.loss)
+                        Text("(" + signedPercent(invested > 0 ? gain / invested * 100 : 0) + ")").monospacedDigit()
+                    }
+                    .font(.footnote).foregroundStyle(gain >= 0 ? theme.gain : theme.loss)
                     Text(shell.strings.t("portfolio.invested", ["amount": money(invested)]))
-                        .font(.caption).foregroundStyle(theme.secondaryLabel)
+                        .font(.caption).monospacedDigit().foregroundStyle(theme.secondaryLabel)
                 }
+                .visionCard(padding: 16)
             }
         }
         if !data.heatmap.years.isEmpty {
@@ -297,11 +312,14 @@ struct PortfolioBreakdownView: View {
             value == nil || magnitude < Decimal(25) / 100
             ? theme.foreground.opacity(0.04)
             : (amount >= 0 ? theme.gain : theme.loss).opacity(opacity)
-        return Text(text ?? "—")
-            .font(.caption.monospaced()).frame(minWidth: 48, maxWidth: .infinity).padding(.vertical, 8)
-            .background(color, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm))
-            .padding(.vertical, 2)
-            .visionTooltip(text ?? shell.strings.t("common.noData2"))
+        // `rounded-control px-1 py-1.5 … font-mono` with a native `title` tooltip; an empty month
+        // shows an en dash.
+        return Text(text ?? "–")
+            .font(.caption.monospaced()).frame(minWidth: 48, maxWidth: .infinity).padding(.vertical, 6)
+            .padding(.horizontal, 4)
+            .background(color, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
+            .padding(.vertical, 4)
+            .help(text ?? shell.strings.t("common.noData2"))
     }
     private func yearReturn(_ months: [Decimal?]) -> Decimal? {
         let known = months.compactMap { $0 }
