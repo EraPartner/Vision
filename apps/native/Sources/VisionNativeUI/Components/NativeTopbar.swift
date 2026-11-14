@@ -28,16 +28,20 @@ struct NativeTopbar: View {
     static let veilThreshold: CGFloat = 8
     /// Room for the traffic lights when the sidebar no longer holds them: the icon rail
     /// under them already takes its own width of it.
-    private static let trafficLightsWidth: CGFloat = 78 - NativeSidebarRail.width
+    /// The traffic lights end about 74 pt in (`trafficLightPosition` x 20); the trigger keeps a
+    /// 12 pt gap after them.
+    private static let trafficLightsWidth: CGFloat = 86 - NativeSidebarRail.width
 
     var body: some View {
         HStack(spacing: 0) {
             // `<SidebarTrigger className="mr-4" />`: an aria-label, no tooltip.
+            // `variant="ghost" size="icon"` at `h-7 w-7` with the 16 pt PanelLeft glyph.
             Button {
                 model.toggleSidebar()
             } label: {
-                Image(systemName: "sidebar.left").frame(width: 26, height: 22).contentShape(Rectangle())
+                Image(systemName: "sidebar.left").font(.system(size: 14, weight: .regular))
             }
+            .buttonStyle(.vision(.ghost, size: .iconXs))
             .accessibilityLabel(model.strings.t("menu.toggleSidebar"))
             .padding(.trailing, 16)
             if let title {
@@ -53,27 +57,44 @@ struct NativeTopbar: View {
             }
             Spacer(minLength: 0)
         }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
-        .padding(.leading, model.isSidebarVisible ? 20 : Self.trafficLightsWidth)
+        // `px-4`.
+        .padding(.leading, model.isSidebarVisible ? 16 : Self.trafficLightsWidth)
         .padding(.trailing, 16)
         .frame(height: height)
         .frame(maxWidth: .infinity)
         // The strip drags the window like a titlebar; buttons above it take their own clicks.
         .background { WindowDragArea() }
         .background {
-            // The web topbar's `bg-background/80 backdrop-blur`: the page background over a blur.
-            // The glass detail tint read greener than the page beneath it.
+            // `.app-topbar::before` (index.css): a `--background` gradient (0.82 → 0.68 light,
+            // 0.7 → 0.56 dark) over a 16 px backdrop blur, the bottom border (`--border` at 0.5 /
+            // 0.7), the inset glass highlight and a soft drop shadow; hidden at scroll-top.
             Rectangle().fill(.ultraThinMaterial)
-                .overlay(Color(token: theme.palette.background, opacity: 0.88))
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(theme.border.opacity(0.6)).frame(height: 1)
+                .overlay(
+                    LinearGradient(
+                        colors: [
+                            Color(token: theme.palette.background, opacity: theme.isDark ? 0.7 : 0.82),
+                            Color(token: theme.palette.background, opacity: theme.isDark ? 0.56 : 0.68),
+                        ], startPoint: .top, endPoint: .bottom)
+                )
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color(token: theme.palette.glassHighlight, opacity: theme.isDark ? 0.06 : 0.3))
+                        .frame(height: 1)
                 }
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(theme.border.opacity(theme.isDark ? 0.7 : 0.5)).frame(height: 1)
+                }
+                .shadow(
+                    color: Color(token: theme.palette.glassShadow, opacity: theme.isDark ? 0.38 : 0.05),
+                    radius: theme.isDark ? 16 : 14, y: theme.isDark ? 14 : 12)
                 .opacity(veiled ? 1 : 0)
                 .allowsHitTesting(false)
         }
         .animation(reduceMotion ? nil : .easeOut(duration: DesignTokens.Duration.normal), value: scrolled)
-        .animation(reduceMotion ? nil : .easeOut(duration: DesignTokens.Duration.normal), value: veiled)
+        // `transition: opacity var(--duration-normal) var(--ease-glide)`.
+        .animation(
+            reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.normal),
+            value: veiled)
     }
 
     private var title: String? {
