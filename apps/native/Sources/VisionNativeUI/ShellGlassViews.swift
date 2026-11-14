@@ -53,9 +53,10 @@ struct SidebarGlassBackground: View {
             if visualEffects == .reduced || reduceTransparency {
                 Color(token: glass.sidebarTop)
             } else {
-                VibrancyBackground(
-                    material: .sidebar,
-                    blendingMode: visualEffects == .enhanced ? .behindWindow : .withinWindow)
+                // Within the window on every tier (Tor, 2026-11-14: colours stay the same across
+                // performance profiles in the Swift app): desktop vibrancy behind the window let the
+                // wallpaper tint the sidebar on Enhanced only.
+                VibrancyBackground(material: .sidebar, blendingMode: .withinWindow)
                 // No second blur pass over the vibrancy, Full effects or not: the desktop rail
                 // filters with saturate alone (`.app-sidebar.glass-chrome`, index.css phase D),
                 // which SwiftUI cannot apply to a backdrop.
@@ -80,22 +81,16 @@ struct SidebarGlassBackground: View {
     }
 }
 
-/// The detail column is opaque in Standard and Reduced. Enhanced opts into desktop
-/// vibrancy, tinted with the page's background; Reduce Transparency always wins.
+/// The detail column: the opaque page background under the aurora on every tier. The web's
+/// Enhanced tier lets the desktop show through (`html.electron-mac.vibrancy body` at 0.72); the
+/// Swift app keeps one background colour across performance profiles (Tor, 2026-11-14), so
+/// the tiers differ only in their effects.
 struct DetailGlassBackground: View {
     @Environment(\.visionTheme) var theme
-    @Environment(\.visionVisualEffects) private var visualEffects
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        let glass = theme.glass
         ZStack {
-            if visualEffects == .enhanced && !reduceTransparency {
-                VibrancyBackground(material: .underWindowBackground, blendingMode: .behindWindow)
-                Color(token: glass.detailTint, opacity: glass.detailTintOpacity)
-            } else {
-                Color(token: glass.detailTint)
-            }
+            Color(token: theme.glass.detailTint)
             AuroraCanvas()
         }
         .ignoresSafeArea()

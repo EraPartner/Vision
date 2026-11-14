@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
-/// The web `<Card>` surface (`card-material premium-frame rounded-card`, plus `glass-thin`, or
-/// `glass-regular` under Full effects: index.css; components/ui/card.tsx): the material gradient,
+/// The web `<Card>` surface (`card-material premium-frame rounded-card glass-regular`: index.css;
+/// components/ui/card.tsx, whose `glass-thin` without Full effects the Swift app does not switch to): the material gradient,
 /// the `--border`/0.7 frame, the embossed inset edge (a top highlight and, in light mode, a bottom
 /// hairline) and the soft drop shadow. Print reports keep a flat white card with a hairline.
 ///
@@ -43,12 +43,15 @@ struct VisionCardBackground: View {
         let palette = theme.palette
         let dark = theme.isDark
         let lifted = interactive && hovering
-        // card.tsx: `fullEffects ? "glass-regular" : "glass-thin"`.
-        let material = (fullEffects ? GlassMaterialSpec.regular : GlassMaterialSpec.thin).appearance(isDark: dark)
+        // card.tsx switches `glass-thin` to `glass-regular` under Full effects, which changes the
+        // card's colour. The Swift app keeps one card colour whatever the profile (Tor,
+        // 2026-11-14): `glass-regular`, the look of the default Standard tier with Full effects
+        // on auto. Full effects still raises the hover highlight below.
+        let material = GlassMaterialSpec.regular.appearance(isDark: dark)
         // `.premium-frame` sets `--border`/0.7, but in dark mode `.dark .glass-regular` (two
         // classes) outranks it with `--glass-border`/0.08; the hover frame outranks both.
         let restingFrame: Color =
-            fullEffects && dark && !opaque
+            dark && !opaque
             ? Color(token: palette.color(material.border.color), opacity: material.border.alpha)
             : theme.border.opacity(0.7)
         // `.premium-frame-interactive:hover` frame: `--primary` at 0.4, dark 0.5.
