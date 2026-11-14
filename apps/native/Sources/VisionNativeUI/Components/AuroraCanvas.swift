@@ -100,11 +100,14 @@ struct AuroraCanvas: View {
         }
     }
 
-    /// `radial-gradient(120rem 60rem at 70% -20%, primary / wash, transparent 60%)`.
+    /// `radial-gradient(120rem 60rem at 70% -20%, primary / wash, transparent 60%)`: an ellipse of
+    /// 1920 by 960 pt radii that is clear from 60 % of them. `EllipticalGradient` counts its
+    /// radius fractions against the frame's width and height (0.5 reaches the edge), so the
+    /// 3840 by 1920 pt frame ends the fade at 0.3.
     private func wash(_ size: CGSize) -> some View {
         EllipticalGradient(
-            colors: [theme.primary.opacity(alphas.wash), .clear], center: .center, startRadiusFraction: 0,
-            endRadiusFraction: 0.6
+            colors: [theme.primary.opacity(alphas.wash), theme.primary.opacity(0)], center: .center,
+            startRadiusFraction: 0, endRadiusFraction: 0.3
         )
         .frame(width: 1920 * 2, height: 960 * 2)
         .position(x: size.width * 0.7, y: -size.height * 0.2)
@@ -253,7 +256,11 @@ private struct AuroraBlobs: NSViewRepresentable {
     }
 }
 
-/// `.liquid-canvas-grain`: a tiled 160×160 fractal-noise texture.
+/// `.liquid-canvas-grain`: a tiled 160 by 160 film grain. The web tile is an SVG
+/// `feTurbulence` (`fractalNoise`, base frequency 0.8, three octaves): at that frequency a noise
+/// cell is about one pixel, so the tile reads as fine per-pixel grain with every channel,
+/// alpha included, noisy around its middle value. Three octaves of white noise, weighted like
+/// the turbulence sum, give the same grain; the pixels are premultiplied.
 private struct AuroraGrain: View {
     private static let tile: Image? = {
         let side = 160
@@ -262,43 +269,22 @@ private struct AuroraGrain: View {
             state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
             return Double(state >> 33) / Double(UInt64(1) << 31)
         }
-        var lattices: [[Double]] = []
-        for octave in 0..<3 {
-            let cells = 8 << octave
-            lattices.append((0..<(cells * cells)).map { _ in next() })
+        /// One channel: 0.5 plus the octave sum (amplitudes 1, 1/2, 1/4), halved as `fractalNoise` does.
+        func channel() -> Double {
+            let sum = (next() - 0.5) + (next() - 0.5) / 2 + (next() - 0.5) / 4
+            return max(0, min(1, 0.5 + sum / 2))
         }
         var pixels = [UInt8](repeating: 0, count: side * side * 4)
-        for y in 0..<side {
-            for x in 0..<side {
-                var value = 0.0
-                var amplitude = 0.5
-                for (octave, lattice) in lattices.enumerated() {
-                    let cells = 8 << octave
-                    let fx = Double(x) / Double(side) * Double(cells)
-                    let fy = Double(y) / Double(side) * Double(cells)
-                    let x0 = Int(fx) % cells
-                    let y0 = Int(fy) % cells
-                    let x1 = (x0 + 1) % cells
-                    let y1 = (y0 + 1) % cells
-                    let tx = fx - floor(fx)
-                    let ty = fy - floor(fy)
-                    let top = lattice[y0 * cells + x0] * (1 - tx) + lattice[y0 * cells + x1] * tx
-                    let bottom = lattice[y1 * cells + x0] * (1 - tx) + lattice[y1 * cells + x1] * tx
-                    value += amplitude * (top * (1 - ty) + bottom * ty)
-                    amplitude *= 0.5
-                }
-                let level = UInt8(max(0, min(255, value / 0.875 * 255)))
-                let index = (y * side + x) * 4
-                pixels[index] = level
-                pixels[index + 1] = level
-                pixels[index + 2] = level
-                pixels[index + 3] = 255
-            }
+        for index in 0..<(side * side) {
+            let alpha = channel()
+            for offset in 0..<3 { pixels[index * 4 + offset] = UInt8((channel() * alpha * 255).rounded()) }
+            pixels[index * 4 + 3] = UInt8((alpha * 255).rounded())
         }
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
             let image = CGImage(
                 width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
         else { return nil }
         return Image(decorative: image, scale: 1)

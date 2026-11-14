@@ -2,14 +2,14 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
-/// The web `<Card>` surface (`card-material glass-thin premium-frame rounded-card`, index.css;
-/// components/ui/card.tsx): a vertical glass-surface gradient, the `--border`/0.7 frame, the
-/// embossed inset edge (a top highlight and, in light mode, a bottom hairline) and the soft
-/// drop shadow. Print reports keep a flat white card with a hairline.
+/// The web `<Card>` surface (`card-material premium-frame rounded-card`, plus `glass-thin`, or
+/// `glass-regular` under Full effects: index.css; components/ui/card.tsx): the material gradient,
+/// the `--border`/0.7 frame, the embossed inset edge (a top highlight and, in light mode, a bottom
+/// hairline) and the soft drop shadow. Print reports keep a flat white card with a hairline.
 ///
-/// Full effects (`useFullEffects`, card.tsx) swap `glass-thin` for `glass-regular`: the 135
-/// degree regular gradient, with no blurred backdrop (`.card-material`). The premium frame (border, edge,
-/// shadow) stays, as `.premium-frame` overrides the material's own.
+/// Both materials are drawn as Core Animation layers (`VisionCardLayers`). The web filters a
+/// card's backdrop with saturate alone (`.card-material`, phase D); SwiftUI has no backdrop
+/// saturate, so the card draws its fill without a backdrop filter.
 ///
 /// An interactive card (`premium-frame-interactive`, index.css) tints its frame with
 /// `--primary` and raises the lift shadow while `hovering`; see `visionCardBackground(interactive:)`.
@@ -35,90 +35,64 @@ struct VisionCardBackground: View {
         if theme.isPrintReport {
             shape.fill(theme.card).overlay(shape.strokeBorder(stroke ?? theme.border, lineWidth: 1))
         } else {
-            let palette = theme.palette
-            let lifted = interactive && hovering
-            // `.premium-frame-interactive:hover` frame: `--primary` at 0.4, dark 0.5.
-            let frame: Color =
-                stroke
-                ?? (lifted
-                    ? theme.primary.opacity(DesignTokens.Hover.cardBorderAlpha.value(isDark: theme.isDark))
-                    : theme.border.opacity(0.7))
-            // `:root.fx-full .premium-frame-interactive:hover` raises the inset highlight to
-            // 0.22 (dark 0.12); otherwise the resting 0.16 (dark 0.06).
-            let highlightAlpha: Double =
-                fullEffects && lifted ? (theme.isDark ? 0.12 : 0.22) : (theme.isDark ? 0.06 : 0.16)
-            // `.premium-frame-interactive::after` / hover box-shadow, a fade in (index.css).
-            let lift = DesignTokens.Hover.cardShadow.value(isDark: theme.isDark).first
-            let liftAlpha = lifted ? (lift?.alpha ?? 0) : 0
-            if !fullEffects {
-                // The same surface as Core Animation layers (`VisionCardLayers`), which the
-                // render server draws instead of SwiftUI rasterising the gradients on the CPU.
-                VisionCardLayers(
-                    style: layerStyle(
-                        frame: frame, highlightAlpha: highlightAlpha, lift: lift, liftAlpha: liftAlpha))
-            } else {
-                fill(shape)
-                    // premium-frame's inset edge: `0 1px 0 highlight inset` and, light only,
-                    // `0 -1px 0 shadow/0.05 inset`.
-                    .overlay(
-                        shape.inset(by: 1).strokeBorder(
-                            LinearGradient(
-                                stops: [
-                                    .init(
-                                        color: Color(token: palette.glassHighlight, opacity: highlightAlpha),
-                                        location: 0),
-                                    .init(color: .clear, location: 0.12),
-                                    .init(color: .clear, location: 0.88),
-                                    .init(
-                                        color: Color(token: palette.glassShadow, opacity: theme.isDark ? 0 : 0.05),
-                                        location: 1),
-                                ], startPoint: .top, endPoint: .bottom),
-                            lineWidth: 1)
-                    )
-                    .overlay(shape.strokeBorder(frame, lineWidth: 1))
-                    // `0 4px 12px shadow/0.04` light, `0 5px 16px shadow/0.2` dark (CSS blur ≈ 2 × radius).
-                    .shadow(
-                        color: Color(token: palette.glassShadow, opacity: theme.isDark ? 0.2 : 0.04),
-                        radius: theme.isDark ? 8 : 6, y: theme.isDark ? 5 : 4)
-                    .modifier(
-                        LiftShadow(
-                            enabled: interactive, color: Color(token: palette.glassShadow, opacity: liftAlpha),
-                            radius: CGFloat((lift?.blur ?? 0) / 2), x: CGFloat(lift?.x ?? 0), y: CGFloat(lift?.y ?? 0))
-                    )
-                    .animation(hoverAnimation, value: hovering)
-            }
+            VisionCardLayers(style: layerStyle())
         }
     }
 
-    /// `glass-thin`'s surface for `VisionCardLayers`. SwiftUI shades a view's shadow by the view's
-    /// own alpha, so the shadows are scaled by the surface's alpha at the bottom edge, where they show.
-    private func layerStyle(frame: Color, highlightAlpha: Double, lift: ShadowLayer?, liftAlpha: Double)
-        -> VisionCardLayerStyle
-    {
+    private func layerStyle() -> VisionCardLayerStyle {
         let palette = theme.palette
         let dark = theme.isDark
-        let opaqueCard = Color(token: palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity)
-        let fillTop = opaque ? opaqueCard : Color(token: palette.glassSurface, opacity: dark ? 0.64 : 0.72)
-        let bottomAlpha = opaque ? 1 : dark ? 0.78 : 0.56
-        let fillBottom =
-            opaque
-            ? opaqueCard
-            : dark
-                ? Color(token: palette.glassSurfaceDeep, opacity: bottomAlpha)
-                : Color(token: palette.glassSurface, opacity: bottomAlpha)
+        let lifted = interactive && hovering
+        // card.tsx: `fullEffects ? "glass-regular" : "glass-thin"`.
+        let material = (fullEffects ? GlassMaterialSpec.regular : GlassMaterialSpec.thin).appearance(isDark: dark)
+        // `.premium-frame` sets `--border`/0.7, but in dark mode `.dark .glass-regular` (two
+        // classes) outranks it with `--glass-border`/0.08; the hover frame outranks both.
+        let restingFrame: Color =
+            fullEffects && dark && !opaque
+            ? Color(token: palette.color(material.border.color), opacity: material.border.alpha)
+            : theme.border.opacity(0.7)
+        // `.premium-frame-interactive:hover` frame: `--primary` at 0.4, dark 0.5.
+        let frame: Color =
+            stroke
+            ?? (lifted
+                ? theme.primary.opacity(DesignTokens.Hover.cardBorderAlpha.value(isDark: dark))
+                : restingFrame)
+        // `:root.fx-full .premium-frame-interactive:hover` raises the inset highlight to
+        // 0.22 (dark 0.12); otherwise the resting 0.16 (dark 0.06).
+        let highlightAlpha: Double = fullEffects && lifted ? (dark ? 0.12 : 0.22) : (dark ? 0.06 : 0.16)
+        // `.premium-frame-interactive::after` / hover box-shadow, a fade in (index.css).
+        let lift = DesignTokens.Hover.cardShadow.value(isDark: dark).first
+        let liftAlpha = lifted ? (lift?.alpha ?? 0) : 0
+        let fillColors: [CGColor]
+        let fillLocations: [Double]
+        if opaque {
+            // Reduce Transparency and the reduced tier replace the gradient with `--card`.
+            let card = NSColor(Color(token: palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity)).cgColor
+            fillColors = [card, card]
+            fillLocations = [0, 1]
+        } else {
+            fillColors = material.fill.stops.map {
+                NSColor(Color(token: palette.color($0.color), opacity: $0.alpha)).cgColor
+            }
+            fillLocations = material.fill.stops.map(\.location)
+        }
         return VisionCardLayerStyle(
             cornerRadius: cornerRadius,
-            fillTop: NSColor(fillTop).cgColor,
-            fillBottom: NSColor(fillBottom).cgColor,
+            fillColors: fillColors,
+            fillLocations: fillLocations,
+            fillAngle: material.fill.angle,
             edgeTop: NSColor(Color(token: palette.glassHighlight, opacity: highlightAlpha)).cgColor,
             edgeBottom: NSColor(Color(token: palette.glassShadow, opacity: dark ? 0 : 0.05)).cgColor,
             frame: NSColor(frame).cgColor,
-            shadow: VisionCardShadow(
-                color: NSColor(Color(token: palette.glassShadow, opacity: (dark ? 0.2 : 0.04) * bottomAlpha)).cgColor,
-                radius: dark ? 8 : 6, x: 0, y: dark ? 5 : 4),
+            // `.premium-frame` outer shadow: `0 4px 12px shadow/0.04`, dark `0 5px 16px shadow/0.2`.
+            shadows: [
+                VisionCardShadow(
+                    color: NSColor(Color(token: palette.glassShadow, opacity: dark ? 0.2 : 0.04)).cgColor,
+                    radius: dark ? 8 : 6, x: 0, y: dark ? 5 : 4)
+            ],
             lift: interactive
                 ? VisionCardShadow(
-                    color: NSColor(Color(token: palette.glassShadow, opacity: liftAlpha * bottomAlpha)).cgColor,
+                    color: NSColor(Color(token: palette.glassShadow, opacity: liftAlpha)).cgColor,
                     radius: CGFloat((lift?.blur ?? 0) / 2), x: CGFloat(lift?.x ?? 0), y: CGFloat(lift?.y ?? 0))
                 : nil,
             transitionDuration: hoverAnimation == nil ? nil : DesignTokens.Duration.normal,
@@ -131,58 +105,45 @@ struct VisionCardBackground: View {
         guard interactive, !reduceMotion else { return nil }
         return .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.normal)
     }
-
-    /// The fill: `glass-thin`'s surface gradient, or `glass-regular` under Full effects.
-    @ViewBuilder
-    private func fill(_ shape: RoundedRectangle) -> some View {
-        let palette = theme.palette
-        if fullEffects {
-            // card.tsx: `fullEffects ? "glass-regular" : "glass-thin"`. Reduce Transparency
-            // replaces the backdrop and gradient with `--card` (index.css reduced-transparency).
-            if opaque {
-                shape.fill(Color(token: palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity))
-            } else {
-                // `.card-material` (index.css, phase D): a card only sits over the canvas, whose
-                // soft gradients a blur returns unchanged, so the web filters it with saturate
-                // alone. SwiftUI has no backdrop saturate, and a system material would re-blur on
-                // every drift step, so the card draws the regular fill without a backdrop.
-                shape.fill(
-                    GlassMaterialSpec.regular.appearance(isDark: theme.isDark).fill
-                        .linearGradient(selection: theme.selection))
-            }
-        } else {
-            shape.fill(
-                LinearGradient(
-                    colors: theme.isDark
-                        ? [
-                            Color(token: palette.glassSurface, opacity: 0.64),
-                            Color(token: palette.glassSurfaceDeep, opacity: 0.78),
-                        ]
-                        : [
-                            Color(token: palette.glassSurface, opacity: 0.72),
-                            Color(token: palette.glassSurface, opacity: 0.56),
-                        ],
-                    startPoint: .top, endPoint: .bottom))
-        }
-    }
 }
 
-/// The hover lift shadow of an interactive card. A static card has none (zero radius and alpha),
-/// so it skips the extra shadow pass instead of drawing an invisible one.
-private struct LiftShadow: ViewModifier {
-    let enabled: Bool
-    let color: Color
-    let radius: CGFloat
-    let x: CGFloat
-    let y: CGFloat
+/// A glass box that is not a `<Card>` (no `premium-frame`): the material's own fill, border, inset
+/// highlight and outer elevation, as Core Animation layers. Reduce Transparency and the reduced
+/// tier make it an opaque `--card`, as they do every material.
+struct VisionGlassBoxBackground: View {
+    let material: GlassMaterialSpec
+    var cornerRadius: CGFloat = DesignTokens.Radius.card
+    /// A frame that replaces the material border (an explicit `border-*` class on the box).
+    var frame: Color?
+    @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.visionVisualEffects) private var visualEffects
 
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled {
-            content.shadow(color: color, radius: radius, x: x, y: y)
-        } else {
-            content
-        }
+    var body: some View {
+        let palette = theme.palette
+        let dark = theme.isDark
+        let look = material.appearance(isDark: dark)
+        let opaque = reduceTransparency || visualEffects == .reduced
+        let card = NSColor(Color(token: palette.card, opacity: DesignTokens.Glass.reducedTransparencyOpacity)).cgColor
+        let inset = look.shadows.first(where: \.inset)
+        let border = frame ?? Color(token: palette.color(look.border.color), opacity: look.border.alpha)
+        VisionCardLayers(
+            style: VisionCardLayerStyle(
+                cornerRadius: cornerRadius,
+                fillColors: opaque
+                    ? [card, card]
+                    : look.fill.stops.map { NSColor(Color(token: palette.color($0.color), opacity: $0.alpha)).cgColor },
+                fillLocations: opaque ? [0, 1] : look.fill.stops.map(\.location),
+                fillAngle: look.fill.angle,
+                edgeTop: NSColor(Color(token: palette.glassHighlight, opacity: inset?.alpha ?? 0)).cgColor,
+                edgeBottom: CGColor.clear,
+                frame: NSColor(border).cgColor,
+                shadows: look.shadows.filter { !$0.inset }.map {
+                    VisionCardShadow(
+                        color: NSColor(Color(token: palette.color($0.color), opacity: $0.alpha)).cgColor,
+                        radius: CGFloat($0.blur / 2), x: CGFloat($0.x), y: CGFloat($0.y), spread: CGFloat($0.spread))
+                },
+                lift: nil, transitionDuration: nil, transitionCurve: DesignTokens.Ease.glide))
     }
 }
 
