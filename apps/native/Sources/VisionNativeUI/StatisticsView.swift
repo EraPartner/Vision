@@ -652,29 +652,32 @@ public struct StatisticsView: View {
         let visible = Array(model.recipientRows.prefix(model.recipientVisibleCount))
         let ranks = Dictionary(
             visible.enumerated().map { index, row in (row.id, index + 1) }, uniquingKeysWith: { first, _ in first })
-        return LocalDataTable(
-            title: strings.t("insights.detailsTitle"), subtitle: strings.t("insights.detailsSubtitle"),
-            columns: [recipientRankColumn(ranks)] + recipientColumns,
-            rows: visible,
-            totalCount: data.topMerchants.count,
-            query: Binding(get: { model.recipientQuery }, set: { model.recipientQuery = $0 }),
-            filterValues: model.recipientFilterValues, strings: strings,
-            serverTotal: model.recipientRows.count,
-            hasMore: model.recipientVisibleCount < model.recipientRows.count
-        ) {
-            Text(
-                strings.t(
-                    model.recipientQuery.isNarrowed ? "table.noFilterResults" : "insights.detailsEmpty"))
-        }
-        .rowAppeared { id in
-            if model.recipientRows.prefix(model.recipientVisibleCount).suffix(5).contains(where: {
-                $0.id == id
-            }
+        // `VirtualDataTable` is always a `Card` on the web.
+        return AdminCard(padding: 0) {
+            LocalDataTable(
+                title: strings.t("insights.detailsTitle"), subtitle: strings.t("insights.detailsSubtitle"),
+                columns: [recipientRankColumn(ranks)] + recipientColumns,
+                rows: visible,
+                totalCount: data.topMerchants.count,
+                query: Binding(get: { model.recipientQuery }, set: { model.recipientQuery = $0 }),
+                filterValues: model.recipientFilterValues, strings: strings,
+                serverTotal: model.recipientRows.count,
+                hasMore: model.recipientVisibleCount < model.recipientRows.count
             ) {
-                model.loadMoreRecipients(pageSize: settings.defaultPageSize)
+                Text(
+                    strings.t(
+                        model.recipientQuery.isNarrowed ? "table.noFilterResults" : "insights.detailsEmpty"))
             }
+            .rowAppeared { id in
+                if model.recipientRows.prefix(model.recipientVisibleCount).suffix(5).contains(where: {
+                    $0.id == id
+                }
+                ) {
+                    model.loadMoreRecipients(pageSize: settings.defaultPageSize)
+                }
+            }
+            .bodyMaxHeight(700)
         }
-        .bodyMaxHeight(700)
     }
     /// The "#" column: the row's position in the list, not sortable or filterable.
     private func recipientRankColumn(_ ranks: [RecipientID: Int]) -> LocalDataColumn<StatisticsRecipientInsights.Merchant> {
