@@ -33,16 +33,19 @@ struct PortfolioDetailHistoryTable: View {
             } else {
                 // The web history is a virtualised `max-h-[400px]` scroller: the table's header and
                 // search stay put and only the rows scroll, drawn lazily.
-                LocalDataTable(
-                    title: "", subtitle: "", columns: columns, rows: rows, totalCount: model.transactions.count,
-                    query: $query,
-                    filterValues: { key in
-                        LocalTableQuery.uniqueValues(model.transactions, key: key, value: rawValue)
-                    }, strings: strings
-                ) {
-                    Text(strings.t("table.noFilterResults"))
+                // `VirtualDataTable` is always a `Card` on the web.
+                AdminCard(padding: 0) {
+                    LocalDataTable(
+                        title: "", subtitle: "", columns: columns, rows: rows, totalCount: model.transactions.count,
+                        query: $query,
+                        filterValues: { key in
+                            LocalTableQuery.uniqueValues(model.transactions, key: key, value: rawValue)
+                        }, strings: strings
+                    ) {
+                        Text(strings.t("table.noFilterResults"))
+                    }
+                    .bodyMaxHeight(400)
                 }
-                .bodyMaxHeight(400)
             }
         }
     }

@@ -7,7 +7,9 @@ import VisionNativeCore
 /// against the leading edge. This layout fills the width it is offered, as `w-full` does: each
 /// column starts at the widest of its cells and the room left over is shared between the
 /// columns in proportion to those widths (CSS automatic table layout). When the content is
-/// wider than the card the columns shrink in the same proportion.
+/// wider than the card the columns keep their content widths and the table scrolls sideways
+/// inside its card, as the web `<Table>`'s `overflow-auto` wrapper does: cells never squeeze
+/// into piled-up lines.
 ///
 /// The cells are the layout's direct children in row order, one per column. A child marked
 /// with `visionTableSpan()` takes a whole row (a divider, an expanded detail row, an empty
@@ -35,11 +37,25 @@ struct VisionTable<Content: View>: View {
     var rowHover = true
     @ViewBuilder var content: () -> Content
     @State private var hoverY: CGFloat?
+    /// The width the table is offered: the scroll view proposes no width to its content.
+    @State private var availableWidth: CGFloat?
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
+        ScrollView(.horizontal) {
+            table
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            if availableWidth != width { availableWidth = width }
+        }
+    }
+
+    private var table: some View {
         VisionTableLayout(
-            columns: columns, columnSpacing: columnSpacing, fixedColumns: fixedColumns, hoverY: rowHover ? hoverY : nil
+            columns: columns, columnSpacing: columnSpacing, fixedColumns: fixedColumns, hoverY: rowHover ? hoverY : nil,
+            availableWidth: availableWidth
         ) {
             if rowHover {
                 Rectangle().fill(theme.foreground.opacity(0.03)).allowsHitTesting(false)
@@ -48,7 +64,6 @@ struct VisionTable<Content: View>: View {
             }
             content()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .onContinuousHover { phase in
             guard rowHover else { return }
             let y: CGFloat?
@@ -81,6 +96,8 @@ struct VisionTableLayout: Layout {
     let fixedColumns: Set<Int>
     /// The pointer's y in the table, for the hover band; nil hides it.
     var hoverY: CGFloat? = nil
+    /// The width to fill when the proposal has none (inside the horizontal scroll view).
+    var availableWidth: CGFloat? = nil
 
     struct Cache {
         var width: CGFloat?
@@ -174,8 +191,8 @@ struct VisionTableLayout: Layout {
     }
 
     /// CSS automatic table layout for `available` points: the content widths, plus a share of
-    /// the spare room in proportion to them (fixed columns keep theirs), or scaled down in
-    /// proportion when the content is wider.
+    /// the spare room in proportion to them (fixed columns keep theirs). Content wider than the
+    /// room keeps its widths: the table overflows and scrolls sideways.
     static func columnWidths(ideal: [CGFloat], available: CGFloat?, spacing: CGFloat, fixed: Set<Int>) -> [CGFloat] {
         guard let available, !ideal.isEmpty else { return ideal }
         let room = available - spacing * CGFloat(ideal.count - 1)
@@ -194,11 +211,12 @@ struct VisionTableLayout: Layout {
                 fixed.contains(index) ? width : width + spare * width / flexible
             }
         }
-        return ideal.map { $0 * room / total }
+        return ideal
     }
 
     private func plan(width: CGFloat?, subviews: Subviews, cache: inout Cache) -> Plan {
-        if let plan = cache.plan, cache.width == width { return plan }
+        let finite = width.flatMap { $0.isFinite ? $0 : nil } ?? availableWidth
+        if let plan = cache.plan, cache.width == finite { return plan }
         let count = max(1, columns.count)
         let cells = subviews.indices.filter { !subviews[$0][VisionTableBandKey.self] }
         let grouped = Self.rows(spans: cells.map { subviews[$0][VisionTableSpanKey.self] }, columnCount: count)
@@ -209,9 +227,9 @@ struct VisionTableLayout: Layout {
                 ideal[column] = max(ideal[column], subviews[index].sizeThatFits(.unspecified).width)
             }
         }
-        let finite = width.flatMap { $0.isFinite ? $0 : nil }
         let widths = Self.columnWidths(ideal: ideal, available: finite, spacing: columnSpacing, fixed: fixedColumns)
-        let tableWidth = finite ?? (widths.reduce(0, +) + columnSpacing * CGFloat(count - 1))
+        let contentWidth = widths.reduce(0, +) + columnSpacing * CGFloat(count - 1)
+        let tableWidth = max(finite ?? 0, contentWidth)
         var rows: [Plan.Row] = []
         var top: CGFloat = 0
         for row in grouped {
@@ -232,7 +250,7 @@ struct VisionTableLayout: Layout {
             top += height
         }
         let plan = Plan(columnWidths: widths, rows: rows, size: CGSize(width: tableWidth, height: top))
-        cache.width = width
+        cache.width = finite
         cache.plan = plan
         return plan
     }

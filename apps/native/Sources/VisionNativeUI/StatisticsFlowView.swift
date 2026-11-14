@@ -40,25 +40,17 @@ struct StatisticsFlowView: View {
                         hoveredLink == link.id || hoveredNode == link.link.source || hoveredNode == link.link.target
                     // Stroked with the target node's colour, 25% opaque, 60% when highlighted.
                     let target = layout.nodes.first { $0.id == link.link.target }
-                    // The band as its stroked outline, so the view's own shape is the hit area: the
-                    // pointer is on a link only over its band, as an SVG `<path>` stroke is.
-                    curve(link, margin: margin)
+                    // The band as its stroked outline: the same path the hover test below uses.
+                    Self.curve(link, margin: margin)
                         .strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
                         .fill(target.map { color($0.node) } ?? theme.mutedForeground)
                         .opacity(isHovered ? 0.6 : 0.25)
                         .animation(fade, value: isHovered)
-                        .onHover { inside in
-                            // `onMouseEnter` / `onMouseLeave`; a late leave never clears a newer link.
-                            if inside {
-                                if hoveredLink != link.id { hoveredLink = link.id }
-                            } else if hoveredLink == link.id {
-                                hoveredLink = nil
-                            }
-                        }
+                        .allowsHitTesting(false)
                 }
                 .accessibilityHidden(true)
                 ForEach(layout.nodes) { node in
-                    let bounds = rect(node, margin: margin)
+                    let bounds = Self.rect(node, margin: margin)
                     let isHovered = hoveredNode == node.id
                     // Labels 6 pt off the node edge at its vertical middle, like the web chart: nodes in
                     // the right half carry theirs on the left (end-anchored), all others on the right.
@@ -68,14 +60,7 @@ struct StatisticsFlowView: View {
                         .opacity(isHovered ? 1 : 0.85)
                         .animation(fade, value: isHovered)
                         .frame(width: bounds.width, height: bounds.height)
-                        .contentShape(Rectangle())
-                        .onHover { inside in
-                            if inside {
-                                if hoveredNode != node.id { hoveredNode = node.id }
-                            } else if hoveredNode == node.id {
-                                hoveredNode = nil
-                            }
-                        }
+                        .allowsHitTesting(false)
                         .position(x: bounds.midX, y: bounds.midY)
                         .accessibilityLabel(label(node.node))
                         .accessibilityValue(
@@ -105,23 +90,51 @@ struct StatisticsFlowView: View {
                 }
             }
             .frame(width: size.width, height: size.height, alignment: .topLeading)
-            // Each node bar and link band tracks its own hover (SVG `onMouseEnter`/`onMouseLeave`),
-            // nodes drawn over links. One tracker for the whole chart, testing nodes first by their
-            // rectangles, lit a node's whole section over the band beside it.
+            .contentShape(Rectangle())
+            // SwiftUI's `onHover` tracks a view's whole frame, not its shape, so per-band trackers
+            // all covered the chart and the topmost band won everywhere. One tracker hit-tests the
+            // SVG way instead: the topmost painted shape under the pointer, node bars (drawn over
+            // the bands) by their exact rectangles, then bands by their stroked outlines, last
+            // drawn first. Empty space hovers nothing.
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let point):
+                    let hit = Self.hit(at: point, layout: layout, margin: margin)
+                    if hoveredNode != hit.node { hoveredNode = hit.node }
+                    if hoveredLink != hit.link { hoveredLink = hit.link }
+                case .ended:
+                    if hoveredNode != nil { hoveredNode = nil }
+                    if hoveredLink != nil { hoveredLink = nil }
+                }
+            }
         }.frame(minHeight: 380)
             .onChange(of: hoveredNode) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
             .onChange(of: hoveredLink) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
     }
 
 
+    /// The node or band painted topmost at `point`, as SVG `onMouseEnter` targets resolve.
+    static func hit(
+        at point: CGPoint, layout: StatisticsFlowLayout, margin: CGFloat
+    ) -> (node: String?, link: String?) {
+        for node in layout.nodes.reversed() where rect(node, margin: margin).contains(point) {
+            return (node.id, nil)
+        }
+        for link in layout.links.reversed() {
+            let band = curve(link, margin: margin).strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
+            if band.contains(point) { return (nil, link.id) }
+        }
+        return (nil, nil)
+    }
+
     /// The node's rectangle in view coordinates; at least 1 pt tall, as on the web.
-    private func rect(_ node: StatisticsFlowNodeLayout, margin: CGFloat) -> CGRect {
+    private static func rect(_ node: StatisticsFlowNodeLayout, margin: CGFloat) -> CGRect {
         CGRect(
             x: margin + CGFloat(node.x0), y: margin + CGFloat(node.y0),
             width: CGFloat(node.x1 - node.x0), height: max(1, CGFloat(node.y1 - node.y0)))
     }
     /// The link's centre line: the web `sankeyLinkPath` curve, M sx,y0 C mx,y0 mx,y1 tx,y1.
-    private func curve(_ link: StatisticsFlowLinkLayout, margin: CGFloat) -> Path {
+    private static func curve(_ link: StatisticsFlowLinkLayout, margin: CGFloat) -> Path {
         let sx = margin + CGFloat(link.sourceX)
         let tx = margin + CGFloat(link.targetX)
         let mx = (sx + tx) / 2
