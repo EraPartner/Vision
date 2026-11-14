@@ -203,25 +203,27 @@ public struct RebalanceView: View {
             }
         }
         card("rebalance.deploymentPlan") {
-            Grid(horizontalSpacing: 24, verticalSpacing: 12) {
-                GridRow {
-                    Text(strings.t("rebalance.sleeve")).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(strings.t("rebalance.current"))
-                    Text(strings.t("rebalance.target"))
-                    Text(strings.t("rebalance.deploy"))
-                }.font(.callout.weight(.medium)).foregroundStyle(theme.secondaryLabel)
-                Divider().gridCellUnsizedAxes(.horizontal)
-                ForEach(result.sleeves, id: \.self) { sleeve in
+            HorizontalOverflowScroll {
+                Grid(horizontalSpacing: 24, verticalSpacing: 12) {
                     GridRow {
-                        Text(label(sleeve)).frame(maxWidth: .infinity, alignment: .leading)
-                        Text(money(result.actualValues[sleeve] ?? 0)).monospacedDigit().gridColumnAlignment(.trailing)
-                        Text(percent(result.targetWeights[sleeve] ?? 0)).monospacedDigit().gridColumnAlignment(
-                            .trailing)
-                        if let deploy = result.deployment[sleeve], deploy > 0 {
-                            VisionBadge(text: money(deploy, signed: true)).monospacedDigit()
-                                .gridColumnAlignment(.trailing)
-                        } else {
-                            Text("—").foregroundStyle(theme.secondaryLabel).gridColumnAlignment(.trailing)
+                        Text(strings.t("rebalance.sleeve")).frame(maxWidth: .infinity, alignment: .leading)
+                        Text(strings.t("rebalance.current"))
+                        Text(strings.t("rebalance.target"))
+                        Text(strings.t("rebalance.deploy"))
+                    }.font(.callout.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                    Divider().gridCellUnsizedAxes(.horizontal)
+                    ForEach(result.sleeves, id: \.self) { sleeve in
+                        GridRow {
+                            Text(label(sleeve)).frame(maxWidth: .infinity, alignment: .leading)
+                            Text(money(result.actualValues[sleeve] ?? 0)).monospacedDigit().gridColumnAlignment(.trailing)
+                            Text(percent(result.targetWeights[sleeve] ?? 0)).monospacedDigit().gridColumnAlignment(
+                                .trailing)
+                            if let deploy = result.deployment[sleeve], deploy > 0 {
+                                VisionBadge(text: money(deploy, signed: true)).monospacedDigit()
+                                    .gridColumnAlignment(.trailing)
+                            } else {
+                                Text("—").foregroundStyle(theme.secondaryLabel).gridColumnAlignment(.trailing)
+                            }
                         }
                     }
                 }

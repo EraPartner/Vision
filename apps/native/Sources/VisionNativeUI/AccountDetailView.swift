@@ -336,27 +336,29 @@ struct AccountDetailContent: View {
                     SkeletonBar(width: nil, height: 40)
                         .accessibilityLabel(strings.t("common.loading"))
                 } else {
-                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                        GridRow {
-                            Text(strings.t("txPage.col.date"))
-                            Text(strings.t("txPage.field.description"))
-                                .gridColumnAlignment(.leading)
-                            Text(strings.t("txPage.col.amount"))
-                                .gridColumnAlignment(.trailing)
-                        }
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(theme.secondaryLabel)
-                        ForEach(model.plannedRows) { row in
-                            Divider()
+                    HorizontalOverflowScroll {
+                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                             GridRow {
-                                Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
-                                    .monospacedDigit()
-                                Text(row.title ?? strings.t("accounts.detail.unlabelled"))
-                                    .lineLimit(1)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                MoneyText(
-                                    amount: row.amount, currency: (row.currency ?? account.currency), settings: settings,
-                                    signed: true)
+                                Text(strings.t("txPage.col.date"))
+                                Text(strings.t("txPage.field.description"))
+                                    .gridColumnAlignment(.leading)
+                                Text(strings.t("txPage.col.amount"))
+                                    .gridColumnAlignment(.trailing)
+                            }
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(theme.secondaryLabel)
+                            ForEach(model.plannedRows) { row in
+                                Divider()
+                                GridRow {
+                                    Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
+                                        .monospacedDigit()
+                                    Text(row.title ?? strings.t("accounts.detail.unlabelled"))
+                                        .lineLimit(1)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    MoneyText(
+                                        amount: row.amount, currency: (row.currency ?? account.currency), settings: settings,
+                                        signed: true)
+                                }
                             }
                         }
                     }
@@ -499,46 +501,48 @@ struct AccountLedgerCard: View {
     }
 
     private var table: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-            GridRow {
-                Text(strings.t("txPage.col.date"))
-                Text(strings.t("txPage.field.description"))
-                Text(strings.t("txPage.col.category"))
-                Text(strings.t("txPage.col.amount"))
-                    .gridColumnAlignment(.trailing)
-                Text(strings.t("txPage.field.balance"))
-                    .gridColumnAlignment(.trailing)
-            }
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(theme.secondaryLabel)
-            ForEach(model.visibleLedger) { row in
-                Divider()
+        HorizontalOverflowScroll {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 GridRow {
-                    Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
-                        .monospacedDigit()
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(row.title ?? strings.t("accounts.detail.unlabelled"))
-                            .lineLimit(1)
-                        if let memo = row.subtitle {
-                            Text(memo)
-                                .font(.footnote)
-                                .foregroundStyle(theme.secondaryLabel)
+                    Text(strings.t("txPage.col.date"))
+                    Text(strings.t("txPage.field.description"))
+                    Text(strings.t("txPage.col.category"))
+                    Text(strings.t("txPage.col.amount"))
+                        .gridColumnAlignment(.trailing)
+                    Text(strings.t("txPage.field.balance"))
+                        .gridColumnAlignment(.trailing)
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(theme.secondaryLabel)
+                ForEach(model.visibleLedger) { row in
+                    Divider()
+                    GridRow {
+                        Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
+                            .monospacedDigit()
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(row.title ?? strings.t("accounts.detail.unlabelled"))
                                 .lineLimit(1)
+                            if let memo = row.subtitle {
+                                Text(memo)
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryLabel)
+                                    .lineLimit(1)
+                            }
                         }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(row.categoryName ?? "—")
-                        .foregroundStyle(theme.secondaryLabel)
-                        .lineLimit(1)
-                    Text(MoneyText.text(row.amount, currency: row.currency, settings: settings, signed: true))
-                        .monospacedDigit()
-                        .foregroundStyle(row.amount < 0 ? theme.loss : (row.amount > 0 ? theme.gain : theme.secondaryLabel))
-                    if let balance = row.runningBalance {
-                        MoneyText(amount: balance, currency: row.currency, settings: settings, signed: false, colored: false)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(row.categoryName ?? "—")
                             .foregroundStyle(theme.secondaryLabel)
-                    } else {
-                        Text(verbatim: "—")
-                            .foregroundStyle(theme.secondaryLabel)
+                            .lineLimit(1)
+                        Text(MoneyText.text(row.amount, currency: row.currency, settings: settings, signed: true))
+                            .monospacedDigit()
+                            .foregroundStyle(row.amount < 0 ? theme.loss : (row.amount > 0 ? theme.gain : theme.secondaryLabel))
+                        if let balance = row.runningBalance {
+                            MoneyText(amount: balance, currency: row.currency, settings: settings, signed: false, colored: false)
+                                .foregroundStyle(theme.secondaryLabel)
+                        } else {
+                            Text(verbatim: "—")
+                                .foregroundStyle(theme.secondaryLabel)
+                        }
                     }
                 }
             }

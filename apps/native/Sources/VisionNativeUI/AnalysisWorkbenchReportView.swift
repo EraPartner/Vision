@@ -14,11 +14,13 @@ struct AnalysisWorkbenchReportView: View {
         VStack(alignment: .leading, spacing: 12) {
             errors(raw["errors"]?.arrayValue ?? [])
             if let summaries = raw["summaries"]?.objectValue {
-                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
-                    ForEach(summaries.keys.sorted(), id: \.self) { id in
-                        GridRow {
-                            Text(model.fieldLabel(id, strings: strings))
-                            Text(verbatim: display(summaries[id])).monospacedDigit().gridColumnAlignment(.trailing)
+                HorizontalOverflowScroll {
+                    Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
+                        ForEach(summaries.keys.sorted(), id: \.self) { id in
+                            GridRow {
+                                Text(model.fieldLabel(id, strings: strings))
+                                Text(verbatim: display(summaries[id])).monospacedDigit().gridColumnAlignment(.trailing)
+                            }
                         }
                     }
                 }.font(.caption).textSelection(.enabled)

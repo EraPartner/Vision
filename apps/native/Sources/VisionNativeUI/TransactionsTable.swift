@@ -56,9 +56,19 @@ struct TransactionsTableCard: View {
                 searchBar
                     .zIndex(1)
                 if !model.columnFilters.isEmpty { chips }
-                headerRow
-                Divider()
-                rowsList
+                // The web table keeps its columns' widths and scrolls sideways inside the card when
+                // the window is narrower; the rows scroll vertically under the fixed header.
+                ScrollView(.horizontal) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        headerRow
+                        Divider()
+                        rowsList
+                    }
+                    .containerRelativeFrame(.horizontal, alignment: .leading) { length, _ in
+                        max(length, minimumTableWidth)
+                    }
+                }
+                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                 if model.isFetchingMore {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
@@ -222,6 +232,14 @@ struct TransactionsTableCard: View {
             dataColumns, resized: widths.mapValues(Double.init), available: Double(tableWidth),
             chrome: Double(Self.selectWidth + Self.editWidth + 32) + (isCompact ? Double(Self.summaryWidth) : 0)
         ).mapValues { CGFloat($0) }
+    }
+
+    /// The width under which the columns stop shrinking and the table scrolls sideways: the
+    /// chrome plus every column at its fitted width.
+    private var minimumTableWidth: CGFloat {
+        let fitted = fittedWidths
+        return Self.selectWidth + Self.editWidth + 32 + (isCompact ? Self.summaryWidth : 0)
+            + dataColumns.reduce(0) { $0 + width($1, fitted: fitted) }
     }
 
     private func width(_ column: TransactionColumn, fitted: [String: CGFloat]) -> CGFloat {
