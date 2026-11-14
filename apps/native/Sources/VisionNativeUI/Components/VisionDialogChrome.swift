@@ -53,11 +53,14 @@ struct VisionFieldChromeModifier: ViewModifier {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.isFocused) private var environmentFocus
     @Environment(\.visionFieldFocused) private var fieldFocused
+    @Environment(\.visionContainerOwnsFocus) private var containerOwnsFocus
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     func body(content: Content) -> some View {
-        let focused = isFocused ?? (fieldFocused || environmentFocus)
+        // A page or panel container that holds focus itself makes `isFocused` true for every field
+        // in it; only a field the call site reports, or a focused wrapping control, draws focus.
+        let focused = isFocused ?? (fieldFocused || (environmentFocus && !containerOwnsFocus))
         let shape = RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)
         content
             .padding(.horizontal, horizontalPadding)

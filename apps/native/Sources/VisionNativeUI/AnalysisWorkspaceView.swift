@@ -27,7 +27,7 @@ public struct AnalysisWorkspaceView: View {
                     VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                         VisionPageHeader(
                             title: strings.t("analysis.title"), subtitle: strings.t("analysis.subtitle"),
-                            symbol: "tablecells")
+                            symbol: VisionPageSymbol.of("/analysis", fallback: "chart.bar"))
                         workflow(proxy)
                         let wide = geometry.size.width >= 1140
                         let layout =

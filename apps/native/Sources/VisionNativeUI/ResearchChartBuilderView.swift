@@ -68,7 +68,7 @@ public struct ResearchChartBuilderView: View {
     private var header: some View {
         VisionPageHeader(
             title: strings.t("research.builder.title"), subtitle: strings.t("research.builder.subtitle"),
-            symbol: "chart.xyaxis.line"
+            symbol: VisionPageSymbol.of("/research/charts", fallback: "chart.bar.xaxis")
         ) {
             Menu {
                 Button(strings.t("research.builder.newChart")) { model.requestNew() }

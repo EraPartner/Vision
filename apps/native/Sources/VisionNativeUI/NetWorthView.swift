@@ -24,7 +24,9 @@ public struct NetWorthView: View {
     public var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                VisionPageHeader(title: strings.t("networth.title"), subtitle: "", symbol: "chart.line.uptrend.xyaxis")
+                VisionPageHeader(
+                    title: strings.t("networth.title"), subtitle: "",
+                    symbol: VisionPageSymbol.of("/portfolio/net-worth", fallback: "wallet.pass"))
                 {}
                 if model.isLoading || model.currency != currency {
                     ProgressView().frame(maxWidth: .infinity).padding(60)

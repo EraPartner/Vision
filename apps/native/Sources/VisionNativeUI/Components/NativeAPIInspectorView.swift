@@ -328,7 +328,7 @@ private struct NativeAPIQueriesView: View {
     }
 
     private func color(_ entry: NativeAPIInspectorModel.QueryEntry) -> Color {
-        if entry.isFetching { return .blue }
+        if entry.isFetching { return theme.info }
         return entry.lastError == nil ? theme.gain : theme.loss
     }
 }

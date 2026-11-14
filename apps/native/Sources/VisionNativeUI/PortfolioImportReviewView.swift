@@ -16,7 +16,8 @@ public struct PortfolioImportReviewView: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 VisionPageHeader(
                     title: strings.t("portfolioImport.review.title"),
-                    subtitle: strings.t("portfolioImport.review.subtitle"), symbol: "square.and.arrow.down"
+                    subtitle: strings.t("portfolioImport.review.subtitle"),
+                    symbol: VisionPageSymbol.of("/portfolio/import", fallback: "briefcase")
                 ) {
                     if model.preview != nil {
                         VisionBadge(

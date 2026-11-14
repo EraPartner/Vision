@@ -17,6 +17,8 @@ public struct ShellRootView: View {
     /// the crossing is stored: a per-pixel offset here would re-run the whole shell body (and
     /// re-diff the sidebar) on every scroll tick and every resize frame of the sidebar animation.
     @State private var pageScrolled = false
+    @State private var pageVeiled = false
+    @State private var pageTitle: String?
     /// The titlebar strip the topbar occupies.
     @State private var titlebarHeight: CGFloat = 28
     /// The titlebar safe area the detail column really receives (zero when the window has no
@@ -102,6 +104,7 @@ public struct ShellRootView: View {
                                 }
                                 .overlay(alignment: .topLeading) { contentLanding }
                                 .background { PageScrollObserver { pageScrollDidChange($0) } }
+                                .onPreferenceChange(VisionPageTitleKey.self) { title in pageTitle = title }
                                 .environment(\.colorScheme, theme.colorScheme)
                                 // The mounted destination receives cold CSV/new-transaction intents.
                                 .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
@@ -135,11 +138,16 @@ public struct ShellRootView: View {
         }
         .overlay(alignment: .top) {
             if isNativeDetail {
-                NativeTopbar(model: model, height: titlebarHeight, scrolled: pageScrolled)
+                NativeTopbar(
+                    model: model, height: titlebarHeight, veiled: pageVeiled, scrolled: pageScrolled,
+                    pageTitle: pageTitle)
                     .ignoresSafeArea(.container, edges: .top)
             }
         }
-        .onChange(of: model.route.path) { pageScrolled = false }
+        .onChange(of: model.route.path) {
+            pageScrolled = false
+            pageVeiled = false
+        }
     }
 
     /// Holds the native page at one width while the sidebar column slides: AppKit resizes the
@@ -160,6 +168,9 @@ public struct ShellRootView: View {
     private func pageScrollDidChange(_ offset: CGFloat) {
         let scrolled = offset > NativeTopbar.titleThreshold
         if scrolled != pageScrolled { pageScrolled = scrolled }
+        // AppLayout's `scrolled` (`window.scrollY > 8`) shows the bar veil before the title.
+        let veiled = offset > NativeTopbar.veilThreshold
+        if veiled != pageVeiled { pageVeiled = veiled }
     }
 
     private func unavailableView(_ theme: VisionTheme) -> some View {

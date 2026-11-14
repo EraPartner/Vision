@@ -23,12 +23,13 @@ public struct NativeReportSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
                         sectionLabel(strings.t("export.reportType"))
-                        Picker(
-                            strings.t("export.reportType"),
-                            selection: Binding(get: { model.type }, set: { value in model.setType(value) })
-                        ) {
-                            ForEach(NativeReportType.allCases) { type in Text(strings.t(type.labelKey)).tag(type) }
-                        }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
+                        // ExportDialog's `SegmentedControl`, not the system accent-coloured picker.
+                        VisionSegmentedControl(
+                            selection: Binding(get: { model.type }, set: { value in model.setType(value) }),
+                            values: NativeReportType.allCases, title: { strings.t($0.labelKey) }
+                        )
+                        .accessibilityLabel(strings.t("export.reportType"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     periodSection
                     sectionsSection
@@ -138,7 +139,7 @@ public struct NativeReportSheet: View {
                             get: { model.selectedSections.contains(section.id) },
                             set: { model.setSection(section.id, selected: $0) })
                     )
-                    .toggleStyle(.checkbox).frame(maxWidth: .infinity, alignment: .leading)
+                    .toggleStyle(.visionCheckbox).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 10)
                 }
             }

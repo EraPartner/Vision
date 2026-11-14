@@ -3,14 +3,20 @@ import SwiftUI
 import VisionNativeCore
 
 /// AppLayout's topbar over native screens, drawn in the transparent titlebar strip: the
-/// sidebar trigger and the search button while the sidebar is hidden (they sit right of the
-/// traffic lights), and the page title once the page has scrolled past 96 pt, over a bar
-/// material as a unified macOS toolbar does. It never takes clicks outside its buttons, so
-/// the strip still drags the window.
+/// `SidebarTrigger` (always, as on the web; right of the traffic lights while the sidebar is
+/// hidden), the page header's title once the page has scrolled past 96 pt, and the bar veil
+/// once it has scrolled past 8 pt. The web's search button is `md:hidden` (phones only); the
+/// sidebar and its icon rail keep the search entry. It never takes clicks outside its buttons,
+/// so the strip still drags the window.
 struct NativeTopbar: View {
     let model: NativeShellModel
     let height: CGFloat
+    /// `scrolled` (`scrollY > 8`): the veil and its hairline show.
+    let veiled: Bool
+    /// `titleVisible` (`scrollY > 96`): the inline page title shows.
     let scrolled: Bool
+    /// The page header's title (`usePageTitle`); the sidebar item's title when the page has none.
+    var pageTitle: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.visionTheme) private var theme
 
@@ -18,35 +24,28 @@ struct NativeTopbar: View {
     static let barHeight: CGFloat = 56
     /// `INLINE_TITLE_THRESHOLD` in AppLayout.
     static let titleThreshold: CGFloat = 96
+    /// AppLayout's `setScrolled(window.scrollY > 8)`.
+    static let veilThreshold: CGFloat = 8
     /// Room for the traffic lights when the sidebar no longer holds them: the icon rail
     /// under them already takes its own width of it.
     private static let trafficLightsWidth: CGFloat = 78 - NativeSidebarRail.width
 
     var body: some View {
-        HStack(spacing: 6) {
-            if !model.isSidebarVisible {
-                Button {
-                    model.toggleSidebar()
-                } label: {
-                    Image(systemName: "sidebar.left").frame(width: 26, height: 22).contentShape(Rectangle())
-                }
-                .help(model.strings.t("menu.toggleSidebar"))
-                .accessibilityLabel(model.strings.t("menu.toggleSidebar"))
-                if model.commandPalette != nil {
-                    Button {
-                        model.openPalette()
-                    } label: {
-                        Image(systemName: "magnifyingglass").frame(width: 26, height: 22).contentShape(Rectangle())
-                    }
-                    .help(model.strings.t("commandPalette.openLabel"))
-                    .accessibilityLabel(model.strings.t("commandPalette.openLabel"))
-                }
+        HStack(spacing: 0) {
+            // `<SidebarTrigger className="mr-4" />`: an aria-label, no tooltip.
+            Button {
+                model.toggleSidebar()
+            } label: {
+                Image(systemName: "sidebar.left").frame(width: 26, height: 22).contentShape(Rectangle())
             }
+            .accessibilityLabel(model.strings.t("menu.toggleSidebar"))
+            .padding(.trailing, 16)
             if let title {
                 Text(title)
                     .font(.visionDisplayHeadline)
+                    .foregroundStyle(theme.foreground)
                     .lineLimit(1)
-                    .padding(.leading, model.isSidebarVisible ? 0 : 4)
+                    .truncationMode(.tail)
                     .opacity(scrolled ? 1 : 0)
                     .offset(y: scrolled ? 0 : 4)
                     .allowsHitTesting(false)
@@ -70,14 +69,16 @@ struct NativeTopbar: View {
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(theme.border.opacity(0.6)).frame(height: 1)
                 }
-                .opacity(scrolled ? 1 : 0)
+                .opacity(veiled ? 1 : 0)
                 .allowsHitTesting(false)
         }
         .animation(reduceMotion ? nil : .easeOut(duration: DesignTokens.Duration.normal), value: scrolled)
+        .animation(reduceMotion ? nil : .easeOut(duration: DesignTokens.Duration.normal), value: veiled)
     }
 
     private var title: String? {
-        NavigationRegistry.matchItem(path: model.route.path).map { model.strings.t($0.titleKey) }
+        if let pageTitle, !pageTitle.isEmpty { return pageTitle }
+        return NavigationRegistry.matchItem(path: model.route.path).map { model.strings.t($0.titleKey) }
     }
 }
 

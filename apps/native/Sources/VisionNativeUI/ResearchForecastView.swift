@@ -26,7 +26,7 @@ public struct ResearchForecastView: View {
             VStack(alignment: .leading, spacing: 24) {
                 VisionPageHeader(
                     title: strings.t("research.forecast.title"), subtitle: strings.t("research.forecast.subtitle"),
-                    symbol: "chart.line.uptrend.xyaxis")
+                    symbol: VisionPageSymbol.of("/research/forecast", fallback: "chart.line.flattrend.xyaxis"))
                 controls
                 if !model.contributionInvalid && !model.targetInvalid {
                     if model.error != nil {
@@ -232,7 +232,7 @@ public struct ResearchForecastView: View {
             ResearchForecastStat(
                 title: strings.t("research.forecast.volatility"),
                 value: ResearchForecastDisplay.percent(forecast?.annualVolatility, shell: shell),
-                subtitle: strings.t("research.forecast.annualized"), symbol: "waveform.path",
+                subtitle: strings.t("research.forecast.annualized"), symbol: "waveform.path.ecg",
                 loading: model.isFetching && forecast == nil)
             ResearchForecastStat(
                 title: strings.t(

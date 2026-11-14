@@ -16,6 +16,8 @@ struct VisionPageHeader<Actions: View>: View {
             // One subview however many actions the page passes (`gap-2`).
             HStack(spacing: 8) { actions() }
         }
+        // `usePageTitle`: the topbar shows this title once the header has scrolled away.
+        .preference(key: VisionPageTitleKey.self, value: title)
     }
 
     private var titleBlock: some View {
@@ -166,5 +168,23 @@ struct VisionEmptyState<Action: View>: View {
         .padding(.vertical, compact ? 24 : 44)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// The canonical identity icon of a destination (`PAGE_ICONS`, lib/pageIcons.ts), as the
+/// generated navigation registry maps it to an SF Symbol, so a page header shows the same glyph
+/// as its sidebar row.
+enum VisionPageSymbol {
+    static func of(_ path: String, fallback: String) -> String {
+        NavigationRegistry.matchItem(path: path)?.symbol ?? fallback
+    }
+}
+
+/// The page header's title (`PageTitleProvider` / `usePageTitle`, AppLayout): the first header in
+/// the page wins, so a header inside a print document or card cannot replace it.
+struct VisionPageTitleKey: PreferenceKey {
+    static let defaultValue: String? = nil
+    static func reduce(value: inout String?, nextValue: () -> String?) {
+        if value == nil { value = nextValue() }
     }
 }

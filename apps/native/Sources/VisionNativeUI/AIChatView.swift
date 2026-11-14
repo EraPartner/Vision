@@ -27,7 +27,7 @@ public struct AIChatView: View {
             VisionPageHeader(
                 title: strings.t("aiChat.title"),
                 subtitle: strings.t(isChat ? "aiChat.mode.chatHint" : "aiChat.mode.investigationHint"),
-                symbol: "bubble.left.and.bubble.right"
+                symbol: VisionPageSymbol.of("/ai-chat", fallback: "sparkles")
             ) {
                 // The web header's trailing Chat / Investigation toggle; the label stays for VoiceOver.
                 VisionSegmentedControl(
