@@ -31,13 +31,33 @@ struct VisionTable<Content: View>: View {
     /// A column that keeps its content width instead of taking a share of the spare room
     /// (`w-24`, an actions column).
     var fixedColumns: Set<Int> = []
+    /// `TableRow`'s `hover:bg-foreground/[0.03]` band under the pointer's row.
+    var rowHover = true
     @ViewBuilder var content: () -> Content
+    @State private var hoverY: CGFloat?
+    @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        VisionTableLayout(columns: columns, columnSpacing: columnSpacing, fixedColumns: fixedColumns) {
+        VisionTableLayout(
+            columns: columns, columnSpacing: columnSpacing, fixedColumns: fixedColumns, hoverY: rowHover ? hoverY : nil
+        ) {
+            if rowHover {
+                Rectangle().fill(theme.foreground.opacity(0.03)).allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                    .layoutValue(key: VisionTableBandKey.self, value: true)
+            }
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onContinuousHover { phase in
+            guard rowHover else { return }
+            let y: CGFloat?
+            switch phase {
+            case .active(let point): y = point.y
+            case .ended: y = nil
+            }
+            if hoverY != y { hoverY = y }
+        }
     }
 }
 
@@ -50,10 +70,17 @@ private struct VisionTableSpanKey: LayoutValueKey {
     static let defaultValue = false
 }
 
+/// The hover band: drawn behind the cells over the row under `hoverY`, outside the row grouping.
+private struct VisionTableBandKey: LayoutValueKey {
+    static let defaultValue = false
+}
+
 struct VisionTableLayout: Layout {
     let columns: [HorizontalAlignment]
     let columnSpacing: CGFloat
     let fixedColumns: Set<Int>
+    /// The pointer's y in the table, for the hover band; nil hides it.
+    var hoverY: CGFloat? = nil
 
     struct Cache {
         var width: CGFloat?
@@ -85,6 +112,16 @@ struct VisionTableLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         let plan = plan(width: bounds.width, subviews: subviews, cache: &cache)
+        for index in subviews.indices where subviews[index][VisionTableBandKey.self] {
+            // Over the cell row under the pointer (not dividers or full-width rows), else empty.
+            if let hoverY, let row = plan.rows.first(where: { !$0.spans && hoverY >= $0.top && hoverY < $0.top + $0.height }) {
+                subviews[index].place(
+                    at: CGPoint(x: bounds.minX, y: bounds.minY + row.top), anchor: .topLeading,
+                    proposal: ProposedViewSize(width: bounds.width, height: row.height))
+            } else {
+                subviews[index].place(at: bounds.origin, anchor: .topLeading, proposal: .zero)
+            }
+        }
         for row in plan.rows {
             if row.spans {
                 for index in row.indices {
@@ -163,7 +200,9 @@ struct VisionTableLayout: Layout {
     private func plan(width: CGFloat?, subviews: Subviews, cache: inout Cache) -> Plan {
         if let plan = cache.plan, cache.width == width { return plan }
         let count = max(1, columns.count)
-        let grouped = Self.rows(spans: subviews.map { $0[VisionTableSpanKey.self] }, columnCount: count)
+        let cells = subviews.indices.filter { !subviews[$0][VisionTableBandKey.self] }
+        let grouped = Self.rows(spans: cells.map { subviews[$0][VisionTableSpanKey.self] }, columnCount: count)
+            .map { row in (indices: row.indices.map { cells[$0] }, spans: row.spans) }
         var ideal = [CGFloat](repeating: 0, count: count)
         for row in grouped where !row.spans {
             for (column, index) in row.indices.enumerated() {

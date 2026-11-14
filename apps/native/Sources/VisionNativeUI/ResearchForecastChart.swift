@@ -91,6 +91,17 @@ struct ResearchForecastChart: View {
                     {
                         RuleMark(x: .value("date", date)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3])).accessibilityHidden(true)
+                        // The web LineChart's active dots: a ring in each line's colour at the hovered month.
+                        ForEach(series) { line in
+                            PointMark(
+                                x: .value("date", date), y: .value(label(line), coordinate(points[index][keyPath: line.value])))
+                            .symbol {
+                                Circle().strokeBorder(line.color, lineWidth: 2)
+                                    .background(Circle().fill(theme.background))
+                                    .frame(width: 9, height: 9)
+                            }
+                            .accessibilityHidden(true)
+                        }
                     }
                 }
                 .chartLegend(.hidden)
@@ -136,6 +147,23 @@ struct ResearchForecastChart: View {
                                 if selected != index { selected = index }
                             },
                             onPress: { focused = true })
+                        // `ChartTooltip`: the hovered month's percentiles and capital in, floating
+                        // above the median, so the layout below the chart never moves.
+                        if scrub.range == nil, let index = selected, points.indices.contains(index),
+                            let day = date(points[index].date),
+                            let frame = proxy.plotFrame.map({ geometry[$0] }),
+                            let x = proxy.position(forX: day),
+                            let y = proxy.position(forY: coordinate(points[index].p90))
+                        {
+                            ChartHoverTooltip(
+                                title: fullDate(points[index].date),
+                                items: lines.map { line in
+                                    ChartTooltipItem(
+                                        id: line.id, label: label(line), value: money(points[index][keyPath: line.value]),
+                                        color: line.color)
+                                },
+                                anchor: CGPoint(x: frame.minX + x, y: frame.minY + y), bounds: geometry.size)
+                        }
                     }
                 }
                 .frame(height: 360).focusable().focused($focused)
@@ -147,19 +175,6 @@ struct ResearchForecastChart: View {
                 .chartAccessibilitySummary { strings in
                     ChartAccessibility.series(
                         strings, kind: .line, categoryCount: points.count, seriesLabels: series.map(label))
-                }
-                if scrub.range == nil, let index = selected, points.indices.contains(index) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(fullDate(points[index].date)).font(.caption.weight(.semibold))
-                        ForEach(series) { line in
-                            HStack {
-                                Text(label(line)).foregroundStyle(theme.secondaryLabel)
-                                Spacer()
-                                Text(money(points[index][keyPath: line.value])).monospacedDigit()
-                            }.font(.caption)
-                        }
-                    }.padding(12).background(theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
-                        .accessibilityElement(children: .combine)
                 }
             }
         }

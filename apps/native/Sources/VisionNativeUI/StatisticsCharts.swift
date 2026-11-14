@@ -142,38 +142,37 @@ struct StatisticsCategoryDonut: View {
             .chartForegroundStyleScale(domain: rows.map(\.name), range: rows.map { color($0.path.first ?? $0.name) })
             .chartLegend(.hidden)
             .chartBackground { _ in
+                // `DonutChart`'s centre morph: the hovered slice's swatch and name over its amount.
                 if let row = rows.first(where: { $0.id == selected }) {
-                    VStack(spacing: 4) {
-                        Text(row.name).font(.caption).multilineTextAlignment(.center)
+                    VStack(spacing: 2) {
+                        HStack(spacing: 6) {
+                            Circle().fill(color(row.path.first ?? row.name)).frame(width: 8, height: 8)
+                                .accessibilityHidden(true)
+                            Text(row.name).lineLimit(1).truncationMode(.tail)
+                        }
+                        .font(.footnote).foregroundStyle(theme.secondaryLabel)
                         MoneyText(
                             amount: row.total, currency: currency, settings: settings, signed: false, colored: false
                         )
-                        .font(.caption.weight(.medium))
-                    }.frame(maxWidth: 135)
+                        .font(.title3.monospacedDigit()).foregroundStyle(theme.foreground)
+                    }
+                    .frame(maxWidth: 170)
+                    .transition(.opacity)
                 }
             }
+            .animation(.easeOut(duration: DesignTokens.Duration.fast), value: selected)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
+                    // The hovered slice is worked out from the pointer here and written straight to
+                    // `selected` (only on change): going through the angle binding missed a slice the
+                    // pointer re-entered, because the same angle fired no change.
                     Rectangle().fill(.clear).contentShape(Rectangle()).onContinuousHover { phase in
+                        let hovered: String?
                         switch phase {
-                        case .ended: selected = nil
-                        case .active(let point):
-                            guard let plot = proxy.plotFrame else { return }
-                            let bounds = geometry[plot]
-                            let dx = point.x - bounds.midX
-                            let dy = point.y - bounds.midY
-                            let radius = min(bounds.width, bounds.height) / 2
-                            let distance = hypot(dx, dy)
-                            if distance < radius * 0.6 || distance > radius {
-                                selected = nil
-                                return
-                            }
-                            var value = atan2(dx, -dy)
-                            if value < 0 { value += 2 * .pi }
-                            angle =
-                                Double(value / (2 * .pi))
-                                * NSDecimalNumber(decimal: rows.reduce(0) { $0 + $1.total }).doubleValue
+                        case .ended: hovered = nil
+                        case .active(let point): hovered = row(at: point, proxy: proxy, geometry: geometry)?.id
                         }
+                        if selected != hovered { selected = hovered }
                     }
                 }
             }
@@ -210,6 +209,25 @@ struct StatisticsCategoryDonut: View {
             }
             // `ChartLegend` under the donut, each entry carrying its amount ("HOUSING: MORTGAGE · 22.380,00 €").
             ChartLegendRow(items: rows.map(legendItem))
+        }
+    }
+    /// The slice under `point`, inside the ring only.
+    private func row(at point: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) -> StatisticsCategory? {
+        guard let plot = proxy.plotFrame else { return nil }
+        let bounds = geometry[plot]
+        let dx = point.x - bounds.midX
+        let dy = point.y - bounds.midY
+        let radius = min(bounds.width, bounds.height) / 2
+        let distance = hypot(dx, dy)
+        guard distance >= radius * 0.6, distance <= radius else { return nil }
+        var value = atan2(dx, -dy)
+        if value < 0 { value += 2 * .pi }
+        let total = NSDecimalNumber(decimal: rows.reduce(0) { $0 + $1.total }).doubleValue
+        let position = Double(value / (2 * .pi)) * total
+        var end = 0.0
+        return rows.first { row in
+            end += NSDecimalNumber(decimal: row.total).doubleValue
+            return position < end
         }
     }
     private func legendItem(_ row: StatisticsCategory) -> ChartLegendItem {

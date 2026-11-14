@@ -56,27 +56,25 @@ public struct EndpointLivenessView: View {
     @ViewBuilder
     private var table: some View {
         let rows = model.filteredRows
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
-            GridRow {
-                ForEach(Array(columns.enumerated()), id: \.offset) { index, column in
-                    Text(column)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(theme.secondaryLabel)
-                        .padding(.vertical, 8)
-                        .gridColumnAlignment(index < 2 ? .leading : .trailing)
-                        .accessibilityAddTraits(.isHeader)
-                }
+        // `<Table>`: full width; Method is `w-24`, the rest share the card.
+        VisionTable(
+            columns: [.leading, .leading, .trailing, .trailing, .trailing, .trailing, .trailing], fixedColumns: [0]
+        ) {
+            ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
+                Text(column)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.secondaryLabel)
+                    .padding(.vertical, 8)
+                    .accessibilityAddTraits(.isHeader)
             }
             if model.isLoading {
                 ForEach(0..<10, id: \.self) { _ in
-                    Divider().gridCellUnsizedAxes(.horizontal)
-                    GridRow {
-                        ForEach(0..<7, id: \.self) { _ in SkeletonBar(width: 56, height: 14).padding(.vertical, 10) }
-                    }
+                    VisionTableDivider()
+                    ForEach(0..<7, id: \.self) { _ in SkeletonBar(width: 56, height: 14).padding(.vertical, 10) }
                 }
             } else if !rows.isEmpty {
                 ForEach(rows) { row in
-                    Divider().gridCellUnsizedAxes(.horizontal)
+                    VisionTableDivider()
                     endpointRow(row)
                 }
             }
@@ -107,10 +105,11 @@ public struct EndpointLivenessView: View {
         }
     }
 
-    private func endpointRow(_ row: EndpointRow) -> GridRow<some View> {
+    @ViewBuilder
+    private func endpointRow(_ row: EndpointRow) -> some View {
         let tone = row.methodTone
         let neutral = tone == .neutral
-        return GridRow {
+        Group {
             Text(row.method)
                 .font(.caption.monospaced())
                 .foregroundStyle(methodColor(tone))

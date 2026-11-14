@@ -201,7 +201,7 @@ struct CategoryTreeRowView: View {
 
     /// The ••• menu: Edit, Merge category, Mark inactive / active, then Delete.
     private var rowMenu: some View {
-        Menu {
+        VisionMenu {
             Button {
                 model.openEdit(node)
             } label: {
@@ -228,7 +228,9 @@ struct CategoryTreeRowView: View {
                 Label {
                     Text(strings.t("common.delete"))
                     if row.isBranch {
+                        // The web helper line: `type-footnote text-label-secondary`.
                         Text(strings.t("categoriesPage.deleteChildrenFirst"))
+                            .font(.footnote).foregroundStyle(theme.secondaryLabel)
                     }
                 } icon: {
                     Image(systemName: "trash")

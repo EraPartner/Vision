@@ -489,7 +489,9 @@ struct TaxHouseholdBreakdownView: View {
                         TaxTableViewport(isPrinting: printLayout) {
                             Grid(alignment: .leading, horizontalSpacing: printLayout ? 10 : 24, verticalSpacing: 10) {
                                 GridRow {
+                                    // `<Table>` is `w-full`: the component column takes the spare width.
                                     Text(strings.t("tax.pit.table.component")).font(.caption.weight(.semibold))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     ForEach(partners, id: \.partnerId) { partner in
                                         Text(
                                             TaxYearPresentation.partner(

@@ -409,6 +409,13 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     // MARK: Rows
 
     private func rowView(_ row: Row) -> some View {
+        // `TableRow`'s `hover:bg-foreground/[0.03]`; the hover state stays in the row.
+        HoverTracking { hovered in
+            rowContent(row).background(theme.foreground.opacity(hovered ? 0.03 : 0))
+        }
+    }
+
+    private func rowContent(_ row: Row) -> some View {
         HStack(spacing: 0) {
             ForEach(columns) { column in
                 column.cell(row)

@@ -93,7 +93,7 @@ public struct RecipientsView: View {
 
     /// More actions: Merge payees.
     private var moreMenu: some View {
-        Menu {
+        VisionMenu {
             Button {
                 Task { await model.openMerge() }
             } label: {
@@ -373,7 +373,7 @@ public struct RecipientsView: View {
 
     /// The ••• menu: Edit, Match rules, Unmerge (aliases), Mark inactive / active, Delete.
     private func rowMenu(_ payee: OpenAPI.Recipient) -> some View {
-        Menu {
+        VisionMenu {
             Button {
                 model.startEditing(payee)
             } label: {
@@ -861,7 +861,7 @@ struct MatchRulesSheet: View {
             .labelsHidden()
             .disabled(state.isSaving)
             .accessibilityLabel(strings.t("recipientPatterns.activeFor", ["pattern": rule.pattern]))
-            Menu {
+            VisionMenu {
                 Button {
                     model.editRule(rule)
                 } label: {

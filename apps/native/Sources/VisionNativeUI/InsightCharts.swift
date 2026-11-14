@@ -318,6 +318,16 @@ struct InsightTimelineChart: View {
                         },
                         onPress: { focused = true },
                         scrubbable: rangeComparison)
+                    // `ChartTooltip`: the hovered category's values, floating at its tallest point.
+                    if !sparkline, scrub.range == nil, let selection, let position = index[selection],
+                        let frame = proxy.plotFrame.map({ geometry[$0] }),
+                        let x = proxy.position(forX: Double(position)),
+                        let y = proxy.position(forY: tooltipAnchorValue(selection, rects: rects))
+                    {
+                        ChartHoverTooltip(
+                            title: periodLabel(selection), items: tooltipItems(selection),
+                            anchor: CGPoint(x: frame.minX + x, y: frame.minY + y), bounds: geometry.size)
+                    }
                 }
             }
             .frame(height: height)
@@ -348,27 +358,29 @@ struct InsightTimelineChart: View {
             }
             if placement == .bottomLeading { ChartLegendRow(items: legendItems) }
             if placement == .bottomCenter { ChartLegendRow(items: legendItems, centered: true) }
-            if scrub.range == nil, let selection {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(periodLabel(selection)).font(.caption.weight(.medium))
-                    ForEach(series) { line in
-                        if let value = line.points.first(where: { $0.key == selection })?.value {
-                            HStack {
-                                Text(line.label).foregroundStyle(theme.secondaryLabel)
-                                Spacer()
-                                MoneyText(
-                                    amount: value, currency: currency, settings: settings, signed: false,
-                                    colored: false)
-                            }.font(.caption)
-                        }
-                    }
-                }
-                .padding(8).background(
-                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
-                )
-                .accessibilityElement(children: .combine)
-            }
         }
+    }
+
+    /// The tooltip's rows: every series with a value at `key`, in series order, with its swatch.
+    private func tooltipItems(_ key: String) -> [ChartTooltipItem] {
+        series.indices.compactMap { position in
+            let line = series[position]
+            guard let value = line.points.first(where: { $0.key == key })?.value else { return nil }
+            return ChartTooltipItem(
+                id: line.id, label: line.label,
+                value: MoneyText.text(value, currency: currency, settings: settings, signed: false),
+                color: seriesColor(at: position))
+        }
+    }
+
+    /// Where the tooltip points: the top of the tallest bar of the category (the baseline when
+    /// every bar is negative), or the highest line value there.
+    private func tooltipAnchorValue(_ key: String, rects: [BarRect]) -> Double {
+        let suffix = "|" + key
+        let tops = rects.filter { $0.id.hasSuffix(suffix) }.map { max($0.y0, $0.y1) }
+        if let top = tops.max() { return max(top, 0) }
+        let values = series.compactMap { line in line.points.first { $0.key == key }.map { coordinate($0.value) } }
+        return values.max() ?? 0
     }
 
     /// The key under an x position of the quantitative axis.

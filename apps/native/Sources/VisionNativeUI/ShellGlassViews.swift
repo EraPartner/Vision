@@ -103,19 +103,6 @@ struct DetailGlassBackground: View {
     }
 }
 
-/// The emerald pill of the active row (`data-[active=true]:bg-primary/[0.12]`).
-struct SidebarSelectionPill: View {
-    let isActive: Bool
-    @Environment(\.visionTheme) var theme
-
-    var body: some View {
-        let glass = theme.glass
-        RoundedRectangle(cornerRadius: DesignTokens.Radius.chip)
-            .fill(isActive ? Color(token: glass.selection, opacity: glass.selectionOpacity) : Color.clear)
-            .padding(.horizontal, 8)
-    }
-}
-
 /// Gives the hosting window the theme's appearance (the web follows its own theme, not macOS),
 /// so system materials, scrollers and menus in the window match the app theme. Without it a
 /// dialog's `Material` follows the macOS appearance: light glass over a dark theme.

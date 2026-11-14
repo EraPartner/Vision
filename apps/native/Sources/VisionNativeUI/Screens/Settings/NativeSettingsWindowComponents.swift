@@ -72,9 +72,12 @@ struct NativeSettingsRow<Content: View>: View {
                     content()
                 }
             } else {
+                // `SettingRow`: title and footnote on the left, the control on the right; stacked
+                // only when even that does not fit. The label's ideal width is pinned: left at its
+                // one-line text width, any row with a description failed the fit and stacked.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .center, spacing: 20) {
-                        label.frame(minWidth: 145)
+                        label.frame(minWidth: 145, idealWidth: 145)
                         content().frame(minWidth: 100, maxWidth: 230, alignment: .trailing)
                     }
                     VStack(alignment: .leading, spacing: 10) {

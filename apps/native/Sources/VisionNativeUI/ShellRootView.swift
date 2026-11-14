@@ -169,10 +169,18 @@ public struct ShellRootView: View {
             .environment(\.colorScheme, theme.colorScheme)
     }
 
+    /// A page presented an in-window dialog, alert or sheet (shell overlays excluded).
+    private var pageModalOpen: Bool {
+        VisionModalRegistry.shared.isOpen && !model.isPresentingNativeOverlay
+    }
+
     public var body: some View {
         let theme = VisionTheme(selection: model.theme)
         NavigationSplitView(columnVisibility: $columnVisibility) {
             NativeSidebar(model: model, skipToContent: isNativeDetail ? { contentFocused = true } : nil)
+                // A page's dialog or sheet dims and blurs the sidebar too, as the web overlay
+                // covers the whole window; shell overlays already cover it themselves.
+                .modifier(PageModalSidebarScrim(active: pageModalOpen))
                 .navigationSplitViewColumnWidth(
                     min: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth,
                     max: SidebarWidthGuard.maximumWidth)
@@ -199,7 +207,8 @@ public struct ShellRootView: View {
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         .environment(\.nativeNoticeCenter, model.notices)
         .overlay(alignment: .bottomTrailing) {
-            if model.settings.adminMode, let inspector = model.apiInspector {
+            // Hidden under a page dialog or sheet: the pill would sit over its footer buttons.
+            if model.settings.adminMode, !pageModalOpen, let inspector = model.apiInspector {
                 NativeAPIInspectorOverlay(model: inspector).environment(\.visionTheme, theme)
             }
         }
@@ -357,16 +366,30 @@ struct NativeSidebar: View {
             .padding(.horizontal, 12)
             .padding(.top, 4)
             .padding(.bottom, 8)
-            List(selection: selection) {
-                ForEach(model.sections) { section in
-                    sectionView(section)
+            // The web sidebar's own rows instead of a system source list: the list drew the
+            // macOS accent colour on hover and press, where the web row has a neutral hover
+            // (`hover:bg-foreground/[0.06]`) and the emerald pill for the active page.
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(model.sections) { section in
+                        sectionView(section)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+            .scrollIndicators(.automatic)
+            // Arrow keys move through the pages, as the list's selection did.
+            .focusable()
+            .focusEffectDisabled()
+            .onMoveCommand { direction in
+                switch direction {
+                case .up: step(-1)
+                case .down: step(1)
+                default: break
                 }
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            // The pill marks the active row; a clear tint hides the system selection highlight
-            // while keeping the list's selection and arrow-key movement.
-            .tint(Color.clear)
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(model.strings.t("nav.primary"))
             footer
         }
@@ -395,67 +418,76 @@ struct NativeSidebar: View {
         }
     }
 
-    /// Selecting a row (click or arrow keys) navigates; the selection follows the reported
-    /// route, so a navigation the page has not confirmed yet does not move it.
-    private var selection: Binding<String?> {
-        Binding(
-            get: { model.selectedItemURL },
-            set: { url in
-                if let url, url != model.route.path { model.navigate(to: url) }
-            })
-    }
-
-    @ViewBuilder
-    private func sectionView(_ section: NavSection) -> some View {
-        if let labelKey = section.labelKey, section.collapsible {
-            Section(isExpanded: expanded(section)) {
-                rows(section.items)
-            } header: {
-                Text(model.strings.t(labelKey))
-            }
-        } else if let labelKey = section.labelKey {
-            Section {
-                rows(section.items)
-            } header: {
-                Text(model.strings.t(labelKey))
-            }
-        } else {
-            Section {
-                rows(section.items)
-            }
+    /// The pages in the order shown, without those of collapsed sections.
+    private var visibleItems: [NavItem] {
+        model.sections.flatMap { section in
+            section.collapsible && section.labelKey != nil && !model.isSectionExpanded(section) ? [] : section.items
         }
     }
 
-    private func expanded(_ section: NavSection) -> Binding<Bool> {
-        Binding(
-            get: { model.isSectionExpanded(section) },
-            set: { model.setSection(section.id, expanded: $0) })
+    /// Arrow keys: the page before or after the active one.
+    private func step(_ offset: Int) {
+        let items = visibleItems
+        guard !items.isEmpty else { return }
+        let current = items.firstIndex { $0.url == model.selectedItemURL }
+        let next = current.map { $0 + offset } ?? (offset > 0 ? 0 : items.count - 1)
+        guard items.indices.contains(next), items[next].url != model.route.path else { return }
+        model.navigate(to: items[next].url)
     }
 
-    /// The pill follows the route the page reports.
+    /// `SidebarGroup`: the label (`SidebarGroupLabel`, a caption in the muted foreground) with
+    /// the collapse chevron of a collapsible group, then its rows.
+    @ViewBuilder
+    private func sectionView(_ section: NavSection) -> some View {
+        let collapsible = section.collapsible && section.labelKey != nil
+        let open = !collapsible || model.isSectionExpanded(section)
+        VStack(alignment: .leading, spacing: 1) {
+            if let labelKey = section.labelKey {
+                SidebarSectionHeader(
+                    title: model.strings.t(labelKey), collapsible: collapsible, isExpanded: open,
+                    toggleLabel: model.strings.t(open ? "nav.hideSection" : "nav.showSection") + " "
+                        + model.strings.t(labelKey)
+                ) {
+                    model.setSection(section.id, expanded: !open)
+                }
+            }
+            if open { rows(section.items) }
+        }
+        .padding(.top, section.labelKey == nil ? 0 : 10)
+    }
+
+    /// `SidebarMenuButton`: 32 pt rows on a chip radius; the pill follows the route the page reports.
     private func rows(_ items: [NavItem]) -> some View {
         ForEach(items) { item in
             let isActive = model.selectedItemURL == item.url
-            Label {
-                HStack(spacing: 6) {
-                    Text(model.strings.t(item.titleKey))
+            let title = model.strings.t(item.titleKey)
+            Button {
+                if item.url != model.route.path { model.navigate(to: item.url) }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: item.symbol)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color(token: theme.glass.icon))
+                        .frame(width: 17, height: 17)
+                    Text(title)
+                        .font(.callout)
                         .fontWeight(isActive ? .semibold : .regular)
                         .foregroundStyle(Color(token: theme.glass.foreground))
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     badgeView(item)
                 }
-            } icon: {
-                Image(systemName: item.symbol)
-                    .foregroundStyle(Color(token: theme.glass.icon))
+                .padding(.horizontal, 8)
+                .frame(height: 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .tag(item.url as String?)
-            // The web row's hover hint and rail tooltip, "<title> · G X".
-            .help(
-                item.shortcutKey.map { model.strings.t(item.titleKey) + " · G " + $0.uppercased() }
-                    ?? model.strings.t(item.titleKey))
+            .buttonStyle(SidebarRowButtonStyle(isActive: isActive))
+            // No hover tooltip here: the web shows "<title> · G X" only on the collapsed rail
+            // (`TooltipContent hidden={state !== "collapsed"}`), see `NativeSidebarRail`.
+            .accessibilityLabel(title)
             .accessibilityValue(badgeLabel(item))
-            .listRowBackground(SidebarSelectionPill(isActive: isActive))
+            .accessibilityAddTraits(isActive ? .isSelected : [])
         }
     }
 
@@ -541,7 +573,7 @@ struct NativeSidebar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(model.strings.t("aria.toggleSidebar"))
+        // No tooltip: the web button carries only its aria-label.
         .accessibilityLabel(model.strings.t("aria.toggleSidebar"))
     }
 
@@ -556,7 +588,7 @@ struct NativeSidebar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(model.strings.t("aria.collapseSidebar"))
+        // No tooltip: the web button carries only its aria-label.
         .accessibilityLabel(model.strings.t("aria.collapseSidebar"))
     }
 
@@ -599,14 +631,119 @@ struct NativeSidebar: View {
             .padding(.horizontal, 8)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.chip)
-                .fill(
-                    isActive ? Color(token: theme.glass.selection, opacity: theme.glass.selectionOpacity) : Color.clear)
-        )
+        .buttonStyle(SidebarRowButtonStyle(isActive: isActive))
         .accessibilityValue(updateReady ? model.strings.t("layout.updateReady") : "")
         .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+/// The modal overlay's share over the sidebar column while a page shows a dialog or sheet: the
+/// same scrim and blur `VisionModalPresenter` puts over the page (`.modal-overlay`, frosted with
+/// Full effects or the enhanced tier), and the sidebar takes no clicks meanwhile.
+private struct PageModalSidebarScrim: ViewModifier {
+    let active: Bool
+    @Environment(\.visionFullEffects) private var fullEffects
+    @Environment(\.visionVisualEffects) private var visualEffects
+    @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let frosted = fullEffects || visualEffects == .enhanced
+        content
+            .blur(radius: frosted && active ? CGFloat(DesignTokens.Overlay.blur) : 0)
+            .overlay {
+                Color(
+                    token: theme.palette.background,
+                    opacity: frosted ? DesignTokens.Overlay.scrimFrosted : DesignTokens.Overlay.scrim
+                )
+                .opacity(active ? 1 : 0)
+                .allowsHitTesting(active)
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+            }
+            .disabled(active)
+            .accessibilityHidden(active)
+            .animation(
+                reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.normal),
+                value: active)
+    }
+}
+
+/// A sidebar row's surface (`sidebarMenuButtonVariants`, sidebar.tsx): the emerald pill when
+/// active (`data-[active=true]:bg-primary/[0.12]`, dark 0.16), otherwise `--foreground` at 0.06
+/// under the pointer and 0.08 while pressed, eased over `Duration.fast` on `--ease-glide`.
+struct SidebarRowButtonStyle: ButtonStyle {
+    let isActive: Bool
+    var cornerRadius: CGFloat = DesignTokens.Radius.chip
+
+    func makeBody(configuration: Configuration) -> some View {
+        SidebarRowSurface(
+            isActive: isActive, isPressed: configuration.isPressed, cornerRadius: cornerRadius,
+            label: configuration.label)
+    }
+}
+
+private struct SidebarRowSurface<Label: View>: View {
+    let isActive: Bool
+    let isPressed: Bool
+    let cornerRadius: CGFloat
+    let label: Label
+    @State private var hovering = false
+    @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let glass = theme.glass
+        let fill: Color =
+            isActive
+            ? Color(token: glass.selection, opacity: glass.selectionOpacity)
+            : Color(token: glass.foreground, opacity: isPressed ? 0.08 : hovering ? 0.06 : 0)
+        label
+            .background(RoundedRectangle(cornerRadius: cornerRadius).fill(fill))
+            .onHover { hovering = $0 }
+            .animation(
+                reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.fast),
+                value: hovering)
+    }
+}
+
+/// `SidebarGroupLabel` with the group's collapse button: the chevron shows while the pointer
+/// is over the header or the group is collapsed.
+private struct SidebarSectionHeader: View {
+    let title: String
+    let collapsible: Bool
+    let isExpanded: Bool
+    let toggleLabel: String
+    let toggle: () -> Void
+    @State private var hovering = false
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        let label = HStack(spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(theme.secondaryLabel)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if collapsible {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.tertiaryLabel)
+                    .opacity(hovering || !isExpanded ? 1 : 0)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 24)
+        .contentShape(Rectangle())
+        if collapsible {
+            Button(action: toggle) { label }
+                .buttonStyle(.plain)
+                .onHover { hovering = $0 }
+                .accessibilityLabel(toggleLabel)
+                .accessibilityAddTraits(.isHeader)
+        } else {
+            label.accessibilityAddTraits(.isHeader)
+        }
     }
 }
 

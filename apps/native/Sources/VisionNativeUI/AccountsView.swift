@@ -368,7 +368,7 @@ struct AccountHubRow: View {
     }
 
     private var rowMenu: some View {
-        Menu {
+        VisionMenu {
             Button {
                 model.openDetail(account)
             } label: {

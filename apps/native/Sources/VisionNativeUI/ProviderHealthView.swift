@@ -55,29 +55,27 @@ public struct ProviderHealthView: View {
     }
 
     private var table: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
-            GridRow {
-                header(strings.t("admin.providers.colProvider"))
-                header(strings.t("admin.providers.colKind"))
-                header(strings.t("admin.providers.colLastSuccess"))
-                header(strings.t("admin.providers.colFailures"))
-                header(strings.t("admin.providers.colLastError"))
-                // `sr-only`: read by VoiceOver, not drawn.
-                Text(strings.t("dbMaintenance.col.actions"))
-                    .font(.caption)
-                    .foregroundStyle(Color.clear)
-                    .accessibilityAddTraits(.isHeader)
-            }
+        // `<Table>`: full width; the Check now column keeps its button's width.
+        VisionTable(columns: [.leading, .leading, .leading, .leading, .leading, .trailing], fixedColumns: [5]) {
+            header(strings.t("admin.providers.colProvider"))
+            header(strings.t("admin.providers.colKind"))
+            header(strings.t("admin.providers.colLastSuccess"))
+            header(strings.t("admin.providers.colFailures"))
+            header(strings.t("admin.providers.colLastError"))
+            // `sr-only`: read by VoiceOver, not drawn.
+            Text(strings.t("dbMaintenance.col.actions"))
+                .font(.caption)
+                .foregroundStyle(Color.clear)
+                .frame(width: 1)
+                .accessibilityAddTraits(.isHeader)
             if model.providers.isLoading {
                 ForEach(0..<7, id: \.self) { _ in
-                    Divider().gridCellUnsizedAxes(.horizontal)
-                    GridRow {
-                        ForEach(0..<6, id: \.self) { _ in SkeletonBar(width: 72, height: 14).padding(.vertical, 10) }
-                    }
+                    VisionTableDivider()
+                    ForEach(0..<6, id: \.self) { _ in SkeletonBar(width: 72, height: 14).padding(.vertical, 10) }
                 }
             } else {
                 ForEach(model.rows(settings: shell.settings, strings: strings)) { row in
-                    Divider().gridCellUnsizedAxes(.horizontal)
+                    VisionTableDivider()
                     providerRow(row)
                     if model.isExpanded(row.provider), let error = row.lastError {
                         errorRow(error, at: row.lastErrorAt)
@@ -95,8 +93,8 @@ public struct ProviderHealthView: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    private func providerRow(_ row: ProviderHealthRow) -> GridRow<some View> {
-        GridRow {
+    private func providerRow(_ row: ProviderHealthRow) -> some View {
+        Group {
             HStack(spacing: 8) {
                 Image(systemName: row.tone.symbol)
                     .foregroundStyle(tone(row.tone))
@@ -144,12 +142,11 @@ public struct ProviderHealthView: View {
             .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(model.isProbing(row.provider))
-            .gridColumnAlignment(.trailing)
         }
     }
 
-    private func errorRow(_ error: String, at timestamp: String?) -> GridRow<some View> {
-        GridRow {
+    private func errorRow(_ error: String, at timestamp: String?) -> some View {
+        Group {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(error)
                     .foregroundStyle(theme.destructive)
@@ -165,7 +162,7 @@ public struct ProviderHealthView: View {
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.destructive.opacity(0.05))
-            .gridCellColumns(6)
+            .visionTableSpan()
         }
     }
 }

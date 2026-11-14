@@ -48,11 +48,15 @@ public struct PortfolioHoldingsView: View {
                             editing.beginAddInvestment(allowedAssetClasses: classes)
                         }
                         .buttonStyle(.visionPrimary)
-                        Menu {
+                        VisionMenu {
                             if assetClass != .crypto {
-                                Button(strings.t("portfolio.menu.exportPdf")) { shell.openPortfolioReport() }
+                                Button(strings.t("portfolio.menu.exportPdf"), systemImage: "arrow.down.doc") {
+                                    shell.openPortfolioReport()
+                                }
                             }
-                            Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
+                            Button(strings.t("nav.portfolioImport"), systemImage: "square.and.arrow.down") {
+                                shell.navigate(to: "/portfolio/import")
+                            }
                         } label: {
                             Image(systemName: "ellipsis").visionChipChrome()
                         }

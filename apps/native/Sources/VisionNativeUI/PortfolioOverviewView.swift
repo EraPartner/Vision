@@ -51,11 +51,15 @@ public struct PortfolioOverviewView: View {
                                 strings.t(model.isOnline ? "portfolio.refreshPrices" : "portfolio.refreshPricesOffline")
                             )
                             .disabled(model.isRefreshingPrices || !model.isOnline)
-                        Menu {
-                            Button(strings.t("portfolio.menu.exportPdf")) { shell.openPortfolioReport() }
-                            Button(strings.t("portfolio.menu.customize")) { customize = true }
+                        VisionMenu {
+                            Button(strings.t("portfolio.menu.exportPdf"), systemImage: "arrow.down.doc") {
+                                shell.openPortfolioReport()
+                            }
+                            Button(strings.t("portfolio.menu.customize"), systemImage: "square.grid.2x2") { customize = true }
                             Divider()
-                            Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
+                            Button(strings.t("nav.portfolioImport"), systemImage: "square.and.arrow.down") {
+                                shell.navigate(to: "/portfolio/import")
+                            }
                         } label: {
                             Image(systemName: "ellipsis").visionChipChrome()
                         }
