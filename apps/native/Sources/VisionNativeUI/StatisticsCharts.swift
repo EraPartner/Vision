@@ -8,6 +8,7 @@ struct InsightRankedChart: View {
     let currency: CurrencyCode
     let strings: any Localizing
     @State private var selection: String?
+    @State private var rowsWidth: CGFloat = 0
     private let onSelectionChange: (String?) -> Void
     @Environment(\.visionTheme) private var theme
     @FocusState private var focused: Bool
@@ -29,13 +30,18 @@ struct InsightRankedChart: View {
             // The web TopRecipientsChart: names in a fixed left gutter, one palette colour per
             // bar (`--chart-1…8`). Drawn as rows rather than a Swift Charts y axis, whose
             // labels sat half a band above their bars.
-            let maximum = rows.map(\.total).max() ?? 0
+            // BarChart `layout="horizontal"`: no value labels on the bars; a `valueTickFormat`
+            // (`formatAxisCompact`) axis under them on a nice 0…max scale, and the full amount in
+            // the hover tooltip titled with the full name.
+            let domainMax = Self.domainMax(rows)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { position, row in
-                    rankedRow(row, position: position, maximum: maximum)
+                    rankedRow(row, position: position, domainMax: domainMax)
                 }
             }
             .padding(.vertical, 4)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowsWidth = $0 }
+            .overlay(alignment: .topLeading) { tooltip(domainMax: domainMax) }
             .focusable().focused($focused).focusEffectDisabled().onKeyPress(phases: .down) { press in
                 guard !rows.isEmpty else { return .ignored }
                 let index = selection.flatMap { id in rows.firstIndex { $0.id == id } } ?? 0
@@ -59,10 +65,73 @@ struct InsightRankedChart: View {
             .accessibilityValue(
                 ChartAccessibility.series(
                     strings, kind: .bar, categoryCount: rows.count, seriesLabels: [strings.t("statsPage.spending")]))
+            if !rows.isEmpty { valueAxis(domainMax: domainMax) }
         }
     }
-    private func rankedRow(_ row: CustomChartEntity, position: Int, maximum: Decimal) -> some View {
-        let ratio = maximum > 0 ? NSDecimalNumber(decimal: max(0, row.total) / maximum).doubleValue : 0
+
+    /// The name gutter (`margin.left` 160) plus the gap before the bars.
+    private static let gutter: CGFloat = 172
+    private static let rowHeight: CGFloat = 24
+    private static let rowSpacing: CGFloat = 6
+
+    private var plotWidth: CGFloat { max(0, rowsWidth - Self.gutter) }
+
+    /// `scaleLinear({ domain: [0, max], nice: true })`.
+    private static func domainMax(_ rows: [CustomChartEntity]) -> Double {
+        let maximum = rows.map { NSDecimalNumber(decimal: max(0, $0.total)).doubleValue }.max() ?? 0
+        guard maximum > 0 else { return 1 }
+        return ChartAxisTicks.niceDomain(0, maximum).upperBound
+    }
+
+    private func barWidth(_ row: CustomChartEntity, domainMax: Double) -> CGFloat {
+        let value = NSDecimalNumber(decimal: max(0, row.total)).doubleValue
+        return max(4, plotWidth * CGFloat(min(1, value / domainMax)))
+    }
+
+    /// The bottom value axis: five d3 ticks, compact amounts, centred under their positions.
+    private func valueAxis(domainMax: Double) -> some View {
+        let ticks = ChartAxisTicks.ticks(0, domainMax, count: 5)
+        return ZStack(alignment: .topLeading) {
+            ForEach(ticks, id: \.self) { tick in
+                Text(
+                    VisionFormat.currencyAxisCompact(
+                        Decimal(tick), code: currency, locale: settings.numberFormat.locale)
+                )
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(theme.secondaryLabel)
+                .fixedSize()
+                .alignmentGuide(.leading) { dimensions in
+                    dimensions.width / 2 - (Self.gutter + plotWidth * CGFloat(tick / domainMax))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
+        .accessibilityHidden(true)
+    }
+
+    /// `ChartTooltip` over the hovered bar's end: the full name and the full amount.
+    @ViewBuilder private func tooltip(domainMax: Double) -> some View {
+        if let selection, let index = rows.firstIndex(where: { $0.id == selection }) {
+            let row = rows[index]
+            let y = 4 + CGFloat(index) * (Self.rowHeight + Self.rowSpacing) + Self.rowHeight / 2
+            ChartHoverTooltip(
+                title: row.name,
+                items: [
+                    ChartTooltipItem(
+                        id: row.id, label: strings.t("statsPage.spending"),
+                        value: VisionFormat.currency(
+                            row.total, code: currency, locale: settings.numberFormat.locale,
+                            fractionDigits: settings.showDecimalPlaces),
+                        color: barColor(index))
+                ],
+                anchor: CGPoint(x: Self.gutter + barWidth(row, domainMax: domainMax), y: y),
+                bounds: CGSize(width: rowsWidth, height: CGFloat(rows.count) * (Self.rowHeight + Self.rowSpacing))
+            )
+            .allowsHitTesting(false)
+        }
+    }
+    private func rankedRow(_ row: CustomChartEntity, position: Int, domainMax: Double) -> some View {
         let dimmed = selection != nil && selection != row.id
         return HStack(spacing: 12) {
             Text(row.name)
@@ -70,27 +139,17 @@ struct InsightRankedChart: View {
                 .foregroundStyle(selection == row.id ? theme.foreground : theme.secondaryLabel)
                 .lineLimit(1).truncationMode(.tail)
                 .frame(width: 160, alignment: .trailing)
-            GeometryReader { proxy in
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(barColor(position))
-                        .frame(width: max(4, (proxy.size.width - 96) * ratio), height: 14)
-                    MoneyText(
-                        amount: row.total, currency: currency, settings: settings, signed: false, colored: false
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(theme.secondaryLabel)
-                }
-                .frame(height: proxy.size.height, alignment: .leading)
-            }
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(barColor(position))
+                .frame(width: barWidth(row, domainMax: domainMax), height: 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 24)
+        .frame(height: Self.rowHeight)
         .opacity(dimmed ? 0.5 : 1)
         .contentShape(Rectangle())
         .onHover { hovering in
             if hovering { selection = row.id } else if selection == row.id { selection = nil }
         }
-        .visionTooltip(row.name)
         .accessibilityElement(children: .combine)
         .animation(.easeOut(duration: DesignTokens.Duration.fast), value: dimmed)
     }

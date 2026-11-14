@@ -178,7 +178,15 @@ struct CustomChartPlot: View {
                     .font(.footnote).foregroundStyle(theme.warning)
             }
             if dataset.entities.isEmpty {
-                Text(strings.t("customChart.noSeries"))
+                // CustomChart's empty body: a compact EmptyState (TrendingUp) centred in `h-[300px]`
+                // that says what to add for a preview.
+                VisionEmptyState(
+                    symbol: "chart.line.uptrend.xyaxis", title: strings.t("customChart.noSeriesPrompt"), compact: true
+                ) {
+                    EmptyView()
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 300)
             } else if kind == .rankedBar {
                 InsightRankedChart(
                     rows: entities, settings: settings, currency: LedgerCurrency.display(settings), strings: strings,

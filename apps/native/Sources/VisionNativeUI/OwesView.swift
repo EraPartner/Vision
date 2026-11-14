@@ -433,7 +433,8 @@ struct OwesRecentTransactions: View {
                             .foregroundStyle(theme.secondaryLabel)
                     }
                     .rowAppeared { id in Task { await model.recentRowAppeared(id) } }
-                    .frame(maxHeight: 420)
+                    // `RecentRecipientTransactionsTable`: `VirtualDataTable maxHeight={320}`.
+                    .bodyMaxHeight(320)
                 }
             }
         }

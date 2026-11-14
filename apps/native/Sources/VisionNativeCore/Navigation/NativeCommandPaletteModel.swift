@@ -125,9 +125,29 @@ import Observation
     /// Dynamic answers/search hits are force-mounted, as in cmdk. Navigation/actions
     /// use cmdk's localized label + URL fuzzy score; groups/items keep stable ties.
     public func groups(strings: any Localizing) -> [NativeCommandPaletteGroup] {
-        var result: [NativeCommandPaletteGroup] = []
-        func group(_ id: String, _ key: String, _ entries: [NativeCommandPaletteEntry]) {
-            if !entries.isEmpty { result.append(.init(id: id, title: strings.t(key), entries: entries)) }
+        // cmdk scores every item, force-mounted ones included, and orders the groups by their
+        // best item (ties keep mount order); force-mounted groups only stay visible at 0. So the
+        // ticker, answer, search and Payees groups take part in the ordering too, scored on the
+        // `value` strings the web items carry.
+        var filtered: [(group: NativeCommandPaletteGroup, score: Double, index: Int)] = []
+        func group(
+            _ id: String, _ key: String, _ entries: [NativeCommandPaletteEntry],
+            value: (NativeCommandPaletteEntry) -> String
+        ) {
+            guard !entries.isEmpty else { return }
+            typealias Scored = (entry: NativeCommandPaletteEntry, score: Double, index: Int)
+            var scored: [Scored] = []
+            for (index, entry) in entries.enumerated() {
+                let score: Double =
+                    query.isEmpty ? 1 : NativeCommandPaletteQueries.score(value(entry), query: query)
+                scored.append((entry: entry, score: score, index: index))
+            }
+            scored.sort { (lhs: Scored, rhs: Scored) -> Bool in
+                lhs.score == rhs.score ? lhs.index < rhs.index : lhs.score > rhs.score
+            }
+            let ordered: [NativeCommandPaletteEntry] = scored.map { (item: Scored) in item.entry }
+            let built = NativeCommandPaletteGroup(id: id, title: strings.t(key), entries: ordered)
+            filtered.append((group: built, score: scored[0].score, index: filtered.count))
         }
         if let tickerSymbol, quote != nil || tickerLoading {
             let symbol = quote?.symbol ?? tickerSymbol
@@ -140,7 +160,8 @@ import Observation
                         action: .navigate(
                             .init(.marketLookup, query: [.init(name: "symbol", value: symbol)])),
                         quote: quote)
-                ])
+                ]
+            ) { _ in "market \(symbol) \(self.quote?.name ?? "")" }
         }
         if let answer {
             group(
@@ -150,7 +171,8 @@ import Observation
                         id: "answer", title: answer.text,
                         symbol: answer.kind == .fx ? "arrow.left.arrow.right" : "plus.forwardslash.minus",
                         hint: strings.t("commandPalette.copyHint"), action: .copy(answer.text))
-                ])
+                ]
+            ) { _ in "result \(query)" }
         }
         if trimmedQuery.utf16.count >= 2 {
             group(
@@ -162,7 +184,8 @@ import Observation
                         symbol: "list.bullet.rectangle.portrait", hint: nil,
                         action: .navigate(
                             .init(.transactions, query: [.init(name: "search", value: trimmedQuery)])))
-                ])
+                ]
+            ) { _ in "tx-search \(query)" }
         }
         group(
             "recipients", "nav.recipients",
@@ -176,7 +199,8 @@ import Observation
                                 .init(name: "recipient_id", value: String($0.id.rawValue)),
                                 .init(name: "filter_label", value: $0.name),
                             ])))
-            })
+            }
+        ) { "recipient \($0.title) \(query)" }
         let pages = Self.pageGroups(adminMode: settings.adminMode).flatMap(\.pages)
         if trimmedQuery.isEmpty {
             group(
@@ -184,17 +208,17 @@ import Observation
                 recents.enumerated().compactMap { index, url in
                     guard let page = pages.first(where: { $0.url == url }) else { return nil }
                     return pageEntry(page, strings: strings, prefix: "recent-\(index)-")
-                })
+                }
+            ) { "recent \($0.title) \(navigationURL($0.action))" }
         }
-        var filtered: [(group: NativeCommandPaletteGroup, score: Double, index: Int)] = []
-        for (index, section) in Self.pageGroups(adminMode: settings.adminMode).enumerated() {
+        for section in Self.pageGroups(adminMode: settings.adminMode) {
             let entries = section.pages.map { pageEntry($0, strings: strings) }
             let ranked = ranked(entries) { $0.title + " " + navigationURL($0.action) }
             if !ranked.isEmpty {
                 filtered.append(
                     (
                         .init(id: section.key, title: strings.t(section.key), entries: ranked.map(\.entry)),
-                        ranked[0].score, index
+                        ranked[0].score, filtered.count
                     ))
             }
         }
@@ -221,12 +245,11 @@ import Observation
                 (
                     .init(
                         id: "actions", title: strings.t("commandPalette.actions"), entries: rankedActions.map(\.entry)),
-                    rankedActions[0].score, filtered.count + 5
+                    rankedActions[0].score, filtered.count
                 ))
         }
         if !query.isEmpty { filtered.sort { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score } }
-        result += filtered.map(\.group)
-        return result
+        return filtered.map(\.group)
     }
 
     private static func pageGroups(adminMode: Bool) -> [(key: String, pages: [NavItem])] {

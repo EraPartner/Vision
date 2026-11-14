@@ -10,6 +10,8 @@ public struct PlannedPaymentsView: View {
     private let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     @Environment(\.openURL) private var openURL
+    /// The window width at the strip's right edge; wide until measured.
+    @State private var stripWindowWidth: CGFloat = VisionBreakpoint.lg
 
     public init(model: PlannedPaymentsModel, shell: NativeShellModel) {
         self.model = model
@@ -200,7 +202,7 @@ public struct PlannedPaymentsView: View {
                             SkeletonBar(width: 96, height: 28)
                         }
                     }
-                    LazyVGrid(columns: Self.tileColumns, spacing: 8) {
+                    LazyVGrid(columns: Self.tileColumns(windowWidth: stripWindowWidth), spacing: 8) {
                         ForEach(0..<PlannedStrip.windowDays, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                                 .fill(theme.muted)
@@ -258,7 +260,13 @@ public struct PlannedPaymentsView: View {
 
     // MARK: Next 7 days
 
-    static let tileColumns = [GridItem(.adaptive(minimum: 104), spacing: 8)]
+    /// `grid-cols-2 sm:grid-cols-4 lg:grid-cols-8` on the window width: the eight day tiles
+    /// (`WINDOW_DAYS`) always fill the card. An adaptive 104 pt grid made ten columns on a
+    /// wide window, so the strip stopped two columns short of the card's right edge.
+    static func tileColumns(windowWidth: CGFloat) -> [GridItem] {
+        let count = windowWidth >= VisionBreakpoint.lg ? 8 : windowWidth >= VisionBreakpoint.sm ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: 8), count: count)
+    }
 
     private var stripCard: some View {
         let strip = model.strip
@@ -313,11 +321,13 @@ public struct PlannedPaymentsView: View {
                         }
                     }
                 }
-                LazyVGrid(columns: Self.tileColumns, spacing: 8) {
+                LazyVGrid(columns: Self.tileColumns(windowWidth: stripWindowWidth), spacing: 8) {
                     ForEach(strip.buckets) { bucket in
                         dayTile(bucket)
                     }
                 }
+                // The viewport the web's breakpoints read: where the strip ends in the window.
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxX } action: { stripWindowWidth = $0 }
                 if strip.dueCount == 0 {
                     HStack(spacing: 10) {
                         Image(systemName: "calendar.badge.checkmark")
@@ -457,6 +467,8 @@ public struct PlannedPaymentsView: View {
         ) {
             emptyState
         }
+        // `PlannedPaymentsTable` keeps `VirtualDataTable`'s default `maxHeight` (600).
+        .bodyMaxHeight(600)
     }
 
     @ViewBuilder

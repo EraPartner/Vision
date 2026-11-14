@@ -21,7 +21,7 @@ public struct AnalysisWorkspaceView: View {
     private var strings: any Localizing { shell.strings }
 
     public var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
@@ -29,12 +29,10 @@ public struct AnalysisWorkspaceView: View {
                             title: strings.t("analysis.title"), subtitle: strings.t("analysis.subtitle"),
                             symbol: VisionPageSymbol.of("/analysis", fallback: "chart.bar"))
                         workflow(proxy)
-                        let wide = geometry.size.width >= 1140
-                        let layout =
-                            wide
-                            ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
-                            : AnyLayout(VStackLayout(alignment: .leading, spacing: 24))
-                        layout {
+                        // The web page is one column: the editor and result cards, then
+                        // `<aside className="grid items-start gap-4 lg:grid-cols-2">` with the
+                        // Reusable analysis and Saved analyses cards side by side under them.
+                        VStack(alignment: .leading, spacing: 24) {
                             VStack(alignment: .leading, spacing: 24) {
                                 if model.dataset?.relation.hasPrefix("service:") == true { financialParameters }
                                 templates(proxy)
@@ -55,7 +53,7 @@ public struct AnalysisWorkspaceView: View {
                                 }
                                 savedFeedback
                             }.frame(maxWidth: .infinity, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 24) {
+                            VisionResponsiveColumns(weights: [1, 1], spacing: 16, loneChildSpans: false) {
                                 AnalysisReusableView(model: model, shell: shell)
                                 AnalysisSavedLibraryView(
                                     model: model, shell: shell,
@@ -63,7 +61,7 @@ public struct AnalysisWorkspaceView: View {
                                         templatesOpen = false
                                         builderOpen = true
                                     })
-                            }.frame(width: wide ? 360 : nil)
+                            }
                         }
                     }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
                 }

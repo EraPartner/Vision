@@ -125,11 +125,6 @@ public struct ShellRootView: View {
                 // Only settled widths: mid-slide widths would make the next freeze wrong.
                 if frozenDetailWidth == nil { columnWidths.detail = width }
             }
-            .overlay(alignment: .top) {
-                if case .native = model.detail, let inspector = model.apiInspector {
-                    BackgroundQueryIndicator(inspector: inspector)
-                }
-            }
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { inset in
             titlebarSafeInset = inset

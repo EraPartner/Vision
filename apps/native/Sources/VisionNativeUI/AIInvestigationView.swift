@@ -90,11 +90,18 @@ struct AIInvestigationView: View {
                 .visionAccessibilityLabel(strings.t("aiResearch.researchMode"))
             }.padding(.top, 12)
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(strings.t("aiResearch.configure")).font(.callout.weight(.medium))
-                Text(settingsSummary).font(.caption).foregroundStyle(theme.secondaryLabel)
+            // `flex flex-wrap items-baseline gap-x-2`: title and summary share one line.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) { configureTitle; configureSummary }
+                VStack(alignment: .leading, spacing: 4) { configureTitle; configureSummary }
             }
         }
+    }
+    private var configureTitle: some View {
+        Text(strings.t("aiResearch.configure")).font(.callout.weight(.medium))
+    }
+    private var configureSummary: some View {
+        Text(settingsSummary).font(.footnote).foregroundStyle(theme.secondaryLabel)
     }
     @ViewBuilder private var publicInputs: some View {
         if model.researchMode == .publicWeb {
@@ -110,18 +117,26 @@ struct AIInvestigationView: View {
             Text(strings.t("aiResearch.publicSymbolsHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
         }
     }
+    /// The lifecycle row (`flex flex-wrap items-center gap-2`): the buttons, then the state note
+    /// in the same row, as a footnote.
     private var lifecycle: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { lifecycleActions }
-                VStack(alignment: .leading, spacing: 10) { lifecycleActions }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                lifecycleActions
+                lifecycleNote
             }
-            Text(
-                model.job.map { strings.t("aiResearch.jobState", ["state": $0.state.rawValue]) }
-                    ?? strings.t("aiResearch.localDefault")
-            )
-            .font(.caption).foregroundStyle(theme.secondaryLabel)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) { lifecycleActions }
+                lifecycleNote
+            }
         }
+    }
+    private var lifecycleNote: some View {
+        Text(
+            model.job.map { strings.t("aiResearch.jobState", ["state": $0.state.rawValue]) }
+                ?? strings.t("aiResearch.localDefault")
+        )
+        .font(.footnote).foregroundStyle(theme.secondaryLabel)
     }
     @ViewBuilder private var lifecycleActions: some View {
         Button {

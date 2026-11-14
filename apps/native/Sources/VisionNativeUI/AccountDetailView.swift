@@ -378,13 +378,25 @@ struct AccountDetailContent: View {
                 Text(strings.t("accounts.detail.details"))
                     .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
-                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
-                    ForEach(model.details(account)) { entry in
-                        GridRow {
-                            Text(strings.t(entry.labelKey))
-                                .font(.footnote)
-                                .foregroundStyle(theme.secondaryLabel)
-                            Text(entry.value)
+                // `<dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">`: each entry is
+                // a footnote label over its body value.
+                VisionBreakpointReader(breakpoint: VisionBreakpoint.sm) { wide in
+                    LazyVGrid(
+                        columns: Array(
+                            repeating: GridItem(.flexible(), spacing: 16, alignment: .topLeading), count: wide ? 4 : 2),
+                        alignment: .leading, spacing: 12
+                    ) {
+                        ForEach(model.details(account)) { entry in
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(strings.t(entry.labelKey))
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryLabel)
+                                Text(entry.value)
+                                    .monospacedDigit()
+                                    .foregroundStyle(theme.foreground)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityElement(children: .combine)
                         }
                     }
                 }

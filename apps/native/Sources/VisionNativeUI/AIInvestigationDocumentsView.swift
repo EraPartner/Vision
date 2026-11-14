@@ -49,9 +49,11 @@ struct AIInvestigationDocumentsView: View {
                 }
             }.padding(.top, 12)
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(strings.t("aiResearch.evidenceOptions")).font(.callout.weight(.medium))
-                Text(summary).font(.caption).foregroundStyle(theme.secondaryLabel)
+            // `DisclosureSummary className="flex flex-wrap items-baseline gap-x-2"`: the title and
+            // its footnote summary on one line, wrapping only when the row is too narrow.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) { evidenceTitle; evidenceSummary }
+                VStack(alignment: .leading, spacing: 4) { evidenceTitle; evidenceSummary }
             }
         }
         .padding(.vertical, 10)
@@ -83,6 +85,12 @@ struct AIInvestigationDocumentsView: View {
             .buttonStyle(.vision(.ghost, size: .iconSm)).foregroundStyle(theme.destructive)
             .accessibilityLabel(strings.t("aiResearch.deleteDocument") + ": " + document.title)
         }.padding(.vertical, 10)
+    }
+    private var evidenceTitle: some View {
+        Text(strings.t("aiResearch.evidenceOptions")).font(.callout.weight(.medium))
+    }
+    private var evidenceSummary: some View {
+        Text(summary).font(.footnote).foregroundStyle(theme.secondaryLabel)
     }
     private func dateField(_ key: String, value: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {

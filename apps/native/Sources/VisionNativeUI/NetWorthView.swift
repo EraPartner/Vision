@@ -228,67 +228,83 @@ public struct NetWorthView: View {
             details.append(strings.t("networth.byAccount.cash") + " " + money(row.cash))
             details.append(strings.t("networth.byAccount.holdings") + " " + money(row.holdings))
         }
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.label ?? strings.t("networth.byAccount.unassigned"))
-                    .font(.callout.weight(.medium))
-                if !details.isEmpty {
-                    Text(details.joined(separator: " · "))
-                        .font(.footnote)
-                        .foregroundStyle(theme.secondaryLabel)
-                }
+        return insetRow {
+            Text(row.label ?? strings.t("networth.byAccount.unassigned"))
+                .lineLimit(1)
+            if !details.isEmpty {
+                Text(details.joined(separator: " · "))
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .lineLimit(1)
             }
-            Spacer()
+        } trailing: {
             if row.accountId == nil {
                 Button(strings.t("networth.byAccount.assign")) { shell.navigate(to: "/portfolio") }
                     .buttonStyle(.visionLink)
-                    .font(.footnote.weight(.medium))
+                    .font(.footnote)
             }
             MoneyText(amount: row.total, currency: currency, settings: settings, signed: false, colored: false)
-                .font(.callout.weight(.medium))
+                .foregroundStyle(theme.foreground)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+    }
+
+    /// `ListRow` (list.tsx): `min-h-11 px-4 py-2.5 gap-3`, a body title over a footnote
+    /// subtitle, the trailing slot in body type with tabular digits.
+    private func insetRow<Title: View, Trailing: View>(
+        @ViewBuilder title: () -> Title, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) { title() }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) { trailing() }
+                .monospacedDigit()
+                .foregroundStyle(theme.secondaryLabel)
+        }
+        .font(.body)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
     }
     @ViewBuilder private func accounts(_ data: OpenAPI.NetWorthResponse) -> some View {
         AdminCard(padding: VisionPageLayout.padding) {
             Text(strings.t("networth.byAccount.title")).font(Font.visionTitle3)
             Text(strings.t("networth.byAccount.description")).foregroundStyle(theme.secondaryLabel)
             if let rows = model.accountRows, let total = model.accountsTotal {
-                if rows.isEmpty { Text(strings.t("networth.byAccount.none")) }
-                // The web's inset list: one bordered surface, hairlines between compact rows.
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        if index > 0 { Divider() }
-                        accountRow(row)
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                        .fill(theme.foreground.opacity(0.02)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                        .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
                 let difference = NetWorthAccountRow.cents(total - data.current.netWorth)
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
+                let matches = abs(difference) < Decimal.literal("0.005")
+                // `<List>`: one `rounded-card` surface (`bg-card/70`, `border-border/60`) with
+                // `divide-border/50` hairlines; the displayed total is its last row.
+                VStack(spacing: 0) {
+                    if rows.isEmpty {
+                        insetRow { Text(strings.t("networth.byAccount.none")) } trailing: { EmptyView() }
+                        Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1)
+                    }
+                    ForEach(rows) { row in
+                        accountRow(row)
+                        Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1)
+                    }
+                    insetRow {
                         Text(strings.t("networth.byAccount.displayedTotal")).fontWeight(.medium)
                         Text(
-                            abs(difference) < Decimal.literal("0.005")
+                            matches
                                 ? strings.t("networth.byAccount.matches")
                                 : strings.t(difference > 0 ? "networth.byAccount.above" : "networth.byAccount.below")
                                     + " " + money(abs(difference))
                         )
-                        .font(.footnote).foregroundStyle(
-                            abs(difference) < Decimal.literal("0.005") ? theme.secondaryLabel : theme.warning)
+                        .font(.footnote.weight(matches ? .regular : .medium))
+                        .foregroundStyle(matches ? theme.secondaryLabel : theme.warning)
+                    } trailing: {
+                        MoneyText(amount: total, currency: currency, settings: settings, signed: false, colored: false)
+                            .fontWeight(.medium)
+                            .foregroundStyle(theme.foreground)
                     }
-                    Spacer()
-                    MoneyText(amount: total, currency: currency, settings: settings, signed: false, colored: false)
-                        .fontWeight(.medium)
+                    .background(theme.foreground.opacity(0.02))
                 }
-                .padding(.vertical, 6).padding(.horizontal, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control).fill(theme.foreground.opacity(0.02)))
+                .background(theme.card.opacity(0.7))
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
                 if abs(difference) >= Decimal.literal("0.005") {
                     Text(strings.t("networth.byAccount.differenceHint")).font(.footnote).foregroundStyle(
                         theme.secondaryLabel)

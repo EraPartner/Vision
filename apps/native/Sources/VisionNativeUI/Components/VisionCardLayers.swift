@@ -82,7 +82,8 @@ struct VisionCardLayerStyle: Equatable {
         edgeMask.strokeColor = CGColor(gray: 0, alpha: 1)
         edgeMask.lineWidth = 1
         edgeLayer.mask = edgeMask
-        // `.init(color: highlight, location: 0)`, clear at 0.12 and 0.88, the hairline at 1.
+        // The highlight at 0, clear within a corner radius of each edge (set in `layout`), the
+        // hairline at 1.
         edgeLayer.locations = [0, 0.12, 0.88, 1]
         frameLayer.cornerCurve = .continuous
         frameLayer.borderWidth = 1
@@ -133,9 +134,15 @@ struct VisionCardLayerStyle: Equatable {
             for layer in shadowLayers { shadowHost.insertSublayer(layer, below: liftLayer) }
         }
         for (layer, shadow) in zip(shadowLayers, style.shadows) { Self.setShadow(layer, shadow) }
-        fillLayer.colors = style.fillColors
-        fillLayer.locations = style.fillLocations.map { NSNumber(value: $0) }
-        edgeLayer.colors = [style.edgeTop, CGColor.clear, CGColor.clear, style.edgeBottom]
+        let fill = Self.premultipliedStops(colors: style.fillColors, locations: style.fillLocations)
+        fillLayer.colors = fill.colors
+        fillLayer.locations = fill.locations.map { NSNumber(value: $0) }
+        // Fade each edge to its own colour at alpha 0, not to `clear` (black): the layer mixes raw
+        // components, so a fade to black would darken the rim on its way out.
+        edgeLayer.colors = [
+            style.edgeTop, style.edgeTop.copy(alpha: 0) ?? CGColor.clear,
+            style.edgeBottom.copy(alpha: 0) ?? CGColor.clear, style.edgeBottom,
+        ]
         frameLayer.borderColor = style.frame
         if let lift = style.lift {
             Self.setShadow(liftLayer, lift)
@@ -176,7 +183,54 @@ struct VisionCardLayerStyle: Equatable {
         // `shape.inset(by: 1).strokeBorder(…, lineWidth: 1)`: a 1 pt line just inside 1 pt of inset.
         edgeMask.frame = bounds
         edgeMask.path = Self.path(bounds.insetBy(dx: 1.5, dy: 1.5), radius: max(0, radius - 1.5))
+        // `0 1px 0 … inset` lights the top edge and the curve of its corners, not the sides: the
+        // highlight fades out within one corner radius. A fixed 12 % of the height lit 40 pt of
+        // a tall card's sides, which read as a glow around the card.
+        let reach = bounds.height > 0 ? min(0.5, Double(radius / bounds.height)) : 0.12
+        edgeLayer.locations = [0, NSNumber(value: reach), NSNumber(value: 1 - reach), 1]
         CATransaction.commit()
+    }
+
+    /// Sub-stops per gradient segment for `premultipliedStops`.
+    private nonisolated static let premultipliedSteps = 12
+
+    /// CSS interpolates gradient stops in premultiplied alpha; `CAGradientLayer` mixes the raw
+    /// components. Between the glass highlight (near white at 0.04) and the surface (dark at
+    /// 0.78) the raw mix runs through a bright, half-opaque grey: a diagonal sheen across the
+    /// top-left of every Full effects card that the web card does not have. Each segment is
+    /// split into sub-stops whose colours are the premultiplied mix, un-premultiplied again, so
+    /// the layer's linear steps between them stay within a few levels of the CSS curve.
+    nonisolated static func premultipliedStops(colors: [CGColor], locations: [Double]) -> (colors: [CGColor], locations: [Double]) {
+        guard colors.count == locations.count, colors.count > 1,
+            let space = CGColorSpace(name: CGColorSpace.sRGB)
+        else { return (colors, locations) }
+        let rgba: [[CGFloat]] = colors.compactMap { color in
+            guard let converted = color.converted(to: space, intent: .defaultIntent, options: nil),
+                let parts = converted.components, parts.count == 4
+            else { return nil }
+            return parts
+        }
+        guard rgba.count == colors.count else { return (colors, locations) }
+        // Nothing to correct when every stop has the same alpha.
+        guard rgba.contains(where: { abs($0[3] - rgba[0][3]) > 0.001 }) else { return (colors, locations) }
+        var outColors: [CGColor] = []
+        var outLocations: [Double] = []
+        for index in 0..<(rgba.count - 1) {
+            let from = rgba[index]
+            let to = rgba[index + 1]
+            let steps = index == rgba.count - 2 ? premultipliedSteps + 1 : premultipliedSteps
+            for step in 0..<steps {
+                let t = CGFloat(step) / CGFloat(premultipliedSteps)
+                let alpha = from[3] + (to[3] - from[3]) * t
+                let channel = { (i: Int) -> CGFloat in
+                    let premultiplied = from[i] * from[3] + (to[i] * to[3] - from[i] * from[3]) * t
+                    return alpha > 0 ? min(1, max(0, premultiplied / alpha)) : 0
+                }
+                outColors.append(CGColor(colorSpace: space, components: [channel(0), channel(1), channel(2), alpha]) ?? colors[index])
+                outLocations.append(locations[index] + (locations[index + 1] - locations[index]) * Double(t))
+            }
+        }
+        return (outColors, outLocations)
     }
 
     /// How far outside the card a shadow may paint (offset plus blur of the largest lift).
