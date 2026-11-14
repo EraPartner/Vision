@@ -102,6 +102,12 @@ public final class StatisticsModel {
     public func isVisible(_ id: String) -> Bool {
         InsightWidget.statistics.first { $0.id == id }.map { widgets.isVisible($0, page: "statistics") } ?? false
     }
+    /// A tab click: the tab shows at once, before the route change reaches `appear`, which
+    /// then reads the same tab back from the URL.
+    public func selectTab(_ next: StatisticsTab) {
+        tab = next
+    }
+
     public func appear(settings: NativeAppSettings, route: NativeRoute, force: Bool = false) async {
         let nextWindow = StatisticsWindow(routeValue: route.value("window"))
         tab = StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview

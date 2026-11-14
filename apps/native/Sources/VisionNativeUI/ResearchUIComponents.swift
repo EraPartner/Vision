@@ -62,6 +62,8 @@ struct ResearchSymbolSearchView: View {
     var provider: String? = nil
     let placeholder: String
     var autoFocus = false
+    /// `SymbolSearchResultItem leadingIcon`: an SF Symbol before each result's ticker.
+    var leadingSymbol: String? = nil
     let onEscape: (() -> Void)?
     let shell: NativeShellModel
     let onSelect: (ResearchSearchItem) -> Void
@@ -71,7 +73,8 @@ struct ResearchSymbolSearchView: View {
     init(
         text: Binding<String>, items: [ResearchSearchItem], isOpen: Bool, isFetching: Bool = false,
         showsLoading: Bool = true, isUnavailable: Bool = false, isError: Bool = false, provider: String? = nil,
-        placeholder: String, autoFocus: Bool = false, onEscape: (() -> Void)? = nil, shell: NativeShellModel,
+        placeholder: String, autoFocus: Bool = false, leadingSymbol: String? = nil, onEscape: (() -> Void)? = nil,
+        shell: NativeShellModel,
         onSelect: @escaping (ResearchSearchItem) -> Void
     ) {
         self._text = text
@@ -84,6 +87,7 @@ struct ResearchSymbolSearchView: View {
         self.provider = provider
         self.placeholder = placeholder
         self.autoFocus = autoFocus
+        self.leadingSymbol = leadingSymbol
         self.onEscape = onEscape
         self.shell = shell
         self.onSelect = onSelect
@@ -172,6 +176,11 @@ struct ResearchSymbolSearchView: View {
     }
     private func row(_ item: ResearchSearchItem, selected: Bool) -> some View {
         HStack(spacing: 12) {
+            if let leadingSymbol {
+                // `h-3.5 w-3.5 shrink-0 text-label-secondary`.
+                Image(systemName: leadingSymbol).font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.secondaryLabel).frame(width: 14).accessibilityHidden(true)
+            }
             Text(item.symbol ?? "—").font(.callout.monospaced().weight(.medium)).frame(
                 minWidth: 64, alignment: .leading)
             Text(item.name ?? "").font(.callout).foregroundStyle(theme.secondaryLabel).lineLimit(1)

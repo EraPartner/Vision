@@ -190,11 +190,18 @@ private final class VisionTooltipAnchorBox {
     weak var view: NSView?
 }
 
+/// Only measures where the tooltip goes. It is transparent to the mouse, so it can never take a
+/// mouse-down meant for the menu or button it is attached to.
+private final class VisionTooltipAnchorView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
+}
+
 private struct VisionTooltipAnchor: NSViewRepresentable {
     let box: VisionTooltipAnchorBox
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
+        let view = VisionTooltipAnchorView()
         box.view = view
         return view
     }

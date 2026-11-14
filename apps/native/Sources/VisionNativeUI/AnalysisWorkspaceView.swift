@@ -42,15 +42,15 @@ public struct AnalysisWorkspaceView: View {
                                 if model.displayedResult != nil {
                                     AnalysisResultView(model: model, shell: shell, focusRequest: resultFocusRequest)
                                 }
-                                if model.displayedResult != nil {
-                                    AnalysisPanel {
-                                        DisclosureGroup(strings.t("analysis.refineTitle"), isExpanded: $toolsOpen) {
-                                            VStack(alignment: .leading, spacing: 12) {
-                                                Text(strings.t("analysis.refineHelp")).font(.callout).foregroundStyle(
-                                                    theme.secondaryLabel)
-                                                AnalysisWorkbenchView(model: workbench, shell: shell)
-                                            }.padding(.top, 12)
-                                        }
+                                // The web renders the Refine card with or without a result, so the
+                                // Prepare and Calculate links always have a section to open and scroll to.
+                                AnalysisPanel {
+                                    DisclosureGroup(strings.t("analysis.refineTitle"), isExpanded: $toolsOpen) {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            Text(strings.t("analysis.refineHelp")).font(.callout).foregroundStyle(
+                                                theme.secondaryLabel)
+                                            AnalysisWorkbenchView(model: workbench, shell: shell)
+                                        }.padding(.top, 12)
                                     }
                                 }
                                 savedFeedback
@@ -104,7 +104,8 @@ public struct AnalysisWorkspaceView: View {
                         scroll(proxy, to: "analysis-" + section)
                     }
                 }.buttonStyle(.visionOutline)
-                    .disabled(section == "present" && model.displayedResult == nil)
+                // `<a href="#analysis-present">`: always enabled; without a result there is no
+                // section to scroll to, as on the web.
             }
         }.accessibilityElement(children: .contain).accessibilityLabel(strings.t("analysis.workflow.title"))
     }

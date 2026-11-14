@@ -29,7 +29,9 @@ public struct ResearchCompareView: View {
                             isUnavailable: model.search.meta?.source == "unavailable",
                             isError: model.search.error != nil,
                             provider: model.search.meta?.provider,
-                            placeholder: strings.t("research.compare.addPlaceholder"), shell: shell,
+                            placeholder: strings.t("research.compare.addPlaceholder"),
+                            // `leadingIcon={<Plus />}` on each result.
+                            leadingSymbol: "plus", shell: shell,
                             onSelect: { item in
                                 if let symbol = item.symbol { replace(model.addSymbol(symbol)) }
                             }
@@ -38,6 +40,10 @@ public struct ResearchCompareView: View {
                         .frame(maxWidth: 672, alignment: .leading)
                     }
                 }
+                // The results popup hangs below the search box as an overlay. `zIndex` orders only
+                // siblings, so this whole block must sit above the cards that follow it; otherwise
+                // the empty-state card draws over the popup and takes its clicks.
+                .zIndex(model.search.isOpen ? 1 : 0)
                 if model.state.symbols.isEmpty {
                     ResearchCard {
                         VisionEmptyState(
