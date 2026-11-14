@@ -165,8 +165,8 @@ public struct PlannedPaymentsView: View {
             Image(systemName: "ellipsis")
         }
         .visionMoreActionsMenu()
-        .accessibilityLabel(strings.t("plannedPage.menu"))
         .visionTooltip(strings.t("plannedPage.menu"))
+        .accessibilityLabel(strings.t("plannedPage.menu"))
     }
 
     private var addButton: some View {

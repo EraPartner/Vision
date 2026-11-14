@@ -121,6 +121,7 @@ public struct StatisticsView: View {
                             selection: Binding(
                                 get: { model.tab },
                                 set: { value in
+                                    model.selectTab(value)
                                     shell.replaceQuery("tab", with: value.rawValue)
                                 }),
                             values: StatisticsTab.allCases, title: { strings.t($0.labelKey) }

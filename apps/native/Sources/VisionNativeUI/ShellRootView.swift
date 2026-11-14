@@ -303,6 +303,8 @@ public struct ShellRootView: View {
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? .standard)
         .environment(\.visionFullEffects, model.nativeSettings?.fullEffects ?? false)
         .environment(\.colorScheme, theme.colorScheme)
+        // `<details>`: a click anywhere on a disclosure's title row toggles it, not only the chevron.
+        .disclosureGroupStyle(.vision)
     }
     private var shellBanners: some View {
         VStack(spacing: 0) { shellBannerStack }

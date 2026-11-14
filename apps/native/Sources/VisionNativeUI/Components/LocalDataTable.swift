@@ -160,6 +160,16 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                     Divider()
                 }
             }
+            // The end of the loaded rows. A row's `onAppear` fires once, so a page that was not
+            // asked for then (the rows appeared together, or a reload dropped the request) was
+            // never asked for again and the table stopped short of the total. This marker gets a
+            // new identity with every page, so reaching the end asks again until nothing is left.
+            if hasMore, let last = rows.last, let onRowAppear {
+                Color.clear.frame(height: 1)
+                    .id(rows.count)
+                    .onAppear { onRowAppear(last.id) }
+                    .accessibilityHidden(true)
+            }
             if isFetchingMore {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
