@@ -8,12 +8,6 @@ public struct HomeView: View {
     let shell: NativeShellModel
     @State private var customize = false
     @State private var diagnostics = false
-    @State private var heroSelection: String?
-    @State private var heroRange: String?
-    @State private var monthSelection: String?
-    @State private var monthRange: String?
-    @State private var netSelection: String?
-    @State private var netRange: String?
     @State private var windowWidth = InsightsBreakpoint.initialWidth
     @Environment(\.visionTheme) private var theme
 
@@ -465,9 +459,16 @@ public struct HomeView: View {
             }
         }
     }
+    /// The hovered month of the sparkline belongs to the card: a hover re-renders this card, not
+    /// the whole dashboard.
     private var summary: some View {
+        ChartSelectionScope { selection, rangeStart in
+            summaryCard(netSelection: selection, netRange: rangeStart)
+        }
+    }
+    private func summaryCard(netSelection: Binding<String?>, netRange: Binding<String?>) -> some View {
         let months = Array((model.monthly?.orderedMonths ?? []).filter { $0.transaction_count > 0 }.suffix(12))
-        let selected = months.first { $0.id == netSelection } ?? months.last
+        let selected = months.first { $0.id == netSelection.wrappedValue } ?? months.last
         let net = selected.map { $0.total_income - abs($0.total_spending) } ?? 0
         return card("dashboard.statCards", hero: net >= 0 ? .gain : .loss) {
             Text(strings.t("dashboard.stat.lastMonthNet")).font(.body.weight(.medium)).foregroundStyle(
@@ -495,7 +496,7 @@ public struct HomeView: View {
                 title: strings.t("dashboard.stat.netTrend", ["n": String(months.count)]),
                 areas: true, stackedAreas: false, height: 80,
                 customColors: ["net": net >= 0 ? theme.gain : theme.loss], sparkline: true,
-                selection: $netSelection, rangeStart: $netRange)
+                selection: netSelection, rangeStart: netRange)
             routeRow(
                 strings.t("dashboard.stat.lastMonthIncome"),
                 route: InsightsRoutes.drill(
@@ -567,17 +568,19 @@ public struct HomeView: View {
             fillsHeight: true
         ) {
             let months = Array((model.monthlyData(for: "monthlyTrends")?.orderedMonths ?? []).suffix(6))
-            InsightTimelineChart(
-                series: [
-                    InsightChartSeries(
-                        id: "income", label: strings.t("monthlyTrends.income"),
-                        points: months.map { InsightChartPoint(key: $0.id, value: $0.total_income) }),
-                    InsightChartSeries(
-                        id: "spending", label: strings.t("monthlyTrends.spending"),
-                        points: months.map { InsightChartPoint(key: $0.id, value: abs($0.total_spending)) }),
-                ], currency: currency, settings: settings, title: strings.t("monthlyTrends.title"),
-                bars: true, yAxis: .lengthAware, xLabels: .appMonthYear,
-                selection: $monthSelection, rangeStart: $monthRange)
+            ChartSelectionScope { selection, rangeStart in
+                InsightTimelineChart(
+                    series: [
+                        InsightChartSeries(
+                            id: "income", label: strings.t("monthlyTrends.income"),
+                            points: months.map { InsightChartPoint(key: $0.id, value: $0.total_income) }),
+                        InsightChartSeries(
+                            id: "spending", label: strings.t("monthlyTrends.spending"),
+                            points: months.map { InsightChartPoint(key: $0.id, value: abs($0.total_spending)) }),
+                    ], currency: currency, settings: settings, title: strings.t("monthlyTrends.title"),
+                    bars: true, yAxis: .lengthAware, xLabels: .appMonthYear,
+                    selection: selection, rangeStart: rangeStart)
+            }
             // `mt-6 grid grid-cols-2 gap-3`: the totals as two tinted tiles.
             HStack(spacing: 12) {
                 HomeTotalTile(

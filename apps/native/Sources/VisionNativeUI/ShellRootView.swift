@@ -82,7 +82,7 @@ public struct ShellRootView: View {
                 // never rebuilds it, resizes its Metal drawable or restarts its drift.
                 if isNativeDetail {
                     FrozenWidthLayout(width: frozenDetailWidth) { DetailGlassBackground() }
-                        .mask { Rectangle().padding(.vertical, -400) }
+                        .clipShape(ColumnSidewaysClip())
                 }
                 if case .native(let screen) = model.detail {
                     FrozenWidthLayout(width: frozenDetailWidth) {
@@ -117,8 +117,9 @@ public struct ShellRootView: View {
                         }
                     }
                     // Clip the page to its column sideways only: the canvas still runs up under
-                    // the titlebar strip.
-                    .mask { Rectangle().padding(.vertical, -400) }
+                    // the titlebar strip. A rectangular clip, not a mask: a mask view makes the
+                    // whole page an offscreen pass composited through the mask's alpha.
+                    .clipShape(ColumnSidewaysClip())
                 } else if case .notFound = model.detail {
                     NativePageZoomView(factor: model.pageZoom) {
                         NativeNotFoundView(shell: model)
@@ -920,6 +921,14 @@ struct FrozenWidthLayout: Layout {
         subview.place(
             at: CGPoint(x: bounds.maxX - laidOut, y: bounds.minY), anchor: .topLeading,
             proposal: ProposedViewSize(width: laidOut, height: bounds.height))
+    }
+}
+
+/// The column's rectangle, 400 pt taller at each end: it clips sideways and lets the canvas and
+/// page run up under the titlebar strip.
+struct ColumnSidewaysClip: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: 0, dy: -400))
     }
 }
 

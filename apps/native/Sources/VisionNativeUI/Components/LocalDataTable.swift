@@ -409,10 +409,8 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     // MARK: Rows
 
     private func rowView(_ row: Row) -> some View {
-        // `TableRow`'s `hover:bg-foreground/[0.03]`; the hover state stays in the row.
-        HoverTracking { hovered in
-            rowContent(row).background(theme.foreground.opacity(hovered ? 0.03 : 0))
-        }
+        // `TableRow`'s `hover:bg-foreground/[0.03]`; only the band redraws under the pointer.
+        RowHoverBand { rowContent(row) }
     }
 
     private func rowContent(_ row: Row) -> some View {
@@ -452,6 +450,41 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             .foregroundStyle(theme.secondaryLabel)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+    }
+}
+
+/// Whether the pointer is over a view. Only the view that draws the hover reads it.
+@Observable
+final class HoverFlag {
+    var inside = false
+}
+
+/// `hover:bg-foreground/[0.03]` behind its content. The content is built once by the caller and
+/// the hover state is read by the fill alone, so the pointer entering or leaving a row redraws
+/// one rectangle and never rebuilds the row's cells.
+struct RowHoverBand<Content: View>: View {
+    @State private var flag = HoverFlag()
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .background(RowHoverFill(flag: flag))
+            .onHover { inside in
+                if flag.inside != inside { flag.inside = inside }
+            }
+    }
+}
+
+private struct RowHoverFill: View {
+    let flag: HoverFlag
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        theme.foreground.opacity(flag.inside ? 0.03 : 0)
     }
 }
 

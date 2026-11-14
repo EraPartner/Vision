@@ -17,7 +17,21 @@ struct NativeTopbar: View {
     /// The page header's title (`usePageTitle`); the sidebar item's title when the page has none.
     var pageTitle: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.visionVisualEffects) private var visualEffects
     @Environment(\.visionTheme) private var theme
+
+    /// What the veil's gradient lies over: the blurred page, or the opaque `--card` on the reduced
+    /// tier and under Reduce Transparency (`:root.fx-reduced .app-topbar` and the
+    /// `prefers-reduced-transparency` block of index.css set `backdrop-filter: none` and
+    /// `background: hsl(var(--card))`), so those never blur the page scrolling under the bar.
+    @ViewBuilder private var veilBackdrop: some View {
+        if visualEffects == .reduced || reduceTransparency {
+            Rectangle().fill(theme.card)
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
+    }
 
     /// AppLayout's topbar `h-14`: the page content starts below it.
     static let barHeight: CGFloat = 56
@@ -60,7 +74,7 @@ struct NativeTopbar: View {
             // `.app-topbar::before` (index.css): a `--background` gradient (0.82 → 0.68 light,
             // 0.7 → 0.56 dark) over a 16 px backdrop blur, the bottom border (`--border` at 0.5 /
             // 0.7), the inset glass highlight and a soft drop shadow; hidden at scroll-top.
-            Rectangle().fill(.ultraThinMaterial)
+            veilBackdrop
                 .overlay(
                     LinearGradient(
                         colors: [

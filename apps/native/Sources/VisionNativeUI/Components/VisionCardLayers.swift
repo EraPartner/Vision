@@ -134,6 +134,11 @@ struct VisionCardLayerStyle: Equatable {
             for layer in shadowLayers { shadowHost.insertSublayer(layer, below: liftLayer) }
         }
         for (layer, shadow) in zip(shadowLayers, style.shadows) { Self.setShadow(layer, shadow) }
+        // An opaque fill (the reduced tier, Reduce Transparency) hides the shadow under the card
+        // by itself. The cut-out mask is an offscreen pass the size of the card on every
+        // composited frame, so only a translucent card keeps it.
+        let cutsOut = style.fillColors.contains { $0.alpha < 1 }
+        if cutsOut != (shadowHost.mask != nil) { shadowHost.mask = cutsOut ? shadowMask : nil }
         let fill = Self.premultipliedStops(colors: style.fillColors, locations: style.fillLocations)
         fillLayer.colors = fill.colors
         fillLayer.locations = fill.locations.map { NSNumber(value: $0) }

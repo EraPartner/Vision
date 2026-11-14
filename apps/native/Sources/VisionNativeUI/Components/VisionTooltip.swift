@@ -57,7 +57,8 @@ private struct VisionTooltipRequest {
     let locale: Locale
     let theme: VisionTheme
     let edge: Edge
-    weak var anchor: NSView?
+    /// The anchor view is made when the pointer enters, so it is read when the tooltip opens.
+    let anchor: VisionTooltipAnchorBox
 }
 
 /// Shows tooltips in a borderless, mouse-transparent child panel of the anchor's window, with the
@@ -93,6 +94,13 @@ final class VisionTooltipPresenter {
         let delay = skip ? Duration.zero : openDelay
         openTask = Task { [weak self, delay] in
             if delay > .zero { try? await Task.sleep(for: delay) }
+            // The anchor view joins the window in the update after the hover; without the open
+            // delay (another tooltip just closed) that can be a moment after this task starts.
+            var waits = 0
+            while !Task.isCancelled, self?.pendingAnchorIsInWindow == false, waits < 12 {
+                try? await Task.sleep(for: .milliseconds(8))
+                waits += 1
+            }
             guard !Task.isCancelled else { return }
             self?.presentPending()
         }
@@ -112,8 +120,10 @@ final class VisionTooltipPresenter {
         dismissPanel()
     }
 
+    private var pendingAnchorIsInWindow: Bool { pending?.anchor.view?.window != nil }
+
     private func presentPending() {
-        guard let request = pending, let anchor = request.anchor, let window = anchor.window else { return }
+        guard let request = pending, let anchor = request.anchor.view, let window = anchor.window else { return }
         let hosting = NSHostingView(
             rootView: AnyView(
                 VisionTooltipBubble(text: request.text, edge: request.edge, theme: request.theme)
@@ -218,15 +228,20 @@ private struct VisionTooltipModifier: ViewModifier {
     @Environment(\.visionTheme) private var theme
     @Environment(\.locale) private var locale
     @State private var anchor = VisionTooltipAnchorBox()
+    /// The pointer is over the view. The anchor is an AppKit view, and 70-odd controls carry a
+    /// tooltip (one in every ledger row), so it exists only while its control is hovered.
+    @State private var hovering = false
 
     func body(content: Content) -> some View {
         content
-            .background(VisionTooltipAnchor(box: anchor))
+            .background { if hovering { VisionTooltipAnchor(box: anchor) } }
             .onHover { inside in
                 let owner = ObjectIdentifier(anchor)
-                if inside && !isEmpty {
+                let show = inside && !isEmpty
+                if hovering != show { hovering = show }
+                if show {
                     VisionTooltipPresenter.shared.enter(
-                        VisionTooltipRequest(text: text, locale: locale, theme: theme, edge: edge, anchor: anchor.view),
+                        VisionTooltipRequest(text: text, locale: locale, theme: theme, edge: edge, anchor: anchor),
                         owner: owner)
                 } else {
                     VisionTooltipPresenter.shared.leave(owner: owner)
