@@ -18,10 +18,12 @@ struct VisionTextEditorStyle: ViewModifier {
     func body(content: Content) -> some View {
         VisionFieldChrome(
             isFocused: isFocused,
-            // `px-3` of the chrome minus the 5 pt `NSTextView` text container inset, so text lines up
-            // with a `VisionTextFieldStyle` field.
-            horizontalPadding: VisionControlMetrics.fieldHorizontalPadding - Self.textContainerInset,
-            verticalPadding: VisionControlMetrics.textAreaVerticalPadding - Self.textContainerInset,
+            // `px-3` of the chrome minus the 5 pt line fragment padding `NSTextView` adds on each
+            // side, so text lines up with a `VisionTextFieldStyle` field. That padding is horizontal
+            // only: the text view adds nothing above the first line, so `py-2` is taken in full.
+            // Taking 5 pt off it too put the caret and typed text 5 pt above the placeholder.
+            horizontalPadding: VisionControlMetrics.fieldHorizontalPadding - Self.lineFragmentPadding,
+            verticalPadding: VisionControlMetrics.textAreaVerticalPadding,
             minHeight: minHeight, alignment: .topLeading
         ) {
             content
@@ -31,8 +33,8 @@ struct VisionTextEditorStyle: ViewModifier {
         }
     }
 
-    /// The horizontal inset `NSTextView` adds around its text.
-    private static var textContainerInset: CGFloat { 5 }
+    /// The horizontal inset `NSTextView` adds on each side of its text (`lineFragmentPadding`).
+    private static var lineFragmentPadding: CGFloat { 5 }
 }
 
 /// The web `Textarea`'s `placeholder`: shown over an empty editor, in the field's font and inset,
