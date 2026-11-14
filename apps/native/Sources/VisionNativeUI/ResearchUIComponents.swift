@@ -181,19 +181,28 @@ struct ResearchSymbolSearchView: View {
                 Image(systemName: leadingSymbol).font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.secondaryLabel).frame(width: 14).accessibilityHidden(true)
             }
-            Text(item.symbol ?? "—").font(.callout.monospaced().weight(.medium)).frame(
-                minWidth: 64, alignment: .leading)
-            Text(item.name ?? "").font(.callout).foregroundStyle(theme.secondaryLabel).lineLimit(1)
+            // SymbolSearchResultItem: mono `type-body` ticker (`min-w-[5rem]`), the name in
+            // `type-body` secondary, the type as an outline `Badge size="sm"` and the exchange in
+            // `type-footnote`.
+            Text(item.symbol ?? "—")
+                .font(.system(size: CGFloat(DesignTokens.Typography.body.size), weight: .medium, design: .monospaced))
+                .frame(minWidth: 80, alignment: .leading)
+            Text(item.name ?? "").font(VisionFonts.font(DesignTokens.Typography.body, relativeTo: .body))
+                .foregroundStyle(theme.secondaryLabel).lineLimit(1)
             Spacer(minLength: 0)
             if let type = item.type, !type.isEmpty {
-                Text(type).font(.caption).padding(.horizontal, 6).padding(.vertical, 3)
-                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(theme.border))
+                VisionBadge(text: type, tone: .outline, small: true).fixedSize()
             }
             if let exchange = item.exchange, !exchange.isEmpty {
-                Text(exchange).font(.caption).foregroundStyle(theme.secondaryLabel)
+                Text(exchange).font(VisionFonts.font(DesignTokens.Typography.footnote, relativeTo: .footnote))
+                    .foregroundStyle(theme.secondaryLabel).fixedSize()
             }
-        }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? theme.foreground.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+        }
+        // `px-3 py-2.5 rounded-control`, `bg-foreground/[0.06]` while active.
+        .padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            selected ? theme.foreground.opacity(0.06) : .clear,
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
     }
     private func move(_ direction: Int) -> KeyPress.Result {
         guard isOpen, !isUnavailable, !navigable.isEmpty else { return .ignored }
