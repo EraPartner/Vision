@@ -31,17 +31,26 @@ struct NativeSettingsAppearanceTests {
             ]))
         #expect(malformed == defaults)
     }
-    @Test func fullEffectsDefaultsOffAndKeepsOnlyABooleanLikeTheSourceStore() {
-        // ADR-244: `AppSettings.fullEffects`, off by default, validated on its own.
-        #expect(!NativeAppSettings.defaults.fullEffects)
-        #expect(NativeSettingsDefaults.app["fullEffects"] == .bool(false))
-        #expect(NativeAppSettings.migrate(.object(["fullEffects": .bool(true)])).fullEffects)
-        #expect(!NativeAppSettings.migrate(.object(["fullEffects": .string("true")])).fullEffects)
-        #expect(!NativeAppSettings.migrate(.object(["fullEffects": .int(1)])).fullEffects)
-        // A stored blob without the key (older installs) migrates to off and keeps the other fields.
+    @Test func fullEffectsIsAutoByDefaultAndReadsTheOldBooleanLikeTheSourceStore() {
+        // ADR-255 (settingsStore.ts): `auto | on | off`, default `auto`; the pre-ADR-255 boolean
+        // reads as `on` for true and `auto` for false; anything else falls back to `auto`.
+        #expect(NativeAppSettings.defaults.fullEffects == .auto)
+        #expect(NativeSettingsDefaults.app["fullEffects"] == .string("auto"))
+        #expect(NativeAppSettings.migrate(.object(["fullEffects": .bool(true)])).fullEffects == .on)
+        #expect(NativeAppSettings.migrate(.object(["fullEffects": .bool(false)])).fullEffects == .auto)
+        #expect(NativeAppSettings.migrate(.object(["fullEffects": .string("off")])).fullEffects == .off)
+        #expect(NativeAppSettings.migrate(.object(["fullEffects": .string("true")])).fullEffects == .auto)
+        #expect(NativeAppSettings.migrate(.object(["fullEffects": .int(1)])).fullEffects == .auto)
+        // A stored blob without the key (older installs) migrates to auto and keeps the other fields.
         let migrated = NativeSettingsDefaults.migrateApp(.object(["visualEffects": .string("enhanced")]))
-        #expect(migrated["fullEffects"] == .bool(false) && migrated["visualEffects"] == .string("enhanced"))
-        #expect(NativeSettingsDefaults.appValue("fullEffects", raw: .object(["fullEffects": .string("on")])) == .bool(false))
+        #expect(migrated["fullEffects"] == .string("auto") && migrated["visualEffects"] == .string("enhanced"))
+        #expect(NativeSettingsDefaults.appValue("fullEffects", raw: .object(["fullEffects": .bool(true)])) == .string("on"))
+        // `resolveFullEffects`: auto follows the chosen tier, on Standard only.
+        #expect(FullEffectsChoice.auto.resolved(chosenTier: .standard))
+        #expect(!FullEffectsChoice.auto.resolved(chosenTier: .enhanced))
+        #expect(!FullEffectsChoice.auto.resolved(chosenTier: .reduced))
+        #expect(FullEffectsChoice.on.resolved(chosenTier: .reduced))
+        #expect(!FullEffectsChoice.off.resolved(chosenTier: .standard))
     }
     @Test func explicitAndSystemModesRetainVariantAccentAndGainLossSkin() {
         var settings = NativeAppSettings.defaults

@@ -19,30 +19,57 @@ struct NativeAPIInspectorOverlay: View {
         .animation(.easeOut(duration: 0.2), value: model.isOpen)
     }
 
-    /// InspectorToggle: pulses in the warning colour while requests are in flight.
+    /// InspectorToggle: `Button variant="outline" size="sm"` made a pill (`rounded-full font-mono
+    /// type-footnote shadow-elevation-2`), secondary text that turns foreground on hover, a
+    /// `primary/50` border and primary text while open, and the Activity glyph pulsing in the
+    /// warning colour with the in-flight count while requests run.
     private var toggle: some View {
         Button {
             model.toggle()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "waveform.path.ecg")
-                    .symbolEffect(.pulse, isActive: !model.inFlight.isEmpty)
-                    .foregroundStyle(model.inFlight.isEmpty ? Color.primary : theme.warning)
-                Text("API").font(.caption.weight(.semibold))
-                if !model.inFlight.isEmpty {
-                    Text(String(model.inFlight.count)).font(.caption.monospacedDigit()).foregroundStyle(theme.warning)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(.regularMaterial))
-            .overlay(Capsule().strokeBorder(model.isOpen ? theme.primary : Color.secondary.opacity(0.3)))
+            NativeAPIInspectorToggleLabel(isOpen: model.isOpen, inFlight: model.inFlight.count)
         }
         .buttonStyle(.plain)
         .keyboardShortcut("a", modifiers: [.command, .shift])
         .help("Toggle API Inspector (⌘⇧A)")
         .accessibilityLabel("Toggle API Inspector (⌘⇧A)")
         .accessibilityAddTraits(model.isOpen ? .isSelected : [])
+    }
+}
+
+private struct NativeAPIInspectorToggleLabel: View {
+    let isOpen: Bool
+    let inFlight: Int
+    @State private var hovering = false
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        let pending = inFlight > 0
+        let text = isOpen ? theme.primary : hovering ? theme.foreground : theme.secondaryLabel
+        HStack(spacing: 6) {
+            Image(systemName: "waveform.path.ecg").font(.system(size: 11, weight: .medium))
+                .symbolEffect(.pulse, isActive: pending)
+                .foregroundStyle(pending ? theme.warning : text)
+                .accessibilityHidden(true)
+            Text(verbatim: "API")
+            if pending {
+                Text(String(inFlight)).monospacedDigit().foregroundStyle(theme.warning)
+            }
+        }
+        .font(.system(size: 12, design: .monospaced))
+        .foregroundStyle(text)
+        .padding(.horizontal, 12)
+        .frame(height: VisionControlMetrics.heightSm)
+        .background(
+            Capsule().fill(Color(token: theme.palette.background, opacity: hovering ? 1 : 0.8))
+                .visionElevation(DesignTokens.Elevation.level2))
+        .overlay(
+            Capsule().strokeBorder(
+                isOpen ? theme.primary.opacity(0.5) : Color(token: theme.palette.input, opacity: 0.7),
+                lineWidth: VisionControlMetrics.borderWidth))
+        .contentShape(Capsule())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: DesignTokens.Duration.fast), value: hovering)
     }
 }
 
@@ -53,45 +80,71 @@ private struct NativeAPIInspectorPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
-            Picker("", selection: $model.tab) {
-                Text("Requests").tag(NativeAPIInspectorModel.Tab.requests)
-                Text("Metrics").tag(NativeAPIInspectorModel.Tab.metrics)
-                Text("Queries").tag(NativeAPIInspectorModel.Tab.queries)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(8)
+            Rectangle().fill(theme.border).frame(height: 1)
+            tabs
             switch model.tab {
             case .requests: requests
             case .metrics: NativeAPIMetricsView(model: model)
             case .queries: NativeAPIQueriesView(model: model)
             }
         }
+        // `rounded-card border border-border bg-background shadow-elevation-4`, 520 × 480.
         .frame(width: 520, height: 480)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.regularMaterial))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.secondary.opacity(0.25)))
-        .shadow(radius: 16, y: 6)
+        .background(shape.fill(Color(token: theme.palette.background)))
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(theme.border, lineWidth: 1))
+        .background(shape.fill(Color(token: theme.palette.background)).visionElevation(DesignTokens.Elevation.level4))
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card), style: .continuous)
+    }
+
+    /// The `TabsList`: `h-8 px-2 border-b border-border`, each trigger `h-7 px-3 type-footnote`
+    /// with a 2 pt primary underline while active.
+    private var tabs: some View {
+        HStack(spacing: 0) {
+            ForEach(NativeAPIInspectorModel.Tab.allCases, id: \.self) { tab in
+                let active = model.tab == tab
+                let title = tab.rawValue.prefix(1).uppercased() + tab.rawValue.dropFirst()
+                Button {
+                    model.tab = tab
+                } label: {
+                    Text(verbatim: title).font(.footnote)
+                        .foregroundStyle(active ? theme.foreground : theme.secondaryLabel)
+                        .padding(.horizontal, 12).frame(height: 28)
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(active ? theme.primary : .clear).frame(height: 2)
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8).frame(height: 32)
+        .overlay(alignment: .bottom) { Rectangle().fill(theme.border).frame(height: 1) }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("API Inspector").font(.headline)
+            Text(verbatim: "API Inspector").font(.headline).foregroundStyle(theme.foreground)
             if !model.inFlight.isEmpty {
-                Text("\(model.inFlight.count) in-flight").font(.caption)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(theme.warning.opacity(0.18)))
-                    .foregroundStyle(theme.warning)
+                VisionBadge(text: "\(model.inFlight.count) in-flight", tone: .warning, small: true, monospaced: true)
             } else if !(model.log.isEmpty && model.inFlight.isEmpty) {
-                Text("\(model.log.count + model.inFlight.count) requests").font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(verbatim: "\(model.log.count + model.inFlight.count) requests")
+                    .font(.system(size: 11, design: .monospaced)).monospacedDigit()
+                    .foregroundStyle(theme.secondaryLabel)
             }
             Spacer()
-            Button { model.isOpen = false } label: { Image(systemName: "minus") }
-                .buttonStyle(.borderless).help("Minimise").accessibilityLabel("Minimise")
-            Button { model.isOpen = false } label: { Image(systemName: "xmark") }
-                .buttonStyle(.borderless).help("Close").accessibilityLabel("Close")
+            HStack(spacing: 4) {
+                Button { model.isOpen = false } label: { Image(systemName: "minus") }
+                    .help("Minimise").accessibilityLabel("Minimise")
+                Button { model.isOpen = false } label: { Image(systemName: "xmark") }
+                    .help("Close").accessibilityLabel("Close")
+            }
+            .buttonStyle(.vision(.ghost, size: .iconXs))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -107,7 +160,7 @@ private struct NativeAPIInspectorPanel: View {
                     .padding(.bottom, 6)
                 let events = model.visibleEvents
                 if events.isEmpty {
-                    Text("No requests yet").foregroundStyle(.secondary)
+                    Text("No requests yet").foregroundStyle(theme.secondaryLabel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(events) { event in
@@ -140,7 +193,7 @@ private struct NativeAPIRequestRow: View {
             Text(event.method.rawValue).font(.caption.monospaced()).frame(width: 56, alignment: .leading)
                 .foregroundStyle(methodColor)
             Text(event.endpoint).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
-                .foregroundStyle(event.phase == .error ? theme.loss : Color.primary)
+                .foregroundStyle(event.phase == .error ? theme.loss : theme.foreground)
             Spacer(minLength: 4)
             if event.phase == .start {
                 Text("…").foregroundStyle(theme.warning).symbolEffect(.pulse)
@@ -151,7 +204,7 @@ private struct NativeAPIRequestRow: View {
                 }
                 if let duration = event.durationMs {
                     Text(NativeAPIInspectorFormat.duration(duration)).font(.caption.monospacedDigit())
-                        .foregroundStyle(duration >= 1000 ? theme.warning : Color.secondary)
+                        .foregroundStyle(duration >= 1000 ? theme.warning : theme.secondaryLabel)
                 }
             }
         }
@@ -161,11 +214,11 @@ private struct NativeAPIRequestRow: View {
 
     private var methodColor: Color {
         switch event.method {
-        case .get: return .blue
-        case .post: return theme.gain
+        case .get: return theme.info
+        case .post: return theme.success
         case .put, .patch: return theme.warning
-        case .delete: return theme.loss
-        case .head, .options: return .secondary
+        case .delete: return theme.destructive
+        case .head, .options: return theme.secondaryLabel
         }
     }
 }
@@ -188,7 +241,7 @@ private struct NativeAPIRequestDetail: View {
                 VStack(alignment: .leading, spacing: 6) {
                     row("Method", event.method.rawValue)
                     row("Endpoint", event.endpoint)
-                    row("Request ID", event.requestId, color: .secondary)
+                    row("Request ID", event.requestId, color: theme.secondaryLabel)
                     row("Status", event.status.map(String.init) ?? "—", color: statusColor)
                     row(
                         "Duration", event.durationMs.map { String(format: "%.1f ms", $0) } ?? "—",
@@ -207,10 +260,10 @@ private struct NativeAPIRequestDetail: View {
         return status < 300 ? theme.gain : status < 400 ? theme.warning : theme.loss
     }
 
-    private func row(_ label: String, _ value: String, color: Color = .primary) -> some View {
+    private func row(_ label: String, _ value: String, color: Color? = nil) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-            Text(value).font(.caption.monospaced()).foregroundStyle(color).textSelection(.enabled)
+            Text(label).font(.caption2).foregroundStyle(theme.secondaryLabel)
+            Text(value).font(.caption.monospaced()).foregroundStyle(color ?? theme.foreground).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -256,7 +309,7 @@ private struct NativeAPIMetricsView: View {
                             Spacer()
                             Text("\(stats.count)×").font(.caption.monospacedDigit())
                             Text("p95:\(Int(stats.p95.rounded()))ms").font(.caption.monospacedDigit())
-                                .foregroundStyle(stats.p95 >= 1000 ? theme.warning : Color.secondary)
+                                .foregroundStyle(stats.p95 >= 1000 ? theme.warning : theme.secondaryLabel)
                             if stats.errorCount > 0 {
                                 Text("\(stats.errorCount)err").font(.caption.monospacedDigit()).foregroundStyle(theme.loss)
                             }
@@ -272,14 +325,15 @@ private struct NativeAPIMetricsView: View {
 
     private func stat(_ title: String, _ value: String, sub: String?, warn: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.caption).foregroundStyle(theme.secondaryLabel)
             Text(value).font(.title3.monospacedDigit().weight(.semibold))
-                .foregroundStyle(warn ? theme.warning : Color.primary)
-            if let sub { Text(sub).font(.caption2).foregroundStyle(.secondary) }
+                .foregroundStyle(warn ? theme.warning : theme.foreground)
+            if let sub { Text(sub).font(.caption2).foregroundStyle(theme.secondaryLabel) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
+        // A compact `Card`.
+        .visionCardBackground()
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -299,7 +353,7 @@ private struct NativeAPIQueriesView: View {
     var body: some View {
         let entries = model.sortedQueries
         if entries.isEmpty {
-            Text("No queries yet").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text("No queries yet").foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             List(entries) { entry in
                 VStack(alignment: .leading, spacing: 2) {
@@ -316,7 +370,7 @@ private struct NativeAPIQueriesView: View {
                         }
                     }
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.secondaryLabel)
                     if let error = entry.lastError {
                         Text(error).font(.caption2).foregroundStyle(theme.loss).lineLimit(2)
                     }
@@ -328,7 +382,7 @@ private struct NativeAPIQueriesView: View {
     }
 
     private func color(_ entry: NativeAPIInspectorModel.QueryEntry) -> Color {
-        if entry.isFetching { return .blue }
+        if entry.isFetching { return theme.info }
         return entry.lastError == nil ? theme.gain : theme.loss
     }
 }

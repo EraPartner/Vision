@@ -148,12 +148,17 @@ public final class NativeSettingsModel {
             sessionTierOverride = nil
         }
     }
-    /// `AppSettings.fullEffects` (ADR-244, `useFullEffects`): restores the effects that were turned
-    /// down to save GPU work. Off until the stored value says otherwise; the design layer reads this.
-    public var fullEffects: Bool { appBool("fullEffects", fallback: false) }
+    /// `AppSettings.fullEffects` as stored (ADR-255): `auto`, `on` or `off`.
+    public var fullEffectsChoice: FullEffectsChoice {
+        FullEffectsChoice(stored: NativeSettingsDefaults.appValue("fullEffects", raw: appRaw)) ?? .auto
+    }
+    /// `useFullEffects` (ADR-244, ADR-255): restores the effects that were turned down to save GPU
+    /// work. `auto` (the default) is on for the chosen Standard tier; the design layer reads this.
+    public var fullEffects: Bool { fullEffectsChoice.resolved(chosenTier: visualEffects) }
+    /// The Appearance switch writes the user's explicit choice (`v ? 'on' : 'off'`).
     public func setFullEffects(_ enabled: Bool) {
         guard !retired, !isSuspendedForRestore else { return }
-        updateApp(["fullEffects": .bool(enabled)])
+        updateApp(["fullEffects": .string((enabled ? FullEffectsChoice.on : .off).rawValue)])
     }
     public func setAutoAdaptDisplay(_ enabled: Bool) {
         guard !retired, !isSuspendedForRestore else { return }

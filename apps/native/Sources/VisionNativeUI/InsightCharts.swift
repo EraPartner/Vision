@@ -4,7 +4,9 @@ import VisionNativeCore
 
 /// How a timeline chart writes its value-axis ticks: `formatAxisCompact` ("6,5k €") or the full
 /// currency format with the app's decimal places (`formatCurrency`).
-enum InsightYAxisFormat { case compact, full }
+/// `compact` is `formatAxisCompact`, `lengthAware` is `formatCompact` (full while short), `full`
+/// the plain currency format.
+enum InsightYAxisFormat { case compact, lengthAware, full }
 
 /// How a timeline chart writes its x-axis ticks: `CHART_DATE_PATTERNS.monthTick` ("Nov 24"),
 /// `formatMonthYearWithAppSettings` ("05/2026"), the day number of a month ("2", "4", ...) or
@@ -439,6 +441,10 @@ struct InsightTimelineChart: View {
         case .compact:
             return VisionFormat.currencyAxisCompact(
                 Decimal(number), code: currency, locale: settings.numberFormat.locale)
+        case .lengthAware:
+            return VisionFormat.currencyCompact(
+                Decimal(number), code: currency, locale: settings.numberFormat.locale,
+                fractionDigits: settings.showDecimalPlaces)
         case .full:
             return VisionFormat.currency(
                 Decimal(number), code: currency, locale: settings.numberFormat.locale,
@@ -520,6 +526,7 @@ struct HomeCategoryChart: View {
     @State private var selectedCount: Int?
     @State private var selectedId: String?  // lint:allow raw-id view selection key of chart series, not an API entity
     @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var selected: HomeCategorySlice? { slices.first { $0.id == selectedId } }
 
@@ -542,7 +549,8 @@ struct HomeCategoryChart: View {
                 Chart(slices) { slice in
                     SectorMark(
                         angle: .value(slice.name, slice.count), innerRadius: .ratio(0.6),
-                        outerRadius: .ratio(selectedId == slice.id ? 1 : 0.93), angularInset: 2
+                        outerRadius: .ratio(DonutHoverMotion.outer(hovered: selectedId == slice.id, reduceMotion: reduceMotion)),
+                        angularInset: 2
                     )
                     .foregroundStyle(by: .value(strings.t("categories.title"), slice.name))
                     .accessibilityLabel(slice.name).accessibilityValue(String(slice.count))
@@ -557,8 +565,11 @@ struct HomeCategoryChart: View {
                             Text(selected.name).font(.caption).multilineTextAlignment(.center)
                             Text(String(selected.count)).font(.title2.monospacedDigit())
                         }.frame(maxWidth: 120)
+                            .id(selected.id)
+                            .transition(DonutHoverMotion.center(reduceMotion: reduceMotion))
                     }
                 }
+                .animation(DonutHoverMotion.arc(reduceMotion: reduceMotion), value: selectedId)
                 .frame(height: 232)
                 .chartOverlay { proxy in
                     GeometryReader { geometry in

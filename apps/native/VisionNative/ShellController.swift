@@ -1268,6 +1268,7 @@ final class ShellController: NSObject, NSWindowDelegate {
         self.container = container
         self.effectView = effectView
         self.launchView = launchView
+        Self.layoutTrafficLights(window)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
@@ -1424,6 +1425,7 @@ final class ShellController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResize(_ notification: Notification) {
+        if let window { Self.layoutTrafficLights(window) }
         scheduleFrameSave()
         resolveNativeSettingsAppearance()
     }
@@ -1438,7 +1440,41 @@ final class ShellController: NSObject, NSWindowDelegate {
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
+        if let window { Self.layoutTrafficLights(window) }
         scheduleFrameSave()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        if let window { Self.layoutTrafficLights(window) }
+    }
+
+    /// Electron's `trafficLightPosition: { x: 20, y: 20 }` (packaging/electron/main.ts): the
+    /// close button's top-left corner 20 pt in from the window's left and top edges, so the
+    /// buttons sit on the 56 pt topbar's centre line beside the sidebar trigger. AppKit lays the
+    /// titlebar out again on resize, key changes and full-screen exit, so this runs after each.
+    /// The titlebar container grows to hold them; the content layout (safe area) is unchanged.
+    static func layoutTrafficLights(_ window: NSWindow) {
+        guard !window.styleMask.contains(.fullScreen),
+            let close = window.standardWindowButton(.closeButton),
+            let titlebar = close.superview, let container = titlebar.superview
+        else { return }
+        let inset = CGPoint(x: 20, y: 20)
+        let buttonHeight = close.frame.height
+        let height = buttonHeight + inset.y * 2
+        var frame = container.frame
+        frame.size.height = height
+        frame.origin.y = window.frame.height - height
+        container.frame = frame
+        titlebar.frame = container.bounds
+        // AppKit's own spacing between the buttons is kept.
+        let spacing =
+            (window.standardWindowButton(.miniaturizeButton)?.frame.minX ?? close.frame.maxX + 6) - close.frame.minX
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        for (index, type) in buttons.enumerated() {
+            guard let button = window.standardWindowButton(type) else { continue }
+            button.setFrameOrigin(
+                NSPoint(x: inset.x + CGFloat(index) * spacing, y: inset.y))
+        }
     }
 
     private func scheduleFrameSave() {

@@ -245,17 +245,18 @@ struct NativeSettingsModelTests {
         await model.flush()
         #expect(await transport.writes.count == 1)
     }
-    @Test func fullEffectsIsAnObservablePersistedSettingThatDefaultsOff() async throws {
+    @Test func fullEffectsIsAnObservablePersistedSettingThatFollowsStandardByDefault() async throws {
         let transport = NativeSettingsFixture()
         let model = settingsModel(transport)
         await model.load()
-        #expect(!model.fullEffects)
-        model.setFullEffects(true)
-        #expect(model.fullEffects && model.appValue("fullEffects") == .bool(true))
-        await model.flush()
-        #expect(await transport.value("app_settings")?["fullEffects"] == .bool(true))
+        // `auto` on the default Standard tier is on (ADR-255).
+        #expect(model.fullEffectsChoice == .auto && model.fullEffects)
         model.setFullEffects(false)
-        #expect(!model.fullEffects)
+        #expect(!model.fullEffects && model.appValue("fullEffects") == .string("off"))
+        await model.flush()
+        #expect(await transport.value("app_settings")?["fullEffects"] == .string("off"))
+        model.setFullEffects(true)
+        #expect(model.fullEffects && model.fullEffectsChoice == .on)
     }
     @Test func editsDuringForcedReadAreNotOverwrittenByEarlierSnapshot() async throws {
         let transport = NativeSettingsFixture(values: [

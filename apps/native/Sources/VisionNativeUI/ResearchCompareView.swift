@@ -15,7 +15,7 @@ public struct ResearchCompareView: View {
             VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 VisionPageHeader(
                     title: strings.t("research.compare.title"), subtitle: strings.t("research.compare.subtitle"),
-                    symbol: "chart.line.uptrend.xyaxis")
+                    symbol: VisionPageSymbol.of("/research/compare", fallback: "arrow.triangle.swap"))
                 VStack(alignment: .leading, spacing: 10) {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 8) { selectedSymbols }
@@ -47,7 +47,8 @@ public struct ResearchCompareView: View {
                 if model.state.symbols.isEmpty {
                     ResearchCard {
                         VisionEmptyState(
-                            symbol: "chart.line.uptrend.xyaxis", title: strings.t("research.compare.startTitle"),
+                            symbol: VisionPageSymbol.of("/research/compare", fallback: "arrow.triangle.swap"),
+                            title: strings.t("research.compare.startTitle"),
                             description: strings.t("research.compare.startHint")
                         ) {}.padding(.vertical, 28)
                     }

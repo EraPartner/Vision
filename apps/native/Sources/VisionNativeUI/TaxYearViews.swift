@@ -37,13 +37,14 @@ struct TaxYearSwitcherView: View {
         ).sorted(by: >)
     }
     var body: some View {
-        Menu {
-            Text(strings.t("tax.yearSwitcher.menuLabel"))
+        VisionMenu {
+            VisionMenuLabel(text: strings.t("tax.yearSwitcher.menuLabel"))
+            Divider()
             ForEach(years, id: \.self) { year in
                 Button {
                     shell.replaceQuery("year", with: String(year))
                 } label: {
-                    Label(String(year) + " · " + strings.t(badge(year)), systemImage: symbol(year))
+                    yearRow(year)
                 }
             }
             if overview.isHistorical && !overview.hasSnapshot {
@@ -64,27 +65,48 @@ struct TaxYearSwitcherView: View {
                     .accessibilityHidden(true)
             }
         }
-        .menuStyle(.button)
         .buttonStyle(.vision(.outline))
-        .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("tax.yearSwitcher.trigger"))
         .disabled(actions.isSaving)
     }
+    /// One `DropdownMenuItem` (`min-w-[240px]`): the year, its status icon, and the status badge.
+    private func yearRow(_ year: Int) -> some View {
+        let filed = meta(year)["filing"]?.objectValue != nil
+        let frozen = meta(year)["frozenCalculation"]?.objectValue != nil
+        let active = year == overview.year
+        return HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Text(String(year)).monospacedDigit()
+                    .fontWeight(active ? .medium : .regular)
+                    .foregroundStyle(active ? theme.foreground : theme.foreground.opacity(0.85))
+                // `TaxYearStatusIcon`: a lock when filed, a snowflake when frozen.
+                if filed {
+                    Image(systemName: "lock").font(.system(size: 10)).foregroundStyle(theme.warning)
+                } else if frozen {
+                    Image(systemName: "snowflake").font(.system(size: 10)).foregroundStyle(theme.info)
+                }
+            }
+            Spacer(minLength: 0)
+            if let badge = badge(year) {
+                VisionBadge(text: strings.t(badge.key), tone: badge.tone, small: true)
+            }
+        }
+        .frame(minWidth: 216, alignment: .leading)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
     private func meta(_ year: Int) -> TaxValue {
         overview.snapshotMetas[String(year)].flatMap { try? TaxValue(encoding: $0) } ?? .object([:])
     }
-    private func badge(_ year: Int) -> String {
-        if year == overview.liveYear { return "tax.yearSwitcher.currentBadge" }
-        if meta(year)["filing"]?.objectValue != nil { return "tax.yearSwitcher.filedBadge" }
-        if meta(year)["frozenCalculation"]?.objectValue != nil { return "tax.yearSwitcher.frozenBadge" }
-        if overview.householdSnapshots[String(year)] != nil { return "tax.yearSwitcher.snapshotBadge" }
-        return "tax.yearSwitcher.transactionsBadge"
-    }
-    private func symbol(_ year: Int) -> String {
-        if meta(year)["filing"]?.objectValue != nil { return "lock" }
-        if meta(year)["frozenCalculation"]?.objectValue != nil { return "snowflake" }
-        return year == overview.year ? "checkmark" : "calendar"
+    /// `YearStatusBadge`, by precedence: current (unless filed) > filed > frozen > saved > data only.
+    private func badge(_ year: Int) -> (key: String, tone: BadgeTone)? {
+        let filed = meta(year)["filing"]?.objectValue != nil
+        if year == overview.liveYear && !filed { return ("tax.yearSwitcher.currentBadge", .primary) }
+        if filed { return ("tax.yearSwitcher.filedBadge", .warning) }
+        if meta(year)["frozenCalculation"]?.objectValue != nil { return ("tax.yearSwitcher.frozenBadge", .outline) }
+        if overview.householdSnapshots[String(year)] != nil { return ("tax.yearSwitcher.snapshotBadge", .secondary) }
+        if availableYears.contains(year) { return ("tax.yearSwitcher.transactionsBadge", .muted) }
+        return nil
     }
 }
 

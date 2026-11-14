@@ -18,7 +18,8 @@ public struct ResearchDossiersView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VisionPageHeader(
-                    title: strings.t("dossiers.title"), subtitle: strings.t("dossiers.subtitle"), symbol: "folder"
+                    title: strings.t("dossiers.title"), subtitle: strings.t("dossiers.subtitle"),
+                    symbol: VisionPageSymbol.of("/research/dossiers", fallback: "book")
                 ) {
                     Menu {
                         Button(strings.t("dossiers.exportAll"), systemImage: "arrow.down.doc") {

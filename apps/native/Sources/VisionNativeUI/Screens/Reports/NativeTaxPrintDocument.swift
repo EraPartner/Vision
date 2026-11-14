@@ -80,7 +80,7 @@ public struct NativeTaxPrintSectionView: View {
         case .header:
             VisionPageHeader(
                 title: strings.t("tax.page.title"),
-                subtitle: strings.t("tax.page.subtitle", ["year": String(snapshot.year)]), symbol: "percent"
+                subtitle: strings.t("tax.page.subtitle", ["year": String(snapshot.year)]), symbol: TaxOverviewView.symbol
             ) { EmptyView() }
         case .masthead:
             TaxMastheadView(overview: overview, actions: presentation.actions, shell: shell)

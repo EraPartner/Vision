@@ -304,7 +304,9 @@ public struct NativeNetWorthPrintSectionView: View {
     public var body: some View {
         switch section {
         case .header:
-            VisionPageHeader(title: strings.t("networth.title"), subtitle: "", symbol: "chart.line.uptrend.xyaxis") {}
+            VisionPageHeader(
+                title: strings.t("networth.title"), subtitle: "",
+                symbol: VisionPageSymbol.of("/portfolio/net-worth", fallback: "wallet.pass")) {}
         case .emptyState:
             AdminCard {
                 Text(strings.t("networth.emptyTitle")).font(.headline)

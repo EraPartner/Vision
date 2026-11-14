@@ -118,13 +118,15 @@ struct NativeSettingsAboutView: View {
         NativeSettingsSection(title: strings.t("settings.section.about")) {
             NativeSettingsGroup {
                 HStack(spacing: 16) {
-                    Image(systemName: "eye.fill").font(.system(size: 28)).foregroundStyle(theme.primaryForeground)
+                    // `VisionMark` (`h-8 w-8`) on the `bg-primary` 56 pt tile.
+                    VisionBrandMark().fill(theme.primaryForeground).frame(width: 32, height: 32)
                         .frame(width: 56, height: 56).background(
                             theme.primary,
                             in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                         ).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(model.appName).font(.visionCardTitle)
+                        // `APP_NAME` (lib/appIdentity.ts): the product name, not the bundle variant.
+                        Text(verbatim: "Vision").font(.visionCardTitle)
                         Text(strings.t("settings.app.version", ["version": model.version ?? "—"])).font(.body)
                             .foregroundStyle(theme.secondaryLabel)
                         Text(strings.t("settings.app.license", ["license": model.license])).font(.footnote)
@@ -132,11 +134,18 @@ struct NativeSettingsAboutView: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 8) {
+                        // The label, then the `ExternalLink` icon.
                         Link(destination: NativeSettingsAboutModel.repositoryURL) {
-                            Label(strings.t("settings.app.sourceCode"), systemImage: "arrow.up.right")
+                            HStack(spacing: 6) {
+                                Text(strings.t("settings.app.sourceCode"))
+                                Image(systemName: "arrow.up.forward.square").imageScale(.small).accessibilityHidden(true)
+                            }
                         }
                         Link(destination: NativeSettingsAboutModel.documentationURL) {
-                            Label(strings.t("settings.app.documentation"), systemImage: "arrow.up.right")
+                            HStack(spacing: 6) {
+                                Text(strings.t("settings.app.documentation"))
+                                Image(systemName: "arrow.up.forward.square").imageScale(.small).accessibilityHidden(true)
+                            }
                         }
                     }.buttonStyle(.visionOutline)
                 }.padding(24)

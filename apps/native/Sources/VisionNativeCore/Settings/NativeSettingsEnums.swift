@@ -140,3 +140,42 @@ public enum VisualEffects: Codable, Hashable, Sendable, CaseIterable, RawReprese
         try container.encode(rawValue)
     }
 }
+
+/// `AppSettings.fullEffects` (`FullEffectsChoice`, settingsStore.ts; ADR-255): `auto` follows the
+/// tier the user chose, `on` and `off` are the user's own choice from the Appearance switch.
+public enum FullEffectsChoice: String, Codable, Hashable, Sendable, CaseIterable {
+    case auto
+    case on
+    case off
+
+    /// The stored value as the web store reads it: a choice, or the pre-ADR-255 boolean. A stored
+    /// `false` cannot be told apart from the old untouched default, so it becomes `auto`; `true` is
+    /// `on`. Anything else is `nil` (the caller falls back to the default).
+    public init?(stored: TaxValue?) {
+        self.init(raw: stored?.stringValue, flag: stored?.boolValue)
+    }
+
+    /// The same reading of the settings blob's JSON field.
+    public init?(stored: JSONValue?) {
+        self.init(raw: stored?.stringValue, flag: stored?.boolValue)
+    }
+
+    private init?(raw: String?, flag: Bool?) {
+        if let raw, let choice = Self(rawValue: raw) {
+            self = choice
+        } else if let flag {
+            self = flag ? .on : .auto
+        } else {
+            return nil
+        }
+    }
+
+    /// `resolveFullEffects`: `auto` is on for the chosen Standard tier only (not the display-capped one).
+    public func resolved(chosenTier: VisualEffects) -> Bool {
+        switch self {
+        case .auto: return chosenTier == .standard
+        case .on: return true
+        case .off: return false
+        }
+    }
+}

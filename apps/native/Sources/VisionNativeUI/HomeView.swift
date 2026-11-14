@@ -1,3 +1,4 @@
+import AppKit
 import Charts
 import SwiftUI
 import VisionNativeCore
@@ -575,7 +576,7 @@ public struct HomeView: View {
                         id: "spending", label: strings.t("monthlyTrends.spending"),
                         points: months.map { InsightChartPoint(key: $0.id, value: abs($0.total_spending)) }),
                 ], currency: currency, settings: settings, title: strings.t("monthlyTrends.title"),
-                bars: true, xLabels: .appMonthYear,
+                bars: true, yAxis: .lengthAware, xLabels: .appMonthYear,
                 selection: $monthSelection, rangeStart: $monthRange)
             // `mt-6 grid grid-cols-2 gap-3`: the totals as two tinted tiles.
             HStack(spacing: 12) {
@@ -925,6 +926,10 @@ private struct HomeWidgetsSheet: View {
     let strings: any Localizing
     @Environment(\.visionDismissDialog) private var dismiss
     @Environment(\.visionTheme) private var theme
+    /// The list's natural height; the dialog is as tall as its content, as the web's is.
+    @State private var listHeight: CGFloat = 0
+    /// `max-h-[60vh] overflow-y-auto`: the list scrolls only past 60 % of the window's height.
+    private var maxListHeight: CGFloat { (NSApp.keyWindow?.frame.height ?? 1050) * 0.6 }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
@@ -963,8 +968,10 @@ private struct HomeWidgetsSheet: View {
                     }
                 }
                 .visionCardBackground()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in listHeight = height }
             }
-            .frame(height: 420)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: listHeight > 0 ? min(listHeight, maxListHeight) : nil)
             if let error = model.widgetError {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(strings.t("settings.saveFailed")).foregroundStyle(theme.destructive)

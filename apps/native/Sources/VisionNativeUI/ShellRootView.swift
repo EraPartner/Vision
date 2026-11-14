@@ -17,8 +17,8 @@ public struct ShellRootView: View {
     /// the crossing is stored: a per-pixel offset here would re-run the whole shell body (and
     /// re-diff the sidebar) on every scroll tick and every resize frame of the sidebar animation.
     @State private var pageScrolled = false
-    /// The titlebar strip the topbar occupies.
-    @State private var titlebarHeight: CGFloat = 28
+    @State private var pageVeiled = false
+    @State private var pageTitle: String?
     /// The titlebar safe area the detail column really receives (zero when the window has no
     /// toolbar), so the topbar clearance only adds what the system does not already reserve.
     @State private var titlebarSafeInset: CGFloat = 0
@@ -58,7 +58,8 @@ public struct ShellRootView: View {
     private func detailColumn(_ theme: VisionTheme) -> some View {
         HStack(spacing: 0) {
             if !model.isSidebarVisible {
-                NativeSidebarRail(model: model, topInset: max(0, 28 - titlebarSafeInset))
+                // The rail's first button starts below the lowered traffic lights (bottom edge 34 pt).
+                NativeSidebarRail(model: model, topInset: max(0, 48 - titlebarSafeInset))
                     .environment(\.colorScheme, theme.colorScheme)
             }
             pageColumn(theme)
@@ -102,6 +103,7 @@ public struct ShellRootView: View {
                                 }
                                 .overlay(alignment: .topLeading) { contentLanding }
                                 .background { PageScrollObserver { pageScrollDidChange($0) } }
+                                .onPreferenceChange(VisionPageTitleKey.self) { title in pageTitle = title }
                                 .environment(\.colorScheme, theme.colorScheme)
                                 // The mounted destination receives cold CSV/new-transaction intents.
                                 .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
@@ -131,15 +133,21 @@ public struct ShellRootView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { inset in
             titlebarSafeInset = inset
-            titlebarHeight = max(inset, 28)
         }
         .overlay(alignment: .top) {
             if isNativeDetail {
-                NativeTopbar(model: model, height: titlebarHeight, scrolled: pageScrolled)
+                NativeTopbar(
+                    // AppLayout's `h-14` topbar: its centre line carries the traffic lights
+                    // (`trafficLightPosition` y 20) and the sidebar trigger.
+                    model: model, height: NativeTopbar.barHeight, veiled: pageVeiled, scrolled: pageScrolled,
+                    pageTitle: pageTitle)
                     .ignoresSafeArea(.container, edges: .top)
             }
         }
-        .onChange(of: model.route.path) { pageScrolled = false }
+        .onChange(of: model.route.path) {
+            pageScrolled = false
+            pageVeiled = false
+        }
     }
 
     /// Holds the native page at one width while the sidebar column slides: AppKit resizes the
@@ -160,6 +168,9 @@ public struct ShellRootView: View {
     private func pageScrollDidChange(_ offset: CGFloat) {
         let scrolled = offset > NativeTopbar.titleThreshold
         if scrolled != pageScrolled { pageScrolled = scrolled }
+        // AppLayout's `scrolled` (`window.scrollY > 8`) shows the bar veil before the title.
+        let veiled = offset > NativeTopbar.veilThreshold
+        if veiled != pageVeiled { pageVeiled = veiled }
     }
 
     private func unavailableView(_ theme: VisionTheme) -> some View {
@@ -196,6 +207,9 @@ public struct ShellRootView: View {
         }
         .environment(\.visionTheme, theme)
         .environment(\.visionStrings, model.strings)
+        // No system scroll-edge band under the transparent titlebar: the page canvas runs up
+        // to the window's top edge as the web canvas does; the topbar veil appears on scroll.
+        .scrollEdgeEffectHidden(true, for: .top)
         .background { WindowAppearanceSync(isDark: theme.isDark) }
         // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
         // chosen accent) instead of the system blue.

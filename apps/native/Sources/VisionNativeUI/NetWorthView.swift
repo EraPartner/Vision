@@ -24,7 +24,9 @@ public struct NetWorthView: View {
     public var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                VisionPageHeader(title: strings.t("networth.title"), subtitle: "", symbol: "chart.line.uptrend.xyaxis")
+                VisionPageHeader(
+                    title: strings.t("networth.title"), subtitle: "",
+                    symbol: VisionPageSymbol.of("/portfolio/net-worth", fallback: "wallet.pass"))
                 {}
                 if model.isLoading || model.currency != currency {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
@@ -353,19 +355,19 @@ public struct NetWorthView: View {
     }
     private var table: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView {
-                LocalDataTable(
-                    title: strings.t("networth.dailyBreakdown"), subtitle: "", columns: columns, rows: model.tableRows,
-                    totalCount: model.tableSnapshots.count,
-                    query: Binding(get: { model.tableQuery }, set: { model.tableQuery = $0 }),
-                    filterValues: model.tableFilterValues, strings: strings, serverTotal: model.tableTotal,
-                    isFetchingMore: model.isFetchingMore, hasMore: model.hasMore
-                ) {
-                    Text(strings.t(model.tableQuery.isNarrowed ? "table.noFilterResults" : "table.noData"))
-                }.rowAppeared { id in
-                    if model.tableRows.suffix(5).contains(where: { $0.id == id }) { Task { await model.loadMore() } }
-                }
-            }.frame(maxHeight: 520)
+            LocalDataTable(
+                title: strings.t("networth.dailyBreakdown"), subtitle: "", columns: columns, rows: model.tableRows,
+                totalCount: model.tableSnapshots.count,
+                query: Binding(get: { model.tableQuery }, set: { model.tableQuery = $0 }),
+                filterValues: model.tableFilterValues, strings: strings, serverTotal: model.tableTotal,
+                isFetchingMore: model.isFetchingMore, hasMore: model.hasMore
+            ) {
+                Text(strings.t(model.tableQuery.isNarrowed ? "table.noFilterResults" : "table.noData"))
+            }.rowAppeared { id in
+                if model.tableRows.suffix(5).contains(where: { $0.id == id }) { Task { await model.loadMore() } }
+            }
+            // `VirtualDataTable maxHeight={520}`: the rows scroll under the fixed header.
+            .bodyMaxHeight(520)
             if let error = model.tableError {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) {

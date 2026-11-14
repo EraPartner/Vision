@@ -17,7 +17,7 @@ public struct PortfolioImportView: View {
             VStack(alignment: .leading, spacing: 24) {
                 VisionPageHeader(
                     title: strings.t("portfolioImport.title"), subtitle: strings.t("portfolioImport.desc"),
-                    symbol: "tray.and.arrow.down")
+                    symbol: VisionPageSymbol.of("/portfolio/import", fallback: "briefcase"))
                 PortfolioImportSessionView(
                     model: screens.session, shell: shell, history: screens.history, historyExpanded: $historyOpen,
                     isLocked: screens.advanced.isBusy || screens.history.isBusy,

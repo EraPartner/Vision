@@ -24,6 +24,7 @@ struct ChartHoverTooltip: View {
     @State private var size: CGSize = .zero
     @Environment(\.visionTheme) private var theme
     @Environment(\.visionFullEffects) private var fullEffects
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let gap: CGFloat = 12
     private static let pad: CGFloat = 8
@@ -89,6 +90,15 @@ struct ChartHoverTooltip: View {
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.updatesFrequently)
+        // `AnimatePresence`: in from opacity 0, y + 4, scale 0.98; out to opacity 0, y + 2, over
+        // `durations.fast` on out-expo (the scale is left out: it would scale the whole overlay box).
+        .transition(
+            reduceMotion
+                ? .identity
+                : .asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 4)),
+                    removal: .opacity.combined(with: .offset(y: 2))
+                ).animation(VisionMotion.outExpo(DesignTokens.Duration.fast)))
     }
 
     @ViewBuilder

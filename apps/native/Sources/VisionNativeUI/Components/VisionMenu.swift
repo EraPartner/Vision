@@ -7,9 +7,12 @@ import VisionNativeCore
 /// colour (`variant="destructive"`, icon included). A `Label` whose title holds a second `Text`
 /// shows it as the item's helper line (`type-footnote text-label-secondary`).
 ///
-/// Use it like `Menu` for menus of `Button`s and `Divider`s; a menu that holds `Toggle`s or
-/// `Picker`s stays a `Menu`. Buttons keep their role and `.disabled`; choosing an item closes the
-/// popover first, then runs its action. Escape or a click outside closes it.
+/// Use it like `Menu` for menus of `Button`s, `Divider`s, `VisionMenuLabel`s and `Toggle`s; a
+/// `Toggle` is a `DropdownMenuCheckboxItem` (a primary check in the `pl-8` gutter), or a
+/// `DropdownMenuRadioItem` (a primary dot) under `.environment(\.visionMenuRadio, true)`. A menu
+/// that holds `Picker`s stays a `Menu`. Buttons keep their role and `.disabled`; choosing an item
+/// (a toggle too, as Radix does) closes the popover first, then runs its action. Escape or a
+/// click outside closes it.
 ///
 ///     VisionMenu {
 ///         Button { edit() } label: { Label("Edit", systemImage: "pencil") }
@@ -50,6 +53,7 @@ private struct VisionMenuPanel<Content: View>: View {
             content()
         }
         .buttonStyle(VisionMenuItemStyle(dismiss: dismiss))
+        .toggleStyle(VisionMenuToggleStyle())
         .labelStyle(VisionMenuItemLabelStyle())
         .padding(6)
         .frame(minWidth: 128, alignment: .leading)
@@ -130,7 +134,61 @@ private struct VisionMenuItemLabel: View {
     }
 }
 
+/// `DropdownMenuLabel`: `px-2 py-1.5 eyebrow` (11 pt medium, upper case, 0.12 em tracking,
+/// `muted-foreground/0.8`).
+struct VisionMenuLabel: View {
+    let text: String
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium)).tracking(11 * 0.12).textCase(.uppercase)
+            .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// `DropdownMenuCheckboxItem` / `DropdownMenuRadioItem`: an item row (`py-1.5 pl-8 pr-2`) whose
+/// `left-2` slot shows a 16 pt primary check, or an 8 pt primary dot for a radio item, while on.
+private struct VisionMenuToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VisionMenuToggleRow(configuration: configuration)
+    }
+}
+
+private struct VisionMenuToggleRow: View {
+    let configuration: ToggleStyleConfiguration
+    @Environment(\.visionMenuRadio) private var radio
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 0) {
+                Group {
+                    if configuration.isOn {
+                        if radio {
+                            Circle().fill(theme.primary).frame(width: 8, height: 8)
+                        } else {
+                            Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(theme.primary)
+                        }
+                    }
+                }
+                .frame(width: 24, alignment: .leading).padding(.leading, radio ? 3 : 1)
+                .accessibilityHidden(true)
+                configuration.label
+            }
+        }
+        .accessibilityAddTraits(configuration.isOn ? .isSelected : [])
+    }
+}
+
 extension EnvironmentValues {
     /// Set by a `VisionMenu` item for its label: the icon takes the destructive colour.
     @Entry var visionMenuItemDestructive = false
+    /// Draws the `Toggle`s of a `VisionMenu` as radio items.
+    @Entry var visionMenuRadio = false
 }

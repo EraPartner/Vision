@@ -40,13 +40,21 @@ struct StatisticsFlowView: View {
                         hoveredLink == link.id || hoveredNode == link.link.source || hoveredNode == link.link.target
                     // Stroked with the target node's colour, 25% opaque, 60% when highlighted.
                     let target = layout.nodes.first { $0.id == link.link.target }
+                    // The band as its stroked outline, so the view's own shape is the hit area: the
+                    // pointer is on a link only over its band, as an SVG `<path>` stroke is.
                     curve(link, margin: margin)
-                        .stroke(
-                            target.map { color($0.node) } ?? theme.mutedForeground,
-                            style: StrokeStyle(lineWidth: max(1, CGFloat(link.width)))
-                        )
+                        .strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
+                        .fill(target.map { color($0.node) } ?? theme.mutedForeground)
                         .opacity(isHovered ? 0.6 : 0.25)
                         .animation(fade, value: isHovered)
+                        .onHover { inside in
+                            // `onMouseEnter` / `onMouseLeave`; a late leave never clears a newer link.
+                            if inside {
+                                if hoveredLink != link.id { hoveredLink = link.id }
+                            } else if hoveredLink == link.id {
+                                hoveredLink = nil
+                            }
+                        }
                 }
                 .accessibilityHidden(true)
                 ForEach(layout.nodes) { node in
@@ -60,6 +68,14 @@ struct StatisticsFlowView: View {
                         .opacity(isHovered ? 1 : 0.85)
                         .animation(fade, value: isHovered)
                         .frame(width: bounds.width, height: bounds.height)
+                        .contentShape(Rectangle())
+                        .onHover { inside in
+                            if inside {
+                                if hoveredNode != node.id { hoveredNode = node.id }
+                            } else if hoveredNode == node.id {
+                                hoveredNode = nil
+                            }
+                        }
                         .position(x: bounds.midX, y: bounds.midY)
                         .accessibilityLabel(label(node.node))
                         .accessibilityValue(
@@ -72,6 +88,7 @@ struct StatisticsFlowView: View {
                         .lineLimit(1).fixedSize()
                         .frame(width: 0, height: 0, alignment: leading ? .trailing : .leading)
                         .position(x: anchorX, y: bounds.midY)
+                        .allowsHitTesting(false)
                         .accessibilityHidden(true)
                     // The value, 14 pt under the label, while the node is hovered.
                     if isHovered {
@@ -82,32 +99,15 @@ struct StatisticsFlowView: View {
                         .lineLimit(1).fixedSize()
                         .frame(width: 0, height: 0, alignment: leading ? .trailing : .leading)
                         .position(x: anchorX, y: bounds.midY + 14)
+                        .allowsHitTesting(false)
                         .accessibilityHidden(true)
                     }
                 }
             }
             .frame(width: size.width, height: size.height, alignment: .topLeading)
-            .contentShape(Rectangle())
-            // One hover tracker for the chart. As in the SVG, only a node's bar or a link's band
-            // reacts (labels take no pointer events), and the element drawn last wins.
-            .onContinuousHover { phase in
-                switch phase {
-                case .ended:
-                    hoveredNode = nil
-                    hoveredLink = nil
-                case .active(let location):
-                    let node = layout.nodes.last { rect($0, margin: margin).contains(location) }?.id
-                    let link =
-                        node == nil
-                        ? layout.links.last { link in
-                            curve(link, margin: margin)
-                                .strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
-                                .contains(location)
-                        }?.id : nil
-                    if hoveredNode != node { hoveredNode = node }
-                    if hoveredLink != link { hoveredLink = link }
-                }
-            }
+            // Each node bar and link band tracks its own hover (SVG `onMouseEnter`/`onMouseLeave`),
+            // nodes drawn over links. One tracker for the whole chart, testing nodes first by their
+            // rectangles, lit a node's whole section over the band beside it.
         }.frame(minHeight: 380)
             .onChange(of: hoveredNode) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
             .onChange(of: hoveredLink) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
