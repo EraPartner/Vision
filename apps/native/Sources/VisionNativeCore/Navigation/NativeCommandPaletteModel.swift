@@ -135,15 +135,19 @@ import Observation
             value: (NativeCommandPaletteEntry) -> String
         ) {
             guard !entries.isEmpty else { return }
-            let scored = entries.enumerated().map { index, entry in
-                (entry: entry, score: query.isEmpty ? 1 : NativeCommandPaletteQueries.score(value(entry), query: query),
-                    index: index)
-            }.sorted { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score }
-            filtered.append(
-                (
-                    .init(id: id, title: strings.t(key), entries: scored.map(\.entry)), scored[0].score,
-                    filtered.count
-                ))
+            typealias Scored = (entry: NativeCommandPaletteEntry, score: Double, index: Int)
+            var scored: [Scored] = []
+            for (index, entry) in entries.enumerated() {
+                let score: Double =
+                    query.isEmpty ? 1 : NativeCommandPaletteQueries.score(value(entry), query: query)
+                scored.append((entry: entry, score: score, index: index))
+            }
+            scored.sort { (lhs: Scored, rhs: Scored) -> Bool in
+                lhs.score == rhs.score ? lhs.index < rhs.index : lhs.score > rhs.score
+            }
+            let ordered: [NativeCommandPaletteEntry] = scored.map { (item: Scored) in item.entry }
+            let built = NativeCommandPaletteGroup(id: id, title: strings.t(key), entries: ordered)
+            filtered.append((group: built, score: scored[0].score, index: filtered.count))
         }
         if let tickerSymbol, quote != nil || tickerLoading {
             let symbol = quote?.symbol ?? tickerSymbol
