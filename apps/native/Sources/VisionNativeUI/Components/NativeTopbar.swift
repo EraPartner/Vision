@@ -3,8 +3,7 @@ import SwiftUI
 import VisionNativeCore
 
 /// AppLayout's topbar over native screens, drawn in the transparent titlebar strip: the
-/// `SidebarTrigger` (always, as on the web; right of the traffic lights while the sidebar is
-/// hidden), the page header's title once the page has scrolled past 96 pt, and the bar veil
+/// page header's title once the page has scrolled past 96 pt, and the bar veil
 /// once it has scrolled past 8 pt. The web's search button is `md:hidden` (phones only); the
 /// sidebar and its icon rail keep the search entry. It never takes clicks outside its buttons,
 /// so the strip still drags the window.
@@ -34,16 +33,9 @@ struct NativeTopbar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // `<SidebarTrigger className="mr-4" />`: an aria-label, no tooltip.
-            // `variant="ghost" size="icon"` at `h-7 w-7` with the 16 pt PanelLeft glyph.
-            Button {
-                model.toggleSidebar()
-            } label: {
-                Image(systemName: "sidebar.left").font(.system(size: 14, weight: .regular))
-            }
-            .buttonStyle(.vision(.ghost, size: .iconXs))
-            .accessibilityLabel(model.strings.t("menu.toggleSidebar"))
-            .padding(.trailing, 16)
+            // No SidebarTrigger here (Tor, 2026-11-14): beside the sidebar header's own collapse
+            // button it was a second sidebar icon. The sidebar's collapse button, the icon
+            // rail's toggle, ⌃⌘S and View › Toggle Sidebar keep every way to open and close it.
             if let title {
                 Text(title)
                     .font(.visionDisplayHeadline)
@@ -89,6 +81,11 @@ struct NativeTopbar: View {
                     radius: theme.isDark ? 16 : 14, y: theme.isDark ? 14 : 12)
                 .opacity(veiled ? 1 : 0)
                 .allowsHitTesting(false)
+        }
+        // `<BackgroundQueryIndicator />` is the header's last child, `absolute inset-x-0 bottom-0`:
+        // the 2 pt line runs along the bar's bottom edge, not the window's top edge.
+        .overlay(alignment: .bottom) {
+            if let inspector = model.apiInspector { BackgroundQueryIndicator(inspector: inspector) }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: DesignTokens.Duration.normal), value: scrolled)
         // `transition: opacity var(--duration-normal) var(--ease-glide)`.

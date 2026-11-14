@@ -28,9 +28,12 @@ struct VisionResponsiveColumns: Layout {
     var weights: [Int]
     var minimumPageWidth: CGFloat = VisionBreakpoint.lg
     var spacing: CGFloat = 24
+    /// `lg:[&>*:only-child]:col-span-N`. A plain `grid lg:grid-cols-2` (the asset card grids)
+    /// keeps a lone child in its first column.
+    var loneChildSpans = true
 
     private func isWide(_ width: CGFloat, count: Int) -> Bool {
-        count > 1 && weights.count > 1 && width + 2 * VisionPageLayout.padding >= minimumPageWidth
+        (count > 1 || !loneChildSpans) && weights.count > 1 && width + 2 * VisionPageLayout.padding >= minimumPageWidth
     }
 
     func makeCache(subviews: Subviews) -> Cache { Cache() }

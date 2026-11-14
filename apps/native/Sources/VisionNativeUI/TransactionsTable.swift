@@ -43,6 +43,16 @@ struct TransactionsTableCard: View {
     private var card: some View {
         AdminCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
+                // VirtualDataTable's `actions`: a `CardHeader` row (`justify-end`, `flex-wrap
+                // gap-2`) above the search row, shown while rows are selected.
+                if model.showsBulkBar {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        TransactionBulkBar(model: model, shell: shell)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                }
                 searchBar
                     .zIndex(1)
                 if !model.columnFilters.isEmpty { chips }
@@ -144,9 +154,6 @@ struct TransactionsTableCard: View {
                 .buttonStyle(.vision(.ghost, size: .sm))
             }
             Spacer(minLength: 0)
-            if model.showsBulkBar {
-                TransactionBulkBar(model: model, shell: shell)
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -462,18 +469,33 @@ struct TransactionRowView: View, Equatable {
         return HStack(spacing: 0) {
             checkbox(label: rowLabel)
                 .frame(width: TransactionsTableCard.selectWidth, alignment: .leading)
-            if compact {
-                summaryCell(dateText: dateText)
-                    .padding(.trailing, 8)
-                    .frame(minWidth: TransactionsTableCard.summaryWidth, maxWidth: .infinity, alignment: .leading)
+            // The focusable part stops before the box and the Edit button: the web row selects on
+            // its own focus only (`event.target === event.currentTarget`), so a click on a control
+            // never focuses, and so never selects, the row. Before, the pencil's mouse-down
+            // focused the row, which opened the inspector and swallowed the click.
+            HStack(spacing: 0) {
+                if compact {
+                    summaryCell(dateText: dateText)
+                        .padding(.trailing, 8)
+                        .frame(minWidth: TransactionsTableCard.summaryWidth, maxWidth: .infinity, alignment: .leading)
+                }
+                ForEach(columns, id: \.self) { column in
+                    cell(column, dateText: dateText)
+                        .padding(.trailing, 8)
+                        .frame(width: column == .category ? nil : width(column), alignment: alignment(column))
+                        .frame(
+                            minWidth: column == .category ? width(column) : nil,
+                            maxWidth: column == .category ? .infinity : nil, alignment: alignment(column))
+                }
             }
-            ForEach(columns, id: \.self) { column in
-                cell(column, dateText: dateText)
-                    .padding(.trailing, 8)
-                    .frame(width: column == .category ? nil : width(column), alignment: alignment(column))
-                    .frame(
-                        minWidth: column == .category ? width(column) : nil,
-                        maxWidth: column == .category ? .infinity : nil, alignment: alignment(column))
+            .contentShape(Rectangle())
+            .focusable(!isEditing)
+            .focusEffectDisabled()
+            .focused(focusedRow, equals: row.id)
+            .onKeyPress(phases: .down) { press in
+                guard !isEditing, let key = Self.rowKey(press.key) else { return .ignored }
+                if let next = model.handleRowKey(key, from: row.id) { focusedRow.wrappedValue = next }
+                return .handled
             }
             editCell(label: rowLabel)
                 .frame(width: TransactionsTableCard.editWidth, alignment: .center)
@@ -489,14 +511,6 @@ struct TransactionRowView: View, Equatable {
         }
         .onTapGesture {
             click()
-        }
-        .focusable(!isEditing)
-        .focusEffectDisabled()
-        .focused(focusedRow, equals: row.id)
-        .onKeyPress(phases: .down) { press in
-            guard !isEditing, let key = Self.rowKey(press.key) else { return .ignored }
-            if let next = model.handleRowKey(key, from: row.id) { focusedRow.wrappedValue = next }
-            return .handled
         }
         .contextMenu { contextMenu }
         .task { await model.rowAppeared(row.id) }

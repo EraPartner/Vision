@@ -476,7 +476,7 @@ public struct PortfolioHoldingsView: View {
     private var assetCards: some View {
         VisionResponsiveColumns(
             weights: [1, 1], minimumPageWidth: assetClass == .realEstate ? VisionBreakpoint.lg : VisionBreakpoint.md,
-            spacing: 16
+            spacing: 16, loneChildSpans: false
         ) {
             ForEach(holdings) { holding in
                 PortfolioAssetCard(holding: holding, model: model, editing: editing, shell: shell)
