@@ -267,8 +267,9 @@ struct AccountHubRow: View {
 
     private var titleLine: some View {
         HStack(spacing: 6) {
+            // ListRow's title: `type-body` (Inter 14, regular), not medium.
             Text(label)
-                .font(.body.weight(.medium))
+                .font(VisionFonts.font(DesignTokens.Typography.body, relativeTo: .body))
                 .lineLimit(1)
             if !account.isActive {
                 VisionBadge(text: strings.t("accounts.archived"), tone: .outline, small: true)
@@ -279,13 +280,16 @@ struct AccountHubRow: View {
         }
     }
 
+    /// ListRow's subtitle line: `type-footnote` (Inter 12).
+    private static var footnote: Font { VisionFonts.font(DesignTokens.Typography.footnote, relativeTo: .footnote) }
+
     @ViewBuilder
     private var subtitle: some View {
         if let drift = model.drift(account) {
             AccountDriftChip(drift: drift, strings: strings) { model.openReconcile(account) }
         }
         Text(model.meta(account))
-            .font(.footnote)
+            .font(Self.footnote)
             .foregroundStyle(theme.secondaryLabel)
             .lineLimit(1)
         if isPortfolio {
@@ -297,26 +301,26 @@ struct AccountHubRow: View {
                         Text(verbatim: "· \(provenance)")
                     }
                 }
-                .font(.footnote)
+                .font(Self.footnote)
                 .foregroundStyle(theme.secondaryLabel)
                 .lineLimit(1)
             }
         } else if account.computedBalance != nil, let provenance = model.provenance(account) {
             Text(provenance)
-                .font(.footnote)
+                .font(Self.footnote)
                 .foregroundStyle(theme.secondaryLabel)
                 .lineLimit(1)
         }
         if !isPortfolio && account.balanceIncomplete == true {
             Text(strings.t("accounts.balanceIncomplete"))
-                .font(.footnote)
+                .font(Self.footnote)
                 .foregroundStyle(theme.warning)
             ForEach(model.excludedParts(account), id: \.currency) { part in
                 HStack(spacing: 4) {
                     MoneyText(amount: part.balance, currency: part.currency, settings: settings, signed: false, colored: false)
                     Text(strings.t("accounts.balanceExcluded"))
                 }
-                .font(.footnote)
+                .font(Self.footnote)
                 .foregroundStyle(theme.warning)
             }
         }
@@ -410,7 +414,8 @@ struct AccountDriftChip: View {
 
     var body: some View {
         Button(action: open) {
-            VisionBadge(text: drift.label, tone: drift.stale ? .warning : .destructive, small: true)
+            // `badgeVariants({ variant })` without a size: the default `px-2.5`, as on the web.
+            VisionBadge(text: drift.label, tone: drift.stale ? .warning : .destructive)
         }
         .buttonStyle(.plain)
         .visionTooltip(strings.t(drift.tooltipKey))
