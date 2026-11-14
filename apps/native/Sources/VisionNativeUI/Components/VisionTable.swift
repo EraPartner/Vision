@@ -36,7 +36,11 @@ struct VisionTable<Content: View>: View {
     /// `TableRow`'s `hover:bg-foreground/[0.03]` band under the pointer's row.
     var rowHover = true
     @ViewBuilder var content: () -> Content
-    @State private var hoverY: CGFloat?
+    /// The cell row under the pointer. A row index, not the pointer's y, so the layout is
+    /// invalidated (and the table re-measured) only when the pointer crosses into another row.
+    @State private var hoveredRow: Int?
+    /// The row bounds of the last placement, for mapping the pointer to a row.
+    @State private var rowBounds = VisionTableRowBounds()
     /// The width the table is offered: the scroll view proposes no width to its content.
     @State private var availableWidth: CGFloat?
     @Environment(\.visionTheme) private var theme
@@ -54,7 +58,7 @@ struct VisionTable<Content: View>: View {
 
     private var table: some View {
         VisionTableLayout(
-            columns: columns, columnSpacing: columnSpacing, fixedColumns: fixedColumns, hoverY: rowHover ? hoverY : nil,
+            columns: columns, columnSpacing: columnSpacing, fixedColumns: fixedColumns, hoveredRow: rowHover ? hoveredRow : nil, rowBounds: rowBounds,
             availableWidth: availableWidth
         ) {
             if rowHover {
@@ -66,12 +70,12 @@ struct VisionTable<Content: View>: View {
         }
         .onContinuousHover { phase in
             guard rowHover else { return }
-            let y: CGFloat?
+            let row: Int?
             switch phase {
-            case .active(let point): y = point.y
-            case .ended: y = nil
+            case .active(let point): row = rowBounds.row(at: point.y)
+            case .ended: row = nil
             }
-            if hoverY != y { hoverY = y }
+            if hoveredRow != row { hoveredRow = row }
         }
     }
 }
@@ -85,7 +89,18 @@ private struct VisionTableSpanKey: LayoutValueKey {
     static let defaultValue = false
 }
 
-/// The hover band: drawn behind the cells over the row under `hoverY`, outside the row grouping.
+/// Where the cell rows were placed, written by the layout and read by the hover handler. A
+/// reference box: writing it during placement must not invalidate the view.
+final class VisionTableRowBounds {
+    /// Top and height of each cell row (spanning rows are `nil`: they take no hover band).
+    var rows: [(top: CGFloat, height: CGFloat)?] = []
+
+    func row(at y: CGFloat) -> Int? {
+        rows.firstIndex { row in row.map { y >= $0.top && y < $0.top + $0.height } ?? false }
+    }
+}
+
+/// The hover band: drawn behind the cells over the hovered row, outside the row grouping.
 private struct VisionTableBandKey: LayoutValueKey {
     static let defaultValue = false
 }
@@ -94,8 +109,10 @@ struct VisionTableLayout: Layout {
     let columns: [HorizontalAlignment]
     let columnSpacing: CGFloat
     let fixedColumns: Set<Int>
-    /// The pointer's y in the table, for the hover band; nil hides it.
-    var hoverY: CGFloat? = nil
+    /// The plan row under the pointer, for the hover band; nil hides it.
+    var hoveredRow: Int? = nil
+    /// Receives the placed row bounds, so the view can map the pointer to a row.
+    var rowBounds: VisionTableRowBounds? = nil
     /// The width to fill when the proposal has none (inside the horizontal scroll view).
     var availableWidth: CGFloat? = nil
 
@@ -129,9 +146,11 @@ struct VisionTableLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         let plan = plan(width: bounds.width, subviews: subviews, cache: &cache)
+        rowBounds?.rows = plan.rows.map { $0.spans ? nil : ($0.top, $0.height) }
         for index in subviews.indices where subviews[index][VisionTableBandKey.self] {
             // Over the cell row under the pointer (not dividers or full-width rows), else empty.
-            if let hoverY, let row = plan.rows.first(where: { !$0.spans && hoverY >= $0.top && hoverY < $0.top + $0.height }) {
+            if let hoveredRow, plan.rows.indices.contains(hoveredRow), !plan.rows[hoveredRow].spans {
+                let row = plan.rows[hoveredRow]
                 subviews[index].place(
                     at: CGPoint(x: bounds.minX, y: bounds.minY + row.top), anchor: .topLeading,
                     proposal: ProposedViewSize(width: bounds.width, height: row.height))
