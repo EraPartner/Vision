@@ -13,6 +13,28 @@ enum VisionMotion {
     static let reveal = DesignTokens.Duration.reveal
 }
 
+/// `DonutChart`'s hover motion: the hovered arc grows by `whileHover: { scale: 1.045 }` over
+/// `durations.slow` on out-expo, and the hollow's content swaps through `AnimatePresence
+/// mode="wait"`: the old content fades out over `durations.fast`, then the new one fades and scales
+/// in from 0.96 over the same time. Under Reduce Motion nothing grows and the swap is instant.
+enum DonutHoverMotion {
+    static let restingOuter = 0.93
+    static func outer(hovered: Bool, reduceMotion: Bool) -> Double {
+        hovered && !reduceMotion ? restingOuter * 1.045 : restingOuter
+    }
+    static func arc(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : VisionMotion.outExpo(DesignTokens.Duration.slow)
+    }
+    static func center(reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion else { return .identity }
+        let fast = DesignTokens.Duration.fast
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.96))
+                .animation(VisionMotion.outExpo(fast).delay(fast)),
+            removal: .opacity.animation(VisionMotion.outExpo(fast)))
+    }
+}
+
 /// PageTransition: each pathname enters with opacity 0 → 1 and y 14 → 0 over 0.52 s on the
 /// out-expo curve; enter-only, and none under Reduce Motion. The web's scale 0.995 → 1 is left
 /// out: an invisible half-percent, it made every layer of the page re-render each frame.

@@ -115,6 +115,7 @@ struct StatisticsCategoryDonut: View {
     @State private var angle: Double?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         rows: [StatisticsCategory], settings: NativeAppSettings, currency: CurrencyCode, strings: any Localizing,
@@ -132,7 +133,8 @@ struct StatisticsCategoryDonut: View {
             Chart(rows) { row in
                 SectorMark(
                     angle: .value(row.name, NSDecimalNumber(decimal: row.total).doubleValue), innerRadius: .ratio(0.6),
-                    outerRadius: .ratio(row.id == selected ? 1 : 0.93), angularInset: 2
+                    outerRadius: .ratio(DonutHoverMotion.outer(hovered: row.id == selected, reduceMotion: reduceMotion)),
+                    angularInset: 2
                 )
                 .foregroundStyle(by: .value(strings.t("categories.title"), row.name))
                 .accessibilityLabel(row.name)
@@ -157,10 +159,11 @@ struct StatisticsCategoryDonut: View {
                         .font(.title3.monospacedDigit()).foregroundStyle(theme.foreground)
                     }
                     .frame(maxWidth: 170)
-                    .transition(.opacity)
+                    .id(row.id)
+                    .transition(DonutHoverMotion.center(reduceMotion: reduceMotion))
                 }
             }
-            .animation(.easeOut(duration: DesignTokens.Duration.fast), value: selected)
+            .animation(DonutHoverMotion.arc(reduceMotion: reduceMotion), value: selected)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     // The hovered slice is worked out from the pointer here and written straight to

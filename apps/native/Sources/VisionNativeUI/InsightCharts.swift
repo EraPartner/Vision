@@ -526,6 +526,7 @@ struct HomeCategoryChart: View {
     @State private var selectedCount: Int?
     @State private var selectedId: String?  // lint:allow raw-id view selection key of chart series, not an API entity
     @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var selected: HomeCategorySlice? { slices.first { $0.id == selectedId } }
 
@@ -548,7 +549,8 @@ struct HomeCategoryChart: View {
                 Chart(slices) { slice in
                     SectorMark(
                         angle: .value(slice.name, slice.count), innerRadius: .ratio(0.6),
-                        outerRadius: .ratio(selectedId == slice.id ? 1 : 0.93), angularInset: 2
+                        outerRadius: .ratio(DonutHoverMotion.outer(hovered: selectedId == slice.id, reduceMotion: reduceMotion)),
+                        angularInset: 2
                     )
                     .foregroundStyle(by: .value(strings.t("categories.title"), slice.name))
                     .accessibilityLabel(slice.name).accessibilityValue(String(slice.count))
@@ -563,8 +565,11 @@ struct HomeCategoryChart: View {
                             Text(selected.name).font(.caption).multilineTextAlignment(.center)
                             Text(String(selected.count)).font(.title2.monospacedDigit())
                         }.frame(maxWidth: 120)
+                            .id(selected.id)
+                            .transition(DonutHoverMotion.center(reduceMotion: reduceMotion))
                     }
                 }
+                .animation(DonutHoverMotion.arc(reduceMotion: reduceMotion), value: selectedId)
                 .frame(height: 232)
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
