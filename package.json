@@ -80,10 +80,10 @@
     "check": "bun run lint && bun run typecheck && bun run typecheck:backend && bun run typecheck:packages && bun run typecheck:scripts && bun run typecheck:electron && bun run validate-locales && bun run check-endpoint-matrix && bun run check-legacy-inventory && bun run check-test-only-exports && bun run check:package-boundaries && bun run check:agent-instructions && bun run check:workflow-supply-chain && bun run todo:check && bun run test:scripts && bun run test:packages && bun run test && bun run test:frontend && bun run test:electron"
   },
   "devDependencies": {
-    "@ast-grep/cli": "0.51.0",
-    "@types/node": "^26.6.5",
-    "dependency-cruiser": "18.7.0",
-    "knip": "6.43.0",
+    "@ast-grep/cli": "0.51.1",
+    "@types/node": "^26.6.6",
+    "dependency-cruiser": "18.7.2",
+    "knip": "6.44.1",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.10",
     "typescript": "^6.0.3"
