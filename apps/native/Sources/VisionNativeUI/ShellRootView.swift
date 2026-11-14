@@ -77,6 +77,13 @@ public struct ShellRootView: View {
             // and under the titlebar strip; the other states stack them above.
             if !isNativeDetail { shellBanners }
             ZStack {
+                // `.liquid-canvas` is one fixed layer under every route, never part of a page: the
+                // canvas sits beside the page here, so a page switch (a new `.id`, new page sizes)
+                // never rebuilds it, resizes its Metal drawable or restarts its drift.
+                if isNativeDetail {
+                    FrozenWidthLayout(width: frozenDetailWidth) { DetailGlassBackground() }
+                        .mask { Rectangle().padding(.vertical, -400) }
+                }
                 if case .native(let screen) = model.detail {
                     FrozenWidthLayout(width: frozenDetailWidth) {
                         NativePageZoomView(factor: model.pageZoom) {
@@ -766,11 +773,11 @@ struct NativeScreenContainer: View {
     var body: some View {
         content
             .environment(\.visionContainerOwnsFocus, focused)
-            // PageTransition keys on the pathname; the canvas behind it stays put.
+            // PageTransition keys on the pathname.
             .modifier(PageEntrance())
             .id(model.route.path)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(DetailGlassBackground())
+            // The canvas behind the page is `pageColumn`'s, so it outlives the page.
             .focusable()
             .focusEffectDisabled()
             .focused($focused)
