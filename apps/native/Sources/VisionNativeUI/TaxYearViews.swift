@@ -38,12 +38,7 @@ struct TaxYearSwitcherView: View {
     }
     var body: some View {
         VisionMenu {
-            // `DropdownMenuLabel` (`px-2 py-1.5 eyebrow`), then a separator.
-            Text(strings.t("tax.yearSwitcher.menuLabel"))
-                .font(.system(size: 11, weight: .medium)).tracking(11 * 0.12).textCase(.uppercase)
-                .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
-                .padding(.horizontal, 8).padding(.vertical, 6)
-                .accessibilityAddTraits(.isHeader)
+            VisionMenuLabel(text: strings.t("tax.yearSwitcher.menuLabel"))
             Divider()
             ForEach(years, id: \.self) { year in
                 Button {

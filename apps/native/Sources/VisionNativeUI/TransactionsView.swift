@@ -438,7 +438,7 @@ struct TransactionsToolbar: View {
 
     private func dateMenu(_ filters: TransactionFilters) -> some View {
         let preset = filters.datePreset(today: model.today, calendar: model.calendar)
-        return Menu {
+        return VisionMenu {
             ForEach(TransactionDatePreset.allCases, id: \.self) { option in
                 Toggle(
                     strings.t(option.labelKey),
@@ -451,16 +451,15 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(model.dateChipLabel(), symbol: "calendar", active: preset != TransactionDatePreset.any)
         }
-        .menuStyle(.button)
+        .environment(\.visionMenuRadio, true)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("txPage.filter.dateAria"))
         .accessibilityValue(model.dateChipLabel())
     }
 
     private func typeMenu(_ filters: TransactionFilters) -> some View {
-        Menu {
+        VisionMenu {
             Toggle(
                 strings.t("txPage.filter.type.all"),
                 isOn: Binding(get: { filters.transactionType == nil }, set: { _ in model.setType(nil) }))
@@ -472,9 +471,8 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(model.typeChipLabel(), symbol: "arrow.up.arrow.down", active: filters.transactionType != nil)
         }
-        .menuStyle(.button)
+        .environment(\.visionMenuRadio, true)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("txPage.filter.typeAria"))
         .accessibilityValue(model.typeChipLabel())
@@ -497,27 +495,25 @@ struct TransactionsToolbar: View {
 
     /// `txPage.view.menu`: Show excluded, the optional columns and Reset columns.
     private var viewMenu: some View {
-        Menu {
+        VisionMenu {
             Toggle(
                 strings.t("txPage.view.showExcluded"),
                 isOn: Binding(get: { model.showAll }, set: { value in Task { await model.setShowAll(value) } }))
-            Section(strings.t("txPage.view.columns")) {
-                ForEach(OptionalTransactionColumn.allCases, id: \.self) { column in
-                    Toggle(
-                        strings.t(column.labelKey),
-                        isOn: Binding(
-                            get: { model.columnVisibility.isVisible(column) },
-                            set: { model.setColumn(column, visible: $0) }))
-                }
+            Divider()
+            VisionMenuLabel(text: strings.t("txPage.view.columns"))
+            ForEach(OptionalTransactionColumn.allCases, id: \.self) { column in
+                Toggle(
+                    strings.t(column.labelKey),
+                    isOn: Binding(
+                        get: { model.columnVisibility.isVisible(column) },
+                        set: { model.setColumn(column, visible: $0) }))
             }
             Divider()
             Button(strings.t("txPage.view.resetColumns")) { model.resetColumns() }
         } label: {
             chipLabel(strings.t("txPage.view.menu"), symbol: "slider.horizontal.3", active: model.showAll)
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("txPage.view.menu"))
     }
