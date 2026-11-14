@@ -50,7 +50,14 @@ struct ResearchMarketChartView: View {
             }
             .chartXAxis {
                 // AreaChart's bottom axis: `numTicks={Math.max(2, Math.floor(innerWidth / 90))}`.
-                AxisMarks(values: .automatic(desiredCount: max(2, Int(chartWidth / 90)))) { value in
+                // d3 `scaleTime().ticks(n)` dates: `.automatic(desiredCount:)` picked coarser steps.
+                AxisMarks(
+                    values: plot.times.first.flatMap { first in
+                        plot.times.last.map { last in
+                            TimeAxisTicks.values(from: first, to: last, count: max(2, Int(chartWidth / 90)))
+                        }
+                    } ?? []
+                ) { value in
                     AxisTick()
                     AxisValueLabel {
                         if let date = value.as(Date.self) {

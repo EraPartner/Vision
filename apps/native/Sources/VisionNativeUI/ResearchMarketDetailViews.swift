@@ -125,53 +125,90 @@ struct ResearchMarketScorecardView: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
+        // ScorecardPanel (ResearchScorecard.tsx): the grade badge, the evaluated count and the
+        // severity count pills, then the worst-first concerns as an inset `List` of `ListRow`s.
         VStack(alignment: .leading, spacing: 12) {
             if scorecard.evaluated == 0 {
-                Text(strings.t("research.scorecard.noData")).foregroundStyle(theme.secondaryLabel)
+                Text(strings.t("research.scorecard.noData")).font(Self.callout).foregroundStyle(theme.secondaryLabel)
+                    .padding(.vertical, 8)
             } else {
-                HStack {
-                    Text(strings.t("research.scorecard.grade." + scorecard.grade)).font(.headline)
-                    if let score = scorecard.score {
-                        Text(ResearchMarketDisplay.number(score, shell: shell, digits: 0)).monospacedDigit()
-                    }
-                    Text(strings.t("research.scorecard.evaluated", ["count": String(scorecard.evaluated)])).font(
-                        .caption
-                    )
-                    .foregroundStyle(theme.secondaryLabel)
-                    Spacer()
-                    ForEach(["risk", "warn", "caution"], id: \.self) { severity in
-                        if let count = scorecard.counts[severity], count > 0 {
-                            Text(strings.t("research.scorecard.severity." + severity) + " " + String(count)).font(
-                                .caption
-                            ).foregroundStyle(tone(severity))
+                HStack(spacing: 12) {
+                    VisionBadge(text: gradeText, tone: gradeTone)
+                    Text(strings.t("research.scorecard.evaluated", ["count": String(scorecard.evaluated)]))
+                        .font(Self.footnote).foregroundStyle(theme.secondaryLabel)
+                    Spacer(minLength: 0)
+                    HStack(spacing: 6) {
+                        ForEach(["risk", "warn", "caution"], id: \.self) { severity in
+                            if let count = scorecard.counts[severity], count > 0 {
+                                VisionBadge(
+                                    text: String(count) + " " + strings.t("research.scorecard.severity." + severity),
+                                    tone: severity == "risk" ? .destructive : .warning, small: true)
+                            }
                         }
                     }
                 }
                 let concerns = scorecard.flags.filter { $0.severity != "ok" }
                 if concerns.isEmpty {
-                    Label(strings.t("research.scorecard.allClear"), systemImage: "checkmark.circle").foregroundStyle(
-                        theme.success)
-                }
-                ForEach(concerns) { flag in
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Image(
-                                systemName: flag.severity == "risk"
-                                    ? "exclamationmark.octagon" : "exclamationmark.triangle"
-                            ).foregroundStyle(tone(flag.severity)).accessibilityLabel(
-                                strings.t("research.scorecard.severity." + flag.severity))
-                            Text(strings.t("research.metric." + flag.metric)).font(.callout.weight(.medium))
-                            Spacer()
-                            Text(flagValue(flag)).monospacedDigit()
+                    Label(strings.t("research.scorecard.allClear"), systemImage: "checkmark.circle")
+                        .font(Self.callout).foregroundStyle(theme.success)
+                } else {
+                    InsightsInsetList {
+                        ForEach(Array(concerns.enumerated()), id: \.element.id) { index, flag in
+                            if index > 0 { InsightsInsetDivider() }
+                            concernRow(flag)
                         }
-                        let key = "research.scorecard.reason." + flag.reasonKey
-                        Text(strings.t(key) == key ? flag.reason : strings.t(key)).font(.caption).foregroundStyle(
-                            theme.secondaryLabel)
-                        Text(strings.t("research.scorecard.benchmark", ["value": localizedBenchmark(flag.benchmark)]))
-                            .font(.caption).foregroundStyle(theme.secondaryLabel)
-                    }.padding(.vertical, 7)
+                    }
                 }
             }
+        }
+    }
+    private static var footnote: Font { VisionFonts.font(DesignTokens.Typography.footnote, relativeTo: .footnote) }
+    private static var callout: Font { VisionFonts.font(DesignTokens.Typography.callout, relativeTo: .callout) }
+    /// `ScorecardGradeBadge`: the score, then the grade.
+    private var gradeText: String {
+        let grade = strings.t("research.scorecard.grade." + scorecard.grade)
+        guard let score = scorecard.score else { return grade }
+        return ResearchMarketDisplay.number(score, shell: shell, digits: 0) + " " + grade
+    }
+    private var gradeTone: BadgeTone {
+        switch scorecard.grade {
+        case "strong", "healthy": return .success
+        case "mixed", "weak": return .warning
+        case "poor": return .destructive
+        default: return .muted
+        }
+    }
+    /// A concern's `ListRow`: the severity glyph, the metric over its reason, and the value over
+    /// its benchmark at the trailing edge.
+    private func concernRow(_ flag: ResearchScorecardFlag) -> some View {
+        let key = "research.scorecard.reason." + flag.reasonKey
+        return HStack(alignment: .center, spacing: 12) {
+            Image(systemName: Self.icon(flag.severity))
+                .font(.system(size: 15)).foregroundStyle(tone(flag.severity))
+                .frame(width: 28, height: 28)
+                .accessibilityLabel(strings.t("research.scorecard.severity." + flag.severity))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(strings.t("research.metric." + flag.metric)).lineLimit(1).foregroundStyle(theme.foreground)
+                Text(strings.t(key) == key ? flag.reason : strings.t(key)).font(Self.footnote).lineLimit(1)
+                    .foregroundStyle(theme.secondaryLabel)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(flagValue(flag)).monospacedDigit().foregroundStyle(theme.foreground)
+                Text(strings.t("research.scorecard.benchmark", ["value": localizedBenchmark(flag.benchmark)]))
+                    .foregroundStyle(theme.secondaryLabel)
+            }
+            .font(Self.footnote)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+    }
+    /// lucide `CheckCircle2`, `TriangleAlert`, `AlertTriangle` and `ShieldAlert`.
+    private static func icon(_ severity: String) -> String {
+        switch severity {
+        case "ok": return "checkmark.circle"
+        case "risk": return "exclamationmark.shield"
+        default: return "exclamationmark.triangle"
         }
     }
     private func tone(_ severity: String) -> Color {
