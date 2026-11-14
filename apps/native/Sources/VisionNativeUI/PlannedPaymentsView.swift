@@ -467,6 +467,8 @@ public struct PlannedPaymentsView: View {
         ) {
             emptyState
         }
+        // `PlannedPaymentsTable` keeps `VirtualDataTable`'s default `maxHeight` (600).
+        .bodyMaxHeight(600)
     }
 
     @ViewBuilder

@@ -48,10 +48,13 @@ public struct StatisticsView: View {
         return min(120, max(0, (printPageWidth ?? 544) - 32) * 0.25)
     }
     private var pivotColumnWidth: CGFloat {
-        // The table fills the card (`w-full`, `min-w-[800px]`): columns grow past 110 pt to share it.
+        // The table fills the card (`w-full`, `min-w-[800px]`) and its auto-layout columns are as
+        // narrow as a `px-3` amount, so twelve months and the total fit a wide card. A 110 pt floor
+        // pushed the last months past the card's edge: the table opened scrolled to the left, so
+        // it seemed to end two months early. Amounts scale down to 0.8 before they would clip.
         guard isPrinting else {
             let shared = (pivotWidth - pivotLabelWidth) / CGFloat(displayedPivotPeriods.count + 1)
-            return max(110, shared.isFinite ? shared : 0)
+            return max(84, shared.isFinite ? shared : 0)
         }
         let available = max(0, (printPageWidth ?? 544) - 32 - pivotLabelWidth)
         return min(72, available / CGFloat(displayedPivotPeriods.count + 1))

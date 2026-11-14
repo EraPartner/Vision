@@ -139,13 +139,29 @@ struct PageScrollObserver: NSViewRepresentable {
         private func clipDidScroll(_ clip: NSClipView) {
             guard clip.window === window, let document = clip.documentView,
                 document.frame.height > clip.bounds.height,
-                clip.bounds.width >= bounds.width * 0.6
+                clip.bounds.width >= bounds.width * 0.6, !Self.isNestedInVerticalScroller(clip)
             else { return }
             let offset =
                 document.isFlipped
                 ? clip.bounds.minY + clip.contentInsets.top
                 : document.frame.height - clip.bounds.maxY
             onChange?(max(0, offset))
+        }
+
+        /// A table body that scrolls inside the page (`VirtualDataTable`'s `maxHeight`) is as wide
+        /// as the page but sits inside the page's own scroller; only the outermost vertical
+        /// scroller moves the topbar.
+        private static func isNestedInVerticalScroller(_ clip: NSClipView) -> Bool {
+            var view = clip.superview
+            while let current = view {
+                if let outer = current as? NSClipView, let document = outer.documentView,
+                    document.frame.height > outer.bounds.height + 1
+                {
+                    return true
+                }
+                view = current.superview
+            }
+            return false
         }
     }
 }

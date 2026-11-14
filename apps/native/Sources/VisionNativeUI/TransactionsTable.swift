@@ -389,21 +389,29 @@ struct TransactionsTableCard: View {
             let columns = dataColumns
             let labels = model.labels
             let accountNames = model.accountNames
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(rows) { row in
-                    // The row and its divider are one lazy child, not two.
-                    VStack(alignment: .leading, spacing: 0) {
-                        TransactionRowView(
-                            model: model, shell: shell, row: row, columns: columns, compact: isCompact,
-                            widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow
-                        )
-                        .equatable()
-                        Divider()
+            // `VirtualDataTable maxHeight={720}`: the header and search row stay put and the rows
+            // scroll inside the card, drawn lazily; drawn rows near the end load the next page.
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { row in
+                        // The row and its divider are one lazy child, not two.
+                        VStack(alignment: .leading, spacing: 0) {
+                            TransactionRowView(
+                                model: model, shell: shell, row: row, columns: columns, compact: isCompact,
+                                widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow
+                            )
+                            .equatable()
+                            Divider()
+                        }
                     }
                 }
             }
+            .frame(maxHeight: Self.bodyMaxHeight)
         }
     }
+
+    /// `maxHeight` the Transactions page gives its `VirtualDataTable`.
+    static let bodyMaxHeight: CGFloat = 720
 
     @ViewBuilder
     private var emptyState: some View {
@@ -501,7 +509,8 @@ struct TransactionRowView: View, Equatable {
                 .frame(width: TransactionsTableCard.editWidth, alignment: .center)
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: compact ? 128 : 52)
+        // `rowHeight={compact ? 128 : 57}` (TransactionsTable.tsx).
+        .frame(minHeight: compact ? 128 : 57)
         .background(isSelected ? theme.primary.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
         .opacity(row.isActive ? 1 : 0.55)

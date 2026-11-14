@@ -186,6 +186,8 @@ public struct RecipientsView: View {
             if model.editing?.id != payee.id { model.startEditing(payee) }
         }
         .searchPlaceholder(strings.t("table.searchDatabase"))
+        // RecipientsPage: `VirtualDataTable maxHeight={700}`; the header stays and the rows scroll.
+        .bodyMaxHeight(700)
     }
 
     /// `recipientsPage.loadMoreFailed` with Retry.
