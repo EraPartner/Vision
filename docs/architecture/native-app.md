@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-13
+date: 2026-11-14
 updated: 2026-11-07
 tags:
   [
@@ -1910,6 +1910,26 @@ counterpart:
   (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state.
 - **Halos.** Under Full effects the wide dark-mode halo stays on headings, and the page subtitle
   keeps the single 8 pt halo.
+
+### Swift redraw and layer optimisations
+
+These have no Electron counterpart; they remove work SwiftUI and Core Animation did per pointer
+move or per composited frame.
+
+- **Hover state stays with what it draws.** `VisionTable` keeps the hovered row in `VisionTableHover`
+  (an `@Observable` object that only `VisionTableHoverBand` reads; the layout records its row
+  extents there), so a pointer moving over a table redraws the band and never re-runs the table
+  body, its cells or its layout. `LocalDataTable` rows use `RowHoverBand` the same way. On Home,
+  `ChartSelectionScope` owns the hovered point of the summary sparkline and the monthly trends
+  chart, so a chart hover re-renders its card and not the dashboard.
+- **Tooltip anchors.** `VisionTooltipModifier` creates its AppKit anchor view only while the pointer
+  is over the control; `VisionTooltipPresenter` reads it when the tooltip opens.
+- **Offscreen passes.** The detail column is clipped sideways with a rectangular `clipShape`
+  (`ColumnSidewaysClip`), not a mask view. A card with an opaque fill (reduced tier, Reduce
+  Transparency) drops the shadow cut-out mask of `VisionCardLayerView`. `VisionButtonChrome` casts
+  `shadow-sm` from the fill shape and only on the variants that have one.
+- **Topbar.** On the reduced tier and under Reduce Transparency the veil lies over an opaque
+  `--card` instead of a blurred backdrop (`:root.fx-reduced .app-topbar`).
 
 Chromium-only items have no Swift counterpart: squircle clips, React memoisation, virtualizer
 estimates, chart entrance layers, `material-host` pseudo-elements and `backdrop-filter`

@@ -252,3 +252,22 @@ enum ChartCurve {
         return path
     }
 }
+
+// MARK: Selection scope
+
+/// Owns a chart's hovered point and compared range. A page that keeps them in its own `@State`
+/// re-runs its whole body (every card, grid and chart) each time the pointer crosses to another
+/// point; held here, the hover re-renders only what `content` builds.
+struct ChartSelectionScope<Content: View>: View {
+    @State private var selection: String?
+    @State private var rangeStart: String?
+    private let content: (Binding<String?>, Binding<String?>) -> Content
+
+    init(@ViewBuilder content: @escaping (Binding<String?>, Binding<String?>) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        content($selection, $rangeStart)
+    }
+}

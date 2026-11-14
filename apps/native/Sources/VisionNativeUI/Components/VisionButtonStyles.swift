@@ -146,12 +146,8 @@ struct VisionButtonChrome: View {
             .foregroundStyle(foreground(resolved, hover: hover))
             .padding(.horizontal, metrics.horizontalPadding)
             .frame(minWidth: metrics.isIcon ? metrics.height : nil, minHeight: metrics.height)
-            .background(shape.fill(fill(resolved, hover: hover)))
+            .background { surface(shape, variant: resolved, hover: hover) }
             .overlay(shape.strokeBorder(stroke(resolved), lineWidth: VisionControlMetrics.borderWidth))
-            .shadow(
-                color: .black.opacity(hasShadow(resolved) ? VisionControlMetrics.shadowSmAlpha : 0),
-                radius: VisionControlMetrics.shadowSmRadius, y: VisionControlMetrics.shadowSmY
-            )
             .contentShape(shape)
             .visionFocusRing(cornerRadius: VisionControlMetrics.radius)
             .opacity(isEnabled ? 1 : VisionControlMetrics.disabledOpacity)
@@ -165,6 +161,21 @@ struct VisionButtonChrome: View {
     /// `variant="destructive"` does for delete actions.
     private var resolvedVariant: VisionButtonVariant {
         variant == .default && configuration.role == .destructive ? .destructive : variant
+    }
+
+    /// The fill, with `shadow-sm` on the variants that have one. The shadow is cast by the fill's
+    /// shape: on the whole button it was a shadow effect over the label, fill and border of every
+    /// button, the ghost and outline ones (each ledger row's Edit button) included at alpha 0.
+    @ViewBuilder
+    private func surface(_ shape: RoundedRectangle, variant: VisionButtonVariant, hover: Bool) -> some View {
+        if hasShadow(variant) {
+            shape.fill(fill(variant, hover: hover))
+                .shadow(
+                    color: .black.opacity(VisionControlMetrics.shadowSmAlpha),
+                    radius: VisionControlMetrics.shadowSmRadius, y: VisionControlMetrics.shadowSmY)
+        } else {
+            shape.fill(fill(variant, hover: hover))
+        }
     }
 
     private func hasShadow(_ variant: VisionButtonVariant) -> Bool {
