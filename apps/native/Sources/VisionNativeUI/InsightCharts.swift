@@ -4,7 +4,9 @@ import VisionNativeCore
 
 /// How a timeline chart writes its value-axis ticks: `formatAxisCompact` ("6,5k €") or the full
 /// currency format with the app's decimal places (`formatCurrency`).
-enum InsightYAxisFormat { case compact, full }
+/// `compact` is `formatAxisCompact`, `lengthAware` is `formatCompact` (full while short), `full`
+/// the plain currency format.
+enum InsightYAxisFormat { case compact, lengthAware, full }
 
 /// How a timeline chart writes its x-axis ticks: `CHART_DATE_PATTERNS.monthTick` ("Nov 24"),
 /// `formatMonthYearWithAppSettings` ("05/2026"), the day number of a month ("2", "4", ...) or
@@ -439,6 +441,10 @@ struct InsightTimelineChart: View {
         case .compact:
             return VisionFormat.currencyAxisCompact(
                 Decimal(number), code: currency, locale: settings.numberFormat.locale)
+        case .lengthAware:
+            return VisionFormat.currencyCompact(
+                Decimal(number), code: currency, locale: settings.numberFormat.locale,
+                fractionDigits: settings.showDecimalPlaces)
         case .full:
             return VisionFormat.currency(
                 Decimal(number), code: currency, locale: settings.numberFormat.locale,

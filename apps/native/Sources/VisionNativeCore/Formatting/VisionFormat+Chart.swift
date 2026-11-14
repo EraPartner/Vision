@@ -2,6 +2,21 @@ import Foundation
 
 /// Chart axis formatting (apps/frontend/src/utils/currency.ts and lib/dateUtils.ts).
 extension VisionFormat {
+    /// `formatCurrencyCompact`: the full amount while it is at most nine characters, otherwise the
+    /// locale's compact notation (one fraction digit at most) when that is shorter and the locale
+    /// has one for the magnitude (`de_DE` writes thousands in full, so it keeps the full amount).
+    public static func currencyCompact(
+        _ value: Decimal, code: CurrencyCode, locale: Locale, fractionDigits: Int
+    ) -> String {
+        let full = currency(value, code: code, locale: locale, fractionDigits: fractionDigits)
+        guard !value.isNaN, full.utf16.count > 9 else { return full }
+        let plain = Decimal.FormatStyle.Currency(code: code.rawValue, locale: locale)
+            .precision(.fractionLength(0...1))
+        let compact = value.formatted(plain.notation(.compactName))
+        guard compact != value.formatted(plain), compact.utf16.count < full.utf16.count else { return full }
+        return compact
+    }
+
     /// `formatCurrencyAxisCompact`: the amount scaled to k / M / B / T with at most one fraction
     /// digit, the suffix placed right after the last digit so the locale keeps its own symbol
     /// order ("6,5k €" in `de_DE`, "$6.5k" in `en_US`). Amounts under one thousand keep no

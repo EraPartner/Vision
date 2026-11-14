@@ -576,7 +576,7 @@ public struct HomeView: View {
                         id: "spending", label: strings.t("monthlyTrends.spending"),
                         points: months.map { InsightChartPoint(key: $0.id, value: abs($0.total_spending)) }),
                 ], currency: currency, settings: settings, title: strings.t("monthlyTrends.title"),
-                bars: true, xLabels: .appMonthYear,
+                bars: true, yAxis: .lengthAware, xLabels: .appMonthYear,
                 selection: $monthSelection, rangeStart: $monthRange)
             // `mt-6 grid grid-cols-2 gap-3`: the totals as two tinted tiles.
             HStack(spacing: 12) {
