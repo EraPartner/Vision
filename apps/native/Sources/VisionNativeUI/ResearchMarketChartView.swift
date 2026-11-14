@@ -14,6 +14,8 @@ struct ResearchMarketChartView: View {
     @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
     @State private var plotCache = ChartLinePlotCache()
+    /// The chart's width, for the web's date tick count.
+    @State private var chartWidth: CGFloat = 0
     @Environment(\.visionTheme) private var theme
     /// `isPositive ? hsl(var(--accent)) : hsl(var(--destructive))` in MarketLookupPage.
     private var color: Color { positive ? theme.accent : theme.destructive }
@@ -47,7 +49,8 @@ struct ResearchMarketChartView: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                // AreaChart's bottom axis: `numTicks={Math.max(2, Math.floor(innerWidth / 90))}`.
+                AxisMarks(values: .automatic(desiredCount: max(2, Int(chartWidth / 90)))) { value in
                     AxisTick()
                     AxisValueLabel {
                         if let date = value.as(Date.self) {
@@ -83,7 +86,9 @@ struct ResearchMarketChartView: View {
                         onPress: { focused = true })
                 }
             }
-            .frame(height: 320).focusable().focused($focused).focusEffectDisabled()
+            .frame(height: 320)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { chartWidth = $0 }
+            .focusable().focused($focused).focusEffectDisabled()
             .onKeyPress(phases: .down) { press in
                 ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: plot.times.count)
             }

@@ -81,7 +81,11 @@ public struct ResearchDossiersView: View {
             }
             if !model.listLoading && model.listError == nil && model.items.isEmpty {
                 ResearchCard {
-                    VisionEmptyState(symbol: "folder", title: strings.t("dossiers.empty")) {}.padding(.vertical, 8)
+                    // `EmptyState size="compact"` with the page icon (`PAGE_ICONS["/research/dossiers"]`).
+                    VisionEmptyState(
+                        symbol: VisionPageSymbol.of("/research/dossiers", fallback: "book"),
+                        title: strings.t("dossiers.empty"), compact: true
+                    ) {}
                 }
             }
             LazyVStack(spacing: 0) {
@@ -145,7 +149,8 @@ public struct ResearchDossiersView: View {
             } else if model.selectedId == nil && !model.listLoading && model.listError == nil {
                 ResearchCard {
                     VisionEmptyState(
-                        symbol: "folder", title: strings.t(model.items.isEmpty ? "dossiers.empty" : "dossiers.select"),
+                        symbol: VisionPageSymbol.of("/research/dossiers", fallback: "book"),
+                        title: strings.t(model.items.isEmpty ? "dossiers.empty" : "dossiers.select"),
                         description: model.items.isEmpty ? strings.t("dossiers.emptyHint") : nil
                     ) {}
                 }

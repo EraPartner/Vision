@@ -280,9 +280,10 @@ public struct PortfolioHoldingsView: View {
                                     }))
                         }
                     } label: {
-                        Text(strings.t("portfolio.columns")).visionChipChrome()
+                        Text(strings.t("portfolio.columns"))
                     }
-                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                    // StocksPage: `<Button variant="outline" size="sm">` as the dropdown trigger.
+                    .menuStyle(.button).buttonStyle(.vision(.outline, size: .sm)).menuIndicator(.hidden).fixedSize()
                 }
                 HStack(spacing: 16) {
                     if let freshness = PortfolioPricePresentation.freshness(holdings, shell: shell) {
@@ -339,10 +340,11 @@ public struct PortfolioHoldingsView: View {
                                         ).string)
                                 }
                                 .buttonStyle(.plain)
-                                .font(.system(.callout, design: .monospaced))
+                                // `font-mono` at the cell's body size, the name under it `type-footnote`.
+                                .font(.system(.body, design: .monospaced))
                             }
                             Button(holding.name) { Task { await model.openDetail(id: holding.id) } }.buttonStyle(.plain)
-                                .font(holding.symbol == nil ? .callout.weight(.semibold) : .caption)
+                                .font(holding.symbol == nil ? .body.weight(.semibold) : .footnote)
                                 .foregroundStyle(holding.symbol == nil ? theme.foreground : theme.secondaryLabel)
                             if holding.oversold {
                                 VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
