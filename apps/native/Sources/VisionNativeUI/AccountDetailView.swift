@@ -109,7 +109,7 @@ struct AccountDetailContent: View {
     // MARK: Header menu
 
     private var actionsMenu: some View {
-        Menu {
+        VisionMenu {
             ForEach(Array(model.menuItems(account).enumerated()), id: \.offset) { _, item in
                 menuRow(item)
             }
@@ -179,8 +179,13 @@ struct AccountDetailContent: View {
         case .deleteDisabled:
             Button {
             } label: {
-                Text(strings.t("common.delete"))
-                Text(strings.t("accounts.delete.hasTransactions"))
+                Label {
+                    Text(strings.t("common.delete"))
+                    Text(strings.t("accounts.delete.hasTransactions"))
+                        .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                } icon: {
+                    Image(systemName: "trash")
+                }
             }
             .disabled(true)
         }

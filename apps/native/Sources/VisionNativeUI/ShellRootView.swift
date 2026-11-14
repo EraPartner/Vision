@@ -169,10 +169,18 @@ public struct ShellRootView: View {
             .environment(\.colorScheme, theme.colorScheme)
     }
 
+    /// A page presented an in-window dialog, alert or sheet (shell overlays excluded).
+    private var pageModalOpen: Bool {
+        VisionModalRegistry.shared.isOpen && !model.isPresentingNativeOverlay
+    }
+
     public var body: some View {
         let theme = VisionTheme(selection: model.theme)
         NavigationSplitView(columnVisibility: $columnVisibility) {
             NativeSidebar(model: model, skipToContent: isNativeDetail ? { contentFocused = true } : nil)
+                // A page's dialog or sheet dims and blurs the sidebar too, as the web overlay
+                // covers the whole window; shell overlays already cover it themselves.
+                .modifier(PageModalSidebarScrim(active: pageModalOpen))
                 .navigationSplitViewColumnWidth(
                     min: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth,
                     max: SidebarWidthGuard.maximumWidth)
@@ -199,7 +207,8 @@ public struct ShellRootView: View {
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         .environment(\.nativeNoticeCenter, model.notices)
         .overlay(alignment: .bottomTrailing) {
-            if model.settings.adminMode, let inspector = model.apiInspector {
+            // Hidden under a page dialog or sheet: the pill would sit over its footer buttons.
+            if model.settings.adminMode, !pageModalOpen, let inspector = model.apiInspector {
                 NativeAPIInspectorOverlay(model: inspector).environment(\.visionTheme, theme)
             }
         }
@@ -625,6 +634,38 @@ struct NativeSidebar: View {
         .buttonStyle(SidebarRowButtonStyle(isActive: isActive))
         .accessibilityValue(updateReady ? model.strings.t("layout.updateReady") : "")
         .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+/// The modal overlay's share over the sidebar column while a page shows a dialog or sheet: the
+/// same scrim and blur `VisionModalPresenter` puts over the page (`.modal-overlay`, frosted with
+/// Full effects or the enhanced tier), and the sidebar takes no clicks meanwhile.
+private struct PageModalSidebarScrim: ViewModifier {
+    let active: Bool
+    @Environment(\.visionFullEffects) private var fullEffects
+    @Environment(\.visionVisualEffects) private var visualEffects
+    @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let frosted = fullEffects || visualEffects == .enhanced
+        content
+            .blur(radius: frosted && active ? CGFloat(DesignTokens.Overlay.blur) : 0)
+            .overlay {
+                Color(
+                    token: theme.palette.background,
+                    opacity: frosted ? DesignTokens.Overlay.scrimFrosted : DesignTokens.Overlay.scrim
+                )
+                .opacity(active ? 1 : 0)
+                .allowsHitTesting(active)
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+            }
+            .disabled(active)
+            .accessibilityHidden(active)
+            .animation(
+                reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.normal),
+                value: active)
     }
 }
 

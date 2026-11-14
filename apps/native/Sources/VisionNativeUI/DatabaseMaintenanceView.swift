@@ -181,7 +181,8 @@ public struct DatabaseMaintenanceView: View {
             .buttonStyle(.plain)
             .foregroundStyle(theme.primary)
             .accessibilityAddTraits(.isLink)
-            .padding(.vertical, 8)
+            // `TableCell` `py-3`: the row height of the web table.
+            .padding(.vertical, 12)
             Text(row.liveRows).monospacedDigit()
             Text(row.lastVacuum)
                 .font(.footnote)
@@ -206,7 +207,7 @@ public struct DatabaseMaintenanceView: View {
 
     /// `dbMaintenance.rowMenu`: Browse rows and Run vacuum (disabled while any vacuum runs).
     private func rowMenu(_ row: DatabaseTableRow) -> some View {
-        Menu {
+        VisionMenu {
             Button {
                 shell.navigate(to: row.editorRoute)
             } label: {

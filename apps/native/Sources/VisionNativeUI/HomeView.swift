@@ -38,8 +38,8 @@ public struct HomeView: View {
                     ShellUpcomingPaymentsBanner(model: notifications.upcoming, shell: shell)
                 }
                 VisionPageHeader(title: greeting, subtitle: todayLong, symbol: "square.grid.2x2") {
-                    Menu {
-                        Button(strings.t("home.customize")) { customize = true }
+                    VisionMenu {
+                        Button(strings.t("home.customize"), systemImage: "square.grid.2x2") { customize = true }
                     } label: {
                         Image(systemName: "ellipsis")
                     }

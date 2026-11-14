@@ -9,7 +9,7 @@ struct PortfolioHoldingActionsMenu: View {
     var page = PortfolioHoldingsPage.stocks
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        Menu {
+        VisionMenu {
             Button(strings.t("invDetail.trigger"), systemImage: "info.circle") {
                 Task { await model.openDetail(id: holding.id) }
             }
