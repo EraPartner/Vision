@@ -117,18 +117,27 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
         if mounted { VisionModalRegistry.shared.opened() } else { VisionModalRegistry.shared.closed() }
     }
 
+    /// The scrim covers everything the presenting view reaches, safe areas included. The panel is
+    /// placed in the presenting view's own width: a page's detail column reaches under the
+    /// floating sidebar through a leading safe-area inset, and a panel laid out across that inset
+    /// sat half under the sidebar (clipped by the column, its content off-centre). Vertically it
+    /// spans the window, as the web's `fixed inset-0` overlay does; the shell hides the topbar
+    /// while a page panel is up (`PageModalTopbarHiding`).
     private var layer: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: kind == .sideSheet ? (metrics.sideEdge == .leading ? .leading : .trailing) : .center) {
-                scrim
-                placed(in: proxy.size)
+        ZStack {
+            scrim.ignoresSafeArea()
+            GeometryReader { proxy in
+                ZStack(alignment: kind == .sideSheet ? (metrics.sideEdge == .leading ? .leading : .trailing) : .center) {
+                    Color.clear
+                    placed(in: proxy.size)
+                }
             }
+            .ignoresSafeArea(edges: .vertical)
         }
         // The panel's system `Material` follows the environment colour scheme, not the app theme.
         // The presenter sits above the content that sets it, so without this a dark theme under a
         // light system appearance drew a light material behind dark content.
         .environment(\.colorScheme, theme.colorScheme)
-        .ignoresSafeArea()
     }
 
     private var scrim: some View {

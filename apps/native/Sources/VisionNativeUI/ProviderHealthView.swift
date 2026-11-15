@@ -62,11 +62,12 @@ public struct ProviderHealthView: View {
             header(strings.t("admin.providers.colLastSuccess"))
             header(strings.t("admin.providers.colFailures"))
             header(strings.t("admin.providers.colLastError"))
-            // `sr-only`: read by VoiceOver, not drawn.
-            Text(strings.t("dbMaintenance.col.actions"))
-                .font(.caption)
-                .foregroundStyle(Color.clear)
-                .frame(width: 1)
+            // `sr-only`: read by VoiceOver, not drawn. A zero-size element: a hidden text in a
+            // 1 pt column wrapped one letter per line and made the header row several lines tall.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityLabel(strings.t("dbMaintenance.col.actions"))
                 .accessibilityAddTraits(.isHeader)
             if model.providers.isLoading {
                 ForEach(0..<7, id: \.self) { _ in
@@ -89,7 +90,8 @@ public struct ProviderHealthView: View {
         Text(title)
             .font(.caption.weight(.medium))
             .foregroundStyle(theme.secondaryLabel)
-            .padding(.vertical, 8)
+            // `TableHead` `h-10`.
+            .padding(.vertical, 12)
             .accessibilityAddTraits(.isHeader)
     }
 
@@ -101,7 +103,8 @@ public struct ProviderHealthView: View {
                     .accessibilityHidden(true)
                 Text(row.label).fontWeight(.medium)
             }
-            .padding(.vertical, 6)
+            // `TableCell` `py-3`: the row's height comes from its tallest cell.
+            .padding(.vertical, 12)
             VisionBadge(text: row.kind, tone: .muted, small: true)
             Text(row.lastSuccess)
                 .foregroundStyle(theme.secondaryLabel)

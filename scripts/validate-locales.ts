@@ -410,7 +410,9 @@ if (fs.existsSync(frontendSrc)) {
 // keeping ambiguous keys; the validator never deletes locale data itself.
 // ---------------------------------------------------------------------------
 const USAGE_SCAN_DIRS = ["apps", "packaging", "scripts", "packages", "config"];
-const USAGE_EXTS = /\.(ts|tsx|js|jsx|cjs|mjs|json|html|sh|mako|yml|yaml)$/;
+// `swift`: the Swift app (apps/native) reads the same keys through its String Catalog.
+const USAGE_EXTS =
+  /\.(ts|tsx|js|jsx|cjs|mjs|json|html|sh|mako|yml|yaml|swift)$/;
 // Prefixes for keys consumed dynamically outside t()/tc() (e.g. the electron shell).
 const DYNAMIC_KEY_ALLOWLIST = ["app."];
 // A dotted-key prefix ending at a dot boundary (e.g. "accounts.type.").

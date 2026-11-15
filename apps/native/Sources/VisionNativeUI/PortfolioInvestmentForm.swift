@@ -294,8 +294,7 @@ private struct PortfolioAssetTypeTile: View {
         let shape = RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card), style: .continuous)
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: symbol)
-                    .font(.system(size: 20)).foregroundStyle(theme.primary).accessibilityHidden(true)
+                VisionSymbol(symbol, size: 20).foregroundStyle(theme.primary).accessibilityHidden(true)
                     .frame(width: 40, height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)

@@ -57,6 +57,9 @@ public struct NativeAppSettings: Equatable, Sendable {
     /// `auto` by default (on with the Standard tier); the design layer reads the resolved switch
     /// through `NativeSettingsModel.fullEffects`.
     public var fullEffects: FullEffectsChoice
+    /// `assetLogos` (Swift app only): load company and coin logos for the asset pages by ticker
+    /// (`AssetLogoSource`). Off by default, so no logo host is contacted until the user opts in.
+    public var assetLogos = false
 
     public init(
         defaultCurrency: CurrencyCode = .eur, dateFormat: AppDateFormat = .dayMonthYearSlash,
@@ -113,6 +116,7 @@ public struct NativeAppSettings: Equatable, Sendable {
         }
         if let value = fields["adminMode"]?.boolValue { settings.adminMode = value }
         if let value = fields["colorblindGainLoss"]?.boolValue { settings.colorblindGainLoss = value }
+        if let value = fields["assetLogos"]?.boolValue { settings.assetLogos = value }
         if let value = fields["defaultPageSize"]?.intValue, value > 0 { settings.defaultPageSize = value }
         if let value = fields["analysisBenchmark"]?.stringValue {
             let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()

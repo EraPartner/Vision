@@ -24,8 +24,7 @@ struct VisionPageHeader<Actions: View>: View {
         HStack(alignment: .center, spacing: 12) {
             // PageHeader's default icon: a bare 20 pt muted glyph in a 36 pt slot (its gradient
             // tile only shows when a page passes an icon colour).
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .regular))
+            VisionSymbol(symbol, size: 18)
                 .foregroundStyle(Color(token: theme.palette.mutedForeground))
                 .frame(width: 36, height: 36)
                 .accessibilityHidden(true)
@@ -138,8 +137,7 @@ struct VisionEmptyState<Action: View>: View {
 
     private var block: some View {
         VStack(spacing: 0) {
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .regular))
+            VisionSymbol(symbol, size: 18)
                 .foregroundStyle(theme.secondaryLabel)
                 .frame(width: 40, height: 40)
                 .background(

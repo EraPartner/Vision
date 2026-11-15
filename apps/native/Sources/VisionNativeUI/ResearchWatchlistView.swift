@@ -113,9 +113,10 @@ private struct ResearchWatchlistRow: View {
     private var metric: ResearchWatchlistMetrics? { model.metrics[item.id.rawValue] }
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(
-                systemName: item.assetClass == "crypto"
-                    ? "bitcoinsign.circle" : item.assetClass == "metals" ? "diamond" : "chart.line.uptrend.xyaxis"
+            VisionSymbol(
+                item.assetClass == "crypto"
+                    ? "bitcoinsign.circle" : item.assetClass == "metals" ? VisionSymbol.goldBar : "chart.line.uptrend.xyaxis",
+                size: 13
             )
             .foregroundStyle(theme.secondaryLabel).frame(width: 24).padding(.top, 4).accessibilityHidden(true)
             ViewThatFits(in: .horizontal) {

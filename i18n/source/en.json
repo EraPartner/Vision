@@ -3457,6 +3457,8 @@
   "settings.app.updatesHintWeb": "Update this deployment the same way it was installed. Any data upgrades run automatically on restart.",
   "settings.app.version": "Version {version}",
   "settings.app.versionAvailable": "Version {version} is available",
+  "settings.appearance.assetLogos": "Company and coin logos",
+  "settings.appearance.assetLogosHint": "Shows logos on the asset pages. Vision loads them by ticker from financialmodelingprep.com (stocks and ETFs) and cdn.jsdelivr.net (crypto); no amounts or other data are sent. Off by default.",
   "settings.appearance.autoAdaptDisplay": "Reduce effects on large displays",
   "settings.appearance.autoAdaptDisplayHint": "Automatically switches to Reduced while the window is on a high-resolution external display such as a 4K TV, and back when it leaves. The built-in screen never counts as large.",
   "settings.appearance.darkFrom": "Dark from",

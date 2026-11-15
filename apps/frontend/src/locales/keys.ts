@@ -3460,6 +3460,8 @@ export type TranslationKey =
   | "settings.app.updatesHintWeb"
   | "settings.app.version"
   | "settings.app.versionAvailable"
+  | "settings.appearance.assetLogos"
+  | "settings.appearance.assetLogosHint"
   | "settings.appearance.autoAdaptDisplay"
   | "settings.appearance.autoAdaptDisplayHint"
   | "settings.appearance.darkFrom"

@@ -61,7 +61,7 @@ struct ResearchWatchlistChartSheet: View {
                     }
                 }
             }
-        }.padding(24).frame(width: 760, height: 640)
+        }.padding(24).visionDialogFrame(width: 760, height: 640)
             .onChange(of: model.isEditingTarget) { _, editing in if editing { targetFocused = true } }
             .onChange(of: model.validationRevision) { _, _ in targetFocused = true }
     }

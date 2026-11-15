@@ -310,7 +310,7 @@ struct CustomChartBuilderSheet: View {
                 .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(
                     !draft.canSave || model.isSaving)
             }
-        }.visionDialogPadding().frame(width: 896, height: 680).visionInteractiveDismissDisabled(model.isSaving)
+        }.visionDialogPadding().visionDialogFrame(width: 896, height: 740).visionInteractiveDismissDisabled(model.isSaving)
             .task(id: model.draft) { await model.refreshPreview() }
     }
     /// The web `Label`: `type-body font-medium text-label-primary` above its control.

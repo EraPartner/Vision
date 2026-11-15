@@ -674,12 +674,15 @@ struct TransactionQuickLookSheet: View {
                 .frame(maxWidth: .infinity)
         }
         .visionDialogPadding()
-        .frame(minWidth: 384, idealWidth: 384)
-        .focusable()
-        .focusEffectDisabled()
-        .onKeyPress(.space) {
-            model.closeQuickLook()
-            return .handled
+        .frame(width: 384)
+        // Space closes from wherever focus is: the dialog panel takes focus when it opens, so a
+        // key handler on this view alone never saw the key.
+        .background {
+            Button(strings.t("common.close")) { model.closeQuickLook() }
+                .keyboardShortcut(.space, modifiers: [])
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
     }
 }

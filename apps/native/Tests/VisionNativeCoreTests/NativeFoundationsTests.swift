@@ -21,6 +21,13 @@ import Testing
         #expect(NativeAppSettings.migrate(nil) == .defaults)
     }
 
+    @Test func assetLogosStayOffUntilTheUserTurnsThemOn() {
+        #expect(NativeAppSettings.defaults.assetLogos == false)
+        #expect(NativeSettingsDefaults.app["assetLogos"] == .bool(false))
+        #expect(NativeAppSettings.migrate(.object(["assetLogos": .bool(true)])).assetLogos)
+        #expect(NativeAppSettings.migrate(.object(["assetLogos": .string("yes")])).assetLogos == false)
+    }
+
     @Test func numberFormatsUseTheWebLocales() {
         #expect(NumberFormat.eu.locale.identifier == "de_DE")
         #expect(NumberFormat.us.locale.identifier == "en_US")

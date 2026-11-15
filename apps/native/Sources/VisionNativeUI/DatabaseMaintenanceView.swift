@@ -138,11 +138,11 @@ public struct DatabaseMaintenanceView: View {
                     .padding(.vertical, 8)
                     .accessibilityAddTraits(.isHeader)
             }
-            // `sr-only`: read by VoiceOver, not drawn.
-            Text(strings.t("dbMaintenance.col.actions"))
-                .font(.caption)
-                .foregroundStyle(Color.clear)
-                .frame(width: 1)
+            // `sr-only`: read by VoiceOver, not drawn; zero-size, so it cannot wrap into a tall row.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityLabel(strings.t("dbMaintenance.col.actions"))
                 .accessibilityAddTraits(.isHeader)
             if model.isLoading {
                 ForEach(0..<5, id: \.self) { _ in

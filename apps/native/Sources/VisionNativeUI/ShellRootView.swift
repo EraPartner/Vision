@@ -60,6 +60,7 @@ public struct ShellRootView: View {
             if !model.isSidebarVisible {
                 // The rail's first button starts below the lowered traffic lights (bottom edge 34 pt).
                 NativeSidebarRail(model: model, topInset: max(0, 48 - titlebarSafeInset))
+                    .modifier(PageModalSidebarScrim(active: pageModalOpen))
                     .environment(\.colorScheme, theme.colorScheme)
             }
             pageColumn(theme)
@@ -80,9 +81,13 @@ public struct ShellRootView: View {
                 // `.liquid-canvas` is one fixed layer under every route, never part of a page: the
                 // canvas sits beside the page here, so a page switch (a new `.id`, new page sizes)
                 // never rebuilds it, resizes its Metal drawable or restarts its drift.
+                //
+                // It is neither frozen nor clipped to the column: the sidebar floats over the detail
+                // column, which reaches under it through a leading safe-area inset. Clipped to the
+                // page's frame, the strip under the sidebar was empty window background, which
+                // showed as a grey box while the sidebar slid in over it.
                 if isNativeDetail {
-                    FrozenWidthLayout(width: frozenDetailWidth) { DetailGlassBackground() }
-                        .clipShape(ColumnSidewaysClip())
+                    DetailGlassBackground()
                 }
                 if case .native(let screen) = model.detail {
                     FrozenWidthLayout(width: frozenDetailWidth) {
@@ -145,6 +150,9 @@ public struct ShellRootView: View {
                     model: model, height: NativeTopbar.barHeight, veiled: pageVeiled, scrolled: pageScrolled,
                     pageTitle: pageTitle)
                     .ignoresSafeArea(.container, edges: .top)
+                    // A page's dialog or sheet runs up to the window's top edge, as the web overlay
+                    // covers the topbar; the bar sits above the page, so it steps aside meanwhile.
+                    .modifier(PageModalTopbarHiding(active: pageModalOpen))
             }
         }
         .onChange(of: model.route.path) {
@@ -679,6 +687,23 @@ private struct PageModalSidebarScrim: ViewModifier {
                 .accessibilityHidden(true)
             }
             .disabled(active)
+            .accessibilityHidden(active)
+            .animation(
+                reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.normal),
+                value: active)
+    }
+}
+
+/// Hides the topbar while a page shows a dialog or sheet: the panel and its scrim run up to the
+/// window's top edge underneath it.
+private struct PageModalTopbarHiding: ViewModifier {
+    let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(active ? 0 : 1)
+            .allowsHitTesting(!active)
             .accessibilityHidden(active)
             .animation(
                 reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.normal),

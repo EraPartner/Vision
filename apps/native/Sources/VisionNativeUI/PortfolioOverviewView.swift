@@ -400,9 +400,14 @@ public struct PortfolioOverviewView: View {
                 Task { await model.openDetail(id: holding.id) }
             } label: {
                 HStack(spacing: 14) {
-                    Image(systemName: PortfolioOverviewAsset.symbol(holding.assetClass)).foregroundStyle(
-                        theme.primary
-                    )
+                    AssetLogo(
+                        url: shell.settings.assetLogos
+                            ? AssetLogoSource.url(symbol: holding.symbol, assetClass: holding.assetClass) : nil, size: 26,
+                        plate: holding.assetClass != .crypto
+                    ) {
+                        VisionSymbol(PortfolioOverviewAsset.symbol(holding.assetClass), size: 13)
+                            .foregroundStyle(theme.primary)
+                    }
                     .frame(width: 32).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 5) {
                         HStack {
@@ -629,7 +634,7 @@ enum PortfolioOverviewAsset {
     static func symbol(_ asset: OpenAPI.AssetClass) -> String {
         switch asset {
         case .crypto: "bitcoinsign.circle"
-        case .metals: "diamond"
+        case .metals: VisionSymbol.goldBar
         case .realEstate: "building.2"
         case .savings, .bond: "banknote"
         default: "chart.line.uptrend.xyaxis"

@@ -26,7 +26,7 @@ public struct PortfolioHoldingsView: View {
     private var symbol: String {
         switch assetClass {
         case .crypto: "bitcoinsign.circle"
-        case .metals: "diamond"
+        case .metals: VisionSymbol.goldBar
         case .realEstate: "building.2"
         case .savings, .bond: "banknote"
         default: "chart.line.uptrend.xyaxis"
@@ -320,13 +320,19 @@ public struct PortfolioHoldingsView: View {
                 cell: { holding in
                     AnyView(
                         HStack(spacing: 10) {
-                        // `rounded-full bg-primary/12 text-primary`, 32 pt, with the page icon.
-                        Image(systemName: symbol)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(theme.primary)
-                            .frame(width: 32, height: 32)
-                            .background(theme.primary.opacity(0.12), in: Circle())
-                            .accessibilityHidden(true)
+                        // The company or coin logo when there is one; otherwise `rounded-full
+                        // bg-primary/12 text-primary`, 32 pt, with the page icon.
+                        AssetLogo(
+                            url: shell.settings.assetLogos
+                            ? AssetLogoSource.url(symbol: holding.symbol, assetClass: holding.assetClass) : nil,
+                            plate: holding.assetClass != .crypto
+                        ) {
+                            VisionSymbol(symbol, size: 14, weight: .medium)
+                                .foregroundStyle(theme.primary)
+                                .frame(width: 32, height: 32)
+                                .background(theme.primary.opacity(0.12), in: Circle())
+                        }
+                        .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             if let symbol = holding.symbol {
                                 Button(symbol) {
