@@ -803,13 +803,14 @@ struct StatisticsModelTests {
         model.categoryMetric = .income
         #expect(model.pivotColumnTotals["2026-09"] == 500)
         #expect(model.pivotGrandTotal == 500)
+        // The loaded window holds no 2025 period, so a 2025 pivot is empty; the cache must not
+        // keep serving the 2026 totals.
         model.pivotYear = 2025
         model.categoryMetric = .expense
-        #expect(model.pivotColumnTotals["2025-12"] == 50)
-        #expect(model.pivotColumnTotals["2026-09"] == nil)
-        #expect(model.pivotGrandTotal == 50)
+        #expect(model.pivotColumnTotals.isEmpty)
+        #expect(model.pivotGrandTotal == 0)
         model.pivotYear = nil
-        #expect(model.pivotGrandTotal == 450)
+        #expect(model.pivotGrandTotal == 400)
     }
     @Test func invalidationDuringAnOlderWindowRequestCannotReplaceTheNewSnapshot() async {
         let service = HomeFixtureService()

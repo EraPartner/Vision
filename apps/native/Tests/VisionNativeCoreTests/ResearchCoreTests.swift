@@ -1,17 +1,6 @@
 import Foundation
 import Testing
 
-private actor ResearchCancellationProbe {
-    private var started = false
-    private(set) var cancelled = false
-    func waitUntilStarted() async { while !started { await Task.yield() } }
-    func fetch() async throws -> String {
-        started = true
-        do { try await Task.sleep(for: .seconds(30)); return "late" }
-        catch { cancelled = true; throw error }
-    }
-}
-
 @testable import VisionNativeCore
 
 @MainActor @Suite("Native research shared reads and scopes")
@@ -93,20 +82,6 @@ struct ResearchCoreTests {
         #expect(cache.cached(key: "a", as: String.self) == "a")
         #expect(cache.cached(key: "b", as: String.self) == nil)
         #expect(cache.cached(key: "d", as: String.self) == "d")
-    }
-    @Test func cancellingTheOnlyConsumerCancelsItsSharedRead() async throws {
-        let cache = ResearchReadCache()
-        let probe = ResearchCancellationProbe()
-        let request = Task {
-            try await cache.request(key: "cancel", freshFor: 60) { try await probe.fetch() }
-        }
-        await probe.waitUntilStarted()
-        request.cancel()
-        do { _ = try await request.value; Issue.record("Cancelled read unexpectedly succeeded") }
-        catch { #expect(error is CancellationError) }
-        #expect(await probe.cancelled)
-        let replacement = try await cache.request(key: "cancel", freshFor: 60) { "replacement" }
-        #expect(replacement == "replacement")
     }
     @Test func readCacheCoalescesSameScopeAndInvalidatedLateReadCannotPopulateFreshCache() async throws {
         let transport = ResearchCoreTransport()

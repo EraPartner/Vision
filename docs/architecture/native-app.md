@@ -1961,7 +1961,7 @@ move or per composited frame.
 - **Bounded memory.** AI chat keeps at most 8 loaded conversations (8 MB encoded), with the
   selected and streaming ones pinned, and the live message renders apart from the history.
   `PreparedImageStore` decodes logos, news and attachment thumbnails at display size off the main
-  actor into an 8 MB LRU. Shared Research reads count their consumers and cancel at zero.
+  actor into an 8 MB LRU.
 - **Signposts.** `NativePerformance` wraps `OSSignposter` intervals (Home load, aurora
   preparation, Statistics and Analysis presentation, Sankey) for Instruments.
 - **Offscreen passes.** The detail column is clipped sideways with a rectangular `clipShape`
