@@ -23,16 +23,11 @@ import VisionNativeCore
             presence.setScreenLocked(false, idleSeconds: Self.idleSeconds)
         }
         observe(workspace, NSWorkspace.didWakeNotification.rawValue) { presence.update(idleSeconds: Self.idleSeconds) }
-        @MainActor @Sendable func updatePower() {
-            let info = ProcessInfo.processInfo
-            presence.updatePower(
-                lowPower: info.isLowPowerModeEnabled,
-                thermalPressure: info.thermalState == .serious || info.thermalState == .critical,
-                thermalFair: info.thermalState == .fair)
+        observe(.default, Notification.Name.NSProcessInfoPowerStateDidChange.rawValue) {
+            Self.updatePower(presence)
         }
-        observe(.default, Notification.Name.NSProcessInfoPowerStateDidChange.rawValue) { updatePower() }
-        observe(.default, ProcessInfo.thermalStateDidChangeNotification.rawValue) { updatePower() }
-        updatePower()
+        observe(.default, ProcessInfo.thermalStateDidChangeNotification.rawValue) { Self.updatePower(presence) }
+        updatePower(presence)
         // Local input resumes motion immediately without installing a global event monitor.
         let input = NSEvent.addLocalMonitorForEvents(
             matching: [.keyDown, .mouseMoved, .leftMouseDown, .rightMouseDown, .scrollWheel, .leftMouseDragged,
@@ -52,6 +47,15 @@ import VisionNativeCore
             presence.update(idleSeconds: idle)
             do { try await Task.sleep(for: .seconds(presence.nextCheck(idleSeconds: idle))) } catch { break }
         }
+    }
+
+    /// Low Power Mode and the thermal state (list item 1.9).
+    private static func updatePower(_ presence: UserPresence) {
+        let info = ProcessInfo.processInfo
+        presence.updatePower(
+            lowPower: info.isLowPowerModeEnabled,
+            thermalPressure: info.thermalState == .serious || info.thermalState == .critical,
+            thermalFair: info.thermalState == .fair)
     }
 
     /// Seconds since the last keyboard or mouse event in the login session (`kCGAnyInputEventType`).

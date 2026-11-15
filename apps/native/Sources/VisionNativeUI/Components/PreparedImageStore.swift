@@ -14,6 +14,7 @@ final class PreparedImageStore {
         var use: Int
     }
     /// `CGImage` crosses from the decoding task to the main actor once and is never mutated.
+    // lint:allow unchecked-sendable an immutable CGImage handed over once, never mutated
     private struct Decoded: @unchecked Sendable {
         let image: CGImage
     }
