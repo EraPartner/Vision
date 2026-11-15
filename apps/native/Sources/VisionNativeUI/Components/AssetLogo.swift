@@ -46,14 +46,19 @@ struct AssetLogo<Fallback: View>: View {
 final class AssetLogoStore {
     static let shared = AssetLogoStore()
 
-    private var images: [URL: NSImage] = [:]
+    private let images = NSCache<NSURL, NSImage>()
     private var failed: Set<URL> = []
     private var pending: [URL: Task<Data?, Never>] = [:]
 
-    func cached(_ url: URL) -> NSImage? { images[url] }
+    private init() {
+        images.totalCostLimit = 8 * 1024 * 1024
+        images.countLimit = 256
+    }
+
+    func cached(_ url: URL) -> NSImage? { images.object(forKey: url as NSURL) }
 
     func image(for url: URL) async -> NSImage? {
-        if let image = images[url] { return image }
+        if let image = cached(url) { return image }
         if failed.contains(url) { return nil }
         let task =
             pending[url]
@@ -67,11 +72,12 @@ final class AssetLogoStore {
         pending[url] = task
         let data = await task.value
         pending[url] = nil
-        if let image = images[url] { return image }
-        if let data, let image = NSImage(data: data), image.isValid {
-            images[url] = image
+        if let image = cached(url) { return image }
+        if let data, let image = PreparedImageStore.shared.image(data: data) {
+            images.setObject(image, forKey: url as NSURL, cost: 128 * 128 * 4)
             return image
         }
+        if failed.count >= 256 { failed.removeAll(keepingCapacity: true) }
         failed.insert(url)
         return nil
     }

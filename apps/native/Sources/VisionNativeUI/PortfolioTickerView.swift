@@ -29,7 +29,8 @@ struct PortfolioTickerView: View {
     /// The tape holds with the aurora: on an idle window and behind an open modal
     /// (`fx-idle-atmosphere` and `fx-modal-open .ticker-track`, ADR-255, ADR-257), and resumes in place.
     private var moving: Bool {
-        active && !hovered && !reducedMotion && windowLive && !VisionModalRegistry.shared.isOpen
+        active && !hovered && !reducedMotion && UserPresence.shared.permitsDecorativeMotion(
+            windowIsLive: windowLive, modalIsOpen: VisionModalRegistry.shared.isOpen)
     }
     private var quoted: [(PortfolioInvestment, PortfolioQuote)] {
         included.compactMap { investment in

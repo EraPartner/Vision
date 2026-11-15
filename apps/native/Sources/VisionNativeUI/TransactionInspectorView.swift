@@ -506,7 +506,7 @@ struct TransactionAttachmentsPanel: View {
 
     @ViewBuilder
     private func thumbnail(_ item: OpenAPI.Attachment) -> some View {
-        if let data = attachments.thumbnails[item.id], let image = NSImage(data: data) {
+        if let data = attachments.thumbnails[item.id], let image = PreparedImageStore.shared.image(data: data) {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFill()

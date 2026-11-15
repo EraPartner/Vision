@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 @MainActor @Observable public final class AIChatModel {
-    public private(set) var selectedID: AiConversationID?
+    public private(set) var selectedID: AiConversationID? { didSet { streams.selectedID = selectedID } }
     public private(set) var mode: AIChatMode = .chat
     public var draft = ""
     public var modelOverride: String? = nil { didSet { syncResidency() } }
@@ -89,14 +89,13 @@ import Observation
         let persisted = detail?.messages ?? []
         var seen = Set(persisted.map(\.id))
         var result = persisted
-        let snapshot = streamSnapshot
-        if let user = snapshot.userMessage, !seen.contains(user.id),
-            !(user.isOptimistic && persisted.contains { $0.role == .user && $0.content == user.content })
-        {
-            result.append(user)
-            seen.insert(user.id)
+        for message in selectedID.flatMap({ streams.messageAdditions[$0] }) ?? [] {
+            guard !seen.contains(message.id),
+                !(message.isOptimistic && persisted.contains { $0.role == .user && $0.content == message.content })
+            else { continue }
+            result.append(message)
+            seen.insert(message.id)
         }
-        for tool in snapshot.toolMessages where seen.insert(tool.id).inserted { result.append(tool) }
         return result
     }
     @ObservationIgnored private let service: any AIChatService

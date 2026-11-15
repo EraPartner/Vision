@@ -184,6 +184,17 @@ public struct PerfScrollDetail: Codable, Equatable, Sendable {
     }
 }
 
+/// A one-second sample, not an allocation high-water mark. Old result files omit this field.
+public struct PerfMemorySample: Codable, Equatable, Sendable {
+    public let elapsedMs: Double
+    public let footprintMb: Double
+
+    public init(elapsedMs: Double, footprintMb: Double) {
+        self.elapsedMs = elapsedMs
+        self.footprintMb = footprintMb
+    }
+}
+
 public struct PerfPhaseResult: Codable, Equatable, Sendable {
     public var name: PerfPhaseName
     public var startEpochMs: Double
@@ -202,12 +213,13 @@ public struct PerfPhaseResult: Codable, Equatable, Sendable {
     public var cycles: Int?
     public var windowVisibleAtEnd: Bool
     public var appActiveAtEnd: Bool
+    public var memorySamples: [PerfMemorySample]?
 
     public init(
         name: PerfPhaseName, startEpochMs: Double, endEpochMs: Double, wallMs: Double, cpuSeconds: Double,
         cpuUserSeconds: Double, cpuSystemSeconds: Double, footprintStartMb: Double, footprintEndMb: Double,
         framesTracked: Bool, frameStampsMs: [Double], steps: [PerfStep], scroll: PerfScrollDetail?, cycles: Int?,
-        windowVisibleAtEnd: Bool, appActiveAtEnd: Bool
+        windowVisibleAtEnd: Bool, appActiveAtEnd: Bool, memorySamples: [PerfMemorySample]? = nil
     ) {
         self.name = name
         self.startEpochMs = startEpochMs
@@ -226,6 +238,7 @@ public struct PerfPhaseResult: Codable, Equatable, Sendable {
         self.cycles = cycles
         self.windowVisibleAtEnd = windowVisibleAtEnd
         self.appActiveAtEnd = appActiveAtEnd
+        self.memorySamples = memorySamples
     }
 }
 

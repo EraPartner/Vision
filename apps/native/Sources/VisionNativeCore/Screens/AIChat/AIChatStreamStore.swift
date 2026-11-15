@@ -7,6 +7,8 @@ import Observation
     public private(set) var details: [AiConversationID: AIChatConversationDetail] = [:]
     public private(set) var detailDates: [AiConversationID: Date] = [:]
     public private(set) var activeIDs: [AiConversationID] = []
+    /// Membership changes independently from token text, so history does not observe token batches.
+    public private(set) var messageAdditions: [AiConversationID: [AIChatMessage]] = [:]
     public var didInvalidate: (@MainActor (AiConversationID) async -> Void)?
     public var didError: (@MainActor (Error) -> Void)?
     @ObservationIgnored private let service: any AIChatService
@@ -14,14 +16,22 @@ import Observation
     @ObservationIgnored private var tasks: [AiConversationID: Task<AIChatComplete, Error>] = [:]
     @ObservationIgnored private var generations: [AiConversationID: UUID] = [:]
     @ObservationIgnored private var revisions: [AiConversationID: Int] = [:]
+    @ObservationIgnored private var detailUse: [AiConversationID: Int] = [:]
+    @ObservationIgnored private var useCounter = 0
+    @ObservationIgnored private let detailCapacity: Int
+    @ObservationIgnored private let detailByteBudget: Int
+    @ObservationIgnored private var detailBytes: [AiConversationID: Int] = [:]
+    public var selectedID: AiConversationID? { didSet { markUsed(selectedID); trimDetails() } }
     /// Tokens not yet published to observers (`scheduleEmit`, aiChatStreamStore.ts): the
     /// transcript re-renders at most once a frame, not once per streamed token.
     @ObservationIgnored private var pendingDrafts: [AiConversationID: String] = [:]
     @ObservationIgnored private var flushTask: Task<Void, Never>?
     /// The frame the token notifications coalesce to (`FALLBACK_FRAME_MS`).
     static let frameInterval: Duration = .milliseconds(16)
-    public init(service: any AIChatService, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(service: any AIChatService, detailCapacity: Int = 8, detailByteBudget: Int = 8 * 1024 * 1024, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
+        self.detailCapacity = max(1, detailCapacity)
+        self.detailByteBudget = max(1, detailByteBudget)
         self.now = now
     }
     /// The current state, pending tokens included: only the notification is deferred, so a read
@@ -38,11 +48,35 @@ import Observation
         let id = detail.conversation.id
         details[id] = detail
         detailDates[id] = date ?? now()
+        // Encoded size is a repeatable proxy, not an assertion about Swift heap allocation.
+        detailBytes[id] = (try? APIBody.encode(detail).count) ?? detailByteBudget
+        markUsed(id)
+        trimDetails()
+    }
+    private func markUsed(_ id: AiConversationID?) {
+        guard let id else { return }
+        useCounter += 1
+        detailUse[id] = useCounter
+    }
+    /// Selected details and active/retry turns are source state, not disposable cache entries.
+    private func trimDetails() {
+        while details.count > detailCapacity || detailBytes.values.reduce(0, +) > detailByteBudget {
+            let candidate = details.keys.filter {
+                $0 != selectedID && tasks[$0] == nil && snapshots[$0] == nil
+            }.min { (detailUse[$0] ?? 0) < (detailUse[$1] ?? 0) }
+            guard let candidate else { return }
+            details[candidate] = nil
+            detailDates[candidate] = nil
+            detailUse[candidate] = nil
+            detailBytes[candidate] = nil
+        }
     }
     public func invalidateDetail(id: AiConversationID) { detailDates[id] = nil }
     public func remove(id: AiConversationID) {
         details[id] = nil
         detailDates[id] = nil
+        detailUse[id] = nil
+        detailBytes[id] = nil
         clear(id: id)
     }
     public func clear(id: AiConversationID) {
@@ -66,10 +100,13 @@ import Observation
         synchronizeActiveIDs()
     }
     private func synchronizeActiveIDs() {
+        let additions = snapshots.mapValues { ($0.userMessage.map { [$0] } ?? []) + $0.toolMessages }
+        if additions != messageAdditions { messageAdditions = additions }
         let continuing = activeIDs.filter { snapshots[$0]?.isStreaming == true }
         activeIDs =
             continuing
             + snapshots.keys.filter { snapshots[$0]?.isStreaming == true && !continuing.contains($0) }.sorted()
+        trimDetails()
     }
     private func touch(_ id: AiConversationID) { revisions[id, default: 0] += 1 }
     /// Publishes the buffered tokens; any other change publishes them first, as a synchronous
@@ -99,6 +136,7 @@ import Observation
         guard var detail = details[id], !detail.messages.contains(where: { $0.id == message.id }) else { return }
         detail.messages.append(message)
         details[id] = detail
+        detailBytes[id] = (try? APIBody.encode(detail).count) ?? detailByteBudget
     }
     public func send(_ request: AIChatSendRequest) async {
         let id = request.conversationID

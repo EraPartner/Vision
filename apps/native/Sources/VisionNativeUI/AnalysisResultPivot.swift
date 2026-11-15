@@ -12,6 +12,7 @@ struct AnalysisResultPivot: View {
     @State private var percentages = false
     @State private var errorDetails = false
     @State private var hasRun = false
+    @State private var matrixCache = MatrixCache()
     @FocusState private var addFocus: String?
     @FocusState private var searchFocused: Bool
     @Environment(\.visionTheme) private var theme
@@ -92,7 +93,7 @@ struct AnalysisResultPivot: View {
                 }
                 Text(strings.t("analysis.ext.pivot.complete", ["rows": String(result.coverage.rows)]))
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
-                if visibleRows.isEmpty { Text(strings.t("analysis.ext.pivot.empty")) } else { matrix }
+                if presentation.rows.isEmpty { Text(strings.t("analysis.ext.pivot.empty")) } else { matrix }
             }
         }.onChange(of: config) {
             choosing = nil
@@ -225,6 +226,54 @@ struct AnalysisResultPivot: View {
         let depth: Int
         let id: String
     }
+    private struct LevelKey: Hashable {
+        let row: Int
+        let column: Int
+    }
+    private struct CellKey: Hashable {
+        let row: String
+        let column: String
+    }
+    private struct IndexedLevel {
+        let source: AnalysisPivotResult.Level
+        let cells: [CellKey: AnalysisRow]
+    }
+    private struct MatrixPresentation {
+        var rows: [Entry] = []
+        var columns: [Entry] = []
+        var levels: [LevelKey: IndexedLevel] = [:]
+    }
+    @MainActor
+    private final class MatrixCache {
+        var result: AnalysisPivotResult?
+        var config: AnalysisPivotConfig?
+        var rows: Set<String> = []
+        var columns: Set<String> = []
+        var value: MatrixPresentation?
+    }
+    private var presentation: MatrixPresentation {
+        if matrixCache.result == result, matrixCache.config == config,
+            matrixCache.rows == expandedRows, matrixCache.columns == expandedColumns,
+            let value = matrixCache.value { return value }
+        let interval = NativePerformance.begin("Analysis.pivot")
+        defer { NativePerformance.end("Analysis.pivot", interval) }
+        var next = MatrixPresentation(rows: visibleRows, columns: matrixColumns)
+        for source in result?.levels ?? [] {
+            var cells: [CellKey: AnalysisRow] = [:]
+            for row in source.rows {
+                let key = CellKey(row: rowKey(row, source.rowDepth), column: columnKey(row, source.columnDepth))
+                if cells[key] == nil { cells[key] = row }
+            }
+            let key = LevelKey(row: source.rowDepth, column: source.columnDepth)
+            if next.levels[key] == nil { next.levels[key] = IndexedLevel(source: source, cells: cells) }
+        }
+        matrixCache.result = result
+        matrixCache.config = config
+        matrixCache.rows = expandedRows
+        matrixCache.columns = expandedColumns
+        matrixCache.value = next
+        return next
+    }
     private var visibleRows: [Entry] {
         guard let result else { return [] }
         var output: [Entry] = []
@@ -265,11 +314,12 @@ struct AnalysisResultPivot: View {
         return output
     }
     private var matrix: some View {
-        ScrollView(.horizontal) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                GridRow {
-                    ForEach(rowIDs, id: \.self) { Text(fieldLabel($0)) }
-                    ForEach(matrixColumns) { entry in
+        let snapshot = presentation
+        return ScrollView([.horizontal, .vertical]) {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 16) {
+                    ForEach(rowIDs, id: \.self) { Text(fieldLabel($0)).frame(width: 160, alignment: .leading) }
+                    ForEach(snapshot.columns) { entry in
                         ForEach(config.values, id: \.self) { value in
                             HStack {
                                 if entry.depth < config.columns.count {
@@ -282,17 +332,18 @@ struct AnalysisResultPivot: View {
                                 Text(
                                     "\(config.columns.prefix(entry.depth).map { AnalysisPresentation.rawText(entry.row[$0]) }.joined(separator: " / ")) · \(fieldLabel(value))"
                                 )
-                            }
+                            }.frame(width: 160, alignment: .leading)
                         }
                     }
                     if !config.columns.isEmpty {
                         ForEach(config.values, id: \.self) {
                             Text("\(strings.t("analysis.ext.pivot.total")) · \(fieldLabel($0))")
+                                .frame(width: 160, alignment: .leading)
                         }
                     }
                 }.fontWeight(.medium)
-                ForEach(visibleRows) { entry in
-                    GridRow {
+                ForEach(snapshot.rows) { entry in
+                    HStack(alignment: .top, spacing: 16) {
                         ForEach(rowIDs, id: \.self) { id in
                             HStack {
                                 if entry.depth > 0 && entry.depth < config.rows.count
@@ -306,40 +357,34 @@ struct AnalysisResultPivot: View {
                                     verbatim: entry.depth == 0 && id == config.rows.first
                                         ? strings.t("analysis.ext.pivot.total")
                                         : AnalysisPresentation.rawText(entry.row[id]))
-                            }
+                            }.frame(width: 160, alignment: .leading)
                         }
-                        ForEach(matrixColumns) { column in
+                        ForEach(snapshot.columns) { column in
                             ForEach(config.values, id: \.self) { id in
-                                let source = result?.levels.first {
-                                    $0.rowDepth == entry.depth && $0.columnDepth == column.depth
-                                }
-                                let cell = source?.rows.first { row in
-                                    matches(row, entry) && columnKey(row, column.depth) == column.id
-                                }
+                                let level = snapshot.levels[LevelKey(row: entry.depth, column: column.depth)]
+                                let cell = level?.cells[CellKey(row: entry.id, column: column.id)]
                                 Button(displayCell(cell, id)) {
-                                    guard let cell, let source else { return }
+                                    guard let cell, let source = level?.source else { return }
                                     let values = Dictionary(
                                         uniqueKeysWithValues: source.groups.map { ($0, cell[$0] ?? .null) })
                                     Task { await model.drill(row: values, groups: source.groups) }
                                 }.buttonStyle(.plain).disabled(cell == nil).visionTooltip(strings.t("analysis.ext.pivot.drill"))
+                                    .frame(width: 160, alignment: .leading)
                             }
                         }
                         if !config.columns.isEmpty {
                             ForEach(config.values, id: \.self) { id in
-                                let total = result?.levels.first { $0.rowDepth == entry.depth && $0.columnDepth == 0 }?
-                                    .rows.first { matches($0, entry) }
+                                let total = snapshot.levels[LevelKey(row: entry.depth, column: 0)]?
+                                    .cells[CellKey(row: entry.id, column: columnKey([:], 0))]
                                 Text(verbatim: displayCell(total, id)).fontWeight(.medium)
+                                    .frame(width: 160, alignment: .leading)
                             }
                         }
                     }
                 }
             }.font(.caption).monospacedDigit().textSelection(.enabled).padding(12)
-        }.overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
-    }
-    private func matches(_ row: AnalysisRow, _ entry: Entry) -> Bool {
-        unique((result?.partitions ?? []) + Array(config.rows.prefix(entry.depth))).allSatisfy {
-            row[$0] == entry.row[$0]
-        }
+        }.frame(height: min(600, CGFloat(snapshot.rows.count + 1) * 44 + 24))
+            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
     }
     private func expansion(key: String, label: String, columns: Bool) -> some View {
         let open = (columns ? expandedColumns : expandedRows).contains(key)

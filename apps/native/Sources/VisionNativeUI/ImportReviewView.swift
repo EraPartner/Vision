@@ -26,7 +26,7 @@ public struct ImportReviewView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 content
             }
             .padding(24)
@@ -215,9 +215,34 @@ public struct ImportReviewView: View {
 
     // MARK: Payee groups
 
+    private enum ReviewItem: Identifiable {
+        case header(ImportPreviewGroup)
+        case controls(ImportPreviewGroup)
+        case row(ImportPreviewGroup, ImportStagingRow)
+
+        var id: String {
+            switch self {
+            case .header(let group): return "header:\(group.key)"
+            case .controls(let group): return "controls:\(group.key)"
+            case .row(_, let row): return "row:\(row.id)"
+            }
+        }
+    }
+
+    private func reviewItems(_ preview: ImportPreview) -> [ReviewItem] {
+        preview.groups.flatMap { group in
+            var items: [ReviewItem] = [.header(group)]
+            if model.isExpanded(group) {
+                items.append(.controls(group))
+                items.append(contentsOf: group.rows.map { .row(group, $0) })
+            }
+            return items
+        }
+    }
+
     private func groups(_ preview: ImportPreview) -> some View {
         AdminCard(padding: 0) {
-            VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(strings.t("importReview.groups.title"))
                         .font(Font.visionTitle3)
@@ -227,9 +252,22 @@ public struct ImportReviewView: View {
                         .foregroundStyle(theme.secondaryLabel)
                 }
                 .padding(24)
-                ForEach(Array(preview.groups.enumerated()), id: \.offset) { _, group in
-                    Divider().opacity(0.5)
-                    ImportReviewGroupView(model: model, group: group, settings: settings, strings: strings)
+                ForEach(reviewItems(preview)) { item in
+                    switch item {
+                    case .header(let group):
+                        ImportReviewGroupView(model: model, group: group, settings: settings, strings: strings)
+                            .overlay(alignment: .top) { Divider().opacity(0.5) }
+                    case .controls(let group):
+                        ImportReviewGroupView(model: model, group: group, settings: settings, strings: strings)
+                            .details(model.state(for: group))
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 12)
+                    case .row(let group, let row):
+                        ImportReviewGroupView(model: model, group: group, settings: settings, strings: strings)
+                            .rowView(row)
+                            .overlay(alignment: .bottom) { Divider().opacity(0.4) }
+                            .padding(.horizontal, 24)
+                    }
                 }
             }
         }
@@ -374,16 +412,10 @@ struct ImportReviewGroupView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            if expanded {
-                details(state)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 16)
-                    .transition(.opacity)
-            }
         }
     }
 
-    private func details(_ state: ImportReviewGroupState) -> some View {
+    func details(_ state: ImportReviewGroupState) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let pattern = group.matchedPatternText, !pattern.isEmpty {
                 HStack(spacing: 4) {
@@ -428,16 +460,10 @@ struct ImportReviewGroupView: View {
                 }
             }
             Divider().opacity(0.5)
-            VStack(spacing: 0) {
-                ForEach(Array(group.rows.enumerated()), id: \.element.id) { index, row in
-                    if index > 0 { Divider().opacity(0.4) }
-                    rowView(row)
-                }
-            }
         }
     }
 
-    private func rowView(_ row: ImportStagingRow) -> some View {
+    func rowView(_ row: ImportStagingRow) -> some View {
         HStack(spacing: 12) {
             ImportMatchBadge(kind: row.matchKind, similarity: row.matchSimilarity, settings: settings, strings: strings)
                 .fixedSize()

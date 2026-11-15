@@ -59,6 +59,13 @@ struct VisionCardLayerStyle: Equatable {
     private let edgeMask = CAShapeLayer()
     private let frameLayer = CALayer()
     private var style: VisionCardLayerStyle?
+    private struct GeometryKey: Equatable {
+        let bounds: CGRect
+        let radius: CGFloat
+        let angle: Double
+        let spreads: [CGFloat]
+    }
+    private var geometryKey: GeometryKey?
 
     init() {
         super.init(frame: .zero)
@@ -162,6 +169,14 @@ struct VisionCardLayerStyle: Equatable {
     override func layout() {
         super.layout()
         guard let style else { return }
+        // Hover changes colours and shadow opacity, not geometry. Keep the explicit paths and
+        // gradient coordinates until the size or geometric recipe actually changes.
+        let key = GeometryKey(bounds: bounds, radius: style.cornerRadius, angle: style.fillAngle,
+                              spreads: style.shadows.map(\.spread))
+        guard key != geometryKey else { return }
+        geometryKey = key
+        let interval = NativePerformance.begin("Cards.geometry")
+        defer { NativePerformance.end("Cards.geometry", interval) }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let bounds = self.bounds

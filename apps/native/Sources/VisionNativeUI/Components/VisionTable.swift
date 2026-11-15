@@ -138,6 +138,7 @@ struct VisionTableLayout: Layout {
     /// The measured table: where each row starts, how tall it is and how wide each column is.
     struct Plan {
         var columnWidths: [CGFloat]
+        var cellSizes: [Int: CGSize]
         /// One entry per row: the subview indices in it, whether it spans, its top and height.
         var rows: [Row]
         var size: CGSize
@@ -174,7 +175,7 @@ struct VisionTableLayout: Layout {
             var x = bounds.minX
             for (column, index) in row.indices.enumerated() {
                 let width = plan.columnWidths[column]
-                let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
+                let size = plan.cellSizes[index] ?? .zero
                 let offset: CGFloat
                 switch columns[column] {
                 case .trailing: offset = width - size.width
@@ -252,6 +253,7 @@ struct VisionTableLayout: Layout {
         let contentWidth = widths.reduce(0, +) + columnSpacing * CGFloat(count - 1)
         let tableWidth = max(finite ?? 0, contentWidth)
         var rows: [Plan.Row] = []
+        var cellSizes: [Int: CGSize] = [:]
         var top: CGFloat = 0
         for row in grouped {
             var height: CGFloat = 0
@@ -262,15 +264,15 @@ struct VisionTableLayout: Layout {
                 }
             } else {
                 for (column, index) in row.indices.enumerated() {
-                    height = max(
-                        height,
-                        subviews[index].sizeThatFits(ProposedViewSize(width: widths[column], height: nil)).height)
+                    let size = subviews[index].sizeThatFits(ProposedViewSize(width: widths[column], height: nil))
+                    cellSizes[index] = size
+                    height = max(height, size.height)
                 }
             }
             rows.append(Plan.Row(indices: row.indices, spans: row.spans, top: top, height: height))
             top += height
         }
-        let plan = Plan(columnWidths: widths, rows: rows, size: CGSize(width: tableWidth, height: top))
+        let plan = Plan(columnWidths: widths, cellSizes: cellSizes, rows: rows, size: CGSize(width: tableWidth, height: top))
         cache.width = finite
         cache.plan = plan
         return plan

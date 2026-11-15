@@ -30,9 +30,11 @@ public enum ResearchReadKey {
         let date: Date
         var used: Int
     }
-    private struct Pending {
-        let id: UUID
+    @MainActor private final class Pending {
+        let id = UUID()
         let task: Task<any Sendable, Error>
+        var consumers: Set<UUID> = []
+        init(task: Task<any Sendable, Error>) { self.task = task }
     }
     /// The most answers kept at once. Search results, quotes and chart series are keyed by what
     /// was asked, so without a bound every query typed would stay in memory for the session.
@@ -69,6 +71,7 @@ public enum ResearchReadKey {
     public func request<Value: Sendable>(
         key: String, freshFor: TimeInterval, force: Bool = false, fetch: @escaping @Sendable () async throws -> Value
     ) async throws -> Value {
+        try Task.checkCancellation()
         if !force, let entry = entries[key], now().timeIntervalSince(entry.date) < freshFor,
             let value = entry.value as? Value
         {
@@ -79,11 +82,22 @@ public enum ResearchReadKey {
         if let existing = pending[key] {
             current = existing
         } else {
-            current = Pending(id: UUID(), task: Task { try await fetch() as any Sendable })
+            current = Pending(task: Task { try await fetch() as any Sendable })
             pending[key] = current
         }
+        let consumer = UUID()
+        current.consumers.insert(consumer)
+        defer { release(current, consumer: consumer, key: key) }
         do {
-            let raw = try await current.task.value
+            let raw = try await withTaskCancellationHandler {
+                let value = try await current.task.value
+                try Task.checkCancellation()
+                return value
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.release(current, consumer: consumer, key: key)
+                }
+            }
             guard let value = raw as? Value else { throw ResearchDecode.failure("Research cache type mismatch") }
             if pending[key]?.id == current.id {
                 useCounter += 1
@@ -93,9 +107,15 @@ public enum ResearchReadKey {
             }
             return value
         } catch {
-            if pending[key]?.id == current.id { pending[key] = nil }
+            if !Task.isCancelled, pending[key]?.id == current.id { pending[key] = nil }
             throw error
         }
+    }
+    private func release(_ request: Pending, consumer: UUID, key: String) {
+        request.consumers.remove(consumer)
+        guard request.consumers.isEmpty else { return }
+        request.task.cancel()
+        if pending[key]?.id == request.id { pending[key] = nil }
     }
     public func cached<Value: Sendable>(key: String, as type: Value.Type) -> Value? {
         entries[key]?.value as? Value

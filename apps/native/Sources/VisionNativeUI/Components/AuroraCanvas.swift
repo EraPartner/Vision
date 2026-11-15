@@ -60,7 +60,8 @@ struct AuroraCanvas: View {
         } else {
             let enhanced = visualEffects == .enhanced
             // `fx-modal-open` holds the drift and the shader as `fx-idle-atmosphere` does.
-            let live = windowLive && !VisionModalRegistry.shared.isOpen
+            let live = UserPresence.shared.permitsDecorativeMotion(
+                windowIsLive: windowLive, modalIsOpen: VisionModalRegistry.shared.isOpen)
             // Enhanced without Full effects keeps the blobs at rest (21775a26); static
             // atmosphere and reduced motion hold.
             let drift = (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion
@@ -136,6 +137,8 @@ private struct AuroraBlobs: NSViewRepresentable {
 
     func makeNSView(context: Context) -> AuroraBlobLayerView { AuroraBlobLayerView() }
 
+    static func dismantleNSView(_ view: AuroraBlobLayerView, coordinator: ()) { view.stop() }
+
     func updateNSView(_ view: AuroraBlobLayerView, context: Context) {
         view.apply(
             AuroraBlobLayerView.State(
@@ -185,6 +188,13 @@ private struct AuroraBlobs: NSViewRepresentable {
     required init?(coder: NSCoder) { nil }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func stop() {
+        clock.setRunning(false, now: CACurrentMediaTime())
+        firstBlob.removeAllAnimations()
+        secondBlob.removeAllAnimations()
+        state = nil
+    }
 
     func apply(_ next: State) {
         guard next != state else { return }
@@ -307,7 +317,7 @@ struct AuroraShaderBlobs: Equatable {
     let drift: Bool
 }
 
-/// ShaderAurora: the same fbm fragment shader as the WebGL layer, compiled at runtime,
+/// ShaderAurora: the same fbm fragment shader as the WebGL layer, optionally precompiled by Xcode,
 /// drawn at a quarter resolution (at most 640 px wide) and about 20 fps (`FRAME_MIN_MS`); held on its
 /// first frame for reduced motion or a large display, and paused while the window is
 /// not key, occluded, minimised or its app hidden (`document.hidden || !hasFocus`).
@@ -336,20 +346,7 @@ struct AuroraShaderView: NSViewRepresentable {
         view.preferredFramesPerSecond = AuroraShaderClock.framesPerSecond
         context.coordinator.attach(view)
         update(context.coordinator, view: view)
-        // The runtime shader compile is not on the first frame's path (ADR-247): the CSS
-        // atmosphere shows at once and the shader joins it once compiled.
-        let renderer = context.coordinator
-        Task { @MainActor in
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(400))
-            if renderer.prepare(device: device) {
-                renderer.refreshPlayback()
-                renderer.onLive(true)
-            } else {
-                view.isHidden = true
-                renderer.onLive(false)
-            }
-        }
+        context.coordinator.beginPreparation(device: device)
         return view
     }
 
@@ -359,6 +356,7 @@ struct AuroraShaderView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: NSView, coordinator: AuroraRenderer) {
+        coordinator.stop()
         guard let view = view as? AuroraMTKView else { return }
         view.isPaused = true
         view.delegate = nil
@@ -423,15 +421,81 @@ final class AuroraMTKView: MTKView {
     private var pipeline: MTLRenderPipelineState?
     private weak var view: AuroraMTKView?
     private var clock = AuroraShaderClock()
+    private var preparation: Task<Void, Never>?
+    private final class PreparedPipeline {
+        let value: MTLRenderPipelineState
+        init(_ value: MTLRenderPipelineState) { self.value = value }
+    }
+    /// Disposable, device-specific GPU objects. A cleared cache only adds preparation latency.
+    private static let pipelines: NSCache<NSNumber, PreparedPipeline> = {
+        let cache = NSCache<NSNumber, PreparedPipeline>()
+        cache.countLimit = 2
+        return cache
+    }()
 
-    func prepare(device: MTLDevice) -> Bool {
+    func beginPreparation(device: MTLDevice) {
+        preparation?.cancel()
+        preparation = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            guard !Task.isCancelled, let self, self.view != nil else { return }
+            let ready = await self.prepare(device: device)
+            guard !Task.isCancelled, let view = self.view else { return }
+            if ready {
+                self.refreshPlayback()
+                self.onLive(true)
+            } else {
+                view.isHidden = true
+                self.onLive(false)
+            }
+            self.preparation = nil
+        }
+    }
+
+    func stop() {
+        preparation?.cancel()
+        preparation = nil
+        view?.isPaused = true
+        view?.delegate = nil
+        view = nil
+        queue = nil
+        pipeline = nil
+        onLive = { _ in }
+        clock.stop()
+    }
+
+    private func prepare(device: MTLDevice) async -> Bool {
+        let interval = NativePerformance.begin("AuroraPreparation")
+        defer { NativePerformance.end("AuroraPreparation", interval) }
         do {
-            let library = try device.makeLibrary(source: Self.source, options: nil)
+            let key = NSNumber(value: device.registryID)
+            if let cached = Self.pipelines.object(forKey: key) {
+                try Task.checkCancellation()
+                pipeline = cached.value
+                queue = device.makeCommandQueue()
+                return queue != nil
+            }
+            // Metal's asynchronous compiler does not block the main actor while compiling.
+            let library: MTLLibrary
+            if let bundled = try? device.makeDefaultLibrary(bundle: .module) {
+                library = bundled
+            } else {
+                // Builds without the optional Metal Toolchain copy the source resource.
+                guard let sourceURL = Bundle.module.url(forResource: "Aurora", withExtension: "metal") else {
+                    return false
+                }
+                let source = try String(contentsOf: sourceURL, encoding: .utf8)
+                library = try await device.makeLibrary(source: source, options: nil)
+            }
+            try Task.checkCancellation()
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = library.makeFunction(name: "auroraVertex")
             descriptor.fragmentFunction = library.makeFunction(name: "auroraFragment")
             descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-            pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+            let prepared = try await device.makeRenderPipelineState(descriptor: descriptor)
+            try Task.checkCancellation()
+            guard view != nil else { return false }
+            pipeline = prepared
+            Self.pipelines.setObject(PreparedPipeline(prepared), forKey: key)
             queue = device.makeCommandQueue()
             return pipeline != nil && queue != nil
         } catch {
@@ -449,7 +513,7 @@ final class AuroraMTKView: MTKView {
     func refreshPlayback() {
         guard let view else { return }
         let mode = AuroraPlayback.resolve(motionAllowed: animated, windowIsLive: live)
-        let loop = mode == .loop
+        let loop = mode == .loop && pipeline != nil
         if !loop { clock.stop() }
         view.enableSetNeedsDisplay = !loop
         view.isPaused = !loop
@@ -468,7 +532,7 @@ final class AuroraMTKView: MTKView {
             let buffer = queue.makeCommandBuffer(), let encoder = buffer.makeRenderCommandEncoder(descriptor: pass)
         else { return }
         let size = view.drawableSize
-        let time = animated ? clock.frame(at: CACurrentMediaTime()) : 0
+        let time = animated ? (live ? clock.frame(at: CACurrentMediaTime()) : clock.seconds) : 0
         // The blobs drift on the shader's clock and rest on a held frame (auroraBlobs.ts).
         let bounds = view.bounds.size
         let scale = bounds.width > 0 ? Double(size.width / bounds.width) : 0
@@ -494,75 +558,9 @@ final class AuroraMTKView: MTKView {
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
+        if !hasDrawn { NativePerformance.event("AuroraFirstFrameEncoded") }
         hasDrawn = true
         buffer.present(drawable)
         buffer.commit()
     }
-
-    /// ShaderAurora.tsx's vertex and fragment shaders, translated from GLSL.
-    static let source = """
-        #include <metal_stdlib>
-        using namespace metal;
-
-        struct AuroraUniforms {
-            float2 res;
-            float time;
-            float noiseAlpha;
-            float4 c1;
-            float4 c2;
-            float4 blobA;
-            float4 blobB;
-            float4 blobACol;
-            float4 blobBCol;
-        };
-
-        vertex float4 auroraVertex(uint vid [[vertex_id]]) {
-            const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
-            return float4(positions[vid], 0.0, 1.0);
-        }
-
-        static float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453123); }
-
-        static float noise(float2 p) {
-            float2 i = floor(p);
-            float2 f = fract(p);
-            float2 u = f * f * (3.0 - 2.0 * f);
-            return mix(
-                mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
-                mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x),
-                u.y);
-        }
-
-        static float fbm(float2 p) {
-            float v = 0.0;
-            float a = 0.5;
-            for (int i = 0; i < 4; i++) {
-                v += a * noise(p);
-                p *= 2.0;
-                a *= 0.5;
-            }
-            return v;
-        }
-
-        fragment float4 auroraFragment(float4 position [[position]], constant AuroraUniforms &u [[buffer(0)]]) {
-            // gl_FragCoord has a bottom-left origin.
-            float2 coord = float2(position.x, u.res.y - position.y);
-            float2 uv = coord / u.res;
-            float2 p = uv * float2(u.res.x / u.res.y, 1.0);
-            float t = u.time * 0.045;
-            float n1 = fbm(p * 1.3 + float2(t, -t * 0.6));
-            float n2 = fbm(p * 1.7 - float2(t * 0.7, t * 0.4) + 3.7);
-            float m1 = smoothstep(0.34, 0.68, n1);
-            float m2 = smoothstep(0.38, 0.72, n2);
-            float3 col = u.c1.rgb * m1 + u.c2.rgb * m2;
-            float a = clamp(max(m1, m2), 0.0, 1.0) * 0.65 * u.noiseAlpha;
-            float4 noiseLayer = float4(col * a, a);
-            // Same stacking as the CSS: ::before blob, the noise, then the ::after blob; each
-            // gradient linear in alpha from its colour at the centre to transparent at the radius.
-            float aa = u.blobA.w * clamp(1.0 - distance(coord, u.blobA.xy) / u.blobA.z, 0.0, 1.0);
-            float ab = u.blobB.w * clamp(1.0 - distance(coord, u.blobB.xy) / u.blobB.z, 0.0, 1.0);
-            float4 under = noiseLayer + float4(u.blobACol.rgb * aa, aa) * (1.0 - noiseLayer.a);
-            return float4(u.blobBCol.rgb * ab, ab) + under * (1.0 - ab);
-        }
-        """
 }

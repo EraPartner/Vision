@@ -3,7 +3,7 @@ import CoreGraphics
 import VisionNativeCore
 
 /// Feeds `UserPresence` (main.ts `checkUserIdle` and the powerMonitor lock, unlock and resume
-/// handlers): the input idle time every minute, the screen lock and unlock, and wake from sleep.
+/// handlers): input idle time, screen lock and unlock, wake, power and thermal state.
 /// Runs for the shell's lifetime and ends when its task is cancelled.
 @MainActor enum UserPresenceMonitor {
     static func run(presence: UserPresence = .shared) async {
@@ -23,9 +23,30 @@ import VisionNativeCore
             presence.setScreenLocked(false, idleSeconds: Self.idleSeconds)
         }
         observe(workspace, NSWorkspace.didWakeNotification.rawValue) { presence.update(idleSeconds: Self.idleSeconds) }
-        defer { for (center, token) in observers { center.removeObserver(token) } }
+        @MainActor @Sendable func updatePower() {
+            let info = ProcessInfo.processInfo
+            presence.updatePower(
+                lowPower: info.isLowPowerModeEnabled,
+                thermalPressure: info.thermalState == .serious || info.thermalState == .critical)
+        }
+        observe(.default, Notification.Name.NSProcessInfoPowerStateDidChange.rawValue) { updatePower() }
+        observe(.default, ProcessInfo.thermalStateDidChangeNotification.rawValue) { updatePower() }
+        updatePower()
+        // Local input resumes motion immediately without installing a global event monitor.
+        let input = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .mouseMoved, .leftMouseDown, .rightMouseDown, .scrollWheel, .leftMouseDragged,
+                .rightMouseDragged, .otherMouseDown, .otherMouseDragged]
+        ) { event in
+            MainActor.assumeIsolated { presence.update(idleSeconds: 0) }
+            return event
+        }
+        defer {
+            for (center, token) in observers { center.removeObserver(token) }
+            if let input { NSEvent.removeMonitor(input) }
+        }
         while !Task.isCancelled {
             presence.update(idleSeconds: Self.idleSeconds)
+            // One inexpensive input-clock read per second; publish only state transitions.
             do { try await Task.sleep(for: UserPresence.checkInterval) } catch { break }
         }
     }
