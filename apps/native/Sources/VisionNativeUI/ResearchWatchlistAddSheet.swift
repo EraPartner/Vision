@@ -132,7 +132,7 @@ public struct ResearchWatchlistAddSheet: View {
                     Spacer(minLength: 200)
                 }
             }
-        }.visionDialogPadding().frame(width: 448, height: model.selected == nil ? 540 : 560)
+        }.visionDialogPadding().visionDialogFrame(width: 448, height: model.selected == nil ? 540 : 560)
             .visionInteractiveDismissDisabled(model.isSubmitting)
             .onChange(of: model.validationRevision) { _, _ in targetFocused = true }
     }

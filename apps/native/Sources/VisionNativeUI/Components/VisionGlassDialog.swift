@@ -122,7 +122,8 @@ public struct VisionDialogMetrics: Equatable, Sendable {
     }
 
     /// The widest the panel grows; it shrinks to the window less a margin on each side. `nil` lets
-    /// the content choose its own width (a view with a fixed frame), without scrolling.
+    /// the content choose its own width and height (its ideal size, see `VisionDialogFit`),
+    /// without a scroll view of the panel's own.
     public var maxWidth: CGFloat?
     public var height: Height
     public var padding: CGFloat
@@ -224,9 +225,66 @@ public struct VisionGlassDialog<Content: View>: View {
                 // The first frame has no measured height yet; show the panel once it has.
                 .opacity(contentHeight > 0 ? 1 : 0)
             } else {
-                stack.frame(maxHeight: maxHeight)
+                // The content's own width and height, never more than the window allows. A bare
+                // `frame(maxHeight:)` here took the whole allowance whatever the content's height
+                // (the content floated in the middle of a 90 %-tall card), and content with a
+                // flexible width spread across the window.
+                VisionDialogContentFit(
+                    limit: CGSize(width: max(available.width - 2 * margin, 0), height: maxHeight)
+                ) { stack }
             }
         }
+    }
+}
+
+/// The size of a dialog that sizes to its content (`maxWidth: nil`, `.fitContent`): the content's
+/// ideal width and the height it needs at that width, each capped by the window's allowance.
+/// The panel then hugs its content the way the web `DialogContent` does (`max-h-[90vh]`, no
+/// fixed height), so a card can neither leave a band of empty glass around its content nor
+/// stretch past the window. Content that should scroll when the window is short owns a
+/// `ScrollView`, or a flexible height (`frame(minHeight: 0, idealHeight:, maxHeight:)`, see
+/// `visionDialogFrame(width:height:)`), and gets the capped height proposed.
+enum VisionDialogFit {
+    static func size(ideal: CGSize, heightAtWidth: (CGFloat) -> CGFloat, limit: CGSize) -> CGSize {
+        let width = min(finite(ideal.width, or: limit.width), limit.width)
+        let height = min(finite(heightAtWidth(width), or: limit.height), limit.height)
+        return CGSize(width: max(width, 0), height: max(height, 0))
+    }
+
+    private static func finite(_ value: CGFloat, or fallback: CGFloat) -> CGFloat {
+        value.isFinite ? value : fallback
+    }
+}
+
+/// Lays one content view out at `VisionDialogFit.size`, centred.
+struct VisionDialogContentFit: Layout {
+    let limit: CGSize
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        return fit(content)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let content = subviews.first else { return }
+        let size = fit(content)
+        content.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: ProposedViewSize(size))
+    }
+
+    private func fit(_ content: LayoutSubview) -> CGSize {
+        VisionDialogFit.size(
+            ideal: content.sizeThatFits(.unspecified),
+            heightAtWidth: { content.sizeThatFits(ProposedViewSize(width: $0, height: nil)).height },
+            limit: limit)
+    }
+}
+
+extension View {
+    /// A dialog body's size for a content-sized dialog (`VisionDialogMetrics(maxWidth: nil)`): a
+    /// fixed width and a preferred height that gives way when the window is shorter, so the
+    /// body's own `ScrollView` takes the difference instead of the card clipping it.
+    func visionDialogFrame(width: CGFloat, height: CGFloat) -> some View {
+        frame(width: width).frame(minHeight: 0, idealHeight: height, maxHeight: height)
     }
 }
 

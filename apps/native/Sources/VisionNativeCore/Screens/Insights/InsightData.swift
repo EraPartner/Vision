@@ -230,7 +230,8 @@ public enum InsightsRoutes {
     public static let statistics = "/statistics"
     public static func drill(
         month: InsightMonth? = nil, type: String? = nil,
-        categoryIds: [CategoryID] = [], uncategorised: Bool = false, label: String? = nil
+        categoryIds: [CategoryID] = [], uncategorised: Bool = false, recipientId: RecipientID? = nil,
+        label: String? = nil
     ) -> NativeRoute {
         var query: [URLQueryItem] = []
         if let month {
@@ -248,6 +249,7 @@ public enum InsightsRoutes {
                     name: "category_ids", value: categoryIds.map { String($0.rawValue) }.joined(separator: ",")))
         }
         if uncategorised { query.append(URLQueryItem(name: "uncategorised", value: "true")) }
+        if let recipientId { query.append(URLQueryItem(name: "recipient_id", value: String(recipientId.rawValue))) }
         if let label { query.append(URLQueryItem(name: "filter_label", value: label)) }
         return NativeRoute(.transactions, query: query)
     }

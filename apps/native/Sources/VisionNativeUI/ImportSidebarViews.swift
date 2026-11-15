@@ -93,20 +93,28 @@ struct ImportExportCard: View {
                         .foregroundStyle(theme.secondaryLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                HStack {
-                    Text(strings.t("importPage.exportFilters"))
-                        .font(.headline)
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    Button(strings.t(model.showsFilters ? "importPage.hideFilters" : "importPage.showFilters")) {
-                        Task { await model.toggleFilters() }
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text(strings.t("importPage.exportFilters"))
+                            .font(.headline)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        Button(strings.t(model.showsFilters ? "importPage.hideFilters" : "importPage.showFilters")) {
+                            Task { await model.toggleFilters() }
+                        }
+                        .buttonStyle(.visionOutline)
+                        .controlSize(.small)
                     }
-                    .buttonStyle(.visionOutline)
-                    .controlSize(.small)
-                }
-                if model.showsFilters {
-                    filters
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    // The filters slide down from under the heading inside their own clipped
+                    // slot, so the motion never draws them over the heading and description.
+                    VStack(alignment: .leading, spacing: 0) {
+                        if model.showsFilters {
+                            filters
+                                .padding(.top, 16)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                    .clipped()
                 }
                 HStack(spacing: 8) {
                     ForEach(ExportFormat.allCases) { format in

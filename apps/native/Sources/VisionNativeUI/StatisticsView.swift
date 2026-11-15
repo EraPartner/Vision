@@ -677,6 +677,10 @@ public struct StatisticsView: View {
                 }
             }
             .bodyMaxHeight(700)
+            // A double click opens the payee's transactions, as the pivot cells drill into theirs.
+            .rowDoubleClicked { row in
+                shell.navigate(to: InsightsRoutes.drill(recipientId: row.recipientId, label: row.name).string)
+            }
         }
     }
     /// The "#" column: the row's position in the list, not sortable or filterable.

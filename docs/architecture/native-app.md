@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-14
-updated: 2026-11-07
+date: 2026-11-15
+updated: 2026-11-15
 tags:
   [
     architecture,
@@ -818,7 +818,15 @@ the app's appearance; native menus follow the system.
 dialogs and side sheets are centred glass panels inside the window (`.visionDialog`,
 `.visionAlert`, `.visionConfirmationDialog`, `.visionSideSheet`), not system sheets; the scrim is
 frosted, and the content under it blurred, only under Full effects or the Enhanced tier. Inside
-them `\.dismiss` does nothing, so callers pass `onClose` or read `visionDismissDialog`. Controls
+them `\.dismiss` does nothing, so callers pass `onClose` or read `visionDismissDialog`. A page's
+panel is placed in the page's own width, never across the leading safe-area inset under the
+floating sidebar, and runs up to the window's top edge while the topbar steps aside
+(`PageModalTopbarHiding`); the sidebar and the collapsed rail take the scrim
+(`PageModalSidebarScrim`). A dialog without a `maxWidth` takes its content's ideal size, capped at
+the window less margins and `Overlay.dialogMaxHeightFraction` (`VisionDialogFit`,
+`VisionDialogContentFit`), so the card hugs its content; bodies with a preferred height use
+`visionDialogFrame(width:height:)` so a short window shrinks their scroll area instead of
+clipping them. Controls
 take their sizes from `VisionControlMetrics`, and Inter and Fraunces are bundled and registered by
 `VisionFonts`.
 
@@ -1254,6 +1262,14 @@ See [[docs/reference/native-parity/home-and-statistics|the action mapping]] and
 present above the detail without losing its selection; closing a successful archive/delete closes
 an active detail. Dirty drafts register the native leave/quit guard. Explicit Cancel resets the
 form; Escape or the sheet close keeps applicable edit/trade drafts, matching the web.
+
+The asset pages and the overview's holdings list show a company or coin logo where one exists
+(`AssetLogoSource`, `AssetLogo`; Swift app only): Financial Modeling Prep's public `image-stock`
+images by ticker for stocks and ETFs, and the pinned `cryptocurrency-icons` 0.18.1 PNGs on jsDelivr
+for crypto. Only the ticker is sent. Each address is fetched once per session; a failure, an
+unknown ticker or no network keeps the asset-class glyph. Metals use Vision's own gold-bar glyph
+(`VisionSymbol.goldBar`) in place of the web's gem on the asset pages and tiles; the sidebar keeps
+the generated navigation symbol.
 
 `PortfolioModel` consumes typed Decimal responses for canonical active summaries, performance,
 broker partitions, exposure and prices. Currency/period revisions reject late reads. The eleven
@@ -1875,7 +1891,9 @@ The sidebar header shows the Vision logo button (`NativeSidebar.brandButton` in
 `ShellRootView` in the transparent titlebar strip over native detail screens: the sidebar trigger and
 search button while the sidebar is hidden, and the page title once the page scrolls past 96 pt
 (`PageScrollObserver`, reset on route change). It takes no clicks outside its buttons, so the strip
-still drags the window. `DeltaPill` (`Components/DeltaPill.swift`) is the shared change chip (tinted
+still drags the window. The page canvas (`DetailGlassBackground`) is not clipped to the page: it
+runs under the floating sidebar, so no empty strip shows while the sidebar slides in or out.
+`DeltaPill` (`Components/DeltaPill.swift`) is the shared change chip (tinted
 capsule with a direction arrow, `invert` for spending); the Portfolio holdings, Research and
 Statistics/Tax chart views use it in place of ad hoc chips. The Sankey layout of the Statistics flow
 is `SankeyLayout`, a port of the in-repo web layout that replaced d3-sankey

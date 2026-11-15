@@ -110,6 +110,14 @@ struct InsightsTests {
         #expect(NativeRoute(route.string)?.value("filter_label") == "Food & cafés")
     }
 
+    @Test func payeeDrillOpensTransactionsFilteredToThePayee() throws {
+        let route = try #require(NativeRoute(InsightsRoutes.drill(recipientId: 42, label: "Delhaize").string))
+        #expect(route.path == "/transactions")
+        #expect(route.value("recipient_id") == "42")
+        #expect(route.value("filter_label") == "Delhaize")
+        #expect(TransactionFilters(route: route).recipientId == 42)
+    }
+
     @Test func homeIncomeAndSpendingDrillsCarryTheirCardLabel() throws {
         let month = try insightFixture(InsightMonthlySummary.self, insightMonthsJSON).months[0]
         for (type, label) in [("income", "Latest month's income"), ("expense", "Latest month's spending")] {
