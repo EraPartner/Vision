@@ -19,7 +19,20 @@ struct NativePageZoomView<Content: View>: View {
                 )
                 .scaleEffect(factor, anchor: .topLeading)
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-                .clipped()
+                // Clips the zoomed page's overflow on the right and at the bottom only. The page's
+                // frame starts below the titlebar strip, and a page's dialog layer and side sheet
+                // run up under that strip to the window's top edge (the web overlay is `fixed
+                // inset-0`); a plain `clipped()` cut them off there, leaving an unscrimmed band
+                // across the top with the sheet starting below it.
+                .clipShape(PageZoomClip())
         }
+    }
+}
+
+/// The viewport's rectangle, open 400 pt upward (as `ColumnSidewaysClip` is): a rectangular clip,
+/// not a mask, so the page is not composited offscreen.
+struct PageZoomClip: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX, y: rect.minY - 400, width: rect.width, height: rect.height + 400))
     }
 }
