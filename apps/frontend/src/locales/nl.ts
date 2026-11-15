@@ -3459,6 +3459,8 @@ const nl: Record<string, string> = {
   'settings.app.updatesHintWeb': 'Werk deze installatie bij op dezelfde manier als ze is geïnstalleerd. Eventuele gegevensupgrades draaien automatisch bij herstart.',
   'settings.app.version': 'Versie {version}',
   'settings.app.versionAvailable': 'Versie {version} is beschikbaar',
+  'settings.appearance.assetLogos': 'Bedrijfs- en muntlogo\'s',
+  'settings.appearance.assetLogosHint': 'Toont logo\'s op de activapagina\'s. Vision laadt ze op ticker van financialmodelingprep.com (aandelen en etf\'s) en cdn.jsdelivr.net (crypto); bedragen of andere gegevens worden niet verstuurd. Standaard uit.',
   'settings.appearance.autoAdaptDisplay': 'Effecten verminderen op grote schermen',
   'settings.appearance.autoAdaptDisplayHint': 'Schakelt automatisch naar Verminderd zolang het venster op een extern scherm met hoge resolutie staat, zoals een 4K-tv, en weer terug zodra het dat verlaat. Het ingebouwde scherm telt nooit als groot.',
   'settings.appearance.darkFrom': 'Donker vanaf',

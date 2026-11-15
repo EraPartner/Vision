@@ -4267,6 +4267,8 @@ settings.appearance.autoAdaptDisplay
 settings.appearance.autoAdaptDisplayHint
 settings.appearance.fullEffects
 settings.appearance.fullEffectsHint
+settings.appearance.assetLogos
+settings.appearance.assetLogosHint
 settings.appearance.darkFrom
 settings.appearance.gainLossColors
 settings.appearance.gainLossColors.classic

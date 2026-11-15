@@ -8,7 +8,7 @@ public enum NativeSettingsDefaults {
         "language": .string("en"), "costBasisMethod": .string("weighted_avg"), "adminMode": .bool(false),
         "visualEffects": .string("standard"), "autoAdaptDisplay": .bool(true), "fullEffects": .string(FullEffectsChoice.auto.rawValue),
         "startupSection": .string("budgeting"),
-        "autoClearPlannedOnMatch": .bool(true), "colorblindGainLoss": .bool(false),
+        "autoClearPlannedOnMatch": .bool(true), "colorblindGainLoss": .bool(false), "assetLogos": .bool(false),
     ])
     public static let dashboard: TaxValue = .object([
         "excludedCategoryIds": .array([]), "excludedRecipientIds": .array([]),
@@ -66,7 +66,7 @@ public enum NativeSettingsDefaults {
         case "showDecimalPlaces": return integer(value).map { (0...20).contains($0) } == true ? value : app[key]
         case "fullEffects":
             return FullEffectsChoice(stored: value).map { .string($0.rawValue) } ?? app[key]
-        case "adminMode", "autoAdaptDisplay", "autoClearPlannedOnMatch", "colorblindGainLoss":
+        case "adminMode", "autoAdaptDisplay", "autoClearPlannedOnMatch", "colorblindGainLoss", "assetLogos":
             return value.boolValue != nil ? value : app[key]
         case "analysisBenchmark":
             guard let raw = value.stringValue, let symbol = ResearchCompareURLState.normalizeSymbol(raw),

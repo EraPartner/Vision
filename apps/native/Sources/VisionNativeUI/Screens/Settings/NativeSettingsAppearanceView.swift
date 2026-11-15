@@ -128,6 +128,20 @@ struct NativeSettingsAppearanceView: View {
                     ).frame(width: 200)
                 }
             }
+            NativeSettingsGroup(title: strings.t("nav.portfolio")) {
+                NativeSettingsRow(
+                    title: strings.t("settings.appearance.assetLogos"),
+                    description: strings.t("settings.appearance.assetLogosHint")
+                ) {
+                    Toggle(
+                        strings.t("settings.appearance.assetLogos"),
+                        isOn: Binding(
+                            get: { model.appBool("assetLogos", fallback: false) },
+                            set: { model.updateApp(["assetLogos": .bool($0)]) })
+                    )
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
+                }
+            }
         }
     }
     private var gainLossOptions: [VisionSelectOption<String>] {

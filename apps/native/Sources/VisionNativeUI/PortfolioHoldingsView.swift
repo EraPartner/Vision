@@ -323,7 +323,8 @@ public struct PortfolioHoldingsView: View {
                         // The company or coin logo when there is one; otherwise `rounded-full
                         // bg-primary/12 text-primary`, 32 pt, with the page icon.
                         AssetLogo(
-                            url: AssetLogoSource.url(symbol: holding.symbol, assetClass: holding.assetClass),
+                            url: shell.settings.assetLogos
+                            ? AssetLogoSource.url(symbol: holding.symbol, assetClass: holding.assetClass) : nil,
                             plate: holding.assetClass != .crypto
                         ) {
                             VisionSymbol(symbol, size: 14, weight: .medium)

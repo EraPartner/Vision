@@ -401,7 +401,8 @@ public struct PortfolioOverviewView: View {
             } label: {
                 HStack(spacing: 14) {
                     AssetLogo(
-                        url: AssetLogoSource.url(symbol: holding.symbol, assetClass: holding.assetClass), size: 26,
+                        url: shell.settings.assetLogos
+                            ? AssetLogoSource.url(symbol: holding.symbol, assetClass: holding.assetClass) : nil, size: 26,
                         plate: holding.assetClass != .crypto
                     ) {
                         VisionSymbol(PortfolioOverviewAsset.symbol(holding.assetClass), size: 13)

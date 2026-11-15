@@ -1263,8 +1263,9 @@ present above the detail without losing its selection; closing a successful arch
 an active detail. Dirty drafts register the native leave/quit guard. Explicit Cancel resets the
 form; Escape or the sheet close keeps applicable edit/trade drafts, matching the web.
 
-The asset pages and the overview's holdings list show a company or coin logo where one exists
-(`AssetLogoSource`, `AssetLogo`; Swift app only): Financial Modeling Prep's public `image-stock`
+With Settings › Appearance › Company and coin logos on (`assetLogos` in `app_settings`, off by
+default; Swift app only), the asset pages and the overview's holdings list show a company or coin
+logo where one exists (`AssetLogoSource`, `AssetLogo`): Financial Modeling Prep's public `image-stock`
 images by ticker for stocks and ETFs, and the pinned `cryptocurrency-icons` 0.18.1 PNGs on jsDelivr
 for crypto. Only the ticker is sent. Each address is fetched once per session; a failure, an
 unknown ticker or no network keeps the asset-class glyph. Metals use Vision's own gold-bar glyph
