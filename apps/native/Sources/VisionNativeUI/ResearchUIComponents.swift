@@ -346,7 +346,7 @@ struct ResearchRemoteThumbnail: View {
     @Environment(\.visionTheme) private var theme
     init(url: URL) { self.url = url }
     var body: some View {
-        AsyncImage(url: url) { phase in
+        PreparedAsyncImage(url: url, pixels: 288) { phase in
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill().frame(width: 96, height: 64).clipped()

@@ -67,6 +67,8 @@ struct AuroraCanvas: View {
             let drift = (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion
             // One animator (ADR-255): while the shader draws the blobs, the layers step aside.
             let shaderBlobs = enhanced && shaderLive
+            // Thermal `.fair` halves the decorative rate (`.serious` and Low Power Mode hold it).
+            let rateDivisor: Float = UserPresence.shared.throttlesDecoration ? 2 : 1
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
                     wash(proxy.size)
@@ -75,7 +77,7 @@ struct AuroraCanvas: View {
                         second: wealth ? theme.primary : theme.accent,
                         firstAlpha: alphas.primary, secondAlpha: alphas.accent,
                         animated: drift && !shaderBlobs, running: live && !shaderBlobs,
-                        frameRate: fullEffects ? 30 : 10
+                        frameRate: (fullEffects ? 30 : 10) / rateDivisor
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .opacity(shaderBlobs ? 0 : 1)
@@ -88,6 +90,7 @@ struct AuroraCanvas: View {
                                 firstAlpha: alphas.primary, secondAlpha: alphas.accent, drift: drift),
                             noiseAlpha: theme.isDark ? 0.5 : 0.6,
                             animated: !staticAtmosphere && !reduceMotion, live: live,
+                            framesPerSecond: AuroraShaderClock.framesPerSecond / Int(rateDivisor),
                             onLive: { shaderLive = $0 }
                         )
                         .onDisappear { shaderLive = false }
@@ -330,6 +333,8 @@ struct AuroraShaderView: NSViewRepresentable {
     let animated: Bool
     /// The window is key, on screen and its app shown; the loop pauses on the last frame otherwise.
     let live: Bool
+    /// About 20 fps (`FRAME_MIN_MS`), halved under thermal `.fair`.
+    let framesPerSecond: Int
     /// The program compiled and draws, or failed and the layer blobs stay the fallback.
     let onLive: @MainActor (Bool) -> Void
 
@@ -343,7 +348,9 @@ struct AuroraShaderView: NSViewRepresentable {
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         view.layer?.isOpaque = false
         view.autoResizeDrawable = false
-        view.preferredFramesPerSecond = AuroraShaderClock.framesPerSecond
+        view.preferredFramesPerSecond = framesPerSecond
+        let renderer = context.coordinator
+        view.onVisibilityChange = { [weak renderer] visible in renderer?.visibilityChanged(visible) }
         context.coordinator.attach(view)
         update(context.coordinator, view: view)
         context.coordinator.beginPreparation(device: device)
@@ -358,11 +365,13 @@ struct AuroraShaderView: NSViewRepresentable {
     static func dismantleNSView(_ view: NSView, coordinator: AuroraRenderer) {
         coordinator.stop()
         guard let view = view as? AuroraMTKView else { return }
+        view.onVisibilityChange = nil
         view.isPaused = true
         view.delegate = nil
     }
 
     private func update(_ renderer: AuroraRenderer, view: AuroraMTKView) {
+        if view.preferredFramesPerSecond != framesPerSecond { view.preferredFramesPerSecond = framesPerSecond }
         renderer.colors = (Self.rgb(primary), Self.rgb(accent))
         renderer.blobs = blobs
         renderer.blobColors = (Self.rgb(blobs.first), Self.rgb(blobs.second))
@@ -380,6 +389,27 @@ struct AuroraShaderView: NSViewRepresentable {
 }
 
 final class AuroraMTKView: MTKView {
+    /// The window's occlusion state (minimised, covered, hidden or on another Space).
+    var onVisibilityChange: (@MainActor (Bool) -> Void)?
+    private var occlusionObserver: NSObjectProtocol?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        occlusionObserver = nil
+        guard let window else { return }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reportVisibility() }
+        }
+        reportVisibility()
+    }
+
+    private func reportVisibility() {
+        onVisibilityChange?(window?.occlusionState.contains(.visible) ?? false)
+    }
+
     override func layout() {
         super.layout()
         // RESOLUTION_SCALE 0.25, capped at MAX_CANVAS_WIDTH 640; the layer upscales it.
@@ -422,6 +452,11 @@ final class AuroraMTKView: MTKView {
     private weak var view: AuroraMTKView?
     private var clock = AuroraShaderClock()
     private var preparation: Task<Void, Never>?
+    /// List item 6.11: after a minute out of sight the drawables are released; the first
+    /// visible moment draws the held frame again.
+    private var hiddenRelease: Task<Void, Never>?
+    private var releasedDrawables = false
+    static let releaseDrawablesAfter: Duration = .seconds(60)
     private final class PreparedPipeline {
         let value: MTLRenderPipelineState
         init(_ value: MTLRenderPipelineState) { self.value = value }
@@ -451,9 +486,33 @@ final class AuroraMTKView: MTKView {
         }
     }
 
+    func visibilityChanged(_ visible: Bool) {
+        hiddenRelease?.cancel()
+        hiddenRelease = nil
+        guard let view else { return }
+        if visible {
+            // A paused view redraws its held frame; a running loop draws anyway.
+            if releasedDrawables {
+                releasedDrawables = false
+                view.needsDisplay = true
+            }
+            return
+        }
+        hiddenRelease = Task { [weak self] in
+            do { try await Task.sleep(for: Self.releaseDrawablesAfter) } catch { return }
+            guard let self, let view = self.view, !(view.window?.occlusionState.contains(.visible) ?? false)
+            else { return }
+            view.releaseDrawables()
+            self.releasedDrawables = true
+            self.hiddenRelease = nil
+        }
+    }
+
     func stop() {
         preparation?.cancel()
         preparation = nil
+        hiddenRelease?.cancel()
+        hiddenRelease = nil
         view?.isPaused = true
         view?.delegate = nil
         view = nil

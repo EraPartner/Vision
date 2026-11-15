@@ -27,7 +27,8 @@ import VisionNativeCore
             let info = ProcessInfo.processInfo
             presence.updatePower(
                 lowPower: info.isLowPowerModeEnabled,
-                thermalPressure: info.thermalState == .serious || info.thermalState == .critical)
+                thermalPressure: info.thermalState == .serious || info.thermalState == .critical,
+                thermalFair: info.thermalState == .fair)
         }
         observe(.default, Notification.Name.NSProcessInfoPowerStateDidChange.rawValue) { updatePower() }
         observe(.default, ProcessInfo.thermalStateDidChangeNotification.rawValue) { updatePower() }
@@ -37,17 +38,19 @@ import VisionNativeCore
             matching: [.keyDown, .mouseMoved, .leftMouseDown, .rightMouseDown, .scrollWheel, .leftMouseDragged,
                 .rightMouseDragged, .otherMouseDown, .otherMouseDragged]
         ) { event in
-            MainActor.assumeIsolated { presence.update(idleSeconds: 0) }
+            MainActor.assumeIsolated { presence.noteLocalInput() }
             return event
         }
         defer {
             for (center, token) in observers { center.removeObserver(token) }
             if let input { NSEvent.removeMonitor(input) }
         }
+        // No fixed fast poll: each wake re-arms for the decorative idle moment (at most every
+        // 30 s while input continues) or the 60 s away poll.
         while !Task.isCancelled {
-            presence.update(idleSeconds: Self.idleSeconds)
-            // One inexpensive input-clock read per second; publish only state transitions.
-            do { try await Task.sleep(for: UserPresence.checkInterval) } catch { break }
+            let idle = Self.idleSeconds
+            presence.update(idleSeconds: idle)
+            do { try await Task.sleep(for: .seconds(presence.nextCheck(idleSeconds: idle))) } catch { break }
         }
     }
 

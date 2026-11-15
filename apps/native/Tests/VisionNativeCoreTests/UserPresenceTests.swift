@@ -6,14 +6,18 @@ import Testing
 @MainActor @Suite struct UserPresenceTests {
     @Test func decorativeIdleDoesNotPauseDataAndInputResumesIt() {
         let presence = UserPresence()
-        presence.update(idleSeconds: 14.9)
+        presence.update(idleSeconds: 29.9)
         #expect(presence.permitsDecorativeMotion(windowIsLive: true, modalIsOpen: false))
-        presence.update(idleSeconds: 15)
+        #expect(presence.nextCheck(idleSeconds: 29.9) == 1)
+        #expect(presence.nextCheck(idleSeconds: 0) == 30)
+        presence.update(idleSeconds: 30)
         #expect(presence.isDecorativelyIdle)
         #expect(!presence.isAway)
         #expect(!presence.permitsDecorativeMotion(windowIsLive: true, modalIsOpen: false))
-        presence.update(idleSeconds: 0)
+        #expect(presence.nextCheck(idleSeconds: 30) == 60)
+        presence.noteLocalInput()
         #expect(presence.permitsDecorativeMotion(windowIsLive: true, modalIsOpen: false))
+        presence.update(idleSeconds: 0)
         #expect(!presence.permitsDecorativeMotion(windowIsLive: false, modalIsOpen: false))
         #expect(!presence.permitsDecorativeMotion(windowIsLive: true, modalIsOpen: true))
         presence.setScreenLocked(true, idleSeconds: 0)
@@ -31,6 +35,11 @@ import Testing
         }
         presence.updatePower(lowPower: false, thermalPressure: false)
         #expect(presence.permitsDecorativeMotion(windowIsLive: true, modalIsOpen: false))
+        presence.updatePower(lowPower: false, thermalPressure: false, thermalFair: true)
+        #expect(presence.throttlesDecoration)
+        #expect(presence.permitsDecorativeMotion(windowIsLive: true, modalIsOpen: false))
+        presence.updatePower(lowPower: true, thermalPressure: false, thermalFair: true)
+        #expect(!presence.throttlesDecoration)
     }
 
     @Test func fiveIdleMinutesOrALockedScreenIsAwayAndInputOrUnlockReturns() {

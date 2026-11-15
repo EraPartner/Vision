@@ -315,10 +315,10 @@ struct AnalysisResultPivot: View {
     }
     private var matrix: some View {
         let snapshot = presentation
-        return ScrollView([.horizontal, .vertical]) {
-            LazyVStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 16) {
-                    ForEach(rowIDs, id: \.self) { Text(fieldLabel($0)).frame(width: 160, alignment: .leading) }
+        return ScrollView(.horizontal) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                GridRow {
+                    ForEach(rowIDs, id: \.self) { Text(fieldLabel($0)) }
                     ForEach(snapshot.columns) { entry in
                         ForEach(config.values, id: \.self) { value in
                             HStack {
@@ -332,18 +332,17 @@ struct AnalysisResultPivot: View {
                                 Text(
                                     "\(config.columns.prefix(entry.depth).map { AnalysisPresentation.rawText(entry.row[$0]) }.joined(separator: " / ")) · \(fieldLabel(value))"
                                 )
-                            }.frame(width: 160, alignment: .leading)
+                            }
                         }
                     }
                     if !config.columns.isEmpty {
                         ForEach(config.values, id: \.self) {
                             Text("\(strings.t("analysis.ext.pivot.total")) · \(fieldLabel($0))")
-                                .frame(width: 160, alignment: .leading)
                         }
                     }
                 }.fontWeight(.medium)
                 ForEach(snapshot.rows) { entry in
-                    HStack(alignment: .top, spacing: 16) {
+                    GridRow {
                         ForEach(rowIDs, id: \.self) { id in
                             HStack {
                                 if entry.depth > 0 && entry.depth < config.rows.count
@@ -357,7 +356,7 @@ struct AnalysisResultPivot: View {
                                     verbatim: entry.depth == 0 && id == config.rows.first
                                         ? strings.t("analysis.ext.pivot.total")
                                         : AnalysisPresentation.rawText(entry.row[id]))
-                            }.frame(width: 160, alignment: .leading)
+                            }
                         }
                         ForEach(snapshot.columns) { column in
                             ForEach(config.values, id: \.self) { id in
@@ -369,7 +368,6 @@ struct AnalysisResultPivot: View {
                                         uniqueKeysWithValues: source.groups.map { ($0, cell[$0] ?? .null) })
                                     Task { await model.drill(row: values, groups: source.groups) }
                                 }.buttonStyle(.plain).disabled(cell == nil).visionTooltip(strings.t("analysis.ext.pivot.drill"))
-                                    .frame(width: 160, alignment: .leading)
                             }
                         }
                         if !config.columns.isEmpty {
@@ -377,14 +375,12 @@ struct AnalysisResultPivot: View {
                                 let total = snapshot.levels[LevelKey(row: entry.depth, column: 0)]?
                                     .cells[CellKey(row: entry.id, column: columnKey([:], 0))]
                                 Text(verbatim: displayCell(total, id)).fontWeight(.medium)
-                                    .frame(width: 160, alignment: .leading)
                             }
                         }
                     }
                 }
             }.font(.caption).monospacedDigit().textSelection(.enabled).padding(12)
-        }.frame(height: min(600, CGFloat(snapshot.rows.count + 1) * 44 + 24))
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
+        }.overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
     }
     private func expansion(key: String, label: String, columns: Bool) -> some View {
         let open = (columns ? expandedColumns : expandedRows).contains(key)

@@ -73,7 +73,7 @@ final class AssetLogoStore {
         let data = await task.value
         pending[url] = nil
         if let image = cached(url) { return image }
-        if let data, let image = PreparedImageStore.shared.image(data: data) {
+        if let data, let image = await PreparedImageStore.shared.image(key: url.absoluteString, data: data) {
             images.setObject(image, forKey: url as NSURL, cost: 128 * 128 * 4)
             return image
         }

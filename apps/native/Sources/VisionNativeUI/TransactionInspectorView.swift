@@ -506,17 +506,26 @@ struct TransactionAttachmentsPanel: View {
 
     @ViewBuilder
     private func thumbnail(_ item: OpenAPI.Attachment) -> some View {
-        if let data = attachments.thumbnails[item.id], let image = PreparedImageStore.shared.image(data: data) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+        if let data = attachments.thumbnails[item.id] {
+            // 32 pt filled on Retina; decoded off the main actor, the muted tile shows meanwhile.
+            PreparedDataImage(key: "attachment:\(item.id.rawValue)", data: data, pixels: 128) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } placeholder: {
+                thumbnailPlaceholder
+            }
         } else {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(theme.muted)
-                .frame(width: 32, height: 32)
+            thumbnailPlaceholder
         }
+    }
+
+    private var thumbnailPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(theme.muted)
+            .frame(width: 32, height: 32)
     }
 
     /// The chosen file's bytes and type, read under its security scope.

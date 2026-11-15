@@ -407,7 +407,7 @@ private struct ResearchMarketNewsThumbnail: View {
     let url: URL
     @Environment(\.visionTheme) private var theme
     var body: some View {
-        AsyncImage(url: url) { phase in
+        PreparedAsyncImage(url: url, pixels: 96) { phase in
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill().frame(width: 28, height: 28).clipped().clipShape(

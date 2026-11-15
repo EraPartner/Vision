@@ -9,14 +9,17 @@ import Observation
     public static let shared = UserPresence()
     /// `USER_IDLE_THRESHOLD_S`.
     public static let awayAfter: TimeInterval = 5 * 60
-    /// Coarse polling detects input outside the app; local input resumes decoration immediately.
-    public static let checkInterval: Duration = .seconds(1)
-    /// Decorative motion stops much sooner than background data polling.
-    public static let decorativeIdleAfter: TimeInterval = 15
+    /// `USER_IDLE_POLL_MS`.
+    public static let checkInterval: Duration = .seconds(60)
+    /// Decorative motion (aurora, ticker, shimmer) holds after about 30 s without input, much
+    /// sooner than polls pause. The monitor arms one check for this moment instead of polling.
+    public static let decorativeIdleAfter: TimeInterval = 30
 
     public private(set) var isAway = false
     public private(set) var isDecorativelyIdle = false
     public private(set) var conservesPower = false
+    /// Thermal state `.fair`: decoration runs at half its rate (list item 1.9).
+    public private(set) var throttlesDecoration = false
     @ObservationIgnored private var screenLocked = false
 
     public init() {}
@@ -28,9 +31,26 @@ import Observation
         if isDecorativelyIdle != idle { isDecorativelyIdle = idle }
     }
 
-    public func updatePower(lowPower: Bool, thermalPressure: Bool) {
+    /// Input inside the app: decoration resumes at once. Away keeps its 60 s poll, as main.ts.
+    public func noteLocalInput() {
+        if isDecorativelyIdle && !screenLocked { isDecorativelyIdle = false }
+    }
+
+    /// Low Power Mode or thermal `.serious`/`.critical` hold decoration on a still frame;
+    /// thermal `.fair` halves its rate.
+    public func updatePower(lowPower: Bool, thermalPressure: Bool, thermalFair: Bool = false) {
         let conserve = lowPower || thermalPressure
         if conservesPower != conserve { conservesPower = conserve }
+        let throttle = thermalFair && !conserve
+        if throttlesDecoration != throttle { throttlesDecoration = throttle }
+    }
+
+    /// Seconds until the next check is due: the decorative idle moment while decoration runs,
+    /// otherwise the away poll.
+    public func nextCheck(idleSeconds: TimeInterval) -> TimeInterval {
+        let poll = TimeInterval(Self.checkInterval.components.seconds)
+        guard !isDecorativelyIdle else { return poll }
+        return min(poll, max(1, Self.decorativeIdleAfter - idleSeconds))
     }
 
     /// Shared by decorative renderers; essential data and input remain independent.
