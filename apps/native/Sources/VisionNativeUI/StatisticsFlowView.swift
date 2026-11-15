@@ -9,6 +9,7 @@ struct StatisticsFlowView: View {
     @State private var hoveredNode: String?
     private let onHoverChange: (String?, String?) -> Void
     @State private var hoveredLink: String?
+    @State private var geometryCache = FlowGeometryCache()
     @Environment(\.visionTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -29,7 +30,8 @@ struct StatisticsFlowView: View {
         GeometryReader { geometry in
             let size = geometry.size
             // Same layout as the web chart (ADR-245): d3-sankey positions inside 16 pt margins.
-            let layout = StatisticsFlowLayout(flow: flow, width: size.width, height: size.height)
+            let prepared = geometryCache.prepare(flow: flow, size: size)
+            let layout = prepared.layout
             let margin = CGFloat(StatisticsFlowLayout.margin)
             let fade: Animation? =
                 reduceMotion ? nil : .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.fast)
@@ -39,10 +41,9 @@ struct StatisticsFlowView: View {
                     let isHovered =
                         hoveredLink == link.id || hoveredNode == link.link.source || hoveredNode == link.link.target
                     // Stroked with the target node's colour, 25% opaque, 60% when highlighted.
-                    let target = layout.nodes.first { $0.id == link.link.target }
+                    let target = prepared.nodes[link.link.target]
                     // The band as its stroked outline: the same path the hover test below uses.
-                    Self.curve(link, margin: margin)
-                        .strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
+                    (prepared.bands[link.id] ?? Path())
                         .fill(target.map { color($0.node) } ?? theme.mutedForeground)
                         .opacity(isHovered ? 0.6 : 0.25)
                         .animation(fade, value: isHovered)
@@ -99,7 +100,7 @@ struct StatisticsFlowView: View {
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let point):
-                    let hit = Self.hit(at: point, layout: layout, margin: margin)
+                    let hit = prepared.hit(at: point)
                     if hoveredNode != hit.node { hoveredNode = hit.node }
                     if hoveredLink != hit.link { hoveredLink = hit.link }
                 case .ended:
@@ -117,14 +118,58 @@ struct StatisticsFlowView: View {
     static func hit(
         at point: CGPoint, layout: StatisticsFlowLayout, margin: CGFloat
     ) -> (node: String?, link: String?) {
-        for node in layout.nodes.reversed() where rect(node, margin: margin).contains(point) {
-            return (node.id, nil)
+        FlowGeometry(layout: layout, margin: margin).hit(at: point)
+    }
+
+    private struct FlowGeometry {
+        let layout: StatisticsFlowLayout
+        let nodes: [String: StatisticsFlowNodeLayout]
+        let nodeBounds: [(id: String, bounds: CGRect)]
+        let bands: [String: Path]
+        let bandBounds: [(id: String, bounds: CGRect)]
+
+        init(layout: StatisticsFlowLayout, margin: CGFloat) {
+            self.layout = layout
+            nodes = Dictionary(layout.nodes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            nodeBounds = layout.nodes.map { ($0.id, StatisticsFlowView.rect($0, margin: margin)) }
+            var paths: [String: Path] = [:]
+            var bounds: [(id: String, bounds: CGRect)] = []
+            for link in layout.links {
+                let band = StatisticsFlowView.curve(link, margin: margin)
+                    .strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
+                paths[link.id] = band
+                bounds.append((link.id, band.boundingRect))
+            }
+            bands = paths
+            bandBounds = bounds
         }
-        for link in layout.links.reversed() {
-            let band = curve(link, margin: margin).strokedPath(StrokeStyle(lineWidth: max(1, CGFloat(link.width))))
-            if band.contains(point) { return (nil, link.id) }
+
+        func hit(at point: CGPoint) -> (node: String?, link: String?) {
+            for node in nodeBounds.reversed() where node.bounds.contains(point) { return (node.id, nil) }
+            for link in bandBounds.reversed() where link.bounds.contains(point) {
+                if bands[link.id]?.contains(point) == true { return (nil, link.id) }
+            }
+            return (nil, nil)
         }
-        return (nil, nil)
+    }
+
+    @MainActor
+    private final class FlowGeometryCache {
+        private var source: StatisticsFlow?
+        private var size: CGSize?
+        private var value: FlowGeometry?
+
+        func prepare(flow: StatisticsFlow, size: CGSize) -> FlowGeometry {
+            if source == flow, self.size == size, let value { return value }
+            let interval = NativePerformance.begin("Sankey.layout")
+            defer { NativePerformance.end("Sankey.layout", interval) }
+            let layout = StatisticsFlowLayout(flow: flow, width: size.width, height: size.height)
+            let next = FlowGeometry(layout: layout, margin: CGFloat(StatisticsFlowLayout.margin))
+            source = flow
+            self.size = size
+            value = next
+            return next
+        }
     }
 
     /// The node's rectangle in view coordinates; at least 1 pt tall, as on the web.

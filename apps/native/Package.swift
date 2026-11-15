@@ -1,5 +1,11 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+// Xcode's optional Metal Toolchain is required for .process on a .metal file. Hosts without
+// it retain asynchronous runtime compilation. Release builders can opt into a bundled library.
+let auroraShader: Resource = ProcessInfo.processInfo.environment["VISION_PRECOMPILE_METAL"] == "1"
+    ? .process("Resources/Shaders") : .copy("Resources/Shaders/Aurora.metal")
 
 // Vision Native (ADR-204). VisionNativeCore holds the non-UI logic; VisionNativeUI holds the
 // SwiftUI screens of phase 2 and the generated String Catalog. The app target in project.yml
@@ -22,7 +28,7 @@ let package = Package(
             // web's latin subsets (@fontsource, OFL-1.1) as TrueType, registered by VisionFonts:
             // Inter 400, 400 italic, 500, 600 and 700, and Fraunces 400, 600 and 700, with the
             // OFL texts (OFL.txt for Fraunces, OFL-Inter.txt for Inter).
-            resources: [.copy("Resources/Localizable.xcstrings"), .copy("Resources/Fonts")]
+            resources: [.copy("Resources/Localizable.xcstrings"), .copy("Resources/Fonts"), auroraShader]
         ),
         .testTarget(
             name: "VisionNativeCoreTests",

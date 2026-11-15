@@ -22,6 +22,20 @@ enum RaceChartMutation: Sendable, CaseIterable { case save, delete }
 @MainActor
 @Suite("Insights saved-chart and widget read races")
 struct InsightsRaceTests {
+    @Test func homePublishesMonthlyBeforeAnUnrelatedWidgetReadCompletes() async {
+        let service = RaceHomeService()
+        await service.pauseNextWidgetRead()
+        let home = HomeModel(service: service)
+        let loading = Task { await home.appear(settings: .defaults, route: .home) }
+        await service.waitForWidgetRead()
+        for _ in 0..<1000 where home.monthly == nil { await Task.yield() }
+        #expect(home.monthly != nil)
+        #expect(!home.isLoading)
+        #expect(home.isFetching)
+        await service.releaseWidgetRead()
+        await loading.value
+        #expect(!home.isFetching)
+    }
     @Test func yearlyCategoryBarsTakeMagnitudeAfterSignedMonthsAreBucketed() throws {
         var draft = CustomChartDraft()
         draft.categoryIds = [7]

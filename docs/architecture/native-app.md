@@ -1108,7 +1108,9 @@ The UI uses the generated theme tokens and EN/NL String Catalog.
 
 `HomeModel` resolves `dashboard_settings` and hidden categories before requesting filtered
 aggregates. Exclusions are repeated query parameters, with a separate unfiltered monthly
-summary only when needed. Recent filtered rows scan additional server pages until five survive.
+summary only when needed. Recent filtered rows scan additional server pages until five survive,
+reusing the first transaction page. Each card publishes as its own answer lands, under the same
+generation guard; the monthly summary ends the loading state.
 The hero keeps the web's unfiltered month-to-date and stored planned-amount behavior. Financial
 responses decode directly as `Decimal` through `InsightRequest`, which specializes the generated
 OpenAPI operations without bypassing `APIClient`'s envelope or authentication handling. A failed
@@ -1925,6 +1927,14 @@ counterpart:
   (fed by `UserPresenceMonitor`: input idle time every minute, screen lock and unlock, wake) marks
   the user away after 5 minutes without input or while the screen is locked, and the interval polls
   pause until they are back.
+- **Decorative motion.** `UserPresence.permitsDecorativeMotion` is the one gate for the aurora, the
+  ticker and the background-query shimmer: window live, no modal, input within 30 s, no Low Power
+  Mode and thermal state below `.serious` (`fx-idle-atmosphere`). The monitor arms one check for
+  the 30 s mark from the input clock instead of polling; in-app input resumes motion at once and
+  leaves the away state to the minute poll. Thermal `.fair` halves the aurora and drift rates.
+  The shader source is the resource `Resources/Shaders/Aurora.metal`, compiled asynchronously
+  (precompiled only with `VISION_PRECOMPILE_METAL=1`); its drawables are released after a minute
+  out of sight.
 - **Memory.** The transactions ledger lets its loaded rows go 2 minutes after the page is left
   (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state.
 - **Halos.** Under Full effects the wide dark-mode halo stays on headings, and the page subtitle
@@ -1943,6 +1953,17 @@ move or per composited frame.
   chart, so a chart hover re-renders its card and not the dashboard.
 - **Tooltip anchors.** `VisionTooltipModifier` creates its AppKit anchor view only while the pointer
   is over the control; `VisionTooltipPresenter` reads it when the tooltip opens.
+- **Cached presentations.** The Statistics pivot keeps its groups and column totals per metric,
+  year and exclusion until the data changes. The Analysis pivot indexes each level's cells once
+  per result, configuration and expansion. The Sankey caches stroked link paths and bounds per
+  layout and rejects by bounding box before a stroke hit test. Import review is one lazy list of
+  headers, controls and rows with stable ids.
+- **Bounded memory.** AI chat keeps at most 8 loaded conversations (8 MB encoded), with the
+  selected and streaming ones pinned, and the live message renders apart from the history.
+  `PreparedImageStore` decodes logos, news and attachment thumbnails at display size off the main
+  actor into an 8 MB LRU.
+- **Signposts.** `NativePerformance` wraps `OSSignposter` intervals (Home load, aurora
+  preparation, Statistics and Analysis presentation, Sankey) for Instruments.
 - **Offscreen passes.** The detail column is clipped sideways with a rectangular `clipShape`
   (`ColumnSidewaysClip`), not a mask view. A card with an opaque fill (reduced tier, Reduce
   Transparency) drops the shadow cut-out mask of `VisionCardLayerView`. `VisionButtonChrome` casts

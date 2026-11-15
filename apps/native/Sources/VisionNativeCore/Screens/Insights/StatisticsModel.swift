@@ -4,8 +4,8 @@ import Observation
 @MainActor
 @Observable
 public final class StatisticsModel {
-    public private(set) var filtered: StatisticsSnapshot?
-    public private(set) var unfiltered: StatisticsSnapshot?
+    public private(set) var filtered: StatisticsSnapshot? { didSet { pivotPresentationCache = nil } }
+    public private(set) var unfiltered: StatisticsSnapshot? { didSet { pivotPresentationCache = nil } }
     public private(set) var error: String?
     public private(set) var isFetching = false
     public private(set) var exclusions = InsightExclusions()
@@ -45,6 +45,10 @@ public final class StatisticsModel {
     @ObservationIgnored private var flowTask: Task<Void, Never>?
     @ObservationIgnored private var widgetBaseline: JSONValue = .null
     @ObservationIgnored private var widgetRevision = UUID()
+    @ObservationIgnored private var pivotPresentationCache: (
+        metric: StatisticsMetric, year: Int?, excluded: Bool,
+        groups: [StatisticsCategoryGroup], totals: [String: Decimal], total: Decimal
+    )?
 
     public init(
         service: any StatisticsService, calendar: Calendar = .current,
@@ -228,7 +232,30 @@ public final class StatisticsModel {
         return Array(periods[max(0, end - 12)..<end])
     }
     public var pivotGroups: [StatisticsCategoryGroup] {
-        data(for: "pivotTable")?.categoryGroups(metric: categoryMetric, periods: Set(pivotAllPeriods)) ?? []
+        pivotPresentation.groups
+    }
+    public var pivotColumnTotals: [String: Decimal] { pivotPresentation.totals }
+    public var pivotGrandTotal: Decimal { pivotPresentation.total }
+    private var pivotPresentation: (groups: [StatisticsCategoryGroup], totals: [String: Decimal], total: Decimal) {
+        let snapshot = data(for: "pivotTable")
+        let metric = categoryMetric
+        let year = pivotYear
+        let excluded = graphExclusions["pivotTable"] != false
+        if let cached = pivotPresentationCache,
+            cached.metric == metric, cached.year == year, cached.excluded == excluded {
+            return (cached.groups, cached.totals, cached.total)
+        }
+        let interval = NativePerformance.begin("Statistics.presentation")
+        defer { NativePerformance.end("Statistics.presentation", interval) }
+        let groups = snapshot?.categoryGroups(metric: metric, periods: Set(pivotAllPeriods)) ?? []
+        var totals: [String: Decimal] = [:]
+        var total: Decimal = 0
+        for group in groups {
+            total += group.total
+            for (period, value) in group.values { totals[period, default: 0] += value }
+        }
+        pivotPresentationCache = (metric, year, excluded, groups, totals, total)
+        return (groups, totals, total)
     }
     public var pivotExpandableGroupIds: [String] { pivotGroups.filter(\.isExpandable).map(\.id) }
     /// `computeMasterToggleState(...).allCollapsed`: false when nothing can expand.

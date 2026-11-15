@@ -72,7 +72,7 @@ public final class RecipientsModel {
     public static let suggestionDuration: Duration = .seconds(10)
 
     /// The loaded payees; `nil` until the first page.
-    public private(set) var rows: [OpenAPI.Recipient]?
+    public private(set) var rows: [OpenAPI.Recipient]? { didSet { shownRowsCache = nil } }
     public private(set) var total = 0
     public private(set) var error: APIError?
     public private(set) var isFetchingMore = false
@@ -81,7 +81,7 @@ public final class RecipientsModel {
     /// The search input as typed; the URL holds the gated value.
     public var searchText = ""
     /// The column filters over the loaded rows (never sent to the server).
-    public private(set) var columnFilters = ServerColumnFilters()
+    public private(set) var columnFilters = ServerColumnFilters() { didSet { shownRowsCache = nil } }
     /// The row in inline edit.
     public var editing: PayeeRowEdit?
 
@@ -113,6 +113,7 @@ public final class RecipientsModel {
     @ObservationIgnored private var offset = 0
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var inFlight: (key: PayeeTableKey, task: Task<Void, Never>)?
+    @ObservationIgnored private var shownRowsCache: (none: String, rows: [OpenAPI.Recipient], indices: [RecipientID: Int])?
 
     public init(service: any RecipientsService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -145,6 +146,7 @@ public final class RecipientsModel {
     /// payees' selection stays, like the mounted-but-closed web dialog.
     public func disappear() {
         visible = false
+        shownRowsCache = nil
         editing = nil
         add = nil
         rules = nil
@@ -289,8 +291,17 @@ public final class RecipientsModel {
 
     /// The rows the table shows: the loaded rows narrowed by the column filters.
     public var shownRows: [OpenAPI.Recipient] {
+        // Read observable inputs even on a cache hit so consumers keep their dependencies.
+        let rows = rows ?? []
+        let filters = columnFilters
         let none = strings.t("recipientsPage.none")
-        return columnFilters.apply(rows ?? []) { payee, key in PayeeColumns.value(payee, key: key, none: none) }
+        if let cached = shownRowsCache, cached.none == none { return cached.rows }
+        let interval = NativePerformance.begin("Recipients.presentation")
+        defer { NativePerformance.end("Recipients.presentation", interval) }
+        let shown = filters.apply(rows) { payee, key in PayeeColumns.value(payee, key: key, none: none) }
+        let indices = Dictionary(shown.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        shownRowsCache = (none, shown, indices)
+        return shown
     }
 
     /// A column filter's value list: the distinct raw values of the loaded rows.
@@ -378,7 +389,7 @@ public final class RecipientsModel {
     /// A drawn row near the end asks for the next page.
     public func rowAppeared(_ id: RecipientID) async {
         let shown = shownRows
-        guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = shownRowsCache?.indices[id] else { return }
         let threshold = ServerTablePaging.loadMoreThreshold(pageSize: pageSize)
         guard
             ServerTablePaging.shouldLoadMore(

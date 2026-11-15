@@ -5,7 +5,7 @@ import VisionNativeCore
 /// The in-app perf run: the Swift counterpart of scripts/mac-baseline.ts, started by the
 /// `VisionPerfRun` default (an output directory) and otherwise absent. `startIfRequested` is one
 /// `UserDefaults` read when it is off. The JSON it writes is documented in `PerfRunModel.swift`;
-/// `scripts/mac-baseline.ts --native` launches the app with it and reads the file.
+/// Launch arguments enable it directly; the Electron CDP harness cannot drive this app.
 ///
 ///     open -a "Vision Native Demo" --args -VisionPerfRun /tmp/vision-perf
 ///     defaults write com.vaultvoyager.vision-native-demo VisionPerfRun /tmp/vision-perf
@@ -43,6 +43,7 @@ final class PerfRun {
     private var readyEpochMs: Double?
     private var afterLaunch: PerfProcessSnapshot?
     private var phases: [PerfPhaseResult] = []
+    private var memorySamples: [PerfMemorySample] = []
 
     private init(shell: ShellController, settings: PerfRunSettings) {
         self.shell = shell
@@ -118,10 +119,23 @@ final class PerfRun {
     private func measure(
         _ name: PerfPhaseName, tracksFrames: Bool, body: () async throws -> PhaseDetail
     ) async throws {
+        let interval = NativePerformance.begin("Harness.phase")
+        defer { NativePerformance.end("Harness.phase", interval) }
         let startCpu = PerfProbes.cpuSeconds()
         let startFootprint = PerfProbes.footprintMb()
         let startEpoch = Self.nowMs()
         let startMonotonic = CACurrentMediaTime() * 1000
+        memorySamples = [PerfMemorySample(elapsedMs: 0, footprintMb: startFootprint)]
+        let sampler = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard let self, !Task.isCancelled else { return }
+                self.memorySamples.append(PerfMemorySample(
+                    elapsedMs: CACurrentMediaTime() * 1000 - startMonotonic,
+                    footprintMb: PerfProbes.footprintMb()))
+            }
+        }
+        defer { sampler.cancel() }
         markPhase(name)
         if tracksFrames { clock.beginRecording() }
         let detail: PhaseDetail
@@ -136,6 +150,8 @@ final class PerfRun {
         let endCpu = PerfProbes.cpuSeconds()
         let user = endCpu.user - startCpu.user
         let system = endCpu.system - startCpu.system
+        memorySamples.append(PerfMemorySample(
+            elapsedMs: CACurrentMediaTime() * 1000 - startMonotonic, footprintMb: PerfProbes.footprintMb()))
         let window = shell.window
         phases.append(
             PerfPhaseResult(
@@ -145,7 +161,7 @@ final class PerfRun {
                 framesTracked: tracksFrames, frameStampsMs: stamps.map { $0 - startMonotonic },
                 steps: detail.steps, scroll: detail.scroll, cycles: detail.cycles,
                 windowVisibleAtEnd: window?.occlusionState.contains(.visible) ?? false,
-                appActiveAtEnd: NSApp.isActive))
+                appActiveAtEnd: NSApp.isActive, memorySamples: memorySamples))
     }
 
     private func sustainedLoop() async throws -> PhaseDetail {
@@ -178,6 +194,8 @@ final class PerfRun {
 
     /// A Go-menu navigation, then the harness's dwell. `settleMs` is the time until the route changed.
     private func navigate(to destination: NativeRoute.Destination) async throws -> PerfStep {
+        let interval = NativePerformance.begin("Harness.routeTransition")
+        defer { NativePerformance.end("Harness.routeTransition", interval) }
         let path = destination.rawValue
         let started = Date()
         var timedOut = false

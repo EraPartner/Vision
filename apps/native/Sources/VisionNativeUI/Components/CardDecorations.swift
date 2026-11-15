@@ -59,13 +59,16 @@ struct BackgroundQueryIndicator: View {
     @Environment(\.visionTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = -1
+    @State private var windowLive = true
 
     var body: some View {
         if inspector.inFlight.contains(where: { $0.method == .get }) {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     theme.primary.opacity(0.25)
-                    if !reduceMotion && !VisionModalRegistry.shared.isOpen {
+                    if !reduceMotion && UserPresence.shared.permitsDecorativeMotion(
+                        windowIsLive: windowLive, modalIsOpen: VisionModalRegistry.shared.isOpen)
+                    {
                         LinearGradient(
                             stops: [
                                 .init(color: .clear, location: 0), .init(color: theme.primary, location: 0.45),
@@ -83,6 +86,7 @@ struct BackgroundQueryIndicator: View {
                 .clipped()
             }
             .frame(height: 2)
+            .background { WindowLivenessProbe { windowLive = $0 } }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }

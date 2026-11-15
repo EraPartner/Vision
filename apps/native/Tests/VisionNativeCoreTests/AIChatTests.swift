@@ -5,6 +5,26 @@ import Testing
 
 @Suite("Native chat frames, app-lifetime turns and scoped reads") @MainActor
 struct AIChatTests {
+    @Test func detailCacheEvictsOldInactiveConversationsAndPinsSelection() throws {
+        let store = AIChatStreamStore(service: ChatFixtureService(), detailCapacity: 2)
+        store.selectedID = "a"
+        store.cache(try chatDetail("a"))
+        store.cache(try chatDetail("b"))
+        store.cache(try chatDetail("c"))
+        #expect(Set(store.details.keys) == ["a", "c"])
+        #expect(store.detailDates["b"] == nil)
+        store.selectedID = "c"
+        store.cache(try chatDetail("d"))
+        #expect(Set(store.details.keys) == ["c", "d"])
+    }
+    @Test func oversizedUnselectedDetailsAreDisposable() throws {
+        let store = AIChatStreamStore(service: ChatFixtureService(), detailByteBudget: 1)
+        store.selectedID = "a"
+        store.cache(try chatDetail("a"))
+        #expect(store.details["a"] != nil)
+        store.selectedID = nil
+        #expect(store.details.isEmpty)
+    }
     @Test func messagesKeepUnknownToolMetadataDecimalsNullsAndLiteralWhitespace() throws {
         let raw: TaxValue = .object([
             "id": .string("tool"), "role": .string("tool"), "content": .string("  literal\n**text**  "),

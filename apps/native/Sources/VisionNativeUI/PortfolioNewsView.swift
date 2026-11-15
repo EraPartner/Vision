@@ -95,7 +95,8 @@ private struct PortfolioNewsRow: View {
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 if let thumbnail = article.thumbnail.flatMap(PortfolioOverviewURL.safe) {
-                    AsyncImage(url: thumbnail) { phase in
+                    // 96 by 64 pt filled: 3x the longer side covers a wide source on Retina.
+                    PreparedAsyncImage(url: thumbnail, pixels: 288) { phase in
                         if case .success(let image) = phase {
                             image.resizable().scaledToFill().frame(width: 96, height: 64).clipped()
                                 .clipShape(

@@ -139,6 +139,8 @@ public final class HomeModel {
     }
 
     private func fetch(token: UUID) async {
+        let interval = NativePerformance.begin("HomeDataLoad")
+        defer { NativePerformance.end("HomeDataLoad", interval) }
         let widgetToken = widgetRevision
         let dismissalToken = upcomingDismissalRevision
         let inactivityToken = inactivityRevision
@@ -168,77 +170,96 @@ public final class HomeModel {
         let exclusions = exclusions
         let today = day(now())
         let weekEnd = day(calendar.date(byAdding: .day, value: 7, to: now()) ?? now())
-        async let monthly = Self.result {
+        // Each card publishes as its answer lands (no waiting for the slowest query). Monthly
+        // also ends the skeleton; without exclusions it doubles as the unfiltered summary.
+        async let monthly = publishAnswer(token: token, load: {
             try await service.homeMonthly(currency: currency, exclusions: exclusions)
+        }) { answer in
+            self.assign(answer, key: "monthly", to: &self.monthly)
+            if exclusions.isEmpty { self.assign(answer, key: "unfilteredMonthly", to: &self.unfilteredMonthly) }
+            self.isLoading = false
         }
         async let unfiltered: HomeResult<InsightMonthlySummary>? =
             exclusions.isEmpty
             ? nil
-            : await Self.result {
+            : await publishAnswer(token: token, load: {
                 try await service.homeMonthly(currency: currency, exclusions: InsightExclusions())
+            }) { answer in self.assign(answer, key: "unfilteredMonthly", to: &self.unfilteredMonthly) }
+        async let pace = publishAnswer(token: token, load: { try await service.homePace(currency: currency) }) {
+            answer in self.assign(answer, key: "hero", to: &self.pace)
+        }
+        async let balances = publishAnswer(token: token, load: { try await service.homeBalances(currency: currency) }) {
+            answer in self.assign(answer, key: "bankBalances", to: &self.balances)
+        }
+        async let worth = publishAnswer(token: token, load: { try await service.homeNetWorth(currency: currency) }) {
+            answer in self.assign(answer, key: "netWorth", to: &self.netWorth)
+        }
+        // One first page serves both the transaction list and the filtered recent rows.
+        let firstPage = Task { try await service.homeTransactions(offset: 0, limit: 50) }
+        defer { firstPage.cancel() }
+        async let transactions = publishAnswer(token: token, load: { try await firstPage.value }) { answer in
+            switch answer {
+            case .success(let page):
+                self.transactions = page.items
+                self.errors.removeValue(forKey: "transactions")
+            case .failure(let error): self.errors["transactions"] = error
             }
-        async let pace = Self.result { try await service.homePace(currency: currency) }
-        async let balances = Self.result { try await service.homeBalances(currency: currency) }
-        async let worth = Self.result { try await service.homeNetWorth(currency: currency) }
-        async let transactions = Self.result {
-            try await service.homeTransactions(offset: 0, limit: 50)
         }
-        async let recent = Self.result {
-            exclusions.isEmpty ? [] : try await Self.recent(service: service, exclusions: exclusions)
+        async let recent = publishAnswer(token: token, load: {
+            exclusions.isEmpty
+                ? [] : try await Self.recent(service: service, exclusions: exclusions, firstPage: firstPage.value)
+        }) { answer in self.assignList(answer, key: "recentTransactions", to: &self.filteredRecent) }
+        async let accounts = publishAnswer(token: token, load: { try await service.homeAccounts() }) {
+            answer in self.assignList(answer, key: "accounts", to: &self.accounts)
         }
-        async let accounts = Self.result { try await service.homeAccounts() }
-        async let plannedTotals = Self.result { try await service.homePlannedTotals(currency: currency) }
-        async let accountTotals = Self.result { try await service.homeAccountTotals(currency: currency) }
+        // Totals fail silently like the web: the hero shows zero and the list keeps its order.
+        async let plannedTotals = publishAnswer(token: token, load: {
+            try await service.homePlannedTotals(currency: currency)
+        }) { answer in
+            if case .success(let value) = answer { self.plannedTotals = value }
+        }
+        async let accountTotals = publishAnswer(token: token, load: {
+            try await service.homeAccountTotals(currency: currency)
+        }) { answer in
+            if case .success(let value) = answer { self.accountTotals = value }
+        }
         async let upcoming: HomeResult<[OpenAPI.PlannedTransaction]>? =
             sharedUpcoming
             ? nil
-            : await Self.result {
+            : await publishAnswer(token: token, load: {
                 try await service.homePlanned(start: today, end: weekEnd, limit: 100)
+            }) { answer in
+                if !self.usesSharedUpcoming { self.assignList(answer, key: "upcoming", to: &self.upcoming) }
             }
-        async let count = Self.result { try await service.homeTransactionCount() }
-        async let needsCategory = Self.result { try await service.homeNeedsCategory() }
-        async let matches = Self.result { try await service.homeMatches() }
-        async let widgetSetting = Self.result { try await service.homeWidgetSetting() }
-        let monthlyAnswer = await monthly
-        let unfilteredAnswer = await unfiltered ?? monthlyAnswer
-        let answers = await (
-            monthlyAnswer, unfilteredAnswer, pace, balances, worth, transactions, recent, accounts,
+        async let count = publishAnswer(token: token, load: { try await service.homeTransactionCount() }) { answer in
+            if case .success(let value) = answer { self.transactionCount = value }
+        }
+        async let needsCategory = publishAnswer(token: token, load: { try await service.homeNeedsCategory() }) {
+            answer in
+            if case .success(let value) = answer { self.needsCategory = value }
+        }
+        async let matches = publishAnswer(token: token, load: { try await service.homeMatches() }) { answer in
+            if case .success(let value) = answer {
+                self.matchCount = value.count
+                self.matchPayees = value.payees
+            }
+        }
+        async let widgetSetting = publishAnswer(token: token, load: { try await service.homeWidgetSetting() }) {
+            answer in
+            if case .success(let value) = answer, !self.widgetSavePending, widgetToken == self.widgetRevision {
+                self.widgetBaseline = value.expected.json
+                self.widgets = InsightWidgetVisibility(value.value)
+                self.widgetsLoaded = true
+                self.widgetError = nil
+            } else if case .failure(let error) = answer, widgetToken == self.widgetRevision {
+                self.widgetError = error
+            }
+        }
+        _ = await (
+            monthly, unfiltered, pace, balances, worth, transactions, recent, accounts,
             plannedTotals, upcoming, count, needsCategory, matches, widgetSetting, accountTotals
         )
         guard token == revision, !Task.isCancelled else { return }
-        assign(answers.0, key: "monthly", to: &self.monthly)
-        assign(answers.1, key: "unfilteredMonthly", to: &unfilteredMonthly)
-        assign(answers.2, key: "hero", to: &self.pace)
-        assign(answers.3, key: "bankBalances", to: &self.balances)
-        assign(answers.4, key: "netWorth", to: &netWorth)
-        if case .success(let value) = answers.5 {
-            self.transactions = value.items
-            errors.removeValue(forKey: "transactions")
-        } else if case .failure(let error) = answers.5 {
-            errors["transactions"] = error
-        }
-        assignList(answers.6, key: "recentTransactions", to: &filteredRecent)
-        assignList(answers.7, key: "accounts", to: &self.accounts)
-        // Totals fail silently like the web: the hero shows zero and the list keeps its order.
-        if case .success(let value) = answers.8 { self.plannedTotals = value }
-        if case .success(let value) = answers.14 { self.accountTotals = value }
-        if !usesSharedUpcoming, let answer = answers.9 {
-            assignList(answer, key: "upcoming", to: &self.upcoming)
-        }
-        if case .success(let value) = answers.10 { transactionCount = value }
-        if case .success(let value) = answers.11 { self.needsCategory = value }
-        if case .success(let value) = answers.12 {
-            matchCount = value.count
-            matchPayees = value.payees
-        }
-        if case .success(let value) = answers.13, !widgetSavePending, widgetToken == widgetRevision {
-            widgetBaseline = value.expected.json
-            widgets = InsightWidgetVisibility(value.value)
-            widgetsLoaded = true
-            widgetError = nil
-        } else if case .failure(let error) = answers.13, widgetToken == widgetRevision {
-            widgetError = error
-        }
         let storedDismissals = await readLocal("vision.home.dismissedAccountInactivity")
         guard token == revision, !Task.isCancelled else { return }
         if inactivityToken == inactivityRevision, let values = storedDismissals?.objectValue {
@@ -264,6 +285,15 @@ public final class HomeModel {
     {
         do { return .success(try await load()) } catch { return .failure(error.localizedDescription) }
     }
+    private func publishAnswer<T: Sendable>(
+        token: UUID, load: @Sendable () async throws -> T, apply: @MainActor (HomeResult<T>) -> Void
+    ) async -> HomeResult<T> {
+        let result = await Self.result(load)
+        guard token == revision, !Task.isCancelled else { return result }
+        apply(result)
+        NativePerformance.event("HomeCardDataPublished")
+        return result
+    }
     private func assign<T>(_ result: HomeResult<T>, key: String, to value: inout T?) {
         switch result {
         case .success(let answer):
@@ -281,14 +311,16 @@ public final class HomeModel {
         }
     }
     /// Scan beyond excluded first pages; offsets advance over server rows, not selected rows.
-    public nonisolated static func recent(service: any HomeService, exclusions: InsightExclusions)
+    public nonisolated static func recent(service: any HomeService, exclusions: InsightExclusions, firstPage: HomeTransactionPage? = nil)
         async throws -> [OpenAPI.Transaction]
     {
         var result: [OpenAPI.Transaction] = []
         var offset = 0
         while result.count < 5 {
             try Task.checkCancellation()
-            let page = try await service.homeTransactions(offset: offset, limit: 50)
+            let page: HomeTransactionPage
+            if offset == 0, let firstPage { page = firstPage }
+            else { page = try await service.homeTransactions(offset: offset, limit: 50) }
             result += page.items.filter(exclusions.includes).prefix(5 - result.count)
             offset += 50
             if offset >= page.total || page.items.count < 50 { break }

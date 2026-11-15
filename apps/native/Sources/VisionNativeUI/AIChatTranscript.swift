@@ -42,9 +42,7 @@ struct AIChatTranscript: View {
                             }.buttonStyle(.visionOutline).controlSize(.small).disabled(model.composerDisabled)
                         }.padding(24).frame(maxWidth: 672).visionCardBackground().frame(maxWidth: .infinity)
                     }
-                    ForEach(model.messages) { message in
-                        AIChatBubble(message: message, shell: shell)
-                    }
+                    AIChatHistory(model: model, shell: shell)
                     if !snapshot.assistantDraft.isEmpty {
                         AIChatTextBubble(
                             role: .assistant, content: snapshot.assistantDraft, streaming: snapshot.isStreaming,
@@ -137,6 +135,16 @@ struct AIChatTranscript: View {
 private struct ChatScrollPosition: Equatable {
     let top: CGFloat
     let distance: CGFloat
+}
+
+private struct AIChatHistory: View {
+    let model: AIChatModel
+    let shell: NativeShellModel
+    var body: some View {
+        ForEach(model.messages) { message in
+            AIChatBubble(message: message, shell: shell)
+        }
+    }
 }
 
 struct AIChatBubble: View {

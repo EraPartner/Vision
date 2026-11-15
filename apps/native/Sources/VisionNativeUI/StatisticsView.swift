@@ -527,11 +527,11 @@ public struct StatisticsView: View {
                 HStack(spacing: 0) {
                     ForEach(displayedPivotPeriods, id: \.self) { period in
                         pivotCell(
-                            model.pivotGroups.reduce(0) { $0 + ($1.values[period] ?? 0) }, ids: [],
+                            model.pivotColumnTotals[period] ?? 0, ids: [],
                             period: period, name: strings.t("statsPage.total"))
                     }
                     pivotCell(
-                        model.pivotGroups.reduce(0) { $0 + $1.total }, ids: [], period: nil,
+                        model.pivotGrandTotal, ids: [], period: nil,
                         name: strings.t("statsPage.total"), toTransactions: true)
                 }.font(.headline)
             }
@@ -560,9 +560,9 @@ public struct StatisticsView: View {
             GridRow {
                 printPivotLabel(strings.t("statsPage.total"))
                 ForEach(displayedPivotPeriods, id: \.self) { period in
-                    printPivotAmount(model.pivotGroups.reduce(0) { $0 + ($1.values[period] ?? 0) })
+                    printPivotAmount(model.pivotColumnTotals[period] ?? 0)
                 }
-                printPivotAmount(model.pivotGroups.reduce(0) { $0 + $1.total })
+                printPivotAmount(model.pivotGrandTotal)
             }.fontWeight(.semibold)
         }
     }

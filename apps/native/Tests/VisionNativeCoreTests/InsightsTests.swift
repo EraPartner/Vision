@@ -394,6 +394,14 @@ struct HomeModelTests {
         #expect(rows.map(\.id) == [51, 52, 53, 54, 55])
         #expect(await service.requestedOffsets == [0, 50])
     }
+    @Test func recentRowsReuseTheAlreadyFetchedFirstPage() async throws {
+        let service = HomeFixtureService()
+        let page = try await service.homeTransactions(offset: 0, limit: 50)
+        let rows = try await HomeModel.recent(
+            service: service, exclusions: InsightExclusions(categoryIds: [9]), firstPage: page)
+        #expect(rows.map(\.id) == [51, 52, 53, 54, 55])
+        #expect(await service.requestedOffsets == [0, 50])
+    }
 
     @Test func failedRefreshKeepsLastSuccessfulMoney() async {
         let service = HomeFixtureService()
@@ -784,6 +792,26 @@ struct StatisticsDataTests {
 @MainActor
 @Suite("Insights query behavior")
 struct StatisticsModelTests {
+    @Test func pivotTotalsFollowMetricAndYearChangesAfterRepeatedReads() async {
+        let model = StatisticsModel(service: HomeFixtureService(), now: { PlannedFixture.today })
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
+        model.pivotYear = 2026
+        model.categoryMetric = .expense
+        #expect(model.pivotGroups.first?.total == 400)
+        #expect(model.pivotColumnTotals["2026-09"] == 400)
+        #expect(model.pivotGrandTotal == 400)
+        model.categoryMetric = .income
+        #expect(model.pivotColumnTotals["2026-09"] == 500)
+        #expect(model.pivotGrandTotal == 500)
+        // The loaded window holds no 2025 period, so a 2025 pivot is empty; the cache must not
+        // keep serving the 2026 totals.
+        model.pivotYear = 2025
+        model.categoryMetric = .expense
+        #expect(model.pivotColumnTotals.isEmpty)
+        #expect(model.pivotGrandTotal == 0)
+        model.pivotYear = nil
+        #expect(model.pivotGrandTotal == 400)
+    }
     @Test func invalidationDuringAnOlderWindowRequestCannotReplaceTheNewSnapshot() async {
         let service = HomeFixtureService()
         await service.pauseFirstMonthly()
