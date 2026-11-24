@@ -1322,17 +1322,15 @@ enum PlannedArea {
             }
         }
         if let account = object["account_id"] {
-            guard case .number(let number) = account, number.isFinite else {
-                if account != .null {
-                    issues.append("account_id: Invalid input: expected number, received \(account.zodTypeName)")
-                }
-            }
-            if case .number(let number)? = object["account_id"], number.isFinite {
+            if case .number(let number) = account {
                 if number != number.rounded() {
                     issues.append("account_id: Invalid input: expected int, received number")
                 } else if number <= 0 {
                     issues.append("account_id: Too small: expected number to be >0")
                 }
+            } else if account != .null {
+                issues.append(
+                    "account_id: Invalid input: expected number, received \(account.zodTypeName)")
             }
         }
         if let bankAccount = object["bank_account"] {
