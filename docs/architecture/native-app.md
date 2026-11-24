@@ -627,8 +627,15 @@ The bulk tag (`bulkTagTransactions`, `Areas/TransactionBulk.swift`) follows: the
 custom `transaction_ids` message for every bad shape with the superRefine joining beside a
 length issue but not a type issue, the strict id elements, the active-tag rule of the adds
 (removes may name an inactive tag), the unknown-slug refusal and the two junction writes in
-one write transaction with their counts. Bulk update, delete and export stay on Bun until their
-own phases. The planned payments follow
+one write transaction with their counts. The bulk update and delete follow
+(`Areas/TransactionBulk.swift`, `Areas/BulkSelection.swift`): the `{ ids } | { filter }`
+selector with its dual-shape filter normalization (camelCase and snake_case are one field;
+both at once rejected), unknown-key rejection, the unset convention, the 500-id and 5000-row
+caps, `expected_count` required in filter mode, the account-lock refusal
+(“Reopen the account before changing its ledger balance”), the update's presence-driven SET
+with up-front FK checks, the delete's planned-execution guard and its attachment files removed
+best-effort after the commit, both counted through the export joins with the uncategorised
+queue predicate. Bulk export stays on Bun until its own phase. The planned payments follow
 (port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
 `filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
 (`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored
