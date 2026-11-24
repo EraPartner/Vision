@@ -893,21 +893,19 @@ enum PlannedArea {
 
     // MARK: - POST / (create, port 10b)
 
-    /// The SQL a raw body value binds (`toSqlParam` of `database/sqlite/values.ts`), with
-    /// Bun's integer/real split: an exactly integral double inside Int64 binds as an
-    /// integer, everything else (including −0) as a real; arrays and objects bind as their
-    /// `JSON.stringify` text.
+    /// The SQL a raw body value binds (`toSqlParam` of `database/sqlite/values.ts` over
+    /// node:sqlite): every JS number binds as a double (nodes's `StatementSync` binds
+    /// `SQLITE_FLOAT` even for integral values; a column's INTEGER/NUMERIC affinity makes
+    /// the storage integer when exact), a boolean binds its 1/0 the same way, and arrays
+    /// and objects bind as their `JSON.stringify` text. NaN raises, as the Typecheck did.
     static func looseSQL(_ value: JSValue?) throws -> SQLValue {
         switch value {
         case nil, .null?:
             return .null
         case .bool(let flag)?:
-            return .integer(flag ? 1 : 0)
+            return .real(flag ? 1 : 0)
         case .number(let number)?:
             if number.isNaN { throw UnhandledJSError("NaN cannot be bound to SQLite") }
-            if let exact = Int64(exactly: number), !(number == 0 && number.sign == .minus) {
-                return .integer(exact)
-            }
             return .real(number)
         case .string(let text)?:
             return .text(text)
@@ -962,6 +960,7 @@ enum PlannedArea {
                 "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
         }
         var issues: [String] = []
+        var accountFailed = false
 
         // tags: an array of strings; each failure names the array (or its item).
         if let tags = object["tags"] {
@@ -993,15 +992,19 @@ enum PlannedArea {
         if let account = object["account_id"] {
             if case .number(let number) = account {
                 if number != number.rounded() {
+                    accountFailed = true
                     issues.append("account_id: Invalid input: expected int, received number")
                 } else if number <= 0 {
+                    accountFailed = true
                     issues.append("account_id: Too small: expected number to be >0")
                 }
             } else {
+                accountFailed = true
                 issues.append(
                     "account_id: Invalid input: expected number, received \(account.zodTypeName)")
             }
         } else {
+            accountFailed = true
             issues.append("account_id: Invalid input: expected number, received undefined")
         }
         // bank_account: retired — anything but absence fails.
@@ -1009,13 +1012,13 @@ enum PlannedArea {
             issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
         }
 
-        // superRefine runs only when every leaf parsed.
-        guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+        // superRefine: zod collects its issues beside the leaf issues, reading a leaf
+        // that failed as undefined.
         let isLoan = truthy(object["is_loan"] ?? .null)
         if !isLoan {
             let hasPlannedDate = truthy(object["planned_date"] ?? .null)
             let amount = object["amount"]
-            if !hasPlannedDate || amount == nil || amount == .null {
+            if !hasPlannedDate || accountFailed || amount == nil || amount == .null {
                 issues.append("Missing required fields: planned_date, amount")
             } else {
                 // Number(amount), the value a non-finite or zero one refuses.
@@ -1443,6 +1446,9 @@ enum PlannedArea {
                 if let patched, patched != .null { return patched }
                 return existingValue
             }
+            // `existing.loan_start_date` is `dbDate` — a local-midnight `Date` object, whose
+            // `looseString` never matches the y-m-d shape, so a PATCH that relies on the
+            // stored date always answers the loan-configuration error, as TypeScript does.
             let generated = try LoanSchedule.generate(.init(
                 loanType: loanValue("loan_type", existing.loanType.map { .string($0) }),
                 loanPrincipal: loanValue(
@@ -1452,7 +1458,7 @@ enum PlannedArea {
                 loanTermMonths: loanValue(
                     "loan_term_months", existing.loanTermMonths.map { .int($0) }),
                 loanStartDate: loanValue(
-                    "loan_start_date", existing.loanStartDate.map { .string($0) }),
+                    "loan_start_date", existing.loanStartDate.map { _ in .object(JSObject()) }),
                 loanPaymentDay: loanValue(
                     "loan_payment_day", existing.loanPaymentDay.map { .int($0) })))
             fields["loan_regular_payment_amount"] = .number(generated.regularPaymentAmount)

@@ -118,6 +118,10 @@ enum BackendEnvelope {
             if let details = error.details { fields["details"] = details }
         } else {
             status = 500
+            #if DEBUG
+            // The parity failures print the masked 500s' causes to the test log.
+            print("[parity] masked server error: \(String(describing: error))")
+            #endif
             fields = [
                 "code": .string("INTERNAL_SERVER_ERROR"),
                 "message": .string("An internal server error occurred. Please try again later."),
