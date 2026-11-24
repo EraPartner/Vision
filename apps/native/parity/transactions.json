@@ -15341,6 +15341,32 @@
       }
     },
     {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": [
+          1,
+          3
+        ],
+        "add_slugs": [
+          "work"
+        ],
+        "remove_slugs": [
+          "holiday"
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "added": 1,
+          "removed": 1,
+          "transactions_affected": 2
+        }
+      }
+    },
+    {
       "operationId": "getTransaction",
       "method": "GET",
       "path": "/api/transactions/1",
@@ -15367,12 +15393,6 @@
           "comment": null,
           "tags": [
             {
-              "id": 1,
-              "slug": "holiday",
-              "color": "#00aaff",
-              "is_active": true
-            },
-            {
               "id": 2,
               "slug": "work",
               "color": null,
@@ -15383,6 +15403,143 @@
           "created_at": "2025-03-01T09:00:00.000Z",
           "updated_at": "2026-06-15T09:00:00.000Z",
           "links": []
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": [
+          2
+        ],
+        "add_slugs": [
+          "old"
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unknown or inactive tags: old"
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": [
+          2
+        ],
+        "remove_slugs": [
+          "old"
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "added": 0,
+          "removed": 0,
+          "transactions_affected": 0
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": [
+          1
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "At least one of add_slugs or remove_slugs must be non-empty"
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: transaction_ids must be a non-empty array of up to 500 IDs; At least one of add_slugs or remove_slugs must be non-empty"
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: transaction_ids must be a non-empty array of up to 500 IDs"
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": [
+          "x"
+        ],
+        "add_slugs": [
+          "work"
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids contains invalid value: x"
+        }
+      }
+    },
+    {
+      "operationId": "bulkTagTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-tag",
+      "body": {
+        "transaction_ids": [
+          1,
+          2
+        ],
+        "add_slugs": [
+          "work"
+        ],
+        "remove_slugs": [
+          "nope"
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unknown or inactive tags: nope"
         }
       }
     },
@@ -15795,6 +15952,12 @@
               "comment": null,
               "tags": [
                 {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                },
+                {
                   "id": 3,
                   "slug": "old",
                   "color": "#999999",
@@ -15849,12 +16012,6 @@
               "category_name": "FOOD:GROCERIES",
               "comment": null,
               "tags": [
-                {
-                  "id": 1,
-                  "slug": "holiday",
-                  "color": "#00aaff",
-                  "is_active": true
-                },
                 {
                   "id": 2,
                   "slug": "work",

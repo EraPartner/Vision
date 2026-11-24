@@ -623,7 +623,12 @@ transaction — the graph discovery, re-read and signature recheck, the real-inv
 (two existing, active rows on different accounts with opposite signs; cross-currency pairs are
 legal), the release of a prior peer back to open and the unconditional manual mark of both legs.
 The unmark and suggestion routes of the same module stay on Bun: the client never calls them.
-Bulk actions and exports stay on Bun until their own phases. The planned payments follow
+The bulk tag (`bulkTagTransactions`, `Areas/TransactionBulk.swift`) follows: the schema's one
+custom `transaction_ids` message for every bad shape with the superRefine joining beside a
+length issue but not a type issue, the strict id elements, the active-tag rule of the adds
+(removes may name an inactive tag), the unknown-slug refusal and the two junction writes in
+one write transaction with their counts. Bulk update, delete and export stay on Bun until their
+own phases. The planned payments follow
 (port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
 `filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
 (`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored
