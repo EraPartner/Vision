@@ -652,8 +652,10 @@ enum TransactionsArea {
         var account: Int?
 
         // tags: only "is an array" is checked; the items pass through unchecked.
-        if let tags = object["tags"], !(case .array? = tags) {
-            issues.append("tags: tags must be an array of strings")
+        if let tags = object["tags"] {
+            if case .array = tags {} else {
+                issues.append("tags: tags must be an array of strings")
+            }
         }
         // account_id/category_id: null clears; a present value must be a positive int.
         for field in ["account_id", "category_id"] {
@@ -661,15 +663,17 @@ enum TransactionsArea {
                 if value == .null { continue }
                 if let id = validId(value) {
                     object[field] = .number(Double(id))
-                    if field == ["account_id"].contains(field) { account = id }
+                    if field == "account_id" { account = id }
                 } else {
                     issues.append("\(field): \(field) must be a positive integer")
                 }
             }
         }
         // allow_duplicate: a boolean when present.
-        if let flag = object["allow_duplicate"], !(case .bool? = flag) {
-            issues.append("allow_duplicate: Invalid input: expected boolean, received \(flag.zodTypeName)")
+        if let flag = object["allow_duplicate"] {
+            if case .bool = flag {} else {
+                issues.append("allow_duplicate: Invalid input: expected boolean, received \(flag.zodTypeName)")
+            }
         }
         // currency: absent, null and "" all clear.
         TransactionsArea.currencyCode(object["currency"], issues: &issues)
@@ -844,9 +848,10 @@ enum TransactionsArea {
                     looseSQL(.string(txDate)),
                     .integer(Int64(account)),
                     looseSQL(data["recipient_id"]),
-                    PlannedArea.decimalText(data["amount"]),
+                    decimalText(data["amount"]),
                     looseSQL(try uppercasedText(data["memo"]) ?? .null),
-                    looseSQL(orNull(data["currency"]).map { .string($0.javaScriptString.uppercased()) } ?? "EUR"),
+                    looseSQL(orNull(data["currency"]).map { .string($0.javaScriptString.uppercased()) }
+                        ?? .string("EUR")),
                     looseSQL(data["category_id"]),
                     looseSQL(data["comment"]),
                 ])
@@ -936,8 +941,10 @@ enum TransactionsArea {
             object["date"] = nil
             object["transaction_date"] = date
         }
-        if let tags = object["tags"], !(case .array? = tags) {
-            issues.append("tags: tags must be an array of strings")
+        if let tags = object["tags"] {
+            if case .array = tags {} else {
+                issues.append("tags: tags must be an array of strings")
+            }
         }
         // transaction_date: guardField — falsy clears, then `assertYmd`'s own message.
         if let value = object["transaction_date"] {

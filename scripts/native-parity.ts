@@ -1435,6 +1435,9 @@ export const AREAS: Record<string, ParityArea> = {
   },
   transactions: {
     router: { module: "transactions.ts", mountPath: "/api/transactions" },
+    // The write steps' created/updated timestamps and the dedup/auto-link
+    // chain must record on the same clock every run.
+    now: "2026-06-15T09:00:00.000Z",
     seed: [
       `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, created_at,
          updated_at) VALUES (1, 'FOOD', '', 'FOOD', 1, 0, '${SEED_TIME}', '${SEED_TIME}')`,
@@ -1498,6 +1501,21 @@ export const AREAS: Record<string, ParityArea> = {
         (15, '2024-04-01', vision_numeric('-20', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, NULL, 1, NULL, 0, NULL,
          NULL, '${SEED_TIME}', '${SEED_TIME}')`,
       `INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (1, 1), (1, 2), (3, 3), (5, 2), (8, 1)`,
+      // A closed account for the PATCH ledger guard, and planned rows for the
+      // delete guard and the create auto-link. No transfer pairs are created
+      // during the write steps: the transfer reconcile timer would fire
+      // mid-recording.
+      `INSERT INTO accounts (id, name, currency, type, is_active, created_at, updated_at, import_identity) VALUES
+        (3, 'Closed', 'EUR', 'checking', 0, '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000003')`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, account_id, recipient_id,
+         is_executed, is_active, created_at, updated_at) VALUES
+        (1, '2024-01-14', vision_numeric('-15.5', 18, 4), 'EUR', 'AUTO PLAN', 1, 1, 0, 1,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-06', vision_numeric('-40', 18, 4), 'EUR', 'LINKED', 1, 3, 0, 1,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO planned_transaction_executions (id, planned_transaction_id, executed_transaction_id,
+         execution_date, created_at) VALUES
+        (1, 2, 3, '2024-01-06', '${SEED_TIME}')`,
     ],
     steps: [
       transactions(),
@@ -1587,6 +1605,169 @@ export const AREAS: Record<string, ParityArea> = {
       transactionRead("abc"),
       transactionRead("0"),
       transactionRead("2147483648"),
+      // --- The write port (create/update/delete), recorded against the same seed ---
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          transaction_date: "2024-01-10",
+          amount: -15.5,
+          account_id: 1,
+          recipient_id: 1,
+          memo: "manual one",
+          currency: "EUR",
+        },
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          transaction_date: "2024-01-10",
+          amount: -15.5,
+          account_id: 1,
+          recipient_id: 1,
+          memo: "manual one",
+          currency: "EUR",
+        },
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          transaction_date: "2024-01-10",
+          amount: -15.5,
+          account_id: 1,
+          recipient_id: 1,
+          memo: "manual one",
+          currency: "EUR",
+          allow_duplicate: true,
+        },
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: { memo: "no fields" },
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          transaction_date: "2024-01-10",
+          amount: 0,
+          account_id: 1,
+          recipient_id: 1,
+          currency: "EUR",
+        },
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          transaction_date: "2024-01-10",
+          amount: -5,
+          account_id: 1,
+          recipient_id: "1e3",
+          currency: "EUR",
+        },
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          date: "2024-01-11",
+          amount: "-7.251",
+          account_id: 2,
+          recipient_id: 3,
+          memo: "tagged create",
+          currency: "usd",
+          category_id: 10,
+          tags: ["work", "holiday"],
+        },
+      },
+      {
+        operationId: "updateTransaction",
+        method: "PATCH",
+        path: "/api/transactions/1",
+        body: { memo: "edited card" },
+      },
+      {
+        operationId: "updateTransaction",
+        method: "PATCH",
+        path: "/api/transactions/15",
+        body: { recipient_name: "market", recipient_id: null },
+      },
+      {
+        operationId: "updateTransaction",
+        method: "PATCH",
+        path: "/api/transactions/1",
+        body: { account_id: 3 },
+      },
+      {
+        operationId: "updateTransaction",
+        method: "PATCH",
+        path: "/api/transactions/1",
+        body: { transaction_date: "" },
+      },
+      {
+        operationId: "updateTransaction",
+        method: "PATCH",
+        path: "/api/transactions/1",
+        body: { amount: "abc" },
+      },
+      {
+        operationId: "updateTransaction",
+        method: "PATCH",
+        path: "/api/transactions/999",
+        body: { memo: "missing" },
+      },
+      {
+        operationId: "deleteTransaction",
+        method: "DELETE",
+        path: "/api/transactions/5",
+      },
+      {
+        operationId: "deleteTransaction",
+        method: "DELETE",
+        path: "/api/transactions/3",
+      },
+      {
+        operationId: "deleteTransaction",
+        method: "DELETE",
+        path: "/api/transactions/999",
+      },
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          transaction_date: "2024-01-15",
+          amount: -15.5,
+          account_id: 1,
+          recipient_id: 1,
+          memo: "autolink",
+          currency: "EUR",
+        },
+      },
+      transactionRead("16"),
+      {
+        operationId: "createTransaction",
+        method: "POST",
+        path: "/api/transactions",
+        body: {
+          date: "2024-01-16",
+          amount: -3,
+          account_id: 1,
+          recipient_id: 2,
+        },
+      },
+      transactions("?sort_by=date"),
     ],
   },
 

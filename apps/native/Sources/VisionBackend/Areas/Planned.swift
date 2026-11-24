@@ -1736,7 +1736,7 @@ enum PlannedArea {
                                 .map { .number(Double($0)) },
                             currency: (try transaction.optionalText("currency")).map { .string($0) },
                             amount: (try transaction.optionalText("amount")).map { .string($0) },
-                            transactionDate: (try transaction.optionalText("transaction_date")).map { .string($0) })))
+                            transactionDate: (try transaction.optionalText("transaction_date")).map { .string($0) }))
                 {
                     throw BackendHTTPError.conflict(
                         "Planned match changed; review the current occurrence")
@@ -1817,7 +1817,7 @@ enum PlannedArea {
         let autoClear: Bool
         if let stored = try? session.row("SELECT value FROM user_settings WHERE key = 'app_settings'"),
             let text = try? stored.optionalText("value"),
-            let value = JSValue.parse(text), case .object(let settings)? = value,
+            let value = JSValue.parse(text), case .object(let settings) = value,
             let flag = settings["autoClearPlannedOnMatch"]
         {
             autoClear = flag != .bool(false)
