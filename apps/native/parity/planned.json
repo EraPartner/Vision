@@ -9576,6 +9576,2877 @@
       }
     },
     {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "memo": "rent",
+        "comment": "first"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 14,
+          "planned_date": "2026-07-01",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": "RENT",
+          "amount": -12.5,
+          "currency": "EUR",
+          "category_id": null,
+          "category_name": null,
+          "comment": "first",
+          "url": null,
+          "is_recurring": false,
+          "recurrence_pattern": null,
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getPlannedTransactions",
+      "method": "GET",
+      "path": "/api/planned-transactions?active=false&limit=3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 13,
+              "planned_date": "2027-01-15",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "FAR AWAY",
+              "amount": -5,
+              "currency": "GBP",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 14,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": "RENT",
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": "first",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 12,
+              "planned_date": "2026-06-24",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "PADDED",
+              "amount": -7,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "  BiWeekly ",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": "{{today}}",
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": 103,
+              "execution_count": 1,
+              "executions": [
+                {
+                  "id": 6,
+                  "executed_transaction_id": 103,
+                  "execution_date": "{{today}}",
+                  "created_at": "2026-06-15T09:00:00.000Z"
+                }
+              ],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 11,
+          "limit": 3,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "account_id": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: planned_date, amount"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "account_id": 1,
+        "planned_date": "2026-07-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: planned_date, amount"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "account_id": 1,
+        "planned_date": "2026-07-01",
+        "amount": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount must be a non-zero finite number"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "account_id": 1,
+        "planned_date": "2026-07-01",
+        "amount": "abc"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount must be a non-zero finite number"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "account_id": 1,
+        "planned_date": "2026-07-01",
+        "amount": 1000000000000000
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount must be between -1000000000000 and 1000000000000"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id: Invalid input: expected number, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -5,
+        "account_id": "2"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id: Invalid input: expected number, received string"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -5,
+        "account_id": -1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id: Too small: expected number to be >0"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -5,
+        "account_id": 1.5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id: Invalid input: expected int, received number"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -5,
+        "account_id": 999
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id must reference an active account"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "memo": null,
+        "currency": "usd",
+        "comment": "upper",
+        "url": "",
+        "tags": [
+          "holiday",
+          "old"
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 15,
+          "planned_date": "2026-07-01",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": null,
+          "amount": -12.5,
+          "currency": "USD",
+          "category_id": null,
+          "category_name": null,
+          "comment": "upper",
+          "url": null,
+          "is_recurring": false,
+          "recurrence_pattern": null,
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "memo": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "memo: memo must be a string"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "currency": "xy"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "currency": ""
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 16,
+          "planned_date": "2026-07-01",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": null,
+          "amount": -12.5,
+          "currency": "EUR",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": false,
+          "recurrence_pattern": null,
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "tags": "holiday"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "tags: tags must be an array of strings"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "tags": [
+          5
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "tags.0: tags must be an array of strings"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "is_recurring": true,
+        "recurrence_pattern": "fortnightly"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid or missing recurrence_pattern: fortnightly"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "is_recurring": true,
+        "recurrence_pattern": "every 5 days",
+        "recurrence_end_date": "2026-12-31",
+        "max_occurrences": 5
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 17,
+          "planned_date": "2026-07-01",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": null,
+          "amount": -12.5,
+          "currency": "EUR",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "every 5 days",
+          "recurrence_end_date": "2026-12-31",
+          "max_occurrences": 5,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "recurrence_end_date": "2026-1-1"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "recurrence_end_date must be in YYYY-MM-DD format"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "max_occurrences": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "max_occurrences must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "max_occurrences": 1.5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "max_occurrences must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "reminder_days_before": 2.5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "reminder_days_before: reminder_days_before must be an integer between 0 and 365"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "reminder_days_before": 366
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "reminder_days_before: reminder_days_before must be an integer between 0 and 365"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "reminder_days_before": 3
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 18,
+          "planned_date": "2026-07-01",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": null,
+          "amount": -12.5,
+          "currency": "EUR",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": false,
+          "recurrence_pattern": null,
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": 3,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "planned_date": "2026-07-01",
+        "amount": -12.5,
+        "account_id": 1,
+        "bank_account": "Main"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "bank_account: Invalid input: expected never, received string"
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "is_loan": true,
+        "loan_type": "amortizing",
+        "loan_principal": 12000,
+        "loan_annual_interest_rate": 3.5,
+        "loan_term_months": 6,
+        "loan_start_date": "2026-07-01",
+        "loan_payment_day": 20,
+        "account_id": 1,
+        "memo": " mortgage ",
+        "tags": [
+          "holiday"
+        ],
+        "max_occurrences": 3
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 19,
+          "planned_date": "2026-07-20",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": " MORTGAGE ",
+          "amount": -2020.47,
+          "currency": "EUR",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "monthly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": true,
+          "loan_type": "amortizing",
+          "loan_principal": 12000,
+          "loan_annual_interest_rate": 3.5,
+          "loan_term_months": 6,
+          "loan_start_date": "2026-07-01",
+          "loan_payment_day": 20,
+          "loan_regular_payment_amount": 2020.47,
+          "loan_first_payment_date": "2026-07-20",
+          "loan_schedule": [
+            {
+              "installment_number": 1,
+              "due_date": "2026-07-20",
+              "payment_amount": 2020.47,
+              "principal_amount": 1985.47,
+              "interest_amount": 35,
+              "remaining_principal": 10014.53
+            },
+            {
+              "installment_number": 2,
+              "due_date": "2026-08-20",
+              "payment_amount": 2020.47,
+              "principal_amount": 1991.26,
+              "interest_amount": 29.21,
+              "remaining_principal": 8023.27
+            },
+            {
+              "installment_number": 3,
+              "due_date": "2026-09-20",
+              "payment_amount": 2020.47,
+              "principal_amount": 1997.07,
+              "interest_amount": 23.4,
+              "remaining_principal": 6026.2
+            },
+            {
+              "installment_number": 4,
+              "due_date": "2026-10-20",
+              "payment_amount": 2020.47,
+              "principal_amount": 2002.89,
+              "interest_amount": 17.58,
+              "remaining_principal": 4023.31
+            },
+            {
+              "installment_number": 5,
+              "due_date": "2026-11-20",
+              "payment_amount": 2020.47,
+              "principal_amount": 2008.74,
+              "interest_amount": 11.73,
+              "remaining_principal": 2014.57
+            },
+            {
+              "installment_number": 6,
+              "due_date": "2026-12-20",
+              "payment_amount": 2020.45,
+              "principal_amount": 2014.57,
+              "interest_amount": 5.88,
+              "remaining_principal": 0
+            }
+          ],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getPlannedTransactions",
+      "method": "GET",
+      "path": "/api/planned-transactions?active=false&limit=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 13,
+              "planned_date": "2027-01-15",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "FAR AWAY",
+              "amount": -5,
+              "currency": "GBP",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "planned_date": "2026-07-20",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": " MORTGAGE ",
+              "amount": -2020.47,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "amortizing",
+              "loan_principal": 12000,
+              "loan_annual_interest_rate": 3.5,
+              "loan_term_months": 6,
+              "loan_start_date": "2026-07-01",
+              "loan_payment_day": 20,
+              "loan_regular_payment_amount": 2020.47,
+              "loan_first_payment_date": "2026-07-20",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-07-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1985.47,
+                  "interest_amount": 35,
+                  "remaining_principal": 10014.53
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-08-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1991.26,
+                  "interest_amount": 29.21,
+                  "remaining_principal": 8023.27
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-09-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1997.07,
+                  "interest_amount": 23.4,
+                  "remaining_principal": 6026.2
+                },
+                {
+                  "installment_number": 4,
+                  "due_date": "2026-10-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2002.89,
+                  "interest_amount": 17.58,
+                  "remaining_principal": 4023.31
+                },
+                {
+                  "installment_number": 5,
+                  "due_date": "2026-11-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2008.74,
+                  "interest_amount": 11.73,
+                  "remaining_principal": 2014.57
+                },
+                {
+                  "installment_number": 6,
+                  "due_date": "2026-12-20",
+                  "payment_amount": 2020.45,
+                  "principal_amount": 2014.57,
+                  "interest_amount": 5.88,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 16,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "is_loan": true,
+        "loan_type": "annuity",
+        "loan_principal": 12000,
+        "loan_annual_interest_rate": 3.5,
+        "loan_term_months": 6,
+        "loan_start_date": "2026-07-01",
+        "loan_payment_day": 20,
+        "account_id": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unsupported loan_type 'annuity'. Use amortizing, fixed_principal, or interest_only."
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "is_loan": true,
+        "loan_type": "interest_only",
+        "loan_principal": "2400",
+        "loan_term_months": 3,
+        "loan_start_date": "2026-07-15",
+        "loan_payment_day": 5,
+        "loan_annual_interest_rate": null,
+        "account_id": 1
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 20,
+          "planned_date": "2026-08-05",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": null,
+          "recipient_name": null,
+          "memo": null,
+          "amount": 0,
+          "currency": "EUR",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "monthly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": true,
+          "loan_type": "interest_only",
+          "loan_principal": 2400,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": 3,
+          "loan_start_date": "2026-07-15",
+          "loan_payment_day": 5,
+          "loan_regular_payment_amount": 0,
+          "loan_first_payment_date": "2026-08-05",
+          "loan_schedule": [
+            {
+              "installment_number": 1,
+              "due_date": "2026-08-05",
+              "payment_amount": 0,
+              "principal_amount": 0,
+              "interest_amount": 0,
+              "remaining_principal": 2400
+            },
+            {
+              "installment_number": 2,
+              "due_date": "2026-09-05",
+              "payment_amount": 0,
+              "principal_amount": 0,
+              "interest_amount": 0,
+              "remaining_principal": 2400
+            },
+            {
+              "installment_number": 3,
+              "due_date": "2026-10-05",
+              "payment_amount": 2400,
+              "principal_amount": 2400,
+              "interest_amount": 0,
+              "remaining_principal": 0
+            }
+          ],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createPlannedTransaction",
+      "method": "POST",
+      "path": "/api/planned-transactions",
+      "body": {
+        "is_loan": 1,
+        "loan_type": "fixed_principal",
+        "loan_principal": 1000,
+        "loan_term_months": 601,
+        "loan_start_date": "2026-07-01",
+        "account_id": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "loan_term_months must be between 1 and 600 months"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/999",
+      "body": {
+        "memo": "no"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Planned transaction 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/1",
+      "body": {
+        "currency": null
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency cannot be cleared"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/1",
+      "body": {
+        "currency": "xy"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/1",
+      "body": {
+        "amount": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount: amount must be a non-zero finite number within range"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/1",
+      "body": {
+        "amount": 1000000000000000
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount: amount must be a non-zero finite number within range"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/1",
+      "body": {
+        "amount": "",
+        "reminder_days_before": 400
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "reminder_days_before: reminder_days_before must be an integer between 0 and 365; amount: amount must be a non-zero finite number within range"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/1",
+      "body": {
+        "recurrence_pattern": "fortnightly"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "recurrence_pattern: Invalid recurrence_pattern: fortnightly"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "recurrence_pattern": "quarterly",
+        "is_recurring": true
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "FAR AWAY",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "recurrence_pattern": "quarterly",
+        "is_recurring": true,
+        "memo": " PAD "
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/999",
+      "body": {
+        "recipient_name": "SHOP"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Planned transaction 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "recipient_name": "NOBODY"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Recipient with name 'NOBODY' does not exist"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "recipient_name": "shop south"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "category_name": "FOOD"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": 10,
+          "category_name": "FOOD",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "category_name": "NOPE"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid category name format 'NOPE'. Select a category id or use 'General:Detail'."
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "category_name": "food:grocERIES"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "tags": []
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "tags": [
+          "work",
+          "unknown-tag",
+          "old"
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getPlannedTransactions",
+      "method": "GET",
+      "path": "/api/planned-transactions?active=all&limit=3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 13,
+              "planned_date": "2027-01-15",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": 2,
+              "recipient_name": "SHOP",
+              "memo": " PAD ",
+              "amount": -5,
+              "currency": "GBP",
+              "category_id": 11,
+              "category_name": "FOOD > GROCERIES",
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "quarterly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 20,
+              "planned_date": "2026-08-05",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": 0,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "interest_only",
+              "loan_principal": 2400,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": 3,
+              "loan_start_date": "2026-07-15",
+              "loan_payment_day": 5,
+              "loan_regular_payment_amount": 0,
+              "loan_first_payment_date": "2026-08-05",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-08-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-09-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-10-05",
+                  "payment_amount": 2400,
+                  "principal_amount": 2400,
+                  "interest_amount": 0,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "planned_date": "2026-07-20",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": " MORTGAGE ",
+              "amount": -2020.47,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "amortizing",
+              "loan_principal": 12000,
+              "loan_annual_interest_rate": 3.5,
+              "loan_term_months": 6,
+              "loan_start_date": "2026-07-01",
+              "loan_payment_day": 20,
+              "loan_regular_payment_amount": 2020.47,
+              "loan_first_payment_date": "2026-07-20",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-07-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1985.47,
+                  "interest_amount": 35,
+                  "remaining_principal": 10014.53
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-08-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1991.26,
+                  "interest_amount": 29.21,
+                  "remaining_principal": 8023.27
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-09-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1997.07,
+                  "interest_amount": 23.4,
+                  "remaining_principal": 6026.2
+                },
+                {
+                  "installment_number": 4,
+                  "due_date": "2026-10-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2002.89,
+                  "interest_amount": 17.58,
+                  "remaining_principal": 4023.31
+                },
+                {
+                  "installment_number": 5,
+                  "due_date": "2026-11-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2008.74,
+                  "interest_amount": 11.73,
+                  "remaining_principal": 2014.57
+                },
+                {
+                  "installment_number": 6,
+                  "due_date": "2026-12-20",
+                  "payment_amount": 2020.45,
+                  "principal_amount": 2014.57,
+                  "interest_amount": 5.88,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 16,
+          "limit": 3,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "is_active": false
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 1,
+          "bank_account": "Main",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "GBP",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": false,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "is_active": true,
+        "account_id": 2,
+        "currency": "USD"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2027-01-15",
+          "account_id": 2,
+          "bank_account": "Travel",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -5,
+          "currency": "USD",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "quarterly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "account_id": 999
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id must reference an active account"
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/8",
+      "body": {
+        "loan_principal": 13000
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid loan configuration: loan_start_date must be in YYYY-MM-DD format"
+        }
+      }
+    },
+    {
+      "operationId": "getPlannedTransactions",
+      "method": "GET",
+      "path": "/api/planned-transactions?active=false&limit=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 13,
+              "planned_date": "2027-01-15",
+              "account_id": 2,
+              "bank_account": "Travel",
+              "recipient_id": 2,
+              "recipient_name": "SHOP",
+              "memo": " PAD ",
+              "amount": -5,
+              "currency": "USD",
+              "category_id": 11,
+              "category_name": "FOOD > GROCERIES",
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "quarterly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 20,
+              "planned_date": "2026-08-05",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": 0,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "interest_only",
+              "loan_principal": 2400,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": 3,
+              "loan_start_date": "2026-07-15",
+              "loan_payment_day": 5,
+              "loan_regular_payment_amount": 0,
+              "loan_first_payment_date": "2026-08-05",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-08-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-09-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-10-05",
+                  "payment_amount": 2400,
+                  "principal_amount": 2400,
+                  "interest_amount": 0,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 17,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "is_loan": true,
+        "loan_type": "fixed_principal",
+        "loan_principal": 5000,
+        "loan_term_months": 5,
+        "loan_start_date": "2026-06-01",
+        "loan_payment_day": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2026-06-01",
+          "account_id": 2,
+          "bank_account": "Travel",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -1000,
+          "currency": "USD",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "monthly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": true,
+          "loan_type": "fixed_principal",
+          "loan_principal": 5000,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": 5,
+          "loan_start_date": "2026-06-01",
+          "loan_payment_day": 1,
+          "loan_regular_payment_amount": 1000,
+          "loan_first_payment_date": "2026-06-01",
+          "loan_schedule": [
+            {
+              "installment_number": 1,
+              "due_date": "2026-06-01",
+              "payment_amount": 1000,
+              "principal_amount": 1000,
+              "interest_amount": 0,
+              "remaining_principal": 4000
+            },
+            {
+              "installment_number": 2,
+              "due_date": "2026-07-01",
+              "payment_amount": 1000,
+              "principal_amount": 1000,
+              "interest_amount": 0,
+              "remaining_principal": 3000
+            },
+            {
+              "installment_number": 3,
+              "due_date": "2026-08-01",
+              "payment_amount": 1000,
+              "principal_amount": 1000,
+              "interest_amount": 0,
+              "remaining_principal": 2000
+            },
+            {
+              "installment_number": 4,
+              "due_date": "2026-09-01",
+              "payment_amount": 1000,
+              "principal_amount": 1000,
+              "interest_amount": 0,
+              "remaining_principal": 1000
+            },
+            {
+              "installment_number": 5,
+              "due_date": "2026-10-01",
+              "payment_amount": 1000,
+              "principal_amount": 1000,
+              "interest_amount": 0,
+              "remaining_principal": 0
+            }
+          ],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getPlannedTransactions",
+      "method": "GET",
+      "path": "/api/planned-transactions?active=false&limit=3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 20,
+              "planned_date": "2026-08-05",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": 0,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "interest_only",
+              "loan_principal": 2400,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": 3,
+              "loan_start_date": "2026-07-15",
+              "loan_payment_day": 5,
+              "loan_regular_payment_amount": 0,
+              "loan_first_payment_date": "2026-08-05",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-08-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-09-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-10-05",
+                  "payment_amount": 2400,
+                  "principal_amount": 2400,
+                  "interest_amount": 0,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "planned_date": "2026-07-20",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": " MORTGAGE ",
+              "amount": -2020.47,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "amortizing",
+              "loan_principal": 12000,
+              "loan_annual_interest_rate": 3.5,
+              "loan_term_months": 6,
+              "loan_start_date": "2026-07-01",
+              "loan_payment_day": 20,
+              "loan_regular_payment_amount": 2020.47,
+              "loan_first_payment_date": "2026-07-20",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-07-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1985.47,
+                  "interest_amount": 35,
+                  "remaining_principal": 10014.53
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-08-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1991.26,
+                  "interest_amount": 29.21,
+                  "remaining_principal": 8023.27
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-09-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1997.07,
+                  "interest_amount": 23.4,
+                  "remaining_principal": 6026.2
+                },
+                {
+                  "installment_number": 4,
+                  "due_date": "2026-10-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2002.89,
+                  "interest_amount": 17.58,
+                  "remaining_principal": 4023.31
+                },
+                {
+                  "installment_number": 5,
+                  "due_date": "2026-11-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2008.74,
+                  "interest_amount": 11.73,
+                  "remaining_principal": 2014.57
+                },
+                {
+                  "installment_number": 6,
+                  "due_date": "2026-12-20",
+                  "payment_amount": 2020.45,
+                  "principal_amount": 2014.57,
+                  "interest_amount": 5.88,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 14,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": "RENT",
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": "first",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 17,
+          "limit": 3,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePlannedTransaction",
+      "method": "PATCH",
+      "path": "/api/planned-transactions/13",
+      "body": {
+        "is_loan": false
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 13,
+          "planned_date": "2026-06-01",
+          "account_id": 2,
+          "bank_account": "Travel",
+          "recipient_id": 2,
+          "recipient_name": "SHOP",
+          "memo": " PAD ",
+          "amount": -1000,
+          "currency": "USD",
+          "category_id": 11,
+          "category_name": "FOOD > GROCERIES",
+          "comment": null,
+          "url": null,
+          "is_recurring": true,
+          "recurrence_pattern": "monthly",
+          "recurrence_end_date": null,
+          "max_occurrences": null,
+          "reminder_days_before": null,
+          "is_executed": false,
+          "last_executed_date": null,
+          "is_loan": false,
+          "loan_type": null,
+          "loan_principal": null,
+          "loan_annual_interest_rate": null,
+          "loan_term_months": null,
+          "loan_start_date": null,
+          "loan_payment_day": null,
+          "loan_regular_payment_amount": null,
+          "loan_first_payment_date": null,
+          "loan_schedule": [],
+          "executed_transaction_id": null,
+          "execution_count": 0,
+          "executions": [],
+          "tags": [
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getPlannedTransactions",
+      "method": "GET",
+      "path": "/api/planned-transactions?active=false&limit=3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 20,
+              "planned_date": "2026-08-05",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": 0,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "interest_only",
+              "loan_principal": 2400,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": 3,
+              "loan_start_date": "2026-07-15",
+              "loan_payment_day": 5,
+              "loan_regular_payment_amount": 0,
+              "loan_first_payment_date": "2026-08-05",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-08-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-09-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-10-05",
+                  "payment_amount": 2400,
+                  "principal_amount": 2400,
+                  "interest_amount": 0,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "planned_date": "2026-07-20",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": " MORTGAGE ",
+              "amount": -2020.47,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "amortizing",
+              "loan_principal": 12000,
+              "loan_annual_interest_rate": 3.5,
+              "loan_term_months": 6,
+              "loan_start_date": "2026-07-01",
+              "loan_payment_day": 20,
+              "loan_regular_payment_amount": 2020.47,
+              "loan_first_payment_date": "2026-07-20",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-07-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1985.47,
+                  "interest_amount": 35,
+                  "remaining_principal": 10014.53
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-08-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1991.26,
+                  "interest_amount": 29.21,
+                  "remaining_principal": 8023.27
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-09-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1997.07,
+                  "interest_amount": 23.4,
+                  "remaining_principal": 6026.2
+                },
+                {
+                  "installment_number": 4,
+                  "due_date": "2026-10-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2002.89,
+                  "interest_amount": 17.58,
+                  "remaining_principal": 4023.31
+                },
+                {
+                  "installment_number": 5,
+                  "due_date": "2026-11-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2008.74,
+                  "interest_amount": 11.73,
+                  "remaining_principal": 2014.57
+                },
+                {
+                  "installment_number": 6,
+                  "due_date": "2026-12-20",
+                  "payment_amount": 2020.45,
+                  "principal_amount": 2014.57,
+                  "interest_amount": 5.88,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 14,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": "RENT",
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": "first",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 17,
+          "limit": 3,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
       "operationId": "deletePlannedTransaction",
       "method": "DELETE",
       "path": "/api/planned-transactions/abc",
@@ -9631,15 +12502,263 @@
         "data": {
           "items": [
             {
-              "id": 13,
-              "planned_date": "2027-01-15",
+              "id": 20,
+              "planned_date": "2026-08-05",
               "account_id": 1,
               "bank_account": "Main",
-              "recipient_id": 1,
-              "recipient_name": "SHOP",
-              "memo": "FAR AWAY",
-              "amount": -5,
-              "currency": "GBP",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": 0,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "interest_only",
+              "loan_principal": 2400,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": 3,
+              "loan_start_date": "2026-07-15",
+              "loan_payment_day": 5,
+              "loan_regular_payment_amount": 0,
+              "loan_first_payment_date": "2026-08-05",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-08-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-09-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-10-05",
+                  "payment_amount": 2400,
+                  "principal_amount": 2400,
+                  "interest_amount": 0,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "planned_date": "2026-07-20",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": " MORTGAGE ",
+              "amount": -2020.47,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "amortizing",
+              "loan_principal": 12000,
+              "loan_annual_interest_rate": 3.5,
+              "loan_term_months": 6,
+              "loan_start_date": "2026-07-01",
+              "loan_payment_day": 20,
+              "loan_regular_payment_amount": 2020.47,
+              "loan_first_payment_date": "2026-07-20",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-07-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1985.47,
+                  "interest_amount": 35,
+                  "remaining_principal": 10014.53
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-08-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1991.26,
+                  "interest_amount": 29.21,
+                  "remaining_principal": 8023.27
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-09-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1997.07,
+                  "interest_amount": 23.4,
+                  "remaining_principal": 6026.2
+                },
+                {
+                  "installment_number": 4,
+                  "due_date": "2026-10-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2002.89,
+                  "interest_amount": 17.58,
+                  "remaining_principal": 4023.31
+                },
+                {
+                  "installment_number": 5,
+                  "due_date": "2026-11-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2008.74,
+                  "interest_amount": 11.73,
+                  "remaining_principal": 2014.57
+                },
+                {
+                  "installment_number": 6,
+                  "due_date": "2026-12-20",
+                  "payment_amount": 2020.45,
+                  "principal_amount": 2014.57,
+                  "interest_amount": 5.88,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 14,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": "RENT",
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": "first",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 15,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "USD",
+              "category_id": null,
+              "category_name": null,
+              "comment": "upper",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 16,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "EUR",
               "category_id": null,
               "category_name": null,
               "comment": null,
@@ -9666,8 +12785,88 @@
               "executions": [],
               "tags": [],
               "is_active": true,
-              "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 17,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "every 5 days",
+              "recurrence_end_date": "2026-12-31",
+              "max_occurrences": 5,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 18,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": 3,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -9865,6 +13064,53 @@
               "links": []
             },
             {
+              "id": 13,
+              "planned_date": "2026-06-01",
+              "account_id": 2,
+              "bank_account": "Travel",
+              "recipient_id": 2,
+              "recipient_name": "SHOP",
+              "memo": " PAD ",
+              "amount": -1000,
+              "currency": "USD",
+              "category_id": 11,
+              "category_name": "FOOD > GROCERIES",
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
               "id": 4,
               "planned_date": "2026-05-20",
               "account_id": 2,
@@ -10023,7 +13269,7 @@
               "links": []
             }
           ],
-          "total": 8,
+          "total": 15,
           "limit": 100,
           "offset": 0,
           "links": []
@@ -10047,15 +13293,263 @@
         "data": {
           "items": [
             {
-              "id": 13,
-              "planned_date": "2027-01-15",
+              "id": 20,
+              "planned_date": "2026-08-05",
               "account_id": 1,
               "bank_account": "Main",
-              "recipient_id": 1,
-              "recipient_name": "SHOP",
-              "memo": "FAR AWAY",
-              "amount": -5,
-              "currency": "GBP",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": 0,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "interest_only",
+              "loan_principal": 2400,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": 3,
+              "loan_start_date": "2026-07-15",
+              "loan_payment_day": 5,
+              "loan_regular_payment_amount": 0,
+              "loan_first_payment_date": "2026-08-05",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-08-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-09-05",
+                  "payment_amount": 0,
+                  "principal_amount": 0,
+                  "interest_amount": 0,
+                  "remaining_principal": 2400
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-10-05",
+                  "payment_amount": 2400,
+                  "principal_amount": 2400,
+                  "interest_amount": 0,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "planned_date": "2026-07-20",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": " MORTGAGE ",
+              "amount": -2020.47,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": true,
+              "loan_type": "amortizing",
+              "loan_principal": 12000,
+              "loan_annual_interest_rate": 3.5,
+              "loan_term_months": 6,
+              "loan_start_date": "2026-07-01",
+              "loan_payment_day": 20,
+              "loan_regular_payment_amount": 2020.47,
+              "loan_first_payment_date": "2026-07-20",
+              "loan_schedule": [
+                {
+                  "installment_number": 1,
+                  "due_date": "2026-07-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1985.47,
+                  "interest_amount": 35,
+                  "remaining_principal": 10014.53
+                },
+                {
+                  "installment_number": 2,
+                  "due_date": "2026-08-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1991.26,
+                  "interest_amount": 29.21,
+                  "remaining_principal": 8023.27
+                },
+                {
+                  "installment_number": 3,
+                  "due_date": "2026-09-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 1997.07,
+                  "interest_amount": 23.4,
+                  "remaining_principal": 6026.2
+                },
+                {
+                  "installment_number": 4,
+                  "due_date": "2026-10-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2002.89,
+                  "interest_amount": 17.58,
+                  "remaining_principal": 4023.31
+                },
+                {
+                  "installment_number": 5,
+                  "due_date": "2026-11-20",
+                  "payment_amount": 2020.47,
+                  "principal_amount": 2008.74,
+                  "interest_amount": 11.73,
+                  "remaining_principal": 2014.57
+                },
+                {
+                  "installment_number": 6,
+                  "due_date": "2026-12-20",
+                  "payment_amount": 2020.45,
+                  "principal_amount": 2014.57,
+                  "interest_amount": 5.88,
+                  "remaining_principal": 0
+                }
+              ],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 14,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": "RENT",
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": "first",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 15,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "USD",
+              "category_id": null,
+              "category_name": null,
+              "comment": "upper",
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 16,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "EUR",
               "category_id": null,
               "category_name": null,
               "comment": null,
@@ -10082,8 +13576,88 @@
               "executions": [],
               "tags": [],
               "is_active": true,
-              "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 17,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "every 5 days",
+              "recurrence_end_date": "2026-12-31",
+              "max_occurrences": 5,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 18,
+              "planned_date": "2026-07-01",
+              "account_id": 1,
+              "bank_account": "Main",
+              "recipient_id": null,
+              "recipient_name": null,
+              "memo": null,
+              "amount": -12.5,
+              "currency": "EUR",
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "url": null,
+              "is_recurring": false,
+              "recurrence_pattern": null,
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": 3,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -10321,6 +13895,53 @@
               "links": []
             },
             {
+              "id": 13,
+              "planned_date": "2026-06-01",
+              "account_id": 2,
+              "bank_account": "Travel",
+              "recipient_id": 2,
+              "recipient_name": "SHOP",
+              "memo": " PAD ",
+              "amount": -1000,
+              "currency": "USD",
+              "category_id": 11,
+              "category_name": "FOOD > GROCERIES",
+              "comment": null,
+              "url": null,
+              "is_recurring": true,
+              "recurrence_pattern": "monthly",
+              "recurrence_end_date": null,
+              "max_occurrences": null,
+              "reminder_days_before": null,
+              "is_executed": false,
+              "last_executed_date": null,
+              "is_loan": false,
+              "loan_type": null,
+              "loan_principal": null,
+              "loan_annual_interest_rate": null,
+              "loan_term_months": null,
+              "loan_start_date": null,
+              "loan_payment_day": null,
+              "loan_regular_payment_amount": null,
+              "loan_first_payment_date": null,
+              "loan_schedule": [],
+              "executed_transaction_id": null,
+              "execution_count": 0,
+              "executions": [],
+              "tags": [
+                {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
               "id": 4,
               "planned_date": "2026-05-20",
               "account_id": 2,
@@ -10408,7 +14029,7 @@
               "links": []
             }
           ],
-          "total": 8,
+          "total": 15,
           "limit": 50,
           "offset": 0,
           "links": []

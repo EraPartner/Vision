@@ -131,15 +131,13 @@ enum Recurrence {
     }
 }
 
-extension Substring {
-    /// JavaScript's `\d`: an ASCII digit.
+extension Character {
+    /// JavaScript's `\d`: an ASCII digit, for a single-scalar grapheme.
     var isASCIIDigit: Bool {
         guard let scalar = unicodeScalars.first, unicodeScalars.count == 1 else { return false }
         return (0x30...0x39).contains(scalar)
     }
-}
 
-extension Character {
     /// JavaScript's `\s`: the Unicode whitespace a pattern's runs may hold.
-    var isJSWhitespace: Bool { JavaScriptWhitespace.contains(scalar) ?? false }
+    var isJSWhitespace: Bool { unicodeScalars.allSatisfy(JavaScriptWhitespace.contains) }
 }

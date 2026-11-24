@@ -163,69 +163,76 @@ struct PlannedRow: Sendable {
             value.flatMap { $0.isEmpty ? nil : JSONValue.string($0) } ?? .null
         }
         func money(_ amount: String?) -> JSONValue { (try? PlannedRow.money(amount)) ?? .null }
-        return .object([
-            "id": .int(id.rawValue),
-            "planned_date": PlannedRow.date(plannedDate),
-            "account_id": accountId.map { JSONValue.int($0.rawValue) } ?? .null,
-            "bank_account": text(bankAccount),
-            "recipient_id": recipientId.map { JSONValue.int($0.rawValue) } ?? .null,
-            "recipient_name": nonEmpty(recipientName),
-            "memo": text(memo),
-            "amount": money(amount),
-            "currency": text(currency),
-            "category_id": categoryId.map { JSONValue.int($0.rawValue) } ?? .null,
-            "category_name": nonEmpty(categoryName),
-            "comment": text(comment),
-            "url": nonEmpty(url),
-            "is_recurring": .bool(isRecurring),
-            "recurrence_pattern": text(recurrencePattern),
-            "recurrence_end_date": PlannedRow.date(recurrenceEndDate),
-            "max_occurrences": PlannedRow.integer(maxOccurrences),
-            "reminder_days_before": PlannedRow.integer(reminderDaysBefore),
-            "is_executed": .bool(isExecuted),
-            "last_executed_date": PlannedRow.date(lastExecutedDate),
-            "is_loan": .bool(isLoan || false),
-            "loan_type": nonEmpty(loanType),
-            "loan_principal": money(loanPrincipal),
-            "loan_annual_interest_rate": money(loanAnnualInterestRate),
-            "loan_term_months": PlannedRow.integer(loanTermMonths),
-            "loan_start_date": nonEmpty(loanStartDate),
-            "loan_payment_day": PlannedRow.integer(loanPaymentDay),
-            "loan_regular_payment_amount": money(loanRegularPaymentAmount),
-            "loan_first_payment_date": nonEmpty(loanFirstPaymentDate),
-            "loan_schedule": .array(loanSchedule.map { entry in
+        var fields: [(String, JSONValue)] = [
+            ("id", .int(id.rawValue)),
+            ("planned_date", PlannedRow.date(plannedDate)),
+            ("account_id", accountId.map { JSONValue.int($0.rawValue) } ?? .null),
+            ("bank_account", text(bankAccount)),
+            ("recipient_id", recipientId.map { JSONValue.int($0.rawValue) } ?? .null),
+            ("recipient_name", nonEmpty(recipientName)),
+            ("memo", text(memo)),
+            ("amount", money(amount)),
+            ("currency", text(currency)),
+            ("category_id", categoryId.map { JSONValue.int($0.rawValue) } ?? .null),
+            ("category_name", nonEmpty(categoryName)),
+            ("comment", text(comment)),
+            ("url", nonEmpty(url)),
+            ("is_recurring", .bool(isRecurring)),
+            ("recurrence_pattern", text(recurrencePattern)),
+            ("recurrence_end_date", PlannedRow.date(recurrenceEndDate)),
+            ("max_occurrences", PlannedRow.integer(maxOccurrences)),
+            ("reminder_days_before", PlannedRow.integer(reminderDaysBefore)),
+            ("is_executed", .bool(isExecuted)),
+            ("last_executed_date", PlannedRow.date(lastExecutedDate)),
+            ("is_loan", .bool(isLoan || false)),
+            ("loan_type", nonEmpty(loanType)),
+            ("loan_principal", money(loanPrincipal)),
+            ("loan_annual_interest_rate", money(loanAnnualInterestRate)),
+            ("loan_term_months", PlannedRow.integer(loanTermMonths)),
+            ("loan_start_date", nonEmpty(loanStartDate)),
+            ("loan_payment_day", PlannedRow.integer(loanPaymentDay)),
+            ("loan_regular_payment_amount", money(loanRegularPaymentAmount)),
+            ("loan_first_payment_date", nonEmpty(loanFirstPaymentDate)),
+        ]
+        fields.append(
+            ("loan_schedule", .array(loanSchedule.map { entry in
                 .object([
-                    "installment_number": PlannedRow.integer(entry.installmentNumber),
-                    "due_date": PlannedRow.date(entry.dueDate),
-                    "payment_amount": money(entry.paymentAmount),
-                    "principal_amount": money(entry.principalAmount),
-                    "interest_amount": money(entry.interestAmount),
-                    "remaining_principal": money(entry.remainingPrincipal),
+                    ("installment_number", PlannedRow.integer(entry.installmentNumber)),
+                    ("due_date", PlannedRow.date(entry.dueDate)),
+                    ("payment_amount", money(entry.paymentAmount)),
+                    ("principal_amount", money(entry.principalAmount)),
+                    ("interest_amount", money(entry.interestAmount)),
+                    ("remaining_principal", money(entry.remainingPrincipal)),
                 ])
-            }),
-            "executed_transaction_id": executedTransactionId.map { JSONValue.int($0.rawValue) } ?? .null,
-            "execution_count": .int(executionCount ?? 0),
-            "executions": .array(executions.map { execution in
+            })))
+        fields.append(
+            (
+                "executed_transaction_id",
+                executedTransactionId.map { JSONValue.int($0.rawValue) } ?? .null
+            ))
+        fields.append(("execution_count", .int(executionCount ?? 0)))
+        fields.append(
+            ("executions", .array(executions.map { execution in
                 .object([
-                    "id": .int(execution.id),
-                    "executed_transaction_id": .int(execution.executedTransactionId.rawValue),
-                    "execution_date": PlannedRow.date(execution.executionDate),
-                    "created_at": execution.createdAt.map { JSONValue.string($0.text) } ?? .null,
+                    ("id", .int(execution.id)),
+                    ("executed_transaction_id", .int(execution.executedTransactionId.rawValue)),
+                    ("execution_date", PlannedRow.date(execution.executionDate)),
+                    ("created_at", execution.createdAt.map { JSONValue.string($0.text) } ?? .null),
                 ])
-            }),
-            "tags": .array(tags.map(\.json)),
-            "is_active": .bool(isActive),
-            "created_at": createdAt.map { JSONValue.string($0.text) } ?? .null,
-            "updated_at": updatedAt.map { JSONValue.string($0.text) } ?? .null,
-            "links": .array([]),
-        ])
+            })))
+        fields.append(("tags", .array(tags.map(\.json))))
+        fields.append(("is_active", .bool(isActive)))
+        fields.append(("created_at", createdAt.map { JSONValue.string($0.text) } ?? .null))
+        fields.append(("updated_at", updatedAt.map { JSONValue.string($0.text) } ?? .null))
+        fields.append(("links", .array([])))
+        return .object(fields)
     }
 }
 
 /// `routes/plannedTransactions.ts` over `plannedTransactionService`,
 /// `plannedExecutionService`, `plannedMatchService` and `plannedTotalsService`: the list,
-/// the totals, the match suggestions, execute and delete (port 10a). The write paths with
-/// the loan schedule (create, update) stay on Bun until port 10b.
+/// the totals, the match suggestions, execute, delete and the write paths with the loan
+/// schedule (create, update — port 10b).
 enum PlannedArea {
     // MARK: - Registration
 
@@ -253,6 +260,14 @@ enum PlannedArea {
         }
         backend.serve(OpenAPIOperations.GetPlannedMatchSuggestions.self) { _ in
             try await database.run { session in try PlannedArea.matchSuggestions(session) }
+        }
+        backend.serve(OpenAPIOperations.CreatePlannedTransaction.self) { request in
+            let fields = try PlannedArea.createFields(request)
+            return try await database.run { session in try PlannedArea.create(session, fields: fields) }
+        }
+        backend.serve(OpenAPIOperations.UpdatePlannedTransaction.self) { request in
+            let id = try PlannedArea.pathId(request)
+            return try await database.run { session in try PlannedArea.update(session, id: id, request: request) }
         }
         backend.serve(OpenAPIOperations.ExecutePlannedTransaction.self) { request in
             let id = try PlannedArea.pathId(request)
@@ -392,7 +407,7 @@ enum PlannedArea {
             return text
         }
         func optionalId(_ value: JSValue?, _ field: String) throws -> Int {
-            guard let value, value != .null, value != .string("") else { throw MissingId(field) }
+            guard let value, value != .null, value != .string("") else { throw MissingId(field: field) }
             guard let id = RequestID.valid(value) else {
                 throw BackendHTTPError.validation("\(field) must be a positive integer")
             }
@@ -585,8 +600,8 @@ enum PlannedArea {
 
     /// `remainingOccurrences`: the row's occurrence budget, capped at 500.
     static func remainingOccurrences(_ row: Commitment) -> Int {
-        guard let max = row.maxOccurrences else { return 500 }
-        return min(max(0, max - row.executionCount), 500)
+        guard let budget = row.maxOccurrences else { return 500 }
+        return min(max(0, budget - row.executionCount), 500)
     }
 
     /// `occurrencesBetween`: the row's occurrences inside the window, honouring its
@@ -850,33 +865,708 @@ enum PlannedArea {
                             transactionDate: .string(transaction.transactionDate)))
                 }
                 if candidates.isEmpty { continue }
-                suggestions.append(.object([
-                    "planned": .object([
-                        "id": .int(planned.id),
-                        "recipient_id": planned.recipientId.map { JSONValue.int($0.rawValue) } ?? .null,
-                        "recipient_name": planned.recipientName.map(JSONValue.string) ?? .null,
-                        "amount": .number(try DecimalJS.from(planned.amount).toNumber),
-                        "planned_date": .string(planned.plannedDate),
-                        "currency": planned.currency.map(JSONValue.string) ?? .null,
-                        "is_recurring": .bool(planned.isRecurring),
-                    ]),
-                    "candidates": .array(candidates.map { transaction in
-                        .object([
-                            "id": .int(transaction.id.rawValue),
-                            "recipient_name": transaction.recipientName.map(JSONValue.string) ?? .null,
-                            "amount": .number(try DecimalJS.from(transaction.amount).toNumber),
-                            "transaction_date": .string(transaction.transactionDate),
-                            "currency": transaction.currency.map(JSONValue.string) ?? .null,
-                            "memo": transaction.memo.map(JSONValue.string) ?? .null,
-                        ])
-                    }),
-                ]))
+                let plannedFields: [(String, JSONValue)] = [
+                    ("id", .int(planned.id)),
+                    ("recipient_id", planned.recipientId.map { JSONValue.int($0.rawValue) } ?? .null),
+                    ("recipient_name", planned.recipientName.map(JSONValue.string) ?? .null),
+                    ("amount", .number(try DecimalJS.from(planned.amount).toNumber)),
+                    ("planned_date", .string(planned.plannedDate)),
+                    ("currency", planned.currency.map(JSONValue.string) ?? .null),
+                    ("is_recurring", .bool(planned.isRecurring)),
+                ]
+                suggestions.append(
+                    .object([
+                        ("planned", .object(plannedFields)),
+                        (
+                            "candidates",
+                            .array(candidates.map { transaction in
+                                .object([
+                                    ("id", .int(transaction.id.rawValue)),
+                                    ("recipient_name", transaction.recipientName.map(JSONValue.string) ?? .null),
+                                    ("amount", .number(try DecimalJS.from(transaction.amount).toNumber)),
+                                    ("transaction_date", .string(transaction.transactionDate)),
+                                    ("currency", transaction.currency.map(JSONValue.string) ?? .null),
+                                    ("memo", transaction.memo.map(JSONValue.string) ?? .null),
+                                ])
+                            })
+                        ),
+                    ]))
             }
         }
         return HandlerResult(data: .object(["items": .array(suggestions), "total": .int(suggestions.count)]))
     }
 
     // MARK: - POST /:id/execute
+
+    // MARK: - POST / (create, port 10b)
+
+    /// The SQL a raw body value binds (`toSqlParam` of `database/sqlite/values.ts`), with
+    /// Bun's integer/real split: an exactly integral double inside Int64 binds as an
+    /// integer, everything else (including −0) as a real; arrays and objects bind as their
+    /// `JSON.stringify` text.
+    static func looseSQL(_ value: JSValue?) throws -> SQLValue {
+        switch value {
+        case nil, .null?:
+            return .null
+        case .bool(let flag)?:
+            return .integer(flag ? 1 : 0)
+        case .number(let number)?:
+            if number.isNaN { throw UnhandledJSError("NaN cannot be bound to SQLite") }
+            if let exact = Int64(exactly: number), !(number == 0 && number.sign == .minus) {
+                return .integer(exact)
+            }
+            return .real(number)
+        case .string(let text)?:
+            return .text(text)
+        case .array?, .object?:
+            return .text(value?.jsonText ?? "null")
+        }
+    }
+
+    /// `decimalParam` of the repositories: a number binds as `String(n)`, anything else raw.
+    static func decimalSQL(_ value: JSValue?) throws -> SQLValue {
+        if case .number(let number)? = value { return .text(SQLArguments.javaScriptText(number)) }
+        return try looseSQL(value)
+    }
+
+    /// `booleanInput` bound as a parameter: the flag, or a 22P02 that surfaces as a 500.
+    static func booleanSQL(_ value: JSValue?) throws -> SQLValue {
+        if let flag = try SQLBooleanInput.read(value) { return .integer(flag ? 1 : 0) }
+        return .null
+    }
+
+    /// `assertCurrency` for a body value: null and "" clear, anything else must read as a
+    /// 3-letter ISO code (upper-cased, trimmed). The issue message names the field twice,
+    /// as `formatZodIssues` prefixes the path.
+    static func currencyField(_ value: JSValue?, issues: inout [String]) -> String? {
+        guard let value, value != .null, value != .string("") else { return nil }
+        let code = JavaScriptWhitespace.trim(value.javaScriptString.uppercased())
+        guard AccountsArea.isCurrencyCode(code) else {
+            issues.append("currency: currency must be a 3-letter ISO code")
+            return nil
+        }
+        return code
+    }
+
+    /// `categoryField` / numbers: a bound value that must be integer.
+    static func isJSInteger(_ number: Double) -> Bool {
+        number.isFinite && number == number.rounded()
+    }
+
+    /// A string body value, as `z.string()` accepts.
+    static func isJSString(_ value: JSValue?) -> Bool {
+        if case .string? = value { return true }
+        return false
+    }
+
+    /// `createPlannedSchema`: the leaf checks of the loose object in shape order, then —
+    /// only when every leaf parsed — the superRefine checks (path-less messages) and the
+    /// amount/max-occurrences coercions of its transform.
+    static func createFields(_ request: InProcessRequest) throws -> JSObject {
+        let body = try RequestBody.parseJavaScript(request.body)
+        guard case .object(var object)? = body ?? .object(JSObject()) else {
+            throw BackendHTTPError.validation(
+                "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
+        }
+        var issues: [String] = []
+
+        // tags: an array of strings; each failure names the array (or its item).
+        if let tags = object["tags"] {
+            if case .array(let items) = tags {
+                for (index, item) in items.enumerated() where !isJSString(item) {
+                    issues.append("tags.\(index): tags must be an array of strings")
+                }
+            } else {
+                issues.append("tags: tags must be an array of strings")
+            }
+        }
+        // memo: a string or null; create upper-cases it.
+        if let memo = object["memo"], memo != .null, !isJSString(memo) {
+            issues.append("memo: memo must be a string")
+        }
+        // reminder_days_before: null passes; else an integer within 0...365, coerced.
+        if let reminder = object["reminder_days_before"], reminder != .null {
+            let number = reminder.javaScriptNumber
+            if !isJSInteger(number) || !(0...365).contains(number) {
+                issues.append("reminder_days_before: reminder_days_before must be an integer between 0 and 365")
+            } else {
+                object["reminder_days_before"] = .number(number)
+            }
+        }
+        // currency: absent, null and "" all clear; anything else must read as ISO.
+        currencyField(object["currency"], issues: &issues)
+            .map { object["currency"] = .string($0) }
+        // account_id: z.number().int().positive() — a required leaf.
+        if let account = object["account_id"] {
+            if case .number(let number) = account {
+                if number != number.rounded() {
+                    issues.append("account_id: Invalid input: expected int, received number")
+                } else if number <= 0 {
+                    issues.append("account_id: Too small: expected number to be >0")
+                }
+            } else {
+                issues.append(
+                    "account_id: Invalid input: expected number, received \(account.zodTypeName)")
+            }
+        } else {
+            issues.append("account_id: Invalid input: expected number, received undefined")
+        }
+        // bank_account: retired — anything but absence fails.
+        if let bankAccount = object["bank_account"] {
+            issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
+        }
+
+        // superRefine runs only when every leaf parsed.
+        guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+        let isLoan = truthy(object["is_loan"] ?? .null)
+        if !isLoan {
+            let hasPlannedDate = truthy(object["planned_date"] ?? .null)
+            let amount = object["amount"]
+            if !hasPlannedDate || amount == nil || amount == .null {
+                issues.append("Missing required fields: planned_date, amount")
+            } else {
+                // Number(amount), the value a non-finite or zero one refuses.
+                let value = amount?.javaScriptNumber ?? .nan
+                if !value.isFinite || value == 0 {
+                    issues.append("amount must be a non-zero finite number")
+                } else if abs(value) > 1_000_000_000_000 {
+                    issues.append("amount must be between -1000000000000 and 1000000000000")
+                }
+            }
+        } else if let term = object["loan_term_months"], truthy(term) {
+            let value = term.javaScriptNumber
+            if value < 1 || value > 600 {
+                issues.append("loan_term_months must be between 1 and 600 months")
+            }
+        }
+        // Only bounds that survive the loan branch's truthy deletion validate; a falsy
+        // value is a valid clear, as `assertYmd`'s own `!value` branch reads it.
+        if let end = object["recurrence_end_date"], end != .null, truthy(end),
+            !(isLoan && truthy(end))
+        {
+            var dateIssues: [String] = []
+            _ = TransactionsArea.ymd(end, "recurrence_end_date", &dateIssues)
+            issues.append(contentsOf: dateIssues)
+        }
+        if let max = object["max_occurrences"], max != .null, !(isLoan && truthy(max)),
+            !isJSInteger(max.javaScriptNumber) || max.javaScriptNumber < 1
+        {
+            issues.append("max_occurrences must be a positive integer")
+        }
+        if !isLoan, truthy(object["is_recurring"] ?? .null),
+            !Recurrence.isValidPattern(object["recurrence_pattern"])
+        {
+            issues.append(
+                "Invalid or missing recurrence_pattern: \(AccountsArea.looseText(object["recurrence_pattern"]))")
+        }
+        guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+
+        // The transform: a non-loan amount and max_occurrences coerce through Number().
+        if !isLoan {
+            if let amount = object["amount"], amount != .null { object["amount"] = .number(amount.javaScriptNumber) }
+            if let max = object["max_occurrences"], max != .null {
+                object["max_occurrences"] = .number(max.javaScriptNumber)
+            }
+        }
+        return object
+    }
+
+    /// POST "/": the loan schedule branch of the route, then `plannedTransactionService.create`.
+    static func create(_ session: BackendSession, fields input: JSObject) throws -> HandlerResult {
+        var data = input
+        var schedule: [LoanSchedule.Installment] = []
+        if truthy(data["is_loan"] ?? .null) {
+            let generated = try LoanSchedule.generate(config: .init(
+                loanType: data["loan_type"], loanPrincipal: data["loan_principal"],
+                loanAnnualInterestRate: data["loan_annual_interest_rate"],
+                loanTermMonths: data["loan_term_months"], loanStartDate: data["loan_start_date"],
+                loanPaymentDay: data["loan_payment_day"]))
+            data["loan_regular_payment_amount"] = .number(generated.regularPaymentAmount)
+            if let firstDueDate = generated.firstDueDate {
+                data["loan_first_payment_date"] = .string(firstDueDate)
+            }
+            data["amount"] = .number(-abs(generated.regularPaymentAmount))
+            if let firstDueDate = generated.firstDueDate { data["planned_date"] = .string(firstDueDate) }
+            data["is_recurring"] = .bool(true)
+            data["recurrence_pattern"] = .string("monthly")
+            for key in ["frequency", "custom_interval_days", "end_date"] where truthy(data[key] ?? .null) {
+                data[key] = nil
+            }
+            if truthy(data["recurrence_end_date"] ?? .null) { data["recurrence_end_date"] = nil }
+            if truthy(data["max_occurrences"] ?? .null) { data["max_occurrences"] = nil }
+            schedule = generated.schedule
+        }
+
+        // `plannedTransactionService.create`'s normalizations, mirrored field by field.
+        let memo: JSValue
+        if let raw = data["memo"], truthy(raw), case .string(let text) = raw {
+            memo = .string(text.uppercased())
+        } else {
+            memo = .null
+        }
+        let currency: JSValue
+        if let code = data["currency"], truthy(code), case .string(let text) = code {
+            currency = .string(text.uppercased())
+        } else {
+            currency = .string("EUR")
+        }
+        // The `Number(...) : null` coercions of the normalizations.
+        func coerced(_ value: JSValue?) -> JSValue? {
+            guard let value, value != .null else { return .null }
+            return .number(value.javaScriptNumber)
+        }
+        // `x || null` — a falsy value clears.
+        func orNull(_ value: JSValue?) -> JSValue? {
+            (value.map(truthy) ?? false) ? value : .null
+        }
+        let isLoan = truthy(data["is_loan"] ?? .null)
+        let recurrencePattern: JSValue = isLoan
+            ? .string("monthly")
+            : (orNull(data["recurrence_pattern"]) ?? .null)
+        // `x || false`: a truthy value stays as written for `booleanInput` to read.
+        let isRecurringFlag: JSValue = truthy(data["is_recurring"] ?? .null)
+            ? (data["is_recurring"] ?? .bool(true)) : .bool(false)
+        let isLoanFlag: JSValue = isLoan ? (data["is_loan"] ?? .bool(true)) : .bool(false)
+
+        let plannedId = try session.transaction { () throws -> Int in
+            // `stampAccountIdForUpdate` — `account_id` always survives the schema.
+            let account = data["account_id"]
+            if let account, account != .null {
+                let active = try session.row(
+                    "SELECT id FROM accounts WHERE id = ? AND is_active = 1", [try looseSQL(account)])
+                if active == nil {
+                    throw BackendHTTPError.validation("account_id must reference an active account")
+                }
+            }
+            let inserted = try session.row(
+                """
+                INSERT INTO planned_transactions (
+                   planned_date, account_id, recipient_id, amount, memo, currency, category_id, comment, url,
+                   is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
+                   reminder_days_before, is_executed, is_active,
+                   is_loan, loan_type, loan_principal, loan_annual_interest_rate,
+                   loan_term_months, loan_start_date, loan_payment_day,
+                   loan_regular_payment_amount, loan_first_payment_date
+                 ) VALUES (
+                   ts_date(?), ?, ?, vision_numeric(?, 18, 4), ?, ?, ?, ?, ?,
+                   ?, ?, ts_date(?), ?,
+                   ?, 0, 1,
+                   ?, ?, vision_numeric(?, 18, 4), vision_numeric(?, 8, 4),
+                   ?, ts_date(?), ?,
+                   vision_numeric(?, 18, 4), ts_date(?)
+                 ) RETURNING id
+                """,
+                try [
+                    looseSQL(data["planned_date"]),
+                    looseSQL(account),
+                    looseSQL(data["recipient_id"]),
+                    decimalSQL(data["amount"]),
+                    looseSQL(memo),
+                    looseSQL(currency),
+                    looseSQL(data["category_id"]),
+                    looseSQL(data["comment"]),
+                    looseSQL(truthy(data["url"] ?? .null) ? data["url"] : .null),
+                    booleanSQL(isRecurringFlag),
+                    looseSQL(recurrencePattern),
+                    looseSQL(orNull(data["recurrence_end_date"])),
+                    looseSQL(coerced(data["max_occurrences"])),
+                    looseSQL(coerced(data["reminder_days_before"])),
+                    booleanSQL(isLoanFlag),
+                    looseSQL(orNull(data["loan_type"])),
+                    decimalSQL(coerced(data["loan_principal"])),
+                    decimalSQL(coerced(data["loan_annual_interest_rate"])),
+                    looseSQL(coerced(data["loan_term_months"])),
+                    looseSQL(orNull(data["loan_start_date"])),
+                    looseSQL(coerced(data["loan_payment_day"])),
+                    decimalSQL(coerced(data["loan_regular_payment_amount"])),
+                    looseSQL(orNull(data["loan_first_payment_date"])),
+                ])
+            guard let row = inserted else { throw UnhandledJSError("planned transaction INSERT returned no row") }
+            let id = try row.integerId("id")
+            if !schedule.isEmpty { try insertLoanSchedule(session, id: PlannedTransactionID(rawValue: id), schedule) }
+            if case .array(let slugs)? = data["tags"], !slugs.isEmpty {
+                try setPlannedTransactionTags(session, PlannedTransactionID(rawValue: id), slugs)
+            }
+            return id
+        }
+        let created = try getById(session, id: PlannedTransactionID(rawValue: plannedId))
+        return HandlerResult(status: 201, data: created?.json ?? .null)
+    }
+
+    /// `insertLoanScheduleBatch`: the installment rows of a generated schedule.
+    static func insertLoanSchedule(
+        _ session: BackendSession, id: PlannedTransactionID, _ schedule: [LoanSchedule.Installment]
+    ) throws {
+        var values: [SQLValue] = []
+        var placeholders: [String] = []
+        for installment in schedule {
+            placeholders.append(
+                "(?, ?, ts_date(?), vision_numeric(?, 18, 4), vision_numeric(?, 18, 4), "
+                    + "vision_numeric(?, 18, 4), vision_numeric(?, 18, 4))")
+            values.append(contentsOf: [
+                idValue(id), .integer(Int64(installment.number)), .text(installment.dueDate),
+                .text(SQLArguments.javaScriptText(installment.paymentAmount)),
+                .text(SQLArguments.javaScriptText(installment.principalAmount)),
+                .text(SQLArguments.javaScriptText(installment.interestAmount)),
+                .text(SQLArguments.javaScriptText(installment.remainingPrincipal)),
+            ])
+        }
+        try session.rows(
+            """
+            INSERT INTO planned_transaction_loan_schedule (
+               planned_transaction_id, installment_number, due_date,
+               payment_amount, principal_amount, interest_amount, remaining_principal
+             ) VALUES \(placeholders.joined(separator: ", "))
+            """, values)
+    }
+
+    /// `setPlannedTransactionTags`: replace the attached tags with the active slugs given.
+    static func setPlannedTransactionTags(
+        _ session: BackendSession, _ id: PlannedTransactionID, _ slugs: [JSValue]
+    ) throws {
+        try session.rows("DELETE FROM planned_transaction_tags WHERE planned_transaction_id = ?", [idValue(id)])
+        let resolved = try session.rows(
+            """
+            SELECT id FROM tags WHERE slug IN (SELECT value FROM json_each(?)) AND is_active = 1
+            """, [.text(JSValue.array(slugs).jsonText)])
+        guard !resolved.isEmpty else { return }
+        let ids = try JSValue.array(resolved.map { try .int($0.integerId("id")) })
+        try session.rows(
+            """
+            INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
+             SELECT ?, value FROM json_each(?) WHERE true
+             ON CONFLICT DO NOTHING
+            """, [idValue(id), .text(ids.jsonText)])
+    }
+
+    // MARK: - PATCH /:id (update, port 10b)
+
+    /// The columns `sanitizeUpdateFields("planned_transactions", …)` allows.
+    static let updatableColumns: Set<String> = [
+        "planned_date", "account_id", "recipient_id", "amount", "memo", "currency", "category_id",
+        "comment", "url", "is_recurring", "recurrence_pattern", "recurrence_end_date", "max_occurrences",
+        "reminder_days_before", "is_executed", "is_active", "last_executed_date", "is_loan", "loan_type",
+        "loan_principal", "loan_annual_interest_rate", "loan_term_months", "loan_start_date",
+        "loan_payment_day", "loan_regular_payment_amount", "loan_first_payment_date",
+    ]
+
+    /// The write plugin's conversions for an `UPDATE planned_transactions SET`.
+    static func updateSQL(_ column: String, _ value: JSValue, _ time: SQLTimestamps) throws -> SQLValue {
+        func canonical(precision: Int, scale: Int) throws -> SQLValue {
+            if value == .null { return .null }
+            switch value {
+            case .string(let text):
+                return .text(try ExactDecimal.parse(text).coerced(precision: precision, scale: scale).description)
+            case .number(let number):
+                return .text(
+                    try ExactDecimal.parse(SQLArguments.javaScriptText(number))
+                        .coerced(precision: precision, scale: scale).description)
+            default:
+                return try looseSQL(value)
+            }
+        }
+        if ["amount", "loan_principal", "loan_regular_payment_amount"].contains(column) {
+            return try canonical(precision: 18, scale: 4)
+        }
+        if ["loan_annual_interest_rate"].contains(column) {
+            return try canonical(precision: 8, scale: 4)
+        }
+        if ["is_active", "is_executed", "is_loan", "is_recurring"].contains(column) {
+            return try booleanSQL(value)
+        }
+        if ["last_executed_date", "loan_first_payment_date", "loan_start_date", "planned_date", "recurrence_end_date"]
+            .contains(column)
+        {
+            if let text = value.stringValue { return .text(try time.dateInputText(text)) }
+            return try looseSQL(value)
+        }
+        return try looseSQL(value)
+    }
+
+    /// `patchPlannedSchema`: the leaf checks in shape order, with transform coercions applied.
+    static func patchFields(_ request: InProcessRequest) throws -> JSObject {
+        let body = try RequestBody.parseJavaScript(request.body)
+        guard case .object(var object)? = body ?? .object(JSObject()) else {
+            throw BackendHTTPError.validation(
+                "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
+        }
+        var issues: [String] = []
+
+        if let tags = object["tags"] {
+            if case .array(let items) = tags {
+                for (index, item) in items.enumerated() where !isJSString(item) {
+                    issues.append("tags.\(index): tags must be an array of strings")
+                }
+            } else {
+                issues.append("tags: tags must be an array of strings")
+            }
+        }
+        if let reminder = object["reminder_days_before"], reminder != .null {
+            let number = reminder.javaScriptNumber
+            if !isJSInteger(number) || !(0...365).contains(number) {
+                issues.append("reminder_days_before: reminder_days_before must be an integer between 0 and 365")
+            } else {
+                object["reminder_days_before"] = .number(number)
+            }
+        }
+        if let end = object["recurrence_end_date"], end != .null, truthy(end) {
+            var dateIssues: [String] = []
+            _ = TransactionsArea.ymd(end, "recurrence_end_date", &dateIssues)
+            issues.append(contentsOf: dateIssues.map { "recurrence_end_date: \($0)" })
+        }
+        if let max = object["max_occurrences"], max != .null,
+            !isJSInteger(max.javaScriptNumber) || max.javaScriptNumber < 1
+        {
+            issues.append("max_occurrences: max_occurrences must be a positive integer")
+        }
+        if let currency = object["currency"] {
+            if currency == .null || currency == .string("") {
+                issues.append("currency: currency cannot be cleared")
+            } else {
+                if let code = currencyField(currency, issues: &issues) {
+                    object["currency"] = .string(code)
+                }
+            }
+        }
+        if let account = object["account_id"] {
+            guard case .number(let number) = account, number.isFinite else {
+                if account != .null {
+                    issues.append("account_id: Invalid input: expected number, received \(account.zodTypeName)")
+                }
+            }
+            if case .number(let number)? = object["account_id"], number.isFinite {
+                if number != number.rounded() {
+                    issues.append("account_id: Invalid input: expected int, received number")
+                } else if number <= 0 {
+                    issues.append("account_id: Too small: expected number to be >0")
+                }
+            }
+        }
+        if let bankAccount = object["bank_account"] {
+            issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
+        }
+        if let amount = object["amount"], amount != .null, amount != .string("") {
+            let number = amount.javaScriptNumber
+            if !number.isFinite || number == 0 || abs(number) > 1_000_000_000_000 {
+                issues.append("amount: amount must be a non-zero finite number within range")
+            } else {
+                object["amount"] = .number(number)
+            }
+        } else if let amount = object["amount"] {
+            if amount == .null || amount == .string("") {
+                issues.append("amount: amount must be a non-zero finite number within range")
+            }
+        }
+        if let pattern = object["recurrence_pattern"], truthy(pattern),
+            !Recurrence.isValidPattern(pattern)
+        {
+            issues.append("recurrence_pattern: Invalid recurrence_pattern: \(AccountsArea.looseText(pattern))")
+        }
+        return objectAfterIssues(object, issues)
+    }
+
+    /// `parseInput`'s throw once every leaf of the patch schema was checked.
+    static func objectAfterIssues(_ object: JSObject, _ issues: [String]) throws -> JSObject {
+        if !issues.isEmpty { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+        return object
+    }
+
+    /// PATCH `/:id`: the route's resolvers, loan patch defaults, recurrence guard and the
+    /// service's update in one transaction.
+    static func update(
+        _ session: BackendSession, id: PlannedTransactionID, request: InProcessRequest
+    ) throws -> HandlerResult {
+        guard let existing = try getById(session, id: id) else {
+            throw BackendHTTPError.notFound("Planned transaction \(id.rawValue) not found")
+        }
+        var fields = try patchFields(request)
+        for key in ["links", "id", "executions", "execution_count", "executed_transaction_id"] {
+            fields[key] = nil
+        }
+
+        // `resolveRecipientIdFromName`: the recipient name resolves or the update fails.
+        if let name = fields["recipient_name"], truthy(name),
+            !(fields["recipient_id"].map(truthy) ?? false)
+        {
+            guard case .string(let text) = name else { throw UnhandledJSError("recipient_name is not a string") }
+            let normalized = RecipientText.normalizeForMatching(text)
+            guard let row = try session.row(
+                "SELECT id FROM recipients WHERE normalized_name = ? LIMIT 1", [.text(normalized)])
+            else { throw BackendHTTPError.validation("Recipient with name '\(text)' does not exist") }
+            fields["recipient_id"] = .int(try row.integerId("id"))
+        }
+        fields["recipient_name"] = nil
+
+        // `resolveCategoryIdFromName` of `categoryService`.
+        if let name = fields["category_name"], truthy(name),
+            !(fields["category_id"].map(truthy) ?? false)
+        {
+            let normalized = JavaScriptWhitespace.trim(AccountsArea.looseText(name).uppercased())
+            let byPath = try session.rows(
+                "SELECT id FROM categories WHERE path_name = ? AND is_active = 1 ORDER BY id LIMIT 2",
+                [.text(normalized)])
+            if byPath.count > 1 {
+                throw BackendHTTPError.validation(
+                    "Category path '\(normalized)' is ambiguous. Select the category by id.")
+            }
+            if let match = byPath.first {
+                fields["category_id"] = .int(try match.integerId("id"))
+            } else {
+                guard let delimiter = normalized.firstIndex(of: ":"), delimiter != normalized.startIndex else {
+                    throw BackendHTTPError.validation(
+                        "Invalid category name format '\(normalized)'. Select a category id or use 'General:Detail'.")
+                }
+                let general = JavaScriptWhitespace.trim(String(normalized[normalized.startIndex..<delimiter]))
+                let detail = JavaScriptWhitespace.trim(String(normalized[normalized.index(after: delimiter)...]))
+                let legacy = try session.rows(
+                    """
+                    SELECT id FROM categories WHERE general = ? AND detail = ? AND is_active = 1
+                    UNION
+                    SELECT c.id FROM category_merge_aliases AS a
+                     INNER JOIN categories AS c ON c.id = a.target_category_id
+                     WHERE a.general = ? AND a.detail = ? AND c.is_active = 1
+                    ORDER BY id LIMIT 2
+                    """, [.text(general), .text(detail), .text(general), .text(detail)])
+                guard legacy.count == 1, let match = legacy.first else {
+                    throw BackendHTTPError.validation(
+                        "Category '\(normalized)' does not exist. Please create it first or use an existing category.")
+                }
+                fields["category_id"] = .int(try match.integerId("id"))
+            }
+        }
+        fields["category_name"] = nil
+
+        // `applyLoanPatchDefaults` + `resolveLoanScheduleDirective`.
+        let loanKeys = [
+            "loan_type", "loan_principal", "loan_annual_interest_rate", "loan_term_months",
+            "loan_start_date", "loan_payment_day",
+        ]
+        let loanFieldsChanged = loanKeys.contains { fields[$0] != nil }
+        let resultingIsLoan: Bool
+        if let flag = fields["is_loan"] { resultingIsLoan = truthy(flag) } else { resultingIsLoan = existing.isLoan }
+        var generatedSchedule: [LoanSchedule.Installment]?
+        if resultingIsLoan && (loanFieldsChanged || fields["is_loan"] == .bool(true)) {
+            // `??` reads null as absent here, as JavaScript's nullish coalescing does.
+            func loanValue(_ key: String, _ existingValue: JSValue?) -> JSValue? {
+                let patched = fields[key]
+                if let patched, patched != .null { return patched }
+                return existingValue
+            }
+            let generated = try LoanSchedule.generate(config: .init(
+                loanType: loanValue("loan_type", existing.loanType.map { .string($0) }),
+                loanPrincipal: loanValue(
+                    "loan_principal", existing.loanPrincipal.map { .string($0) }),
+                loanAnnualInterestRate: loanValue(
+                    "loan_annual_interest_rate", existing.loanAnnualInterestRate.map { .string($0) }),
+                loanTermMonths: loanValue(
+                    "loan_term_months", existing.loanTermMonths.map { .int($0) }),
+                loanStartDate: loanValue(
+                    "loan_start_date", existing.loanStartDate.map { .string($0) }),
+                loanPaymentDay: loanValue(
+                    "loan_payment_day", existing.loanPaymentDay.map { .int($0) })))
+            fields["loan_regular_payment_amount"] = .number(generated.regularPaymentAmount)
+            if let firstDueDate = generated.firstDueDate {
+                fields["loan_first_payment_date"] = .string(firstDueDate)
+            }
+            fields["amount"] = .number(-abs(generated.regularPaymentAmount))
+            if fields["planned_date"] == nil, let firstDueDate = generated.firstDueDate {
+                fields["planned_date"] = .string(firstDueDate)
+            }
+            if fields["is_recurring"] == nil { fields["is_recurring"] = .bool(true) }
+            if fields["recurrence_pattern"] == nil { fields["recurrence_pattern"] = .string("monthly") }
+            generatedSchedule = generated.schedule
+        } else if fields["is_loan"] == .bool(false), existing.isLoan {
+            for key in [
+                "loan_type", "loan_principal", "loan_annual_interest_rate", "loan_term_months",
+                "loan_start_date", "loan_payment_day", "loan_regular_payment_amount",
+                "loan_first_payment_date",
+            ] {
+                fields[key] = .null
+            }
+        }
+        // The loan schedule directive: the generated rows, [] to clear, nil to leave as is.
+        let loanScheduleDirective: [LoanSchedule.Installment]?
+        if let generated = generatedSchedule {
+            loanScheduleDirective = generated
+        } else if fields["is_loan"] == .bool(false), existing.isLoan {
+            loanScheduleDirective = []
+        } else {
+            loanScheduleDirective = nil
+        }
+
+        // The merged-state recurrence guard, only when the PATCH touches those fields.
+        if fields["is_recurring"] != nil || fields["recurrence_pattern"] != nil {
+            let resultingRecurring: Bool
+            if fields["is_recurring"] != nil {
+                resultingRecurring = truthy(fields["is_recurring"] ?? .null)
+            } else {
+                resultingRecurring = existing.isRecurring
+            }
+            let resultingPattern: JSValue?
+            if let pattern = fields["recurrence_pattern"] {
+                resultingPattern = pattern
+            } else {
+                resultingPattern = existing.recurrencePattern.map { .string($0) }
+            }
+            if !resultingIsLoan, resultingRecurring, !Recurrence.isValidPattern(resultingPattern) {
+                throw BackendHTTPError.validation(
+                    "Invalid or missing recurrence_pattern: \(AccountsArea.looseText(resultingPattern))")
+            }
+        }
+
+        // `sanitizeUpdateFields` — the allow-list, with lower-cased, trimmed keys.
+        var sanitized: [(String, JSValue)] = []
+        var tags: [JSValue]?
+        for (key, value) in fields.entries {
+            let normalized = JavaScriptWhitespace.trim(key.lowercased())
+            if ["tags"].contains(key) {
+                if case .array(let slugs) = value { tags = slugs }
+                continue
+            }
+            if PlannedArea.updatableColumns.contains(normalized) { sanitized.append((normalized, value)) }
+        }
+        let found = try session.transaction { () throws -> Bool in
+            // `stampAccountIdForUpdate` — inside the write transaction.
+            let accountColumn = "account_id"
+            if let index = sanitized.firstIndex(where: { $0.0 == accountColumn }) {
+                let account = sanitized[index].1
+                if account != .null {
+                    let active = try session.row(
+                        "SELECT id FROM accounts WHERE id = ? AND is_active = 1", [try looseSQL(account)])
+                    if active == nil {
+                        throw BackendHTTPError.validation("account_id must reference an active account")
+                    }
+                }
+            }
+            let changes = sanitized
+            if changes.isEmpty {
+                let exists = try session.row(
+                    "SELECT id FROM planned_transactions WHERE id = ?", [idValue(id)]) != nil
+                guard exists else { return false }
+            } else {
+                let assignments = changes.map { "\($0.0) = ?" }
+                let arguments = try changes.map { try updateSQL($0.0, $0.1, session.time) }
+                let updated = try session.rows(
+                    """
+                    UPDATE planned_transactions SET \(assignments.joined(separator: ", ")), updated_at = now() \
+                    WHERE id = ? RETURNING id
+                    """, arguments + [idValue(id)])
+                guard !updated.isEmpty else { return false }
+            }
+            if let directive = loanScheduleDirective {
+                try session.rows(
+                    "DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = ?",
+                    [idValue(id)])
+                if !directive.isEmpty { try insertLoanSchedule(session, id: id, directive) }
+            }
+            if let tags {
+                try setPlannedTransactionTags(session, id, tags)
+            }
+            return true
+        }
+        guard found else { throw BackendHTTPError.notFound("Planned transaction \(id.rawValue) not found") }
+        return HandlerResult(data: try getById(session, id: id)?.json ?? .null)
+    }
 
     /// `executeBodySchema`: the executed transaction id and the optional execution date.
     struct ExecuteBody: Sendable {
@@ -888,9 +1578,9 @@ enum PlannedArea {
     /// object whose transform checks the id first, then the date; the first failure wins.
     static func executeBody(_ request: InProcessRequest) throws -> ExecuteBody {
         let body = try RequestBody.parseJavaScript(request.body)
-        guard case .object(let fields)? = body ?? .object([]) else {
+        guard case .object(let fields)? = body ?? .object(JSObject()) else {
             throw BackendHTTPError.validation(
-                "Invalid input: expected object, received \(InputIssues.typeName(body ?? .null))")
+                "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
         }
         let id = fields["executed_transaction_id"]
         guard let id, PlannedArea.truthy(id) else {
@@ -904,7 +1594,9 @@ enum PlannedArea {
             var issues: [String] = []
             executionDate = TransactionsArea.ymd(date, "execution_date", &issues)
             if let issue = issues.first { throw BackendHTTPError.validation(issue) }
-            guard case .string(let text)? = date, TransactionsArea.isYmdShape(text), executionDate != nil else {
+            if case .string(let text)? = date, TransactionsArea.isYmdShape(text), executionDate != nil {
+                // `validateDateString`'s `new Date` check accepted the y-m-d text.
+            } else {
                 throw BackendHTTPError.validation("execution_date is not a valid date")
             }
         }
@@ -1017,6 +1709,7 @@ enum PlannedArea {
                 throw BackendHTTPError.conflict("Recurring planned transaction is complete")
             }
 
+
             let execDate = body.executionDate ?? session.today()
             var fields: [(String, SQLValue)] = [
                 ("last_executed_date", .text(execDate)),
@@ -1069,6 +1762,15 @@ enum PlannedArea {
 }
 
 /// `PlannedLike` of `lib/plannedMatching.ts`.
+/// A thrown `TypeError` or invariant failure the TypeScript answer masked as a 500.
+struct UnhandledJSError: Error, Sendable {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+}
+
 struct PlannedMatchLike: Sendable {
     var recipientClusterId: JSValue?
     var currency: JSValue?

@@ -14,6 +14,7 @@ public enum PortedOperations {
         "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern",
         "deleteRecipientPattern", "getTransactions", "getTransaction",
         "getPlannedTransactions", "getPlannedTotals", "getPlannedMatchSuggestions",
+        "createPlannedTransaction", "updatePlannedTransaction",
         "executePlannedTransaction", "deletePlannedTransaction",
     ]
 }
