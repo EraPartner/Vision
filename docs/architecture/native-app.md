@@ -615,7 +615,12 @@ transfers, bulk actions and exports stay on Bun until their own phases. The plan
 rates, the match suggestions (`getPlannedMatchSuggestions`) within the ±5-day, max(1, 5 %)
 tolerance of `lib/plannedMatching.ts`, and execute (`executePlannedTransaction`), which runs in
 one write transaction and answers a replay of the same pair with `Idempotent-Replay: true`
-(`HandlerResult.headers`), and delete (`deletePlannedTransaction`). The recurrence grammar and
+(`HandlerResult.headers`), and delete (`deletePlannedTransaction`). The writes complete the area
+(port 10b): create (`createPlannedTransaction`) reuses `Areas/LoanSchedule.swift` for the loan
+branch and mirrors the raw `INSERT` with `ts_date`/`vision_numeric` bindings, and update
+(`updatePlannedTransaction`) resolves `recipient_name`/`category_name`, applies the loan patch
+defaults and rewrites the installment rows in the same write transaction as the field update, with
+the write plugin's canonical decimal/boolean/date conversions in the `SET`. The recurrence grammar and
 its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
 area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
 suggestions and the execute default date replay the same on every day. A refresh
