@@ -960,7 +960,6 @@ enum PlannedArea {
                 "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
         }
         var issues: [String] = []
-        var accountFatal = false
 
         // tags: an array of strings; each failure names the array (or its item).
         if let tags = object["tags"] {
