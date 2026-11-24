@@ -617,7 +617,13 @@ detected` with `existing_transaction_id`, and the `allow_duplicate` bypass — u
 refuses a planned-execution link (409) and unlinks the row's attachments on disk; the create
 also clears a matching planned payment through the same ±5-day bucket and tolerance match
 as the suggestions (idempotent when the pair already exists), reported as `auto_linked`.
-Transfers, bulk actions and exports stay on Bun until their own phases. The planned payments follow
+The client's transfer mark (`markTransfer`, `Areas/Transfers.swift`) follows: `transferPairBodySchema`'s
+strict ids answering any failure with the one combined message, then `markTransfer`'s write
+transaction — the graph discovery, re-read and signature recheck, the real-invariant validation
+(two existing, active rows on different accounts with opposite signs; cross-currency pairs are
+legal), the release of a prior peer back to open and the unconditional manual mark of both legs.
+The unmark and suggestion routes of the same module stay on Bun: the client never calls them.
+Bulk actions and exports stay on Bun until their own phases. The planned payments follow
 (port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
 `filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
 (`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored
