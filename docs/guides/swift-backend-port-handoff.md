@@ -18,7 +18,7 @@ Read [[docs/adr/270-swift-backend-in-process|ADR-270]] first, then
 1. Merge `origin/main` into `claude/project-thread-8yvcm0` (the branch is behind main).
 2. Finish phase P10a (section 8) on top of the WIP commit 53b88d1. Open a draft PR and let macOS CI
    compile it, because the WIP itself has never been built.
-3. Then work through section 7 top to bottom. Every PR must meet section 6.
+3. Then work through section 7 top to bottom. Every PR must meet sections 6 and 6b (fuzzing is required).
 
 ## 1. Goal and rules (from the owner, Tor)
 
@@ -183,7 +183,7 @@ Never write "should pass".
      value, wrong types and out-of-range values;
    - every 404 and 409;
    - one happy path per write, with reads after each write that show the new state.
-6. The mutations corpus (`<area>-mutations.json`) has at least 200 seeded random steps. They mix
+6. The mutations corpus (`<area>-mutations.json`) follows section 6b: at least 200 seeded random steps (400 with writes), a tenfold stress run in CI before merge, and Layer B vectors for every non-trivial pure helper. They mix
    mutated bodies, random queries (`randomQuery` over all the route's keys) and writes aimed at
    random ids, with reads in between.
 7. A today-dependent answer uses the fixed clock (section 8), never a corpus that only passes on
@@ -209,6 +209,118 @@ Never write "should pass".
     the CI run. Residual risk lists the known differences and the parts not ported.
 15. After the merge, add one dated line to `/mnt/project-files/swift-restart/plan.md`, or to
     section 5 of this page.
+
+## 6b. Differential fuzzing and working technique (required)
+
+Every area is proven equal to TypeScript in two ways. The first is hand-written cases, which cover
+what you thought of. The second is differential fuzzing: seeded random inputs run through
+TypeScript and Swift, with the answers compared exactly, which covers what you did not think of.
+Both are required. A PR without fuzzing is not done.
+
+### Layer A: route-level fuzzing (every area, committed, replayed in macOS CI)
+
+- **Where.** Add a `<area>-mutations` entry in `scripts/native-parity.ts`, built in the function
+  that builds the other mutation areas. Use the tools in `scripts/lib/nativeParityMutations.ts`:
+
+  | Tool                                  | What it does                                                               |
+  | ------------------------------------- | -------------------------------------------------------------------------- |
+  | `Random(seed)`                        | seeded generator: `next`, `int`, `chance`, `pick`                          |
+  | `mutate`, `mutateSome`                | replace, drop, add, retype or nudge one to three fields of a body          |
+  | `mutatedSteps(random, steps, copies)` | mutants of every hand-written step that has a body                         |
+  | `randomQuery(random, keys)`           | random query strings over the route's keys, with repeats                   |
+  | `randomText`, `randomValue`           | hostile strings and values (Unicode, whitespace, numbers as text, nesting) |
+
+- **Seed.** Give each area a fixed hexadecimal seed of its own (for example `0x7a11` for
+  transactions). Never change it in a later PR, or the corpus churns.
+- **Size.** Use at least 200 steps for a read-only area and at least 400 for an area with writes.
+  Steps include:
+  - mutated copies of every hand-written body (3 copies each);
+  - random list queries over every key the route reads, including keys that are not filters;
+  - writes aimed at random ids: existing, deleted, `0`, `-1`, `abc`, `1e3`, huge numbers;
+  - after every few writes, a list and a single read, so a wrong stored state shows up as a
+    difference;
+  - a delete or merge now and then, so later steps run against changed data.
+- **Record** both corpora with `bun run native:parity -- <area>` and
+  `bun run native:parity -- <area>-mutations`, commit them, and add the test arguments in
+  `ParityTests.swift`.
+- **Stress run before the PR.** Temporarily raise the step count tenfold (for example 2,000 to
+  4,000 steps) with a second seed. Push it to the draft PR and let macOS CI replay it. Once it is
+  green, drop back to the committed size, and report both runs in the PR body ("stress run: N
+  steps, seed S, 0 differences, CI run <link>"). This adds no CI job and no lasting CI time.
+
+### Layer B: pure-function fuzzing (any non-trivial pure helper)
+
+Use this layer for date stepping, recurrence grammar, loan schedules, money rounding, tolerance
+checks, number and text parsing, CSV quoting, sorting and hashing.
+
+- Keep the helper pure (no database), so it can be called directly.
+- Add a JSONL vector file under `apps/native/parity/plans/`. It is recorded by
+  `scripts/native-plan-parity.ts` (`bun run native:parity-plans`; `-- --check` verifies the
+  answers are current).
+- Each line is one input and the TS answer (or the message TS threw). Use three kinds of input:
+  - cases lifted from the TS unit tests;
+  - hand-written edges: the empty string, whitespace, Unicode case, month ends, leap days, DST
+    days, years 0001 and 9999, ±0, NaN, huge numbers, a rounding tie at .5;
+  - generated random inputs.
+- Add a Swift test that replays the file and expects 0 differences.
+- Committed files stay small. The plan corpora were kept under 1 MB each by thinning them while
+  keeping every distinct kind of outcome.
+- **Large run.** Run at least 10,000 generated cases (50,000 or more for arithmetic or date code)
+  through the Linux Docker scratch package:
+  - start the daemon: `nohup dockerd > /tmp/dockerd.log 2>&1 &`;
+  - pull the image: `docker pull swift:6.2-noble`;
+  - build and test with the scripts in `/mnt/project-files/swift-restart/linux-scratch-build/`
+    (`assemble.sh`, `build.sh`).
+
+  Report the result as "Linux container", never as CI. #432 did 12,601 to 80,000 cases per part
+  this way.
+
+### Rules when a difference shows up
+
+1. **A difference is a Swift bug** until the TS code proves otherwise. Fix the root cause in Swift.
+2. **Never edit a recorded corpus by hand.** Never loosen the comparison in `ParityTests.swift`,
+   and never drop a failing step. If TS answers differently on another run (time, tie order,
+   randomness), make the input deterministic: fixed clock, unique sort keys in the seed, seeded
+   randomness. Leave the comparison as it is.
+3. **If TS itself is wrong,** Swift still copies it. List it under "Residual risk" and ask Tor
+   whether to fix it in both backends.
+4. **Every difference found goes in the PR body** under "Verification": the step, the cause and
+   the fix. #433 found the repeated-query difference this way.
+
+### Working technique (how the earlier areas were done)
+
+1. **Read before writing.** Read the whole route, service, repository, row schema and helper
+   chain. Write a short notes list:
+   - every error message, and the order its check runs in;
+   - every default;
+   - every coercion (`Number()`, `parseInt`, `||` versus `??`, `String()`, `.trim()`,
+     `.toUpperCase()`, `.slice` on UTF-16);
+   - every SQL statement, and the transaction boundaries.
+2. **Record the TS corpus first** and read the answers before writing Swift. The recorded
+   answers are the spec. Anything surprising in them is a quirk Swift must copy.
+3. **Know the JavaScript traps.**
+   - Truthiness: `0`, `""` and `NaN` are falsy.
+   - `Number("")` is `0`. `parseInt` takes leading digits.
+   - JSON number output: `-0` prints as `0`; `1e21` switches to exponent form. Use
+     `JSValue.number(...).envelopeValue`.
+   - decimal.js runs at precision 30 with ROUND_HALF_EVEN (`DecimalJS`).
+   - Express query arrays.
+   - zod issue order follows the schema shape. Loose objects pass unknown keys through, strict
+     objects reject them.
+   - `Date` accepts Feb 30.
+4. **Reuse before writing.** Check the existing helpers first:
+   - `TransactionsArea` query helpers: `raw`, `optionalId`, `ymd`, `single`, `idList`, `flag`;
+   - `JavaScriptInteger`, `JavaScriptWhitespace`, `JavaScriptNumber`;
+   - `Zod`, `RequestID`, `AccountsArea.latestRatesToEur` and `convert`;
+   - `SQLTimestamps`, `TransactionWhere`, `AccountBalanceSQL`.
+5. **Copy SQL from the compiled Kysely query,** never from memory. Bind the arguments in the same
+   order.
+6. **Review before pushing.** Put the Swift file and the TS file side by side and walk every
+   branch. Then run `native-lint`, prettier and eslint.
+7. **Read CI failures from the first differing step label** in the `swift` job log
+   (`<area> step N: METHOD path: response.x: want != got`). Fix that cause, push, and repeat.
+8. **Report exactly what was run.** "macOS CI green, run <link>, 2 corpora, 0 differences" is a
+   report. "Should pass" is not.
 
 ## 7. Everything left, in order
 
