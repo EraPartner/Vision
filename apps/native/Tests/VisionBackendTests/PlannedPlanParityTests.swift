@@ -32,7 +32,7 @@ import Testing
 
     static func evaluate(_ op: [JSValue]) throws -> JSValue {
         func text(_ index: Int) -> String? {
-            guard op.count > index, case .string(let value)? = op[index] else { return nil }
+            guard op.count > index, case .string(let value) = op[index] else { return nil }
             return value
         }
         func integer(_ index: Int) -> Int { Int(op[index].javaScriptNumber) }
@@ -41,14 +41,14 @@ import Testing
             switch name {
             case "step":
                 guard let step = Recurrence.parseStep(op[safe: 1]) else { return .null }
-                return .object([
+                return .object(JSObject([
                     ("unit", .string(step.unit == .day ? "day" : "month")),
-                    ("amount", JSValue.number(step.amount).envelopeValue),
-                ])
+                    ("amount", .number(step.amount)),
+                ]))
             case "valid":
                 return .bool(Recurrence.isValidPattern(op[safe: 1]))
             case "next":
-                return try Recurrence.nextOccurrenceYmd(text(1) ?? "", text(2)).map(JSONValue.string) ?? .null
+                return try Recurrence.nextOccurrenceYmd(text(1) ?? "", text(2)).map(JSValue.string) ?? .null
             case "fastForward":
                 return .string(
                     try Recurrence.fastForward(text(1) ?? "", text(2), text(3) ?? ""))
@@ -83,7 +83,9 @@ import Testing
                         loanTermMonths: config?["loan_term_months"],
                         loanStartDate: config?["loan_start_date"],
                         loanPaymentDay: config?["loan_payment_day"]))
-                return answer.json
+                let data = try JSONEncoder().encode(answer.json)
+                guard let parsed = JSValue.parse(data) else { throw UnknownOperation(name: name) }
+                return parsed
             default:
                 throw UnknownOperation(name: name)
             }
