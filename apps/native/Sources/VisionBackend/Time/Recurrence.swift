@@ -135,7 +135,7 @@ extension Character {
     /// JavaScript's `\d`: an ASCII digit, for a single-scalar grapheme.
     var isASCIIDigit: Bool {
         guard let scalar = unicodeScalars.first, unicodeScalars.count == 1 else { return false }
-        return (0x30...0x39).contains(scalar)
+        return (0x30...0x39).contains(scalar.value)
     }
 
     /// JavaScript's `\s`: the Unicode whitespace a pattern's runs may hold.

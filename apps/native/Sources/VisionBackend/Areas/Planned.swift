@@ -163,68 +163,62 @@ struct PlannedRow: Sendable {
             value.flatMap { $0.isEmpty ? nil : JSONValue.string($0) } ?? .null
         }
         func money(_ amount: String?) -> JSONValue { (try? PlannedRow.money(amount)) ?? .null }
-        var fields: [(String, JSONValue)] = [
-            ("id", .int(id.rawValue)),
-            ("planned_date", PlannedRow.date(plannedDate)),
-            ("account_id", accountId.map { JSONValue.int($0.rawValue) } ?? .null),
-            ("bank_account", text(bankAccount)),
-            ("recipient_id", recipientId.map { JSONValue.int($0.rawValue) } ?? .null),
-            ("recipient_name", nonEmpty(recipientName)),
-            ("memo", text(memo)),
-            ("amount", money(amount)),
-            ("currency", text(currency)),
-            ("category_id", categoryId.map { JSONValue.int($0.rawValue) } ?? .null),
-            ("category_name", nonEmpty(categoryName)),
-            ("comment", text(comment)),
-            ("url", nonEmpty(url)),
-            ("is_recurring", .bool(isRecurring)),
-            ("recurrence_pattern", text(recurrencePattern)),
-            ("recurrence_end_date", PlannedRow.date(recurrenceEndDate)),
-            ("max_occurrences", PlannedRow.integer(maxOccurrences)),
-            ("reminder_days_before", PlannedRow.integer(reminderDaysBefore)),
-            ("is_executed", .bool(isExecuted)),
-            ("last_executed_date", PlannedRow.date(lastExecutedDate)),
-            ("is_loan", .bool(isLoan || false)),
-            ("loan_type", nonEmpty(loanType)),
-            ("loan_principal", money(loanPrincipal)),
-            ("loan_annual_interest_rate", money(loanAnnualInterestRate)),
-            ("loan_term_months", PlannedRow.integer(loanTermMonths)),
-            ("loan_start_date", nonEmpty(loanStartDate)),
-            ("loan_payment_day", PlannedRow.integer(loanPaymentDay)),
-            ("loan_regular_payment_amount", money(loanRegularPaymentAmount)),
-            ("loan_first_payment_date", nonEmpty(loanFirstPaymentDate)),
+        var fields: [String: JSONValue] = [
+            "id": .int(id.rawValue),
+            "planned_date": PlannedRow.date(plannedDate),
+            "account_id": accountId.map { JSONValue.int($0.rawValue) } ?? .null,
+            "bank_account": text(bankAccount),
+            "recipient_id": recipientId.map { JSONValue.int($0.rawValue) } ?? .null,
+            "recipient_name": nonEmpty(recipientName),
+            "memo": text(memo),
+            "amount": money(amount),
+            "currency": text(currency),
+            "category_id": categoryId.map { JSONValue.int($0.rawValue) } ?? .null,
+            "category_name": nonEmpty(categoryName),
+            "comment": text(comment),
+            "url": nonEmpty(url),
+            "is_recurring": .bool(isRecurring),
+            "recurrence_pattern": text(recurrencePattern),
+            "recurrence_end_date": PlannedRow.date(recurrenceEndDate),
+            "max_occurrences": PlannedRow.integer(maxOccurrences),
+            "reminder_days_before": PlannedRow.integer(reminderDaysBefore),
+            "is_executed": .bool(isExecuted),
+            "last_executed_date": PlannedRow.date(lastExecutedDate),
+            "is_loan": .bool(isLoan || false),
+            "loan_type": nonEmpty(loanType),
+            "loan_principal": money(loanPrincipal),
+            "loan_annual_interest_rate": money(loanAnnualInterestRate),
+            "loan_term_months": PlannedRow.integer(loanTermMonths),
+            "loan_start_date": nonEmpty(loanStartDate),
+            "loan_payment_day": PlannedRow.integer(loanPaymentDay),
+            "loan_regular_payment_amount": money(loanRegularPaymentAmount),
+            "loan_first_payment_date": nonEmpty(loanFirstPaymentDate),
         ]
-        fields.append(
-            ("loan_schedule", .array(loanSchedule.map { entry in
-                .object([
-                    ("installment_number", PlannedRow.integer(entry.installmentNumber)),
-                    ("due_date", PlannedRow.date(entry.dueDate)),
-                    ("payment_amount", money(entry.paymentAmount)),
-                    ("principal_amount", money(entry.principalAmount)),
-                    ("interest_amount", money(entry.interestAmount)),
-                    ("remaining_principal", money(entry.remainingPrincipal)),
-                ])
-            })))
-        fields.append(
-            (
-                "executed_transaction_id",
-                executedTransactionId.map { JSONValue.int($0.rawValue) } ?? .null
-            ))
-        fields.append(("execution_count", .int(executionCount ?? 0)))
-        fields.append(
-            ("executions", .array(executions.map { execution in
-                .object([
-                    ("id", .int(execution.id)),
-                    ("executed_transaction_id", .int(execution.executedTransactionId.rawValue)),
-                    ("execution_date", PlannedRow.date(execution.executionDate)),
-                    ("created_at", execution.createdAt.map { JSONValue.string($0.text) } ?? .null),
-                ])
-            })))
-        fields.append(("tags", .array(tags.map(\.json))))
-        fields.append(("is_active", .bool(isActive)))
-        fields.append(("created_at", createdAt.map { JSONValue.string($0.text) } ?? .null))
-        fields.append(("updated_at", updatedAt.map { JSONValue.string($0.text) } ?? .null))
-        fields.append(("links", .array([])))
+        fields["loan_schedule"] = .array(loanSchedule.map { entry in
+            .object([
+                "installment_number": PlannedRow.integer(entry.installmentNumber),
+                "due_date": PlannedRow.date(entry.dueDate),
+                "payment_amount": money(entry.paymentAmount),
+                "principal_amount": money(entry.principalAmount),
+                "interest_amount": money(entry.interestAmount),
+                "remaining_principal": money(entry.remainingPrincipal),
+            ])
+        })
+        fields["executed_transaction_id"] = executedTransactionId.map { JSONValue.int($0.rawValue) } ?? .null
+        fields["execution_count"] = .int(executionCount ?? 0)
+        fields["executions"] = .array(executions.map { execution in
+            .object([
+                "id": .int(execution.id),
+                "executed_transaction_id": .int(execution.executedTransactionId.rawValue),
+                "execution_date": PlannedRow.date(execution.executionDate),
+                "created_at": execution.createdAt.map { JSONValue.string($0.text) } ?? .null,
+            ])
+        })
+        fields["tags"] = .array(tags.map(\.json))
+        fields["is_active"] = .bool(isActive)
+        fields["created_at"] = createdAt.map { JSONValue.string($0.text) } ?? .null
+        fields["updated_at"] = updatedAt.map { JSONValue.string($0.text) } ?? .null
+        fields["links"] = .array([])
         return .object(fields)
     }
 }
@@ -865,31 +859,30 @@ enum PlannedArea {
                             transactionDate: .string(transaction.transactionDate)))
                 }
                 if candidates.isEmpty { continue }
-                let plannedFields: [(String, JSONValue)] = [
-                    ("id", .int(planned.id)),
-                    ("recipient_id", planned.recipientId.map { JSONValue.int($0.rawValue) } ?? .null),
-                    ("recipient_name", planned.recipientName.map(JSONValue.string) ?? .null),
-                    ("amount", .number(try DecimalJS.from(planned.amount).toNumber)),
-                    ("planned_date", .string(planned.plannedDate)),
-                    ("currency", planned.currency.map(JSONValue.string) ?? .null),
-                    ("is_recurring", .bool(planned.isRecurring)),
+                let plannedAmount = try DecimalJS.from(planned.amount).toNumber
+                let plannedFields: [String: JSONValue] = [
+                    "id": .int(planned.id),
+                    "recipient_id": planned.recipientId.map { JSONValue.int($0.rawValue) } ?? .null,
+                    "recipient_name": planned.recipientName.map(JSONValue.string) ?? .null,
+                    "amount": .double(plannedAmount),
+                    "planned_date": .string(planned.plannedDate),
+                    "currency": planned.currency.map(JSONValue.string) ?? .null,
+                    "is_recurring": .bool(planned.isRecurring),
                 ]
+                let candidateFields: [JSONValue] = try candidates.map { transaction in
+                    .object([
+                        "id": .int(transaction.id.rawValue),
+                        "recipient_name": transaction.recipientName.map(JSONValue.string) ?? .null,
+                        "amount": .double(try DecimalJS.from(transaction.amount).toNumber),
+                        "transaction_date": .string(transaction.transactionDate),
+                        "currency": transaction.currency.map(JSONValue.string) ?? .null,
+                        "memo": transaction.memo.map(JSONValue.string) ?? .null,
+                    ])
+                }
                 suggestions.append(
                     .object([
-                        ("planned", .object(plannedFields)),
-                        (
-                            "candidates",
-                            .array(candidates.map { transaction in
-                                .object([
-                                    ("id", .int(transaction.id.rawValue)),
-                                    ("recipient_name", transaction.recipientName.map(JSONValue.string) ?? .null),
-                                    ("amount", .number(try DecimalJS.from(transaction.amount).toNumber)),
-                                    ("transaction_date", .string(transaction.transactionDate)),
-                                    ("currency", transaction.currency.map(JSONValue.string) ?? .null),
-                                    ("memo", transaction.memo.map(JSONValue.string) ?? .null),
-                                ])
-                            })
-                        ),
+                        "planned": .object(plannedFields),
+                        "candidates": .array(candidateFields),
                     ]))
             }
         }
@@ -1076,7 +1069,7 @@ enum PlannedArea {
         var data = input
         var schedule: [LoanSchedule.Installment] = []
         if truthy(data["is_loan"] ?? .null) {
-            let generated = try LoanSchedule.generate(config: .init(
+            let generated = try LoanSchedule.generate(.init(
                 loanType: data["loan_type"], loanPrincipal: data["loan_principal"],
                 loanAnnualInterestRate: data["loan_annual_interest_rate"],
                 loanTermMonths: data["loan_term_months"], loanStartDate: data["loan_start_date"],
@@ -1362,7 +1355,7 @@ enum PlannedArea {
         {
             issues.append("recurrence_pattern: Invalid recurrence_pattern: \(AccountsArea.looseText(pattern))")
         }
-        return objectAfterIssues(object, issues)
+        return try objectAfterIssues(object, issues)
     }
 
     /// `parseInput`'s throw once every leaf of the patch schema was checked.
@@ -1452,7 +1445,7 @@ enum PlannedArea {
                 if let patched, patched != .null { return patched }
                 return existingValue
             }
-            let generated = try LoanSchedule.generate(config: .init(
+            let generated = try LoanSchedule.generate(.init(
                 loanType: loanValue("loan_type", existing.loanType.map { .string($0) }),
                 loanPrincipal: loanValue(
                     "loan_principal", existing.loanPrincipal.map { .string($0) }),
@@ -1594,7 +1587,7 @@ enum PlannedArea {
             var issues: [String] = []
             executionDate = TransactionsArea.ymd(date, "execution_date", &issues)
             if let issue = issues.first { throw BackendHTTPError.validation(issue) }
-            if case .string(let text)? = date, TransactionsArea.isYmdShape(text), executionDate != nil {
+            if case .string(let text) = date, TransactionsArea.isYmdShape(text), executionDate != nil {
                 // `validateDateString`'s `new Date` check accepted the y-m-d text.
             } else {
                 throw BackendHTTPError.validation("execution_date is not a valid date")

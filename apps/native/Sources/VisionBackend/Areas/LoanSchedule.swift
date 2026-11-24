@@ -25,23 +25,21 @@ enum LoanSchedule {
         let schedule: [Installment]
 
         var json: JSONValue {
-            .object([
-                ("regular_payment_amount", JSValue.number(LoanSchedule.money(regularPaymentAmount)).envelopeValue),
-                ("first_due_date", firstDueDate.map(JSONValue.string) ?? .null),
-                ("schedule", .array(schedule.map { installment in
+            var fields: [String: JSONValue] = [:]
+            fields["regular_payment_amount"] =
+                JSValue.number(LoanSchedule.money(regularPaymentAmount)).envelopeValue
+            fields["first_due_date"] = firstDueDate.map(JSONValue.string) ?? .null
+            fields["schedule"] = .array(schedule.map { installment in
                     .object([
-                        ("installment_number", .int(installment.number)),
-                        ("due_date", .string(installment.dueDate)),
-                        ("payment_amount", JSValue.number(LoanSchedule.money(installment.paymentAmount)).envelopeValue),
-                        ("principal_amount", JSValue.number(LoanSchedule.money(installment.principalAmount)).envelopeValue),
-                        ("interest_amount", JSValue.number(LoanSchedule.money(installment.interestAmount)).envelopeValue),
-                        (
-                            "remaining_principal",
-                            JSValue.number(LoanSchedule.money(installment.remainingPrincipal)).envelopeValue
-                        ),
+                        "installment_number": .int(installment.number),
+                        "due_date": .string(installment.dueDate),
+                        "payment_amount": JSValue.number(LoanSchedule.money(installment.paymentAmount)).envelopeValue,
+                        "principal_amount": JSValue.number(LoanSchedule.money(installment.principalAmount)).envelopeValue,
+                        "interest_amount": JSValue.number(LoanSchedule.money(installment.interestAmount)).envelopeValue,
+                        "remaining_principal": JSValue.number(LoanSchedule.money(installment.remainingPrincipal)).envelopeValue,
                     ])
-                })),
-            ])
+                })
+            return .object(fields)
         }
     }
 
@@ -94,7 +92,7 @@ enum LoanSchedule {
         } else {
             lastDay = 1
         }
-        let day = max(1, min(LoanSchedule.nonZeroOr(preferredDay, 1), lastDay))
+        let day = max(1, min(Int(LoanSchedule.nonZeroOr(Double(preferredDay), 1)), lastDay))
         guard let result = exactDay(
             CalendarDays.utc(year: firstOfTargetDay.year, monthIndex: firstOfTargetDay.month - 1, day: day))
         else { return "Invalid Date" }
@@ -133,7 +131,7 @@ enum LoanSchedule {
         }
         let termMonths = config.loanTermMonths?.javaScriptNumber ?? .nan
         let paymentDay = config.loanPaymentDay?.javaScriptNumber ?? .nan
-        let loanType = JavaScriptWhitespace.trim(truthy(config.loanType)
+        let loanType = JavaScriptWhitespace.trim(truthy(config.loanType ?? .null)
             ? config.loanType?.javaScriptString ?? ""
             : "")
         if loanType.isEmpty { errors.append("loan_type is required for loan planned transactions") }
@@ -150,7 +148,8 @@ enum LoanSchedule {
         if let startDate = config.loanStartDate, truthy(startDate) {
             startShape = startDate.javaScriptString
         }
-        guard let shape = startShape ?? "", TransactionsArea.isYmdShape(shape) else {
+        let shape = startShape ?? ""
+        guard TransactionsArea.isYmdShape(shape) else {
             errors.append("loan_start_date must be in YYYY-MM-DD format")
             if paymentDay.rounded() != paymentDay || !(1...31).contains(paymentDay) {
                 errors.append("loan_payment_day must be an integer between 1 and 31")
