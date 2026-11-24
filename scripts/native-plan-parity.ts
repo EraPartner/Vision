@@ -232,6 +232,7 @@ import {
   nextOccurrenceYmd,
 } from "../apps/node-backend/src/lib/calculations/recurrence.ts";
 import { matchesTolerance } from "../apps/node-backend/src/lib/plannedMatching.ts";
+import { generateLoanRepaymentSchedule } from "../apps/node-backend/src/services/calculations/loanSchedule.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -264,6 +265,8 @@ const CORPUS = repoPath(
 );
 /** `{ op, r }` lines of the planned-payment helpers: see `evaluatePlanned`. */
 const PLANNED = repoPath("apps/native/parity/plans/planned.jsonl");
+/** `{ op, r }` lines of the loan schedule generator: see `evaluateLoan`. */
+const LOAN = repoPath("apps/native/parity/plans/loan-schedule.jsonl");
 /** `{ input, result | error }` lines of `evaluateAnalysisFormulas`. */
 const FORMULAS = repoPath("apps/native/parity/plans/analysis-formulas.jsonl");
 /** `{ op, r }` lines: see `evaluateFoundation`. */
@@ -1611,6 +1614,22 @@ function evaluatePlanned(op: readonly unknown[]): unknown {
   }
 }
 
+/**
+ * One operation of the loan schedule generator
+ * (`services/calculations/loanSchedule.ts`): `["loan", config]` answers the
+ * installment table, or the message the generator threw.
+ */
+function evaluateLoan(op: readonly unknown[]): unknown {
+  const [name, ...args] = op;
+  if (name !== "loan")
+    throw new Error(`unknown loan operation: ${String(name)}`);
+  try {
+    return generateLoanRepaymentSchedule(args[0] as Record<string, unknown>);
+  } catch (error) {
+    return error instanceof ValidationError ? error.message : String(error);
+  }
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -1751,6 +1770,14 @@ if (isEntrypoint(import.meta)) {
     (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: evaluatePlanned(op) };
+    },
+    check,
+  );
+  rerecord(
+    LOAN,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluateLoan(op) };
     },
     check,
   );

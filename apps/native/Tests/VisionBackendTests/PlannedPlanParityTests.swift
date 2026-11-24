@@ -16,6 +16,7 @@ import Testing
     /// The thrown message the recorder stores as the answer.
     private static func failure(_ error: Error) -> JSValue {
         if let thrown = error as? CalendarDaysError { return .string(thrown.message) }
+        if let thrown = error as? BackendHTTPError { return .string(thrown.message) }
         return .string("\(error)")
     }
 
@@ -73,6 +74,16 @@ import Testing
                         TxMatchLike(
                             recipientClusterId: tx.cluster, currency: tx.currency, amount: tx.amount,
                             transactionDate: tx.date)))
+            case "loan":
+                let config = op[safe: 1]?.objectValue
+                let answer = try LoanSchedule.generate(
+                    LoanSchedule.Config(
+                        loanType: config?["loan_type"], loanPrincipal: config?["loan_principal"],
+                        loanAnnualInterestRate: config?["loan_annual_interest_rate"],
+                        loanTermMonths: config?["loan_term_months"],
+                        loanStartDate: config?["loan_start_date"],
+                        loanPaymentDay: config?["loan_payment_day"]))
+                return answer.json
             default:
                 throw UnknownOperation(name: name)
             }
