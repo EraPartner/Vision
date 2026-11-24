@@ -118,6 +118,21 @@ public final class NativeSettingsModel {
     public var excludedCategoryIds: [CategoryID] {
         ids(dashboardRaw?["excludedCategoryIds"]).map(CategoryID.init(rawValue:))
     }
+    /// Category ids hidden everywhere `exclusionScope` applies, like `useExcludedIds` resolves for
+    /// dashboard and statistics; `excludeHiddenCategories` defaults to on.
+    public var hiddenCategoryIds: [CategoryID] {
+        guard [
+            "everywhere", "statistics"
+        ].contains(dashboardString("exclusionScope", fallback: "everywhere")),
+            dashboardBool("excludeHiddenCategories", fallback: true)
+        else { return [] }
+        return categories.filter { !$0.isActive }.map(\.id)
+    }
+    /// The exclusions a financial report sends: the hidden ids join the excluded ids, exactly the
+    /// set `NativeReportPreferences.exclusionsApply` still keeps (everywhere/statistics).
+    public var reportExcludedCategoryIds: [CategoryID] {
+        excludedCategoryIds + hiddenCategoryIds
+    }
     public var excludedRecipientIds: [RecipientID] {
         ids(dashboardRaw?["excludedRecipientIds"]).map(RecipientID.init(rawValue:))
     }
@@ -306,7 +321,8 @@ public final class NativeSettingsModel {
             _ = try await saveNow(.includeTransfers, value: .bool(value))
             await didChangeIncludeTransfers?()
         } catch {
-            // The source optimistically keeps the toggle and intentionally ignores this failure.
+            // The optimistic toggle stays, but a lost save can no longer pass unmentioned.
+            show(.error, "settings.saveFailed")
         }
     }
     public func setCashCategory(_ kind: String, _ id: CategoryID?) async {
@@ -359,7 +375,12 @@ public final class NativeSettingsModel {
         editRevision[.includeTransfers, default: 0] += 1
         show(.info, "settings.resetToDefaults")
         do {
+            // The reset writes the envelopes plus the standalone mirrors of the app defaults; the
+            // server-computed summaries read `cost_basis_method`, which without this write kept
+            // the value the reset had left behind on screen.
             _ = try await saveNow(.includeTransfers, value: .bool(false))
+            _ = try await saveNow(
+                .costBasisMethod, value: .string(CostBasisMethod.weightedAvg.rawValue))
             await didResetPreferences?()
         } catch {
             // Source reset's server-only write is deliberately non-fatal.
@@ -480,7 +501,7 @@ public final class NativeSettingsModel {
                 defer { self.writes[id] = nil }
                 guard !self.retired, !self.isSuspendedForRestore else { return }
                 do { _ = try await self.saveNow(key, value: value, draftRevision: revision) } catch {
-                    if !self.retired, key != .themeSettings {
+                    if !self.retired {
                         self.saveError = "settings.saveFailed"
                         self.saveErrorNonce += 1
                         self.show(.error, "settings.saveFailed")

@@ -119,7 +119,8 @@ struct VisionDatePopover: View {
             // 32 pt day cells, primary fill for the chosen day, a tint for today. The system
             // graphical DatePicker drew a small boxed grid that read as an AppKit control.
             VisionCalendarGrid(
-                selected: day, calendar: calendar, locale: LanguageLocale.locale(strings.language),
+                selected: day, calendar: calendar, firstWeekday: settings.startOfWeek.firstWeekday,
+                locale: LanguageLocale.locale(strings.language),
                 previousLabel: strings.t("common.previous"), nextLabel: strings.t("common.next"),
                 onSelect: select
             )
@@ -173,10 +174,12 @@ struct VisionDatePopover: View {
     }
 }
 
-/// A month grid of day buttons in the page theme, starting on `calendar.firstWeekday`.
+/// A month grid of day buttons in the page theme, starting on the week day the
+/// `AppSettings.startOfWeek` preference picks (monday by default, like the web `DatePicker`).
 struct VisionCalendarGrid: View {
     let selected: PlannedDay?
     let calendar: Calendar
+    let firstWeekday: Int
     let locale: Locale
     let previousLabel: String
     let nextLabel: String
@@ -185,11 +188,13 @@ struct VisionCalendarGrid: View {
     @Environment(\.visionTheme) private var theme
 
     init(
-        selected: PlannedDay?, calendar: Calendar, locale: Locale, previousLabel: String, nextLabel: String,
+        selected: PlannedDay?, calendar: Calendar, firstWeekday: Int, locale: Locale,
+        previousLabel: String, nextLabel: String,
         onSelect: @escaping (PlannedDay) -> Void
     ) {
         self.selected = selected
         self.calendar = calendar
+        self.firstWeekday = VisionCalendarGrid.normalWeekday(firstWeekday, calendar: calendar)
         self.locale = locale
         self.previousLabel = previousLabel
         self.nextLabel = nextLabel
@@ -277,20 +282,60 @@ struct VisionCalendarGrid: View {
         month.formatted(Date.FormatStyle(locale: locale).month(.wide).year())
     }
 
-    /// Short weekday names rotated so the row starts on the calendar's first weekday.
-    private var weekdaySymbols: [String] {
-        var formatter = calendar
-        formatter.locale = locale
-        let symbols = formatter.shortWeekdaySymbols
-        let first = calendar.firstWeekday - 1
-        return Array(symbols[first...] + symbols[..<first]).map { String($0.prefix(2)) }
+    var weekdaySymbols: [String] {
+        VisionCalendarGrid.weekdaySymbolRow(calendar: calendar, locale: locale, firstWeekday: firstWeekday)
     }
 
-    /// Six weeks from the first-weekday on or before the 1st, so the grid never jumps height.
-    private var gridDays: [Date] {
+    var gridDays: [Date] {
+        VisionCalendarGrid.gridDays(
+            from: month, in: calendar, firstWeekday: firstWeekday
+        )
+    }
+
+    /// `1` (sunday) ... `7` (saturday); a value outside the range keeps the calendar's own
+    /// first weekday, so an unknown setting never draws a grid whose lead is wrong.
+    static func normalWeekday(_ weekday: Int, calendar: Calendar) -> Int {
+        (1...7).contains(weekday) ? weekday : calendar.firstWeekday
+    }
+
+    /// The setting's weekday: sunday starts on `1`, everything else (monday, and unknown
+    /// values, which the web schema normalizes to monday) on `2`.
+    static func weekday(from setting: StartOfWeek) -> Int {
+        setting == .sunday ? 1 : 2
+    }
+
+    /// Weekday names rotated so index 0 is the chosen first weekday.
+    static func rotatedSymbols(_ symbols: [String], firstWeekday: Int) -> [String] {
+        guard symbols.count == 7 else { return symbols }
+        let first = normalWeekday(firstWeekday, calendar: Calendar(identifier: .gregorian)) - 1
+        return Array(symbols[first...] + symbols[..<first])
+    }
+
+    /// The weekday row the grid draws: localized, rotated to the chosen week day, two letters.
+    static func weekdaySymbolRow(calendar: Calendar, locale: Locale, firstWeekday: Int) -> [String] {
+        var formatter = calendar
+        formatter.locale = locale
+        return rotatedSymbols(formatter.shortWeekdaySymbols, firstWeekday: firstWeekday)
+            .map { String($0.prefix(2)) }
+    }
+
+    /// The date of the grid's top-left cell: the first chosen-weekday on or before the 1st.
+    static func gridStart(_ month: Date, in calendar: Calendar, firstWeekday: Int) -> Date? {
+        let start = normalWeekday(firstWeekday, calendar: calendar)
         let weekday = calendar.component(.weekday, from: month)
-        let lead = (weekday - calendar.firstWeekday + 7) % 7
-        guard let start = calendar.date(byAdding: .day, value: -lead, to: month) else { return [] }
+        let lead = (weekday - start + 7) % 7
+        return calendar.date(byAdding: .day, value: -lead, to: month)
+    }
+
+    /// Six weeks from the chosen week day on or before the 1st, so the grid never jumps height.
+    static func gridDays(from month: Date, in calendar: Calendar, firstWeekday: Int) -> [Date] {
+        guard let start = gridStart(month, in: calendar, firstWeekday: firstWeekday) else { return [] }
         return (0..<42).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
+}
+
+extension StartOfWeek {
+    /// `1` for sunday, `2` otherwise — the calendar's weekday for the grids the web
+    /// `DatePicker` draws from `weekStartsOnFromSetting`.
+    var firstWeekday: Int { VisionCalendarGrid.weekday(from: self) }
 }

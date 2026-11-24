@@ -177,10 +177,15 @@ final class ShellController: NSObject, NSWindowDelegate {
             callbacks: NativeReportCallbacks(
                 preferences: { [weak nativeSettings] in
                     guard let nativeSettings else { return .init() }
+                    // Hidden-category exclusions need the category tree; the dialog's first read
+                    // (configure) kicks the 60-second cached fetch so the submit sees fresh ids.
+                    if nativeSettings.categories.isEmpty {
+                        Task { await nativeSettings.loadCategories() }
+                    }
                     return .init(
                         currency: nativeSettings.defaultCurrencyCode,
                         exclusionScope: nativeSettings.dashboardString("exclusionScope", fallback: "everywhere"),
-                        excludedCategoryIds: nativeSettings.excludedCategoryIds,
+                        excludedCategoryIds: nativeSettings.reportExcludedCategoryIds,
                         excludedRecipientIds: nativeSettings.excludedRecipientIds)
                 },
                 theme: { [weak self] in
@@ -1161,13 +1166,15 @@ final class ShellController: NSObject, NSWindowDelegate {
         Task { await notifier.post(body) }
     }
 
-    /// Stops the debounced frame save and writes the current frame, then runs the
-    /// quit-time backup when it is enabled; the shutdown task awaits both before the
-    /// runtime stops, within the 45-second quit timeout.
+    /// Stops the debounced frame save and writes the current frame, drains the debounced
+    /// settings writes (so the last edit is not lost and the backup sees it) and then runs the
+    /// quit-time backup when it is enabled; the shutdown task awaits both before the runtime
+    /// stops, within the 45-second quit timeout.
     func prepareForQuit() async {
         stopHealthWatchdog()
         frameSaveTask?.cancel()
         await saveFrame()
+        await shellModel.nativeSettings?.flush()
         switch await runQuitBackup() {
         case .saved?: await notifier.post(strings.t("backup.done", fallback: "Backup saved."), askIfNeeded: false)
         case .failed?:
