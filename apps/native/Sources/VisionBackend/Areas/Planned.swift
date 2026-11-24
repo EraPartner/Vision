@@ -960,7 +960,7 @@ enum PlannedArea {
                 "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
         }
         var issues: [String] = []
-        var accountFailed = false
+        var accountFatal = false
 
         // tags: an array of strings; each failure names the array (or its item).
         if let tags = object["tags"] {
@@ -988,23 +988,24 @@ enum PlannedArea {
         // currency: absent, null and "" all clear; anything else must read as ISO.
         currencyField(object["currency"], issues: &issues)
             .map { object["currency"] = .string($0) }
-        // account_id: z.number().int().positive() — a required leaf.
+        // account_id: z.number().int().positive(). The type and int checks are fatal in
+        // zod 4 — their issue aborts the refinement below; positive() is a plain check.
+        var accountFatal = false
         if let account = object["account_id"] {
             if case .number(let number) = account {
                 if number != number.rounded() {
-                    accountFailed = true
+                    accountFatal = true
                     issues.append("account_id: Invalid input: expected int, received number")
                 } else if number <= 0 {
-                    accountFailed = true
                     issues.append("account_id: Too small: expected number to be >0")
                 }
             } else {
-                accountFailed = true
+                accountFatal = true
                 issues.append(
                     "account_id: Invalid input: expected number, received \(account.zodTypeName)")
             }
         } else {
-            accountFailed = true
+            accountFatal = true
             issues.append("account_id: Invalid input: expected number, received undefined")
         }
         // bank_account: retired — anything but absence fails.
@@ -1012,48 +1013,50 @@ enum PlannedArea {
             issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
         }
 
-        // superRefine: zod collects its issues beside the leaf issues, reading a leaf
-        // that failed as undefined.
+        // superRefine: zod aborts the whole refinement when the account leaf is fatal
+        // (`expected number` / `expected int`); a positive-check failure does not.
         let isLoan = truthy(object["is_loan"] ?? .null)
-        if !isLoan {
-            let hasPlannedDate = truthy(object["planned_date"] ?? .null)
-            let amount = object["amount"]
-            if !hasPlannedDate || accountFailed || amount == nil || amount == .null {
-                issues.append("Missing required fields: planned_date, amount")
-            } else {
-                // Number(amount), the value a non-finite or zero one refuses.
-                let value = amount?.javaScriptNumber ?? .nan
-                if !value.isFinite || value == 0 {
-                    issues.append("amount must be a non-zero finite number")
-                } else if abs(value) > 1_000_000_000_000 {
-                    issues.append("amount must be between -1000000000000 and 1000000000000")
+        if !accountFatal {
+            if !isLoan {
+                let hasPlannedDate = truthy(object["planned_date"] ?? .null)
+                let amount = object["amount"]
+                if !hasPlannedDate || amount == nil || amount == .null {
+                    issues.append("Missing required fields: planned_date, amount")
+                } else {
+                    // Number(amount), the value a non-finite or zero one refuses.
+                    let value = amount?.javaScriptNumber ?? .nan
+                    if !value.isFinite || value == 0 {
+                        issues.append("amount must be a non-zero finite number")
+                    } else if abs(value) > 1_000_000_000_000 {
+                        issues.append("amount must be between -1000000000000 and 1000000000000")
+                    }
+                }
+            } else if let term = object["loan_term_months"], truthy(term) {
+                let value = term.javaScriptNumber
+                if value < 1 || value > 600 {
+                    issues.append("loan_term_months must be between 1 and 600 months")
                 }
             }
-        } else if let term = object["loan_term_months"], truthy(term) {
-            let value = term.javaScriptNumber
-            if value < 1 || value > 600 {
-                issues.append("loan_term_months must be between 1 and 600 months")
+            // Only bounds that survive the loan branch's truthy deletion validate; a falsy
+            // value is a valid clear, as `assertYmd`'s own `!value` branch reads it.
+            if let end = object["recurrence_end_date"], end != .null, truthy(end),
+                !(isLoan && truthy(end))
+            {
+                var dateIssues: [String] = []
+                _ = TransactionsArea.ymd(end, "recurrence_end_date", &dateIssues)
+                issues.append(contentsOf: dateIssues)
             }
-        }
-        // Only bounds that survive the loan branch's truthy deletion validate; a falsy
-        // value is a valid clear, as `assertYmd`'s own `!value` branch reads it.
-        if let end = object["recurrence_end_date"], end != .null, truthy(end),
-            !(isLoan && truthy(end))
-        {
-            var dateIssues: [String] = []
-            _ = TransactionsArea.ymd(end, "recurrence_end_date", &dateIssues)
-            issues.append(contentsOf: dateIssues)
-        }
-        if let max = object["max_occurrences"], max != .null, !(isLoan && truthy(max)),
-            !isJSInteger(max.javaScriptNumber) || max.javaScriptNumber < 1
-        {
-            issues.append("max_occurrences must be a positive integer")
-        }
-        if !isLoan, truthy(object["is_recurring"] ?? .null),
+            if let max = object["max_occurrences"], max != .null, !(isLoan && truthy(max)),
+                !isJSInteger(max.javaScriptNumber) || max.javaScriptNumber < 1
+            {
+                issues.append("max_occurrences must be a positive integer")
+            }
+            if !isLoan, truthy(object["is_recurring"] ?? .null),
             !Recurrence.isValidPattern(object["recurrence_pattern"])
         {
             issues.append(
-                "Invalid or missing recurrence_pattern: \(AccountsArea.looseText(object["recurrence_pattern"]))")
+                    "Invalid or missing recurrence_pattern: \(AccountsArea.looseText(object["recurrence_pattern"]))")
+            }
         }
         guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
 
@@ -1685,7 +1688,7 @@ enum PlannedArea {
                 throw BackendHTTPError.notFound("Planned transaction \(id.rawValue) not found")
             }
             let row = try PlannedRow(state)
-            let duplicate = try state.bool("duplicate::bool")
+            let duplicate = try state.optionalBool("duplicate::bool") ?? false
             let executionCount = Int(try state.int64("execution_count"))
             let tagIds = try session.rows(
                 "SELECT tag_id AS id FROM planned_transaction_tags WHERE planned_transaction_id = ?",
@@ -1789,6 +1792,7 @@ enum PlannedArea {
             }
             return (false, try getById(session, id: id))
         }
+        return replay
     }
 
     // MARK: - The create's auto-link (port 11)
