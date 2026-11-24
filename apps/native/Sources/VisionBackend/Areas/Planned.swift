@@ -1654,6 +1654,18 @@ enum PlannedArea {
     static func execute(
         _ session: BackendSession, id: PlannedTransactionID, body: ExecuteBody
     ) throws -> HandlerResult {
+        let replay = try executeRow(session, id: id, body: body, expectedOccurrence: nil)
+        return HandlerResult(
+            data: replay.1?.json ?? .null,
+            headers: replay.0 ? ["Idempotent-Replay": "true"] : [:])
+    }
+
+    /// `executePlanned` with its write transaction; a create's auto-link passes the
+    /// expected occurrence the mutual-uniqueness rule demands.
+    static func executeRow(
+        _ session: BackendSession, id: PlannedTransactionID, body: ExecuteBody,
+        expectedOccurrence: String?
+    ) throws -> (Bool, PlannedRow?) {
         let replay = try session.transaction { () throws -> (Bool, PlannedRow?) in
             // `lockForExecution`: the write transaction itself is the lock.
             try session.row("SELECT id FROM planned_transactions WHERE id = ?", [idValue(id)])
@@ -1688,7 +1700,7 @@ enum PlannedArea {
             guard
                 let transaction = try session.row(
                     """
-                    SELECT t.currency, t.amount, t.is_active, \
+                    SELECT t.currency, t.amount, t.is_active, t.date AS transaction_date, \
                            COALESCE(r.primary_recipient_id, t.recipient_id) AS "recipient_cluster_id" \
                     FROM transactions t LEFT JOIN recipients r ON r.id = t.recipient_id \
                     WHERE t.id = ?
@@ -1702,10 +1714,37 @@ enum PlannedArea {
             else {
                 throw BackendHTTPError.conflict("Planned payment and transaction currencies must match")
             }
+            if let expectedOccurrence {
+                if try session.row(
+                    "SELECT 1 FROM planned_transaction_executions WHERE executed_transaction_id = ? LIMIT 1",
+                    [.integer(Int64(body.executedTransactionId.rawValue))]) != nil
+                {
+                    throw BackendHTTPError.conflict(
+                        "Transaction is already linked to a planned payment")
+                }
+                let cluster = try state.optionalInt64("recipient_cluster_id")
+                if row.isLoan
+                    || row.plannedDate != expectedOccurrence
+                    || !PlannedMatching.matchesTolerance(
+                        PlannedMatchLike(
+                            recipientClusterId: cluster.map { .number(Double($0)) },
+                            currency: row.currency.map { .string($0) },
+                            amount: .string(row.amount),
+                            plannedDate: .string(row.plannedDate)),
+                        TxMatchLike(
+                            recipientClusterId: (try transaction.optionalInt64("recipient_cluster_id"))
+                                .map { .number(Double($0)) },
+                            currency: (try transaction.optionalText("currency")).map { .string($0) },
+                            amount: (try transaction.optionalText("amount")).map { .string($0) },
+                            transactionDate: (try transaction.optionalText("transaction_date")).map { .string($0) })))
+                {
+                    throw BackendHTTPError.conflict(
+                        "Planned match changed; review the current occurrence")
+                }
+            }
             if row.isRecurring, let max = row.maxOccurrences, executionCount >= max {
                 throw BackendHTTPError.conflict("Recurring planned transaction is complete")
             }
-
 
             let execDate = body.executionDate ?? session.today()
             var fields: [(String, SQLValue)] = [
@@ -1752,9 +1791,100 @@ enum PlannedArea {
             }
             return (false, try getById(session, id: id))
         }
-        return HandlerResult(
-            data: replay.1?.json ?? .null,
-            headers: replay.0 ? ["Idempotent-Replay": "true"] : [:])
+    }
+
+    // MARK: - The create's auto-link (port 11)
+
+    /// `calendarDayOrdinal`: the day on the UTC grid, as `Date.parse` counted it.
+    static func dayOrdinal(_ ymd: String?) -> Int? {
+        guard let ymd else { return nil }
+        let parts = ymd.split(separator: "-")
+        guard parts.count == 3, let year = Int(parts[0]), let month = Int(parts[1]),
+            let day = Int(parts[2]), (1...12).contains(month), (1...31).contains(day)
+        else { return nil }
+        return CalendarDays.utc(year: year, monthIndex: month - 1, day: day) / 86_400_000
+    }
+
+    /// `autoLinkTransactions` for one freshly-created transaction: the auto-clear setting,
+    /// the ±5-day buckets, the mutually-unambiguous pair, `executePlanned` with the expected
+    /// occurrence. A failure never fails the create. Returns the linked planned id.
+    static func autoLink(
+        _ session: BackendSession, transaction: TransactionID, fields: JSObject,
+        // lint:allow raw-id the TypeScript helper carries the account row id as a plain number
+        txDate: String, accountId: Int
+    ) throws -> Int? {
+        // `isAutoClearEnabled`: default ON, and a read that fails reads as ON.
+        let autoClear: Bool
+        if let stored = try? session.row("SELECT value FROM user_settings WHERE key = 'app_settings'"),
+            let text = try? stored.optionalText("value"),
+            let value = JSValue.parse(text), case .object(let settings)? = value,
+            let flag = settings["autoClearPlannedOnMatch"]
+        {
+            autoClear = flag != .bool(false)
+        } else {
+            autoClear = true
+        }
+        guard autoClear else { return nil }
+
+        guard let recipientId = try? session.row(
+            "SELECT recipient_id FROM transactions WHERE id = ?", [.integer(Int64(transaction.rawValue))]),
+            let recipient = try? recipient.optionalInt64("recipient_id")
+        else { return nil }
+        let active = try activeUnexecuted(session)
+        guard !active.isEmpty else { return nil }
+        let clusterRoot = try session.row(
+            """
+            SELECT COALESCE(primary_recipient_id, id) AS cluster_root FROM recipients \
+            WHERE id = (SELECT value FROM json_each(?))
+            """, [.text(JSValue.array([.int(Int(recipient))]).jsonText)])
+        guard let cluster = try clusterRoot?.optionalInt64("cluster_root") else { return nil }
+
+        guard let txDay = dayOrdinal(String(txDate.prefix(10))) else { return nil }
+        let txCurrency = (fields["currency"] ?? .null).javaScriptString.uppercased()
+        let txAmount = fields["amount"]?.javaScriptNumber ?? .nan
+        let txSign = txAmount.isFinite && txAmount != 0 ? (txAmount < 0 ? -1 : 1) : 0
+
+        // The ±5-day window over the same cluster/currency/sign/day buckets. The batch is
+        // this one transaction, so a single match is mutually unambiguous on both sides.
+        var matches: [MatchCandidate] = []
+        for offset in stride(from: -5, through: 5, by: 1) {
+            let key = "\(cluster):\(txCurrency):\(txSign):\(txDay + offset)"
+            for planned in active where bucketKey(planned) == key {
+                matches.append(planned)
+            }
+        }
+        guard matches.count == 1 else { return nil }
+        let planned = matches[0]
+        guard PlannedMatching.matchesTolerance(
+            PlannedMatchLike(
+                recipientClusterId: .number(Double(cluster)),
+                currency: planned.currency.map { .string($0) },
+                amount: .string(planned.amount),
+                plannedDate: .string(planned.plannedDate)),
+            TxMatchLike(
+                recipientClusterId: .number(Double(cluster)),
+                currency: fields["currency"],
+                amount: fields["amount"],
+                transactionDate: .string(String(txDate.prefix(10)))))
+        else { return nil }
+
+        // The auto-clear runs `executePlanned` with the expected occurrence; any refusal is
+        // caught by the caller and leaves the create successful with nothing linked.
+        _ = try executeRow(
+            session, id: PlannedTransactionID(rawValue: planned.id),
+            body: ExecuteBody(
+                executedTransactionId: transaction, executionDate: String(String(txDate.prefix(10)).prefix(10))),
+            expectedOccurrence: planned.plannedDate)
+        return planned.id
+    }
+
+    /// The bucket key of an active planned row.
+    static func bucketKey(_ planned: MatchCandidate) -> String {
+        let cluster = planned.recipientClusterId.map(String.init) ?? "null"
+        let currency = (planned.currency ?? "").uppercased()
+        let amount = Double(planned.amount) ?? 0
+        let sign = amount.isFinite && amount != 0 ? (amount < 0 ? -1 : 1) : 0
+        return "\(cluster):\(currency):\(sign):\(dayOrdinal(planned.plannedDate) ?? 0)"
     }
 }
 
