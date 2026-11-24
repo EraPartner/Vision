@@ -13,6 +13,8 @@ public enum PortedOperations {
         "createRecipient", "updateRecipient", "deleteRecipient", "mergeRecipient", "unmergeRecipient",
         "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern",
         "deleteRecipientPattern", "getTransactions", "getTransaction",
+        "getPlannedTransactions", "getPlannedTotals", "getPlannedMatchSuggestions",
+        "executePlannedTransaction", "deletePlannedTransaction",
     ]
 }
 
@@ -130,6 +132,7 @@ public struct InProcessBackend: Sendable {
         CategoriesArea.register(&backend, database: database, views: views)
         RecipientsArea.register(&backend, database: database, views: views)
         TransactionsArea.register(&backend, database: database)
+        PlannedArea.register(&backend, database: database)
         return backend
     }
 

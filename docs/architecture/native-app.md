@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-15
+date: 2026-11-24
 updated: 2026-11-15
 tags:
   [
@@ -608,7 +608,17 @@ transaction reads `getTransactions` and `getTransaction` follow (`Areas/Transact
 list filter of `buildTransactionWhere` (`Areas/TransactionWhere.swift`), the uncategorised queue,
 per-account running balances and `normalize_to_eur` at the latest stored rates. The list count is
 exact on every request; the TypeScript repository caches it for 2 seconds. Transaction writes,
-transfers, bulk actions and exports stay on Bun until their own phases. A refresh
+transfers, bulk actions and exports stay on Bun until their own phases. The planned payments follow
+(port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
+`filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
+(`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored
+rates, the match suggestions (`getPlannedMatchSuggestions`) within the ±5-day, max(1, 5 %)
+tolerance of `lib/plannedMatching.ts`, and execute (`executePlannedTransaction`), which runs in
+one write transaction and answers a replay of the same pair with `Idempotent-Replay: true`
+(`HandlerResult.headers`), and delete (`deletePlannedTransaction`). The recurrence grammar and
+its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
+area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
+suggestions and the execute default date replay the same on every day. A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.

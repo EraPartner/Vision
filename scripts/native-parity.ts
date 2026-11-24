@@ -52,6 +52,8 @@ interface ParityStep {
   body?: unknown;
   /** Provider answers from this step on, replacing the area's `fetch`. */
   fetch?: Record<string, { status: number; body: string }>;
+  /** Headers the route set itself (such as `Idempotent-Replay`). */
+  headers?: Record<string, string>;
 }
 
 interface ParityArea {
@@ -65,6 +67,12 @@ interface ParityArea {
    * fails like an unreachable host. The Swift replay serves the same answers.
    */
   fetch?: Record<string, { status: number; body: string }>;
+  /**
+   * The fixed clock the whole area records under, as an ISO instant: today-dependent
+   * answers stay the same on every replay day. Set before any backend module loads, via
+   * `setSystemTime`; the Swift replay passes it to `BackendDatabase` as its wall clock.
+   */
+  now?: string;
 }
 
 /** Recorded in place of today's date (APP_TIMEZONE Europe/Brussels): the replay substitutes its own. */
@@ -1581,6 +1589,536 @@ export const AREAS: Record<string, ParityArea> = {
       transactionRead("2147483648"),
     ],
   },
+
+  planned: {
+    router: {
+      module: "plannedTransactions.ts",
+      mountPath: "/api/planned-transactions",
+    },
+    // The area records under a fixed clock (see `now`): totals, suggestions and the
+    // execute default date all depend on today, so a corpus recorded one day must not
+    // fail the next.
+    now: "2026-06-15T09:00:00.000Z",
+    seed: [
+      `INSERT INTO categories (id, general, detail, name, hierarchy_only, legacy_compatible, is_active,
+         created_at, updated_at) VALUES
+        (10, 'FOOD', '', 'FOOD', 1, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (11, 'FOOD', 'GROCERIES', 'FOOD > GROCERIES', 0, 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, primary_recipient_id,
+         is_active, created_at, updated_at) VALUES
+        (1, 'SHOP', 'SHOP', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'SHOP SOUTH', 'SHOP SOUTH', NULL, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'MARKET', 'MARKET', 10, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'RENT CO', 'RENT CO', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001'),
+        (2, 'Travel', 'USD', 'savings', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000002')`,
+      `INSERT INTO tags (id, slug, color, is_active, created_at, updated_at) VALUES
+        (1, 'holiday', '#00aaff', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'work', NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'old', '#999999', 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("USD", "0.9", "2026-06-01", 1)},
+        ${RATE_ROW("GBP", "1.15", "2026-06-01", 1)},
+        ${RATE_ROW("JPY", "0", "2026-06-01", 1)}`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         created_at, updated_at) VALUES
+        (101, '2026-06-10', vision_numeric('-12.5', 18, 4), 'EUR', 'CARD 1234', 1, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (102, '2026-06-14', vision_numeric('-12.6', 18, 4), 'EUR', 'SHOP SOUTH', 2, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (103, '2026-06-13', vision_numeric('-75', 18, 4), 'EUR', 'RENT', 4, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (104, '2026-05-20', vision_numeric('-100', 18, 4), 'USD', 'HOTEL', 3, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (105, '2026-06-13', vision_numeric('-12.5', 18, 4), 'EUR', 'INACTIVE', 1, 1, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (106, '2026-06-01', vision_numeric('-2500', 18, 4), 'EUR', 'SALARY', 3, 1, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, comment, url,
+         account_id, recipient_id, category_id, is_recurring, recurrence_pattern, recurrence_end_date,
+         max_occurrences, is_loan, loan_type, loan_principal, loan_annual_interest_rate, loan_term_months,
+         loan_start_date, loan_payment_day, is_executed, is_active, created_at, updated_at) VALUES
+        (1, '2026-06-12', vision_numeric('-12.5', 18, 4), 'EUR', 'SHOP', 'monthly shop', NULL, 1, 1, 11,
+         0, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2026-05-31', vision_numeric('-35', 18, 4), 'EUR', 'MARKET', NULL, NULL, 1, 3, NULL,
+         1, 'weekly', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2026-05-20', vision_numeric('-20', 18, 4), 'USD', 'HOTEL SAVE', NULL, NULL, 2, 3, NULL,
+         1, 'monthly', '2026-12-20', NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, '2026-06-20', vision_numeric('-9.99', 18, 4), 'EUR', 'INACTIVE', NULL, NULL, 1, 1, NULL,
+         0, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, '2026-05-01', vision_numeric('-45', 18, 4), 'EUR', 'DONE MONTH', NULL, NULL, 1, 4, NULL,
+         1, 'monthly', NULL, 1, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (8, '2026-05-10', vision_numeric('-120', 18, 4), 'EUR', 'LOAN', NULL, NULL, 1, 4, NULL,
+         1, 'monthly', NULL, NULL, 1, 'annuity', vision_numeric('1200', 18, 4), vision_numeric('3.5', 8, 4),
+         12, '2026-05-10', 10, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (10, '2026-05-15', vision_numeric('-14.5', 18, 4), 'EUR', 'BOUNDED', NULL, NULL, 1, 1, NULL,
+         1, 'monthly', '2026-06-20', NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (11, '2026-06-10', vision_numeric('-8', 18, 4), 'EUR', 'EVERY 3', NULL, NULL, 1, 1, NULL,
+         1, 'every 3 days', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (12, '2026-06-10', vision_numeric('-7', 18, 4), 'EUR', 'PADDED', NULL, NULL, 1, 1, NULL,
+         1, '  BiWeekly ', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (13, '2027-01-15', vision_numeric('-5', 18, 4), 'GBP', 'FAR AWAY', NULL, NULL, 1, 1, NULL,
+         0, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO planned_transaction_executions (id, planned_transaction_id, executed_transaction_id,
+         execution_date, created_at) VALUES
+        (1, 6, 103, '2026-05-01', '${SEED_TIME}'),
+        (2, 8, 103, '2026-05-10', '${SEED_TIME}')`,
+      `INSERT INTO planned_transaction_loan_schedule (planned_transaction_id, installment_number, due_date,
+         payment_amount, principal_amount, interest_amount, remaining_principal) VALUES
+        (8, 1, '2026-06-10', vision_numeric('100', 18, 4), vision_numeric('96.5', 18, 4),
+         vision_numeric('3.5', 18, 4), vision_numeric('1103.5', 18, 4)),
+        (8, 2, '2026-07-10', vision_numeric('100', 18, 4), vision_numeric('96.78', 18, 4),
+         vision_numeric('3.22', 18, 4), vision_numeric('1006.72', 18, 4))`,
+      `INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id) VALUES (1, 1), (1, 2), (8, 3)`,
+    ],
+    steps: [
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?limit=3&offset=2",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?limit=0",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?offset=-5",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?limit=99999",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?active=false",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?active=all",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?active=bogus",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?start_date=2026-05-01&end_date=2026-06-12",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?start_date=2026-13-01",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?start_date=2026/05/01",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?end_date=2026-02-30",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?account_id=1",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?account_id=abc",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?account_id=",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?account_id=1&account_id=2",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?category_id=10",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?category_id=11",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?recipient_id=1",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?recipient_id=2",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?bank_account=mai",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?bank_account=",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?bank_account=a&bank_account=b",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=shop",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=groc",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=%C3%A9",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=bogus",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=a&search=b",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?search=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_recurring=true",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_recurring=",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_recurring=bogus",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_recurring=1&is_recurring=true",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_executed=false",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_executed=1&active=false",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_executed=true&is_recurring=true&limit=2",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?recipient_id=x&start_date=bad&search=a&search=b&account_id=abc",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=usd",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=GBP",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=XYZ",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=xy",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=5",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=a&currency=b",
+      },
+      {
+        operationId: "getPlannedMatchSuggestions",
+        method: "GET",
+        path: "/api/planned-transactions/match-suggestions",
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/abc/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/0/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1.5/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: {},
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: null },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 0 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: "" },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: "abc" },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 1e3 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 2147483648 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 101, execution_date: "2026-13-01" },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 101, execution_date: "" },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 101, execution_date: 5 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/999/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/5/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/6/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 999 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/3/execute",
+        body: { executed_transaction_id: 104 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/3/execute",
+        body: { executed_transaction_id: 105 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 104 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/1/execute",
+        body: { executed_transaction_id: 101, execution_date: "2026-06-13" },
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?limit=2",
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/3/execute",
+        body: { executed_transaction_id: 101 },
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?is_executed=false&active=false&limit=3",
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/10/execute",
+        body: { executed_transaction_id: 102 },
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/10/execute",
+        body: { executed_transaction_id: 102 },
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?active=false&limit=5",
+      },
+      {
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: "/api/planned-transactions/12/execute",
+        body: { executed_transaction_id: 103 },
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?limit=4",
+      },
+      {
+        operationId: "getPlannedMatchSuggestions",
+        method: "GET",
+        path: "/api/planned-transactions/match-suggestions",
+      },
+      {
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: "/api/planned-transactions/totals?currency=EUR",
+      },
+      {
+        operationId: "deletePlannedTransaction",
+        method: "DELETE",
+        path: "/api/planned-transactions/abc",
+      },
+      {
+        operationId: "deletePlannedTransaction",
+        method: "DELETE",
+        path: "/api/planned-transactions/0",
+      },
+      {
+        operationId: "deletePlannedTransaction",
+        method: "DELETE",
+        path: "/api/planned-transactions/999",
+      },
+      {
+        operationId: "deletePlannedTransaction",
+        method: "DELETE",
+        path: "/api/planned-transactions/12",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?limit=100",
+      },
+      {
+        operationId: "deletePlannedTransaction",
+        method: "DELETE",
+        path: "/api/planned-transactions/8",
+      },
+      {
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: "/api/planned-transactions?active=false",
+      },
+    ],
+  },
 };
 
 /** Steps as the corpus stores them: JSON round-tripped, so `-0` and dropped keys compare equal. */
@@ -1596,6 +2134,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const categoryArea = AREAS.categories;
   const recipientArea = AREAS.recipients;
   const transactionArea = AREAS.transactions;
+  const plannedArea = AREAS.planned;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -1603,7 +2142,8 @@ function mutationAreas(): Record<string, ParityArea> {
     accountArea === undefined ||
     categoryArea === undefined ||
     recipientArea === undefined ||
-    transactionArea === undefined
+    transactionArea === undefined ||
+    plannedArea === undefined
   )
     throw new Error("missing base area");
 
@@ -1833,7 +2373,133 @@ function mutationAreas(): Record<string, ParityArea> {
       transactionSteps.push(transactionRead(transactionRandom.pick(ids)));
   }
 
+  // The planned-payments area's writes: mutated execute bodies, executes aimed at
+  // random ids, deletes now and then, with random list, totals and suggestion reads
+  // between, all under the area's fixed clock.
+  const plannedRandom = new Random(0x91a3);
+  const plannedSteps: ParityStep[] = [];
+  const executeIds = [
+    "1",
+    "3",
+    "4",
+    "5",
+    "6",
+    "8",
+    "10",
+    "11",
+    "12",
+    "13",
+    "0",
+    "-1",
+    "abc",
+    "1e3",
+    "999",
+  ];
+  const transactionIds = [
+    "101",
+    "102",
+    "103",
+    "104",
+    "105",
+    "106",
+    "0",
+    "-1",
+    "abc",
+    "1.5",
+    "999",
+    "2147483648",
+  ];
+  const plannedPasses = mutatedSteps(plannedRandom, plannedArea.steps, 3);
+  // Eight passes of the mutated bodies: the area writes, so the corpus needs the
+  // hundreds of steps the hand-written one cannot reach.
+  const plannedRounds = [0, 1, 2, 3, 4, 5, 6, 7].flatMap(() => plannedPasses);
+  for (const step of plannedRounds) {
+    if (
+      step.operationId === "executePlannedTransaction" &&
+      plannedRandom.chance(0.25)
+    ) {
+      plannedSteps.push({
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: `/api/planned-transactions/${plannedRandom.pick(executeIds)}/execute`,
+        body: step.body,
+      });
+    } else {
+      plannedSteps.push(step);
+    }
+    if (plannedRandom.chance(0.12)) {
+      plannedSteps.push({
+        operationId: "getPlannedTransactions",
+        method: "GET",
+        path: `/api/planned-transactions${randomQuery(plannedRandom, [
+          "start_date",
+          "end_date",
+          "bank_account",
+          "account_id",
+          "category_id",
+          "recipient_id",
+          "is_recurring",
+          "is_executed",
+          "search",
+          "active",
+          "limit",
+          "offset",
+        ])}`,
+      });
+    }
+    if (plannedRandom.chance(0.05)) {
+      plannedSteps.push({
+        operationId: "getPlannedTotals",
+        method: "GET",
+        path: `/api/planned-transactions/totals${randomQuery(plannedRandom, ["currency"])}`,
+      });
+    }
+    if (plannedRandom.chance(0.05)) {
+      plannedSteps.push({
+        operationId: "getPlannedMatchSuggestions",
+        method: "GET",
+        path: "/api/planned-transactions/match-suggestions",
+      });
+    }
+    if (plannedRandom.chance(0.02)) {
+      plannedSteps.push({
+        operationId: "executePlannedTransaction",
+        method: "POST",
+        path: `/api/planned-transactions/${plannedRandom.pick(executeIds)}/execute`,
+        body: { executed_transaction_id: plannedRandom.pick(transactionIds) },
+      });
+    }
+    if (plannedRandom.chance(0.04)) {
+      plannedSteps.push({
+        operationId: "deletePlannedTransaction",
+        method: "DELETE",
+        path: `/api/planned-transactions/${plannedRandom.pick(executeIds)}`,
+      });
+    }
+  }
+  plannedSteps.push(
+    {
+      operationId: "getPlannedTransactions",
+      method: "GET",
+      path: "/api/planned-transactions?limit=100",
+    },
+    {
+      operationId: "getPlannedTotals",
+      method: "GET",
+      path: "/api/planned-transactions/totals",
+    },
+    {
+      operationId: "getPlannedMatchSuggestions",
+      method: "GET",
+      path: "/api/planned-transactions/match-suggestions",
+    },
+  );
+
   return {
+    "planned-mutations": {
+      ...plannedArea,
+      steps: asRecorded(plannedSteps),
+    },
     "transactions-mutations": {
       ...transactionArea,
       steps: asRecorded(transactionSteps),
@@ -1858,6 +2524,8 @@ Object.assign(AREAS, mutationAreas());
 interface RecordedStep extends ParityStep {
   status: number;
   response: unknown;
+  /** Present on the step when the route set headers (shared with the step itself). */
+  headers?: Record<string, string>;
 }
 
 /** Drops `meta.requestId`, and `meta` itself when nothing else is in it. */
@@ -1873,7 +2541,11 @@ function withoutRequestId(body: unknown): unknown {
 }
 
 /** The parts of the backend's route-test helpers the recorder uses. */
-interface AgentRequest extends PromiseLike<{ status: number; body: unknown }> {
+interface AgentRequest extends PromiseLike<{
+  status: number;
+  body: unknown;
+  headers: Record<string, string | string[] | undefined>;
+}> {
   set(name: string, value: string): AgentRequest;
   send(body: string): AgentRequest;
 }
@@ -1895,6 +2567,12 @@ async function recordArea(
   name: string,
   area: ParityArea,
 ): Promise<RecordedStep[]> {
+  // Before any backend module loads, so a today-dependent area records the same day on
+  // every run (the recorder's answer to a corpus that only passes on the recording day).
+  if (area.now !== undefined) {
+    const { setSystemTime } = await import("bun:test");
+    setSystemTime(new Date(area.now));
+  }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `vision-parity-${name}-`));
   const file = path.join(dir, "vision.sqlite3");
   // Before any backend module loads its settings.
@@ -1975,7 +2653,18 @@ async function recordArea(
         value === today ? TODAY_TOKEN : value,
       ),
     ) as unknown;
-    recorded.push({ ...step, status: res.status, response });
+    // Headers the route set itself (execute's `Idempotent-Replay`), not the envelope's.
+    const replay = res.headers["idempotent-replay"];
+    const headers: Record<string, string> | undefined =
+      replay === undefined
+        ? undefined
+        : { "Idempotent-Replay": String(replay) };
+    recorded.push({
+      ...step,
+      status: res.status,
+      response,
+      ...(headers && { headers }),
+    });
   }
   fs.rmSync(dir, { recursive: true, force: true });
   return recorded;
@@ -1987,6 +2676,7 @@ function corpusText(area: ParityArea, steps: RecordedStep[]): string {
     generatedBy: "bun run native:parity",
     seed: area.seed,
     fetch: area.fetch,
+    now: area.now,
     steps,
   };
   return `${JSON.stringify(corpus, null, 2)}\n`;
