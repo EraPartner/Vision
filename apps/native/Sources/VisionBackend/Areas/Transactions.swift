@@ -765,7 +765,7 @@ enum TransactionsArea {
         let currency = JavaScriptWhitespace.trim((data["currency"] ?? .null).javaScriptString).uppercased()
         let recipientParam: SQLValue
         if let recipient = data["recipient_id"], recipient != .null {
-            recipientParam = looseSQL(recipient)
+            recipientParam = try looseSQL(recipient)
         } else {
             recipientParam = .null
         }
@@ -1076,7 +1076,7 @@ enum TransactionsArea {
         ]
         var targetAccount: Int?
         if let index = sanitized.firstIndex(where: { $0.0 == "account_id" }) {  // lint:allow string-literal-compare the column key is a TypeScript literal
-            if case .number(let number)? = sanitized[index].1, number != 0 {
+            if case .number(let number) = sanitized[index].1, number != 0 {
                 targetAccount = Int(number)
             }
         }
@@ -1105,7 +1105,7 @@ enum TransactionsArea {
             }
             // The canonical account identity, checked on every PATCH that carries it.
             if let index = sanitized.firstIndex(where: { $0.0 == "account_id" }) {  // lint:allow string-literal-compare the column key is a TypeScript literal
-                if case .number(let number)? = sanitized[index].1, number != 0, number.isFinite {
+                if case .number(let number) = sanitized[index].1, number != 0, number.isFinite {
                     let active = try session.row(
                         "SELECT id FROM accounts WHERE id = ? AND is_active = 1",
                         [.real(number)])

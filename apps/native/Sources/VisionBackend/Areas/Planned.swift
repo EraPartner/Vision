@@ -1723,21 +1723,19 @@ enum PlannedArea {
                         "Transaction is already linked to a planned payment")
                 }
                 let cluster = try state.optionalInt64("recipient_cluster_id")
-                if row.isLoan
-                    || row.plannedDate != expectedOccurrence
-                    || !PlannedMatching.matchesTolerance(
-                        PlannedMatchLike(
-                            recipientClusterId: cluster.map { .number(Double($0)) },
-                            currency: row.currency.map { .string($0) },
-                            amount: .string(row.amount),
-                            plannedDate: .string(row.plannedDate)),
-                        TxMatchLike(
-                            recipientClusterId: (try transaction.optionalInt64("recipient_cluster_id"))
-                                .map { .number(Double($0)) },
-                            currency: (try transaction.optionalText("currency")).map { .string($0) },
-                            amount: (try transaction.optionalText("amount")).map { .string($0) },
-                            transactionDate: (try transaction.optionalText("transaction_date")).map { .string($0) }))
-                {
+                let txCluster = (try transaction.optionalInt64("recipient_cluster_id"))
+                let txTolerated = try PlannedMatching.matchesTolerance(
+                    PlannedMatchLike(
+                        recipientClusterId: cluster.map { .number(Double($0)) },
+                        currency: row.currency.map { .string($0) },
+                        amount: .string(row.amount),
+                        plannedDate: .string(row.plannedDate)),
+                    TxMatchLike(
+                        recipientClusterId: txCluster.map { .number(Double($0)) },
+                        currency: (try transaction.optionalText("currency")).map { .string($0) },
+                        amount: (try transaction.optionalText("amount")).map { .string($0) },
+                        transactionDate: (try transaction.optionalText("transaction_date")).map { .string($0) }))
+                if row.isLoan || row.plannedDate != expectedOccurrence || !txTolerated {
                     throw BackendHTTPError.conflict(
                         "Planned match changed; review the current occurrence")
                 }
@@ -1826,9 +1824,9 @@ enum PlannedArea {
         }
         guard autoClear else { return nil }
 
-        guard let recipientId = try? session.row(
+        guard let recipientRow = try? session.row(
             "SELECT recipient_id FROM transactions WHERE id = ?", [.integer(Int64(transaction.rawValue))]),
-            let recipient = try? recipient.optionalInt64("recipient_id")
+            let recipient = try? recipientRow.optionalInt64("recipient_id")
         else { return nil }
         let active = try activeUnexecuted(session)
         guard !active.isEmpty else { return nil }
