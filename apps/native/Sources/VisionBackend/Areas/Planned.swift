@@ -417,10 +417,12 @@ enum PlannedArea {
         issues = []
         filters.endDate = TransactionsArea.ymd(raw("end_date"), "end_date", &issues)
         if let issue = issues.first { throw BackendHTTPError.validation(issue) }
-        let assign: [String: (Int) -> Void] = [
-            "account_id": { filters.accountId = AccountID(rawValue: $0) },
-            "category_id": { filters.categoryId = CategoryID(rawValue: $0) },
-            "recipient_id": { filters.recipientId = RecipientID(rawValue: $0) },
+        // The TypeScript route asserts account_id, then category_id, then recipient_id;
+        // a dictionary here reordered the 400s.
+        let assign: [(String, (Int) -> Void)] = [
+            ("account_id", { filters.accountId = AccountID(rawValue: $0) }),
+            ("category_id", { filters.categoryId = CategoryID(rawValue: $0) }),
+            ("recipient_id", { filters.recipientId = RecipientID(rawValue: $0) }),
         ]
         for (field, set) in assign {
             guard let value = raw(field), value != .null, value != .string("") else { continue }
@@ -1010,12 +1012,14 @@ enum PlannedArea {
         // bank_account: retired — anything but absence fails.
         if let bankAccount = object["bank_account"] {
             issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
+            fatal = true
         }
 
-        // superRefine: zod aborts the whole refinement when the account leaf is fatal
-        // (`expected number` / `expected int`); a positive-check failure does not.
+        // superRefine: zod aborts the whole refinement when a parse-level leaf is
+        // fatal (`z.NEVER` of a transform, a type mismatch, `z.never()`); only the
+        // account's positive check rides beside it.
         let isLoan = truthy(object["is_loan"] ?? .null)
-        if !accountFatal {
+        if !(fatal || accountFatal) {
             if !isLoan {
                 let hasPlannedDate = truthy(object["planned_date"] ?? .null)
                 let amount = object["amount"]
