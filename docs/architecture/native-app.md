@@ -607,8 +607,17 @@ Unicode ILIKE regular expression of `recipientRepository.ts` (`Areas/RecipientTe
 transaction reads `getTransactions` and `getTransaction` follow (`Areas/Transactions.swift`): every
 list filter of `buildTransactionWhere` (`Areas/TransactionWhere.swift`), the uncategorised queue,
 per-account running balances and `normalize_to_eur` at the latest stored rates. The list count is
-exact on every request; the TypeScript repository caches it for 2 seconds. Transaction writes,
-transfers, bulk actions and exports stay on Bun until their own phases. The planned payments follow
+exact on every request; the TypeScript repository caches it for 2 seconds. The transaction writes follow
+(port 11): create (`createTransaction`) mirrors the manual dedup claim chain — the `manual-v3`
+sha256 identity, the claim join with its live field fallback, the 409 `Duplicate transaction
+detected` with `existing_transaction_id`, and the `allow_duplicate` bypass — update
+(`updateTransaction`) resolves `recipient_name` only when `recipient_id` is nulled, rewrites
+`date` as `transaction_date`, and refuses a ledger-touching PATCH on a closed account with
+`Reopen the account before changing its ledger balance`, and delete (`deleteTransaction`)
+refuses a planned-execution link (409) and unlinks the row's attachments on disk; the create
+also clears a matching planned payment through the same ±5-day bucket and tolerance match
+as the suggestions (idempotent when the pair already exists), reported as `auto_linked`.
+Transfers, bulk actions and exports stay on Bun until their own phases. The planned payments follow
 (port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
 `filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
 (`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored
