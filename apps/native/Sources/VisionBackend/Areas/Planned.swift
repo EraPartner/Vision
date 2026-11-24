@@ -962,33 +962,43 @@ enum PlannedArea {
                 "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
         }
         var issues: [String] = []
+        // A parse-level leaf issue (a transform that answers z.NEVER, a type
+        // mismatch, `z.never()`) aborts the refinement below; only the account's
+        // positive check rides beside it, as zod 4 runs that one non-fatally.
+        var fatal = false
 
         // tags: an array of strings; each failure names the array (or its item).
         if let tags = object["tags"] {
             if case .array(let items) = tags {
                 for (index, item) in items.enumerated() where !isJSString(item) {
                     issues.append("tags.\(index): tags must be an array of strings")
+                    fatal = true
                 }
             } else {
                 issues.append("tags: tags must be an array of strings")
+                fatal = true
             }
         }
         // memo: a string or null; create upper-cases it.
         if let memo = object["memo"], memo != .null, !isJSString(memo) {
             issues.append("memo: memo must be a string")
+            fatal = true
         }
         // reminder_days_before: null passes; else an integer within 0...365, coerced.
         if let reminder = object["reminder_days_before"], reminder != .null {
             let number = reminder.javaScriptNumber
             if !isJSInteger(number) || !(0...365).contains(number) {
                 issues.append("reminder_days_before: reminder_days_before must be an integer between 0 and 365")
+                fatal = true
             } else {
                 object["reminder_days_before"] = .number(number)
             }
         }
         // currency: absent, null and "" all clear; anything else must read as ISO.
+        let issuesBefore = issues.count
         currencyField(object["currency"], issues: &issues)
             .map { object["currency"] = .string($0) }
+        fatal = fatal || issues.count > issuesBefore
         // account_id: z.number().int().positive(). The type and int checks are fatal in
         // zod 4 — their issue aborts the refinement below; positive() is a plain check.
         var accountFatal = false
