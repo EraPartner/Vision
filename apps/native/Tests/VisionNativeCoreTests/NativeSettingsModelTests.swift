@@ -168,7 +168,7 @@ struct NativeSettingsModelTests {
         await model.flush()
         #expect(await transport.writes.first?.expected["value"] == .number(0))
     }
-    @Test func themeSaveReconstructsFourSourceFieldsAndFailsSilently() async throws {
+    @Test func themeSaveReconstructsFourSourceFieldsAndSignalsAFailure() async throws {
         let transport = NativeSettingsFixture(values: [
             "theme_settings": .object(["future": .number(9), "variant": .string("nord")])
         ])
@@ -182,16 +182,18 @@ struct NativeSettingsModelTests {
         await transport.failNextWrite(status: 409)
         model.updateTheme(["mode": .string("light")])
         await model.flush()
-        #expect(model.saveErrorNonce == 0 && model.saveError == nil && model.notice == nil)
+        #expect(
+            model.saveErrorNonce == 1 && model.saveError == "settings.saveFailed"
+                && model.notice?.key == "settings.saveFailed")
     }
-    @Test func includeTransfersRemainsOptimisticAndSilentWhileCashRollsBack() async throws {
+    @Test func includeTransfersStaysOptimisticButSignalsAFailedSaveWhileCashRollsBack() async throws {
         let initial: TaxValue = .object(["dividend": .number(17), "future": .string("keep")])
         let transport = NativeSettingsFixture(values: ["brokerage_cash_category_ids": initial])
         let model = settingsModel(transport)
         await model.load()
         await transport.failNextWrite(status: 409)
         await model.setIncludeTransfers(true)
-        #expect(model.includeTransfers && model.notice == nil)
+        #expect(model.includeTransfers && model.notice?.key == "settings.saveFailed")
         await transport.failNextWrite(status: 409)
         await model.setCashCategory("fee", 21)
         #expect(model.cashRaw == initial && model.notice?.key == "settings.saveFailed")
@@ -223,10 +225,44 @@ struct NativeSettingsModelTests {
         await model.flush()
         #expect(model.appRaw == NativeSettingsDefaults.app && model.dashboardRaw == NativeSettingsDefaults.dashboard)
         #expect(model.sessionTierOverride == nil)
-        #expect(Set(await transport.writes.map(\.key)) == ["app_settings", "dashboard_settings", "includeTransfers"])
-        #expect(await transport.value("cost_basis_method") == .string("fifo"))
+        #expect(
+            Set(await transport.writes.map(\.key))
+                == ["app_settings", "dashboard_settings", "includeTransfers", "cost_basis_method"])
+        #expect(await transport.value("cost_basis_method") == .string("weighted_avg"))
         #expect(await transport.value("theme_settings")?["variant"] == .string("nord"))
         #expect(await transport.value("brokerage_cash_category_ids")?["fee"] == .number(17))
+    }
+    @Test func reportExclusionsJoinHiddenCategoriesWhenTheScopeApplies() async throws {
+        let transport = NativeSettingsFixture(values: [
+            "dashboard_settings": .object([
+                "excludedCategoryIds": .array([.number(5)]), "excludedRecipientIds": .array([.number(9)]),
+            ])
+        ])
+        let model = settingsModel(transport)
+        await model.load()
+        #expect(model.reportExcludedCategoryIds == [CategoryID(rawValue: 5)])
+        await transport.setCategory(
+            OpenAPI.CategoryNode(
+                id: CategoryID(rawValue: 3), name: "Hidden", pathIds: [], path: [], categoryName: "Hidden",
+                depth: 0, isActive: false, hierarchyOnly: true, legacyCompatible: true))
+        await model.loadCategories(force: true)
+        #expect(model.reportExcludedCategoryIds == [CategoryID(rawValue: 5), CategoryID(rawValue: 3)])
+        model.updateDashboard(["exclusionScope": .string("dashboard")])
+        #expect(model.reportExcludedCategoryIds == [CategoryID(rawValue: 5)])
+        model.updateDashboard(["exclusionScope": .string("everywhere")])
+        model.updateDashboard(["excludeHiddenCategories": .bool(false)])
+        #expect(model.reportExcludedCategoryIds == [CategoryID(rawValue: 5)])
+    }
+    @Test func flushWaitsOutTheDebounceSoAQuitSeesTheLastEdit() async throws {
+        let transport = NativeSettingsFixture(values: [:])
+        let model = settingsModel(transport)
+        await model.load()
+        model.updateApp(["defaultPageSize": .number(25)])
+        #expect(model.isSaving)
+        await model.flush()
+        let stored = await transport.value("app_settings")
+        #expect(stored?["defaultPageSize"] == .number(25))
+        #expect(!model.isSaving)
     }
     @Test func largeDisplayOverrideNeverPersistsUntilCapIsDisabled() async throws {
         let transport = NativeSettingsFixture()
