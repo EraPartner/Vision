@@ -358,6 +358,70 @@ const accountReconcile = (id: string, body: unknown): ParityStep => ({
   path: `/api/accounts/${id}/reconcile`,
   body,
 });
+const splitsOwed = (query = ""): ParityStep => ({
+  operationId: "getSplitsOwed",
+  method: "GET",
+  path: `/api/splits/owed${query}`,
+});
+const splitsOwedBy = (id: string, query = ""): ParityStep => ({
+  operationId: "getSplitOwedByRecipient",
+  method: "GET",
+  path: `/api/splits/owed/${id}${query}`,
+});
+const splitsOwedExport = (id: string): ParityStep => ({
+  operationId: "exportSplitsOwedCsv",
+  method: "GET",
+  path: `/api/splits/owed/${id}/export/csv`,
+});
+const splitsOfTransaction = (id: string, query = ""): ParityStep => ({
+  operationId: "getSplitsByTransaction",
+  method: "GET",
+  path: `/api/splits/transaction/${id}${query}`,
+});
+const splitCreate = (body: unknown): ParityStep => ({
+  operationId: "createSplit",
+  method: "POST",
+  path: "/api/splits",
+  body,
+});
+const splitBatch = (body: unknown): ParityStep => ({
+  operationId: "createSplitBatch",
+  method: "POST",
+  path: "/api/splits/batch",
+  body,
+});
+const splitBulk = (body: unknown): ParityStep => ({
+  operationId: "createBulkSplits",
+  method: "POST",
+  path: "/api/splits/bulk",
+  body,
+});
+const splitPay = (id: string, body: unknown): ParityStep => ({
+  operationId: "paySplit",
+  method: "POST",
+  path: `/api/splits/${id}/pay`,
+  body,
+});
+const splitPayments = (id: string, query = ""): ParityStep => ({
+  operationId: "getSplitPayments",
+  method: "GET",
+  path: `/api/splits/${id}/payments${query}`,
+});
+const splitSettle = (id: string): ParityStep => ({
+  operationId: "settleSplit",
+  method: "POST",
+  path: `/api/splits/${id}/settle`,
+});
+const splitSettleAll = (id: string): ParityStep => ({
+  operationId: "settleAllSplitsForRecipient",
+  method: "POST",
+  path: `/api/splits/owed/${id}/settle-all`,
+});
+const splitDelete = (id: string): ParityStep => ({
+  operationId: "deleteSplit",
+  method: "DELETE",
+  path: `/api/splits/${id}`,
+});
 const transactions = (query = ""): ParityStep => ({
   operationId: "getTransactions",
   method: "GET",
@@ -1223,6 +1287,117 @@ export const AREAS: Record<string, ParityArea> = {
       accountClose("2", { balance_handling: "adjustment" }),
       accountClose("2", { balance_handling: "adjustment" }),
       accounts("?active=all"),
+    ],
+  },
+  splits: {
+    router: { module: "splits.ts", mountPath: "/api/splits" },
+    seed: [
+      `INSERT INTO recipients (id, name, normalized_name, primary_recipient_id, notes, is_active, created_at, updated_at) VALUES
+        (1, 'Alice', 'alice', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'Alicia', 'alicia', 1, 'alias', 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'Bob', 'bob', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'Carol', 'carol', 3, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'Dora', 'dora', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000011'),
+        (2, 'Travel', NULL, NULL, 'USD', 'savings', 'semi_liquid', 0, 1, 'none', 'joint', 1, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000012')`,
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+        ${RATE_ROW("USD", "0.9", "2025-01-02", 1)},
+        ${RATE_ROW("GBP", "1.15", "2025-01-02", 1)}`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at,
+         updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('100', 18, 4), 'EUR', 'Groceries', 1, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2024-01-20', vision_numeric('-60', 18, 4), 'EUR', 'Concert', 3, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, '2024-01-25', vision_numeric('250.5', 18, 4), 'USD', 'Hotel', 4, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, '2024-02-01', vision_numeric('30', 18, 4), 'CHF', 'Ski pass', 3, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, '2024-02-10', vision_numeric('0', 18, 4), 'EUR', 'Free', 5, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, '2024-02-15', vision_numeric('80', 18, 4), 'EUR', 'Dinner', 1, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, '2024-02-20', vision_numeric('100', 18, 4), 'EUR', 'Tickets', 5, 1, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transaction_splits (id, transaction_id, recipient_id, amount, note, is_settled, created_at, updated_at) VALUES
+        (1, 1, 1, vision_numeric('40', 18, 4), NULL, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 2, 3, vision_numeric('60', 18, 4), 'full share', 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 3, 4, vision_numeric('100', 18, 4), NULL, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 4, 3, vision_numeric('20', 18, 4), NULL, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 1, 2, vision_numeric('10', 18, 4), 'part', 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, 3, 3, vision_numeric('50', 18, 4), NULL, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, 6, 5, vision_numeric('80', 18, 4), 'already settled', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO split_payments (id, split_id, amount, paid_at, note, created_at) VALUES
+        (1, 3, vision_numeric('40', 18, 4), '2024-01-26', 'first', '${SEED_TIME}'),
+        (2, 4, vision_numeric('5', 18, 4), '2024-02-02', NULL, '${SEED_TIME}')`,
+    ],
+    steps: [
+      splitsOwed(),
+      splitsOwed("?currency=usd"),
+      splitsOwed("?currency=EURO"),
+      splitsOwed("?limit=1&offset=1"),
+      splitsOwedBy("1"),
+      splitsOwedBy("1", "?limit=1"),
+      splitsOwedBy("abc"),
+      splitsOwedBy("999", "?currency=USD"),
+      splitsOwedExport("3"),
+      splitsOwedExport("5"),
+      splitsOwedExport("999"),
+      splitsOfTransaction("1"),
+      splitsOfTransaction("1", "?limit=1&offset=1"),
+      splitsOfTransaction("999"),
+      splitsOfTransaction("abc"),
+      splitCreate({ transaction_id: 6, recipient_id: 5, amount: 25, note: "half" }),
+      splitCreate({ transaction_id: 6, recipient_id: 5, amount: 100 }),
+      splitCreate({ transaction_id: 6, recipient_id: 5, amount: 0 }),
+      splitCreate({}),
+      splitCreate({ transaction_id: "abc", recipient_id: 1, amount: 5 }),
+      splitCreate({ transaction_id: 1, recipient_id: 1, amount: "abc" }),
+      splitCreate({ transaction_id: 0, recipient_id: 1, amount: 5 }),
+      splitCreate({ transaction_id: 999, recipient_id: 1, amount: 5 }),
+      splitCreate([]),
+      splitBatch({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 5, amount: 20 },
+          { recipient_id: 2, amount: "12.5", note: "batch part" },
+        ],
+      }),
+      splitBatch({ transaction_id: 6, splits: [] }),
+      splitBatch({ transaction_id: "abc", splits: [{ recipient_id: 5, amount: 1 }] }),
+      splitBatch({ transaction_id: 1, splits: [{ recipient_id: 1, amount: "x" }] }),
+      splitBatch({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 1, amount: 1 },
+          { recipient_id: 4, amount: "zz" },
+        ],
+      }),
+      splitBatch({ transaction_id: 1, splits: [{ recipient_id: 5, amount: 999999 }] }),
+      splitBatch({ transaction_id: 999, splits: [{ recipient_id: 5, amount: 1 }] }),
+      splitBatch("nonsense"),
+      splitBulk({ transaction_ids: [7, 6, 5, 999], recipient_id: 5, mode: "equal", note: "bulk" }),
+      splitBulk({ transaction_ids: [7], recipient_id: 999, mode: "full" }),
+      splitBulk({ transaction_ids: [], recipient_id: 5, mode: "full" }),
+      splitBulk({ transaction_ids: "123", recipient_id: 5, mode: "full" }),
+      splitBulk({ transaction_ids: [999], recipient_id: 5, mode: "half" }),
+      splitBulk({ transaction_ids: ["abc", "1.5"], recipient_id: 5, mode: "equal" }),
+      splitBulk({ transaction_ids: [7], recipient_id: "x", mode: "equal" }),
+      splitBulk({ transaction_ids: [7], recipient_id: 5, mode: "equal", note: "x".repeat(501) }),
+      splitPay("1", { amount: 10, note: "cash" }),
+      splitPay("1", { amount: 100 }),
+      splitPay("2", { amount: 60, paid_at: "2024-03-01" }),
+      splitPay("2", { amount: 1 }),
+      splitPay("1", { amount: 0 }),
+      splitPay("999", { amount: 1 }),
+      splitPayments("1"),
+      splitPayments("1", "?limit=1&offset=1"),
+      splitPayments("999"),
+      splitSettle("6"),
+      splitSettle("999"),
+      splitSettleAll("3"),
+      splitDelete("4"),
+      splitDelete("4"),
+      splitsOwed(),
+      splitsOwedBy("1"),
     ],
   },
   categories: {
