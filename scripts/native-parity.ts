@@ -1757,21 +1757,43 @@ export const AREAS: Record<string, ParityArea> = {
       }),
       csvUploadStep("/api/import/csv", {
         filename: "kbc.csv",
-        content: kbcLine("01/06/2024", "-12,34", "100,00", "", "12,34", "DupCoffee"),
+        content: kbcLine(
+          "01/06/2024",
+          "-12,34",
+          "100,00",
+          "",
+          "12,34",
+          "DupCoffee",
+        ),
         fields: { bank_name: "kbc" },
       }),
       csvUploadStep("/api/import/csv", {
         filename: "kbc-new.csv",
-        content: kbcLine("02/06/2024", "-5,00", "95,00", "", "5,00", "FreshNewPlace"),
+        content: kbcLine(
+          "02/06/2024",
+          "-5,00",
+          "95,00",
+          "",
+          "5,00",
+          "FreshNewPlace",
+        ),
         fields: { bank_name: "kbc" },
       }),
       csvUploadStep("/api/import/csv", {
         filename: "kbc-nobank.csv",
-        content: kbcLine("03/06/2024", "-6,00", "89,00", "", "6,00", "FreshNoBankName"),
+        content: kbcLine(
+          "03/06/2024",
+          "-6,00",
+          "89,00",
+          "",
+          "6,00",
+          "FreshNoBankName",
+        ),
       }),
       csvUploadStep("/api/import/csv/custom", {
         filename: "custom.csv",
-        content: "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
+        content:
+          "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
         fields: {
           bank_name: "MyBank",
           date_format: "%Y-%m-%d",
@@ -1787,13 +1809,21 @@ export const AREAS: Record<string, ParityArea> = {
         path: "/api/import/csv/stream",
         multipart: {
           filename: "kbc-stream.csv",
-          content: kbcLine("04/06/2024", "-7,00", "82,00", "", "7,00", "FreshStream"),
+          content: kbcLine(
+            "04/06/2024",
+            "-7,00",
+            "82,00",
+            "",
+            "7,00",
+            "FreshStream",
+          ),
           fields: { bank_name: "kbc" },
         },
       },
       csvUploadStep("/api/import/recipients", {
         filename: "recipients.csv",
-        content: "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row",
+        content:
+          "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row",
       }),
       csvUploadStep("/api/import/categories", {
         filename: "categories.csv",
@@ -4748,9 +4778,7 @@ async function recordArea(
         .set("Content-Type", "application/json")
         .send(JSON.stringify(step.body));
     if (step.multipart !== undefined) {
-      for (const [name, value] of Object.entries(
-        step.multipart.fields ?? {},
-      )) {
+      for (const [name, value] of Object.entries(step.multipart.fields ?? {})) {
         request.field(name, value);
       }
       if (step.multipart.filename !== "")
