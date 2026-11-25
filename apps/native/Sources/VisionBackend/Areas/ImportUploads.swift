@@ -622,7 +622,8 @@ enum ImportUploadsArea {
             var message =
                 "Import stopped: \(rejected) source row(s) could not be parsed. No transactions were imported."
             if let issues = parsed.issues, !issues.isEmpty {
-                message += " \(issues.joined(separator: "; \"))."
+                let joined = issues.joined(separator: "; ")
+                message += " \(joined)."
             }
             message += " Correct the invalid dates, amounts or CSV structure and import the file again."
             throw BackendHTTPError.validation(message)
