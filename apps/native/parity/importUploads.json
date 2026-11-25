@@ -10,11 +10,10 @@
       "method": "POST",
       "path": "/api/import/csv",
       "multipart": {
-        "filename": "",
-        "content": "",
         "fields": {
           "bank_name": "kbc"
-        }
+        },
+        "files": []
       },
       "status": 400,
       "response": {
@@ -30,12 +29,17 @@
       "method": "POST",
       "path": "/api/import/csv",
       "multipart": {
-        "filename": "x.txt",
-        "contentType": "text/plain",
-        "content": "a;b\nc;d",
         "fields": {
           "bank_name": "kbc"
-        }
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "x.txt",
+            "contentType": "text/plain",
+            "base64": "YTtiCmM7ZA=="
+          }
+        ]
       },
       "status": 400,
       "response": {
@@ -51,11 +55,17 @@
       "method": "POST",
       "path": "/api/import/csv",
       "multipart": {
-        "filename": "kbc.csv",
-        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;01/06/2024;OPN;01/06/2024;-12,34;100,00;;12,34;BE99123456789012;BICBEB22XXX;DupCoffee;Importerslaan 1;+++123/4567/89012;;;",
         "fields": {
           "bank_name": "kbc"
-        }
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzAxLzA2LzIwMjQ7T1BOOzAxLzA2LzIwMjQ7LTEyLDM0OzEwMCwwMDs7MTIsMzQ7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtEdXBDb2ZmZWU7SW1wb3J0ZXJzbGFhbiAxOysrKzEyMy80NTY3Lzg5MDEyOzs7"
+          }
+        ]
       },
       "status": 202,
       "response": {
@@ -77,11 +87,17 @@
       "method": "POST",
       "path": "/api/import/csv",
       "multipart": {
-        "filename": "kbc-new.csv",
-        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;02/06/2024;OPN;02/06/2024;-5,00;95,00;;5,00;BE99123456789012;BICBEB22XXX;FreshNewPlace;Importerslaan 1;+++123/4567/89012;;;",
         "fields": {
           "bank_name": "kbc"
-        }
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc-new.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzAyLzA2LzIwMjQ7T1BOOzAyLzA2LzIwMjQ7LTUsMDA7OTUsMDA7OzUsMDA7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtGcmVzaE5ld1BsYWNlO0ltcG9ydGVyc2xhYW4gMTsrKysxMjMvNDU2Ny84OTAxMjs7Ow=="
+          }
+        ]
       },
       "status": 202,
       "response": {
@@ -103,8 +119,14 @@
       "method": "POST",
       "path": "/api/import/csv",
       "multipart": {
-        "filename": "kbc-nobank.csv",
-        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;03/06/2024;OPN;03/06/2024;-6,00;89,00;;6,00;BE99123456789012;BICBEB22XXX;FreshNoBankName;Importerslaan 1;+++123/4567/89012;;;"
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc-nobank.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzAzLzA2LzIwMjQ7T1BOOzAzLzA2LzIwMjQ7LTYsMDA7ODksMDA7OzYsMDA7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtGcmVzaE5vQmFua05hbWU7SW1wb3J0ZXJzbGFhbiAxOysrKzEyMy80NTY3Lzg5MDEyOzs7"
+          }
+        ]
       },
       "status": 400,
       "response": {
@@ -120,8 +142,6 @@
       "method": "POST",
       "path": "/api/import/csv/custom",
       "multipart": {
-        "filename": "custom.csv",
-        "content": "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
         "fields": {
           "bank_name": "MyBank",
           "date_format": "%Y-%m-%d",
@@ -129,7 +149,15 @@
           "recipient_column": "Name",
           "amount_column": "Amount",
           "memo_column": "Memo"
-        }
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "custom.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxOYW1lLEFtb3VudCxNZW1vCjIwMjQtMDctMDEsRnJlc2hDdXN0b20sMTAuNTAsQ3VzdG9tIG1lbW8K"
+          }
+        ]
       },
       "status": 202,
       "response": {
@@ -151,11 +179,17 @@
       "method": "POST",
       "path": "/api/import/csv/stream",
       "multipart": {
-        "filename": "kbc-stream.csv",
-        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;04/06/2024;OPN;04/06/2024;-7,00;82,00;;7,00;BE99123456789012;BICBEB22XXX;FreshStream;Importerslaan 1;+++123/4567/89012;;;",
         "fields": {
           "bank_name": "kbc"
-        }
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc-stream.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzA0LzA2LzIwMjQ7T1BOOzA0LzA2LzIwMjQ7LTcsMDA7ODIsMDA7OzcsMDA7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtGcmVzaFN0cmVhbTtJbXBvcnRlcnNsYWFuIDE7KysrMTIzLzQ1NjcvODkwMTI7Ozs="
+          }
+        ]
       },
       "status": 200,
       "response": ":                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":0}\n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":70}\n\nevent: review_required\ndata: {\"batch_id\":4,\"match_source_counts\":{\"pattern\":0,\"exact\":0,\"fuzzy\":0,\"new\":1},\"percent\":70}\n\n"
@@ -165,8 +199,14 @@
       "method": "POST",
       "path": "/api/import/recipients",
       "multipart": {
-        "filename": "recipients.csv",
-        "content": "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row"
+        "files": [
+          {
+            "name": "file",
+            "filename": "recipients.csv",
+            "contentType": "text/csv",
+            "base64": "bmFtZSxjYXRlZ29yeQpJbXBvcnRlZCBPbmUsRk9PRDpHUk9DRVJJRVMKSW1wb3J0ZWQgVHdvLAosd29ydGhsZXNzIHJvdw=="
+          }
+        ]
       },
       "status": 201,
       "response": {
@@ -186,8 +226,14 @@
       "method": "POST",
       "path": "/api/import/categories",
       "multipart": {
-        "filename": "categories.csv",
-        "content": "category,description\nIMPORT:FIRST,first test description\n"
+        "files": [
+          {
+            "name": "file",
+            "filename": "categories.csv",
+            "contentType": "text/csv",
+            "base64": "Y2F0ZWdvcnksZGVzY3JpcHRpb24KSU1QT1JUOkZJUlNULGZpcnN0IHRlc3QgZGVzY3JpcHRpb24K"
+          }
+        ]
       },
       "status": 201,
       "response": {
@@ -206,11 +252,17 @@
       "method": "POST",
       "path": "/api/import/recipients",
       "multipart": {
-        "filename": "recipients-sep.csv",
-        "content": "name;category\nSemicolon Rcpt;IMPORT:FIRST\n",
         "fields": {
           "separator": ";"
-        }
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "recipients-sep.csv",
+            "contentType": "text/csv",
+            "base64": "bmFtZTtjYXRlZ29yeQpTZW1pY29sb24gUmNwdDtJTVBPUlQ6RklSU1QK"
+          }
+        ]
       },
       "status": 201,
       "response": {
