@@ -392,7 +392,9 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
       `ImportUploadsArea` in progress):
       `importCsv`, `importCsvCustom`, `importCsvStream`, `importRecipients`, `importCategories`
       (`importRoutes.ts`, `services/importPipeline`)
-- [ ] `getSupportedAdapters`, `getInfoBanks`, `getRecurringPatterns`
+- [x] `getSupportedAdapters`, `getInfoBanks`, `getRecurringPatterns` (`Areas/Info.swift`;
+      the corpus area is `info`, recorded on the fixed clock because `recurring-patterns` reads
+      `sub_interval(today(), '3 years')`)
 
 ### P17 Portfolio core and prices
 

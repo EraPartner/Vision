@@ -2125,6 +2125,81 @@ export const AREAS: Record<string, ParityArea> = {
     },
     steps: [ratesList("?db_only=true"), ratesRefresh, ratesList("?db_only=1")],
   },
+  info: {
+    router: { module: "info.ts", mountPath: "/api/info" },
+    // /recurring-patterns is today-dependent (`sub_interval(today(), '3 years')`), so the
+    // area records on the fixed clock and its transactions sit well inside the window.
+    now: "2026-06-15T09:00:00.000Z",
+    seed: [
+      `INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001'),
+        (2, 'Travel', 'USD', 'savings', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000002'),
+        (3, 'Dormant', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000003')`,
+      `INSERT INTO categories (id, general, detail, name, path_name, legacy_compatible, created_at, updated_at) VALUES
+        (21, 'SPORT', 'FITNESS', 'FITNESS', 'SPORT > FITNESS', 0, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, primary_recipient_id, is_active, created_at, updated_at) VALUES
+        (1, 'GYMFIT', 'GYMFIT', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'SALARY CO', 'CO SALARY', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'CITY GYM', 'CITY GYM', 21, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'CITY GYM NORTH', 'CITY GYM NORTH', NULL, 3, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 'TENANT', 'TENANT', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (6, 'ONCE SHOP', 'ONCE SHOP', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (7, 'NOISY SHOP', 'NOISY SHOP', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (8, 'PRICE UP', 'PRICE UP', NULL, NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at, updated_at) VALUES
+        (101, '2024-02-01', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (102, '2024-02-08', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (103, '2024-02-15', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (104, '2024-02-22', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, NULL, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (105, '2024-02-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (106, '2024-03-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (107, '2024-04-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (108, '2024-05-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (109, '2024-06-01', vision_numeric('-5', 18, 4), 'EUR', 'REFUND', 2, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (110, '2024-01-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (111, '2024-02-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (112, '2024-03-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (113, '2024-04-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (114, '2024-02-10', vision_numeric('-100', 18, 4), 'EUR', 'RENT', 5, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (115, '2024-02-20', vision_numeric('-100', 18, 4), 'EUR', 'RENT', 5, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (116, '2024-03-02', vision_numeric('-100', 18, 4), 'EUR', 'RENT', 5, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (117, '2024-03-12', vision_numeric('-100', 18, 4), 'USD', 'RENT', 5, 2, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (118, '2024-03-12', vision_numeric('-100', 18, 4), 'USD', 'RENT INACTIVE', 5, 2, 0, '${SEED_TIME}', '${SEED_TIME}'),
+        (119, '2024-02-01', vision_numeric('-19.9', 18, 4), 'EUR', 'ONLY ONE', 6, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (120, '2024-03-01', vision_numeric('-19.9', 18, 4), 'EUR', 'ONLY ONE MORE', 6, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (121, '2024-02-01', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (122, '2024-02-06', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (123, '2024-03-08', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (124, '2024-05-07', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (125, '2024-06-08', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (126, '2024-02-15', vision_numeric('-10', 18, 4), 'EUR', 'PLAN', 8, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (127, '2024-03-15', vision_numeric('-10', 18, 4), 'EUR', 'PLAN', 8, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (128, '2024-04-15', vision_numeric('-10', 18, 4), 'EUR', 'PLAN', 8, 1, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (129, '2024-05-15', vision_numeric('-12', 18, 4), 'EUR', 'PLAN RAISED', 8, 1, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, comment, url,
+         account_id, recipient_id, category_id, is_recurring, recurrence_pattern, recurrence_end_date,
+         max_occurrences, is_loan, loan_type, loan_principal, loan_annual_interest_rate, loan_term_months,
+         loan_start_date, loan_payment_day, is_executed, is_active, created_at, updated_at) VALUES
+        (1, '2026-06-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', NULL, NULL, 1, 2, NULL,
+         1, 'monthly', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (2, '2026-06-08', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM INACTIVE', NULL, NULL, 1, 1, NULL,
+         1, 'weekly', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      {
+        operationId: "getSupportedAdapters",
+        method: "GET",
+        path: "/api/info/supported-adapters",
+      },
+      { operationId: "getInfoBanks", method: "GET", path: "/api/info/banks" },
+      {
+        operationId: "getRecurringPatterns",
+        method: "GET",
+        path: "/api/info/recurring-patterns",
+      },
+    ],
+  },
+
   attachments: {
     router: { module: "attachments.ts", mountPath: "/api/attachments" },
     // The upload steps answer 201 with `created_at`/`stored_path` the run wrote, and

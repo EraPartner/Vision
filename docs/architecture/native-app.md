@@ -742,6 +742,17 @@ sends parts with `.field`/`.attach`), the random uuid of a created `stored_path`
 files under the throwaway `ATTACHMENTS_DIR` of a recording; the 10 MB size branch is proven by
 `AttachmentUploadTests` (a corpus file may not weigh megabytes).
 
+The Import page's three metadata reads run in-process (`Areas/Info.swift`): the adapter
+registry (`getSupportedAdapters`, from `BankAdapters`), the account-label list
+(`getInfoBanks`) and the recurring-pattern detector (`getRecurringPatterns`), which is the
+full port of `recurringDetectionService.ts` — the compiled Kysely candidate query with the
+canonical three-level category resolution, recipient-plus-direction grouping, the interval
+grammar (known patterns, then the custom-regular check on the coefficient of variation),
+the last-three-pairs amount-change report, the planned-payment coverage probe, and the
+stable confidence sort. The area's corpus records on the fixed clock
+(`sub_interval(today(), '3 years')`); the service's 3-minute result cache does not port
+(the corpus is deterministic without it).
+
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each
 body sent in the key order the recorder wrote, through

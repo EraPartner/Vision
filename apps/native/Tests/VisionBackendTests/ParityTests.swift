@@ -397,6 +397,10 @@ import VisionNativeCore
         try await Self.replay("importCommit")
     }
 
+    @Test func info() async throws {
+        try await Self.replay("info")
+    }
+
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
