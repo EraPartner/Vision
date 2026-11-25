@@ -422,6 +422,39 @@ const splitDelete = (id: string): ParityStep => ({
   method: "DELETE",
   path: `/api/splits/${id}`,
 });
+const parserList = (): ParityStep => ({
+  operationId: "getCustomParsers",
+  method: "GET",
+  path: "/api/import/parsers",
+});
+const parserCreate = (body: unknown): ParityStep => ({
+  operationId: "createCustomParser",
+  method: "POST",
+  path: "/api/import/parsers",
+  body,
+});
+const parserUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updateCustomParser",
+  method: "PATCH",
+  path: `/api/import/parsers/${id}`,
+  body,
+});
+const parserDelete = (id: string): ParityStep => ({
+  operationId: "deleteCustomParser",
+  method: "DELETE",
+  path: `/api/import/parsers/${id}`,
+});
+const PARSER_CONFIG = {
+  dateColumn: "Date",
+  recipientColumn: "Name",
+  amountColumn: "Amount",
+  memoColumn: " memo ",
+  dateFormat: "%d/%m/%Y",
+  separator: ";",
+  encoding: "utf-8",
+  number_format: "decimal_comma",
+  skipRows: 2,
+};
 const transactions = (query = ""): ParityStep => ({
   operationId: "getTransactions",
   method: "GET",
@@ -1345,7 +1378,12 @@ export const AREAS: Record<string, ParityArea> = {
       splitsOfTransaction("1", "?limit=1&offset=1"),
       splitsOfTransaction("999"),
       splitsOfTransaction("abc"),
-      splitCreate({ transaction_id: 6, recipient_id: 5, amount: 25, note: "half" }),
+      splitCreate({
+        transaction_id: 6,
+        recipient_id: 5,
+        amount: 25,
+        note: "half",
+      }),
       splitCreate({ transaction_id: 6, recipient_id: 5, amount: 100 }),
       splitCreate({ transaction_id: 6, recipient_id: 5, amount: 0 }),
       splitCreate({}),
@@ -1362,8 +1400,14 @@ export const AREAS: Record<string, ParityArea> = {
         ],
       }),
       splitBatch({ transaction_id: 6, splits: [] }),
-      splitBatch({ transaction_id: "abc", splits: [{ recipient_id: 5, amount: 1 }] }),
-      splitBatch({ transaction_id: 1, splits: [{ recipient_id: 1, amount: "x" }] }),
+      splitBatch({
+        transaction_id: "abc",
+        splits: [{ recipient_id: 5, amount: 1 }],
+      }),
+      splitBatch({
+        transaction_id: 1,
+        splits: [{ recipient_id: 1, amount: "x" }],
+      }),
       splitBatch({
         transaction_id: 1,
         splits: [
@@ -1371,16 +1415,36 @@ export const AREAS: Record<string, ParityArea> = {
           { recipient_id: 4, amount: "zz" },
         ],
       }),
-      splitBatch({ transaction_id: 1, splits: [{ recipient_id: 5, amount: 999999 }] }),
-      splitBatch({ transaction_id: 999, splits: [{ recipient_id: 5, amount: 1 }] }),
-      splitBulk({ transaction_ids: [7, 6, 5, 999], recipient_id: 5, mode: "equal", note: "bulk" }),
+      splitBatch({
+        transaction_id: 1,
+        splits: [{ recipient_id: 5, amount: 999999 }],
+      }),
+      splitBatch({
+        transaction_id: 999,
+        splits: [{ recipient_id: 5, amount: 1 }],
+      }),
+      splitBulk({
+        transaction_ids: [7, 6, 5, 999],
+        recipient_id: 5,
+        mode: "equal",
+        note: "bulk",
+      }),
       splitBulk({ transaction_ids: [7], recipient_id: 999, mode: "full" }),
       splitBulk({ transaction_ids: [], recipient_id: 5, mode: "full" }),
       splitBulk({ transaction_ids: "123", recipient_id: 5, mode: "full" }),
       splitBulk({ transaction_ids: [999], recipient_id: 5, mode: "half" }),
-      splitBulk({ transaction_ids: ["abc", "1.5"], recipient_id: 5, mode: "equal" }),
+      splitBulk({
+        transaction_ids: ["abc", "1.5"],
+        recipient_id: 5,
+        mode: "equal",
+      }),
       splitBulk({ transaction_ids: [7], recipient_id: "x", mode: "equal" }),
-      splitBulk({ transaction_ids: [7], recipient_id: 5, mode: "equal", note: "x".repeat(501) }),
+      splitBulk({
+        transaction_ids: [7],
+        recipient_id: 5,
+        mode: "equal",
+        note: "x".repeat(501),
+      }),
       splitPay("1", { amount: 10, note: "cash" }),
       splitPay("1", { amount: 100 }),
       splitPay("2", { amount: 60, paid_at: "2024-03-01" }),
@@ -1397,6 +1461,64 @@ export const AREAS: Record<string, ParityArea> = {
       splitDelete("4"),
       splitsOwed(),
       splitsOwedBy("1"),
+    ],
+  },
+  importParsers: {
+    router: { module: "importRoutes.ts", mountPath: "/api/import" },
+    seed: [
+      `INSERT INTO custom_parser_configs (id, name, kind, config_json, created_at, updated_at) VALUES
+        (1, 'KBC main', 'transaction', vision_jsonb('{"dateColumn":"Datum","recipientColumn":"Naam","amountColumn":"Bedrag","memoColumn":"","dateFormat":"%d/%m/%Y","separator":";","encoding":"latin1","number_format":"decimal_comma","skipRows":1}'), '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'Betaalloverzicht', 'transaction', vision_jsonb('{"dateColumn":"Date","recipientColumn":"Name","amountColumn":"Amount","dateFormat":"%Y-%m-%d","separator":",","encoding":"utf-8","number_format":"auto","skipRows":0}'), '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      parserList(),
+      parserCreate({ name: "  Key trade  ", config: PARSER_CONFIG }),
+      parserCreate({ name: "KBC main", config: PARSER_CONFIG }),
+      parserCreate({ name: "Empty", config: {} }),
+      parserCreate({ name: "No config" }),
+      parserCreate({ name: 7, config: PARSER_CONFIG }),
+      parserCreate({ name: "", config: PARSER_CONFIG }),
+      parserCreate({ config: PARSER_CONFIG }),
+      parserCreate({ name: "   ", config: PARSER_CONFIG }),
+      parserCreate({ name: "Array", config: [] }),
+      parserCreate({
+        name: "Bare minimum",
+        config: { dateColumn: "D", recipientColumn: "R", amountColumn: "A" },
+      }),
+      parserCreate({
+        name: "Zeroes",
+        config: { ...PARSER_CONFIG, skipRows: "0", memoColumn: "" },
+      }),
+      // `parserCreate("text")` (a scalar JSON body) is not recorded: the answer is
+      // body-parser strict mode's own, which the Swift side cannot model.
+      parserCreate([]),
+      parserList(),
+      parserUpdate("1", { name: "KBC renamed" }),
+      parserUpdate("1", {
+        config: { ...PARSER_CONFIG, encoding: "utf8" },
+      }),
+      parserUpdate("1", {}),
+      parserUpdate("999", { name: "Ghost" }),
+      parserUpdate("abc", { name: "Bad id" }),
+      parserUpdate("1.5", { name: "Bad id" }),
+      parserUpdate("1e3", { name: "Bad id" }),
+      parserUpdate("-1", { name: "Bad id" }),
+      parserUpdate("0", { name: "Bad id" }),
+      parserUpdate("1", { name: "Betaalloverzicht" }),
+      parserUpdate("1", { name: 5 }),
+      parserUpdate("1", { name: "  ", config: [] }),
+      parserUpdate("1", { config: { dateColumn: "D", memoColumn: "m" } }),
+      parserUpdate("1", { config: { ...PARSER_CONFIG, number_format: "dot" } }),
+      parserUpdate("1", { config: { ...PARSER_CONFIG, encoding: "bogus" } }),
+      parserUpdate("1", { config: { ...PARSER_CONFIG, skipRows: "abc" } }),
+      parserList(),
+      parserDelete("1"),
+      parserDelete("1"),
+      parserDelete("999"),
+      parserDelete("abc"),
+      parserDelete("2.5"),
+      parserDelete("bogus"),
+      parserList(),
     ],
   },
   categories: {
@@ -2291,25 +2413,41 @@ export const AREAS: Record<string, ParityArea> = {
         operationId: "bulkUpdateTransactions",
         method: "POST",
         path: "/api/transactions/bulk-update",
-        body: { filter: { account_id: 2 }, expected_count: 5001, fields: { category_id: 10 } },
+        body: {
+          filter: { account_id: 2 },
+          expected_count: 5001,
+          fields: { category_id: 10 },
+        },
       },
       {
         operationId: "bulkUpdateTransactions",
         method: "POST",
         path: "/api/transactions/bulk-update",
-        body: { filter: { account_id: 2 }, expected_count: 4, fields: { category_id: 10 } },
+        body: {
+          filter: { account_id: 2 },
+          expected_count: 4,
+          fields: { category_id: 10 },
+        },
       },
       {
         operationId: "bulkUpdateTransactions",
         method: "POST",
         path: "/api/transactions/bulk-update",
-        body: { filter: { category_id: "x" }, expected_count: 1, fields: { category_id: 10 } },
+        body: {
+          filter: { category_id: "x" },
+          expected_count: 1,
+          fields: { category_id: 10 },
+        },
       },
       {
         operationId: "bulkUpdateTransactions",
         method: "POST",
         path: "/api/transactions/bulk-update",
-        body: { filter: { foo: 1 }, expected_count: 1, fields: { category_id: 10 } },
+        body: {
+          filter: { foo: 1 },
+          expected_count: 1,
+          fields: { category_id: 10 },
+        },
       },
       {
         operationId: "bulkUpdateTransactions",
@@ -2325,7 +2463,11 @@ export const AREAS: Record<string, ParityArea> = {
         operationId: "bulkUpdateTransactions",
         method: "POST",
         path: "/api/transactions/bulk-update",
-        body: { filter: { search: "no such thing" }, expected_count: 1, fields: { category_id: 10 } },
+        body: {
+          filter: { search: "no such thing" },
+          expected_count: 1,
+          fields: { category_id: 10 },
+        },
       },
       {
         operationId: "bulkUpdateTransactions",
@@ -3506,6 +3648,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const recipientArea = AREAS.recipients;
   const transactionArea = AREAS.transactions;
   const plannedArea = AREAS.planned;
+  const importParsersArea = AREAS.importParsers;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -3514,7 +3657,8 @@ function mutationAreas(): Record<string, ParityArea> {
     categoryArea === undefined ||
     recipientArea === undefined ||
     transactionArea === undefined ||
-    plannedArea === undefined
+    plannedArea === undefined ||
+    importParsersArea === undefined
   )
     throw new Error("missing base area");
 
@@ -3566,6 +3710,89 @@ function mutationAreas(): Record<string, ParityArea> {
     method: "GET",
     path: "/api/tags?active=all&limit=1000",
   });
+
+  const parserRandom = new Random(0x9c1f);
+  const parserStep: ParityStep[] = [];
+  const parserIds = [
+    "1",
+    "2",
+    "999",
+    "5",
+    "abc",
+    "0",
+    "1e3",
+    "2147483648",
+    "-1",
+  ];
+  const names = ["KBC main", "  Bulk  ", "", 0, null, [], "", "x".repeat(120)];
+  const configs = [
+    null,
+    [],
+    "text",
+    0,
+    {},
+    PARSER_CONFIG,
+    { dateColumn: "D", recipientColumn: "R", amountColumn: "A" },
+    { ...PARSER_CONFIG, encoding: "UTF8" },
+    { ...PARSER_CONFIG, encoding: "latin-1" },
+    { ...PARSER_CONFIG, encoding: "windows-1252" },
+    { ...PARSER_CONFIG, encoding: "bogus" },
+    { ...PARSER_CONFIG, encoding: 7 },
+    { ...PARSER_CONFIG, number_format: "decimal_dot" },
+    { ...PARSER_CONFIG, number_format: "bogus" },
+    { ...PARSER_CONFIG, number_format: 3 },
+    { ...PARSER_CONFIG, skipRows: "" },
+    { ...PARSER_CONFIG, skipRows: "3a" },
+    { ...PARSER_CONFIG, skipRows: 2 },
+    { ...PARSER_CONFIG, skipRows: -1 },
+    { ...PARSER_CONFIG, separator: "" },
+    { ...PARSER_CONFIG, separator: "\t" },
+    { ...PARSER_CONFIG, dateFormat: "  " },
+    { ...PARSER_CONFIG, memoColumn: 0 },
+    { ...PARSER_CONFIG, extraKey: "dropped" },
+    { dateColumn: "", recipientColumn: "R", amountColumn: "A" },
+    { dateColumn: 5, recipientColumn: [], amountColumn: {} },
+  ];
+  for (let i = 0; i < 420; i++) {
+    const roll = parserRandom.next();
+    if (roll < 0.5) {
+      parserStep.push({
+        operationId: "createCustomParser",
+        method: "POST",
+        path: "/api/import/parsers",
+        body: {
+          ...(parserRandom.chance(0.9)
+            ? { name: parserRandom.pick(names) }
+            : {}),
+          ...(parserRandom.chance(0.9)
+            ? { config: parserRandom.pick(configs) }
+            : {}),
+          ...(parserRandom.chance(0.05)
+            ? { extra: randomValue(parserRandom, 0) }
+            : {}),
+        },
+      });
+    } else if (roll < 0.75) {
+      const body: Record<string, unknown> = {};
+      if (parserRandom.chance(0.6)) body.name = parserRandom.pick(names);
+      if (parserRandom.chance(0.6)) body.config = parserRandom.pick(configs);
+      parserStep.push({
+        operationId: "updateCustomParser",
+        method: "PATCH",
+        path: `/api/import/parsers/${parserRandom.pick(parserIds)}`,
+        body,
+      });
+      if (parserRandom.chance(0.06))
+        parserStep.push({
+          operationId: "deleteCustomParser",
+          method: "DELETE",
+          path: `/api/import/parsers/${parserRandom.pick(parserIds)}`,
+        });
+    } else {
+      parserStep.push(parserList());
+    }
+  }
+  parserStep.push(parserList());
 
   const settingRandom = new Random(0x5e77);
   const settingSteps: ParityStep[] = [];
@@ -3887,6 +4114,10 @@ function mutationAreas(): Record<string, ParityArea> {
     "tags-mutations": { ...tags, steps: asRecorded(tagSteps) },
     "settings-mutations": { ...settings, steps: asRecorded(settingSteps) },
     "exchange-rates-mutations": { ...rates, steps: asRecorded(rateSteps) },
+    "importParsers-mutations": {
+      ...importParsersArea,
+      steps: asRecorded(parserStep),
+    },
   };
 }
 
@@ -4025,19 +4256,19 @@ async function recordArea(
     // else round-trips the parsed body 1:1, and a 204 keeps recording `{}`.
     const rawContentType = res.headers["content-type"];
     const contentType = Array.isArray(rawContentType)
-      ? rawContentType[0] ?? ""
-      : rawContentType ?? "";
+      ? (rawContentType[0] ?? "")
+      : (rawContentType ?? "");
     const isTextAnswer =
       (contentType.startsWith("text/") || contentType.includes("ndjson")) &&
       res.text !== undefined &&
       res.text.length > 0;
     const response = isTextAnswer
       ? res.text
-      : JSON.parse(
+      : (JSON.parse(
           JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) =>
             value === today ? TODAY_TOKEN : value,
           ),
-        ) as unknown;
+        ) as unknown);
     // Headers the route set itself (execute's `Idempotent-Replay`), not the envelope's.
     const replay = res.headers["idempotent-replay"];
     const headers: Record<string, string> | undefined =
