@@ -48,8 +48,15 @@ interface ParityStep {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** Path and query, as the client sends them. */
   path: string;
-  /** JSON body; absent for none. */
+  /** JSON body; absent for none. Never combined with `multipart`. */
   body?: unknown;
+  /** A multipart/form-data upload: the `file` part plus its sibling text fields. */
+  multipart?: {
+    filename: string;
+    contentType?: string;
+    content: string;
+    fields?: Record<string, string>;
+  };
   /** Provider answers from this step on, replacing the area's `fetch`. */
   fetch?: Record<string, { status: number; body: string }>;
   /** Headers the route set itself (such as `Idempotent-Replay`). */
@@ -459,6 +466,29 @@ const batchCommit = (id: string): ParityStep => ({
   method: "POST",
   path: `/api/import/batches/${id}/commit`,
 });
+const csvUploadStep = (
+  path: string,
+  multipart: {
+    filename: string;
+    contentType?: string;
+    content: string;
+    fields?: Record<string, string>;
+  },
+): ParityStep => ({
+  operationId: "importCsv",
+  method: "POST",
+  path,
+  multipart,
+});
+const kbcLine = (
+  date: string,
+  amount: string,
+  balance: string,
+  credit: string,
+  debit: string,
+  counterparty: string,
+): string =>
+  `BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;${date};OPN;${date};${amount};${balance};${credit};${debit};BE99123456789012;BICBEB22XXX;${counterparty};Importerslaan 1;+++123/4567/89012;;;`;
 const batchOverrideRecipient = (
   id: string,
   rowId: string,
@@ -1703,6 +1733,107 @@ export const AREAS: Record<string, ParityArea> = {
       batchOverrideCategory("20", "abc", {}),
       batchOverrideCategory("20", "2", { category_id: "abc" }),
       batchPreview("20"),
+    ],
+  },
+  importUploads: {
+    router: { module: "importRoutes.ts", mountPath: "/api/import" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES
+        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES
+        (10, 'DupCoffee', 'dupcoffee', 3, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      csvUploadStep("/api/import/csv", {
+        filename: "",
+        content: "",
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "x.txt",
+        contentType: "text/plain",
+        content: "a;b\nc;d",
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "kbc.csv",
+        content: kbcLine(
+          "01/06/2024",
+          "-12,34",
+          "100,00",
+          "",
+          "12,34",
+          "DupCoffee",
+        ),
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "kbc-new.csv",
+        content: kbcLine(
+          "02/06/2024",
+          "-5,00",
+          "95,00",
+          "",
+          "5,00",
+          "FreshNewPlace",
+        ),
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "kbc-nobank.csv",
+        content: kbcLine(
+          "03/06/2024",
+          "-6,00",
+          "89,00",
+          "",
+          "6,00",
+          "FreshNoBankName",
+        ),
+      }),
+      csvUploadStep("/api/import/csv/custom", {
+        filename: "custom.csv",
+        content:
+          "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
+        fields: {
+          bank_name: "MyBank",
+          date_format: "%Y-%m-%d",
+          date_column: "Date",
+          recipient_column: "Name",
+          amount_column: "Amount",
+          memo_column: "Memo",
+        },
+      }),
+      {
+        operationId: "importCsvStream",
+        method: "POST",
+        path: "/api/import/csv/stream",
+        multipart: {
+          filename: "kbc-stream.csv",
+          content: kbcLine(
+            "04/06/2024",
+            "-7,00",
+            "82,00",
+            "",
+            "7,00",
+            "FreshStream",
+          ),
+          fields: { bank_name: "kbc" },
+        },
+      },
+      csvUploadStep("/api/import/recipients", {
+        filename: "recipients.csv",
+        content:
+          "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row",
+      }),
+      csvUploadStep("/api/import/categories", {
+        filename: "categories.csv",
+        content: "category,description\nIMPORT:FIRST,first test description\n",
+      }),
+      csvUploadStep("/api/import/recipients", {
+        filename: "recipients-sep.csv",
+        content: "name;category\nSemicolon Rcpt;IMPORT:FIRST\n",
+        fields: { separator: ";" },
+      }),
     ],
   },
   investments: {
@@ -4637,6 +4768,12 @@ interface AgentRequest extends PromiseLike<{
 }> {
   set(name: string, value: string): AgentRequest;
   send(body: string): AgentRequest;
+  field(name: string, value: string | number | boolean | Buffer): AgentRequest;
+  attach(
+    name: string,
+    file: Buffer | string,
+    options: string | { filename?: string; contentType?: string },
+  ): AgentRequest;
 }
 type Agent = Record<
   "get" | "post" | "put" | "patch" | "delete",
@@ -4735,6 +4872,16 @@ async function recordArea(
       request
         .set("Content-Type", "application/json")
         .send(JSON.stringify(step.body));
+    if (step.multipart !== undefined) {
+      for (const [name, value] of Object.entries(step.multipart.fields ?? {})) {
+        request.field(name, value);
+      }
+      if (step.multipart.filename !== "")
+        request.attach("file", Buffer.from(step.multipart.content), {
+          filename: step.multipart.filename,
+          contentType: step.multipart.contentType ?? "text/csv",
+        });
+    }
     const res = await request;
     const today = todayAppDateString();
     // A streamed file answer (the exports' text/csv and x-ndjson) never parses into

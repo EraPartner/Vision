@@ -1,0 +1,229 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES\n        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES\n        (10, 'DupCoffee', 'dupcoffee', 3, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "filename": "",
+        "content": "",
+        "fields": {
+          "bank_name": "kbc"
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "No file uploaded. Send a CSV file as multipart form-data with field name \"file\"."
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "filename": "x.txt",
+        "contentType": "text/plain",
+        "content": "a;b\nc;d",
+        "fields": {
+          "bank_name": "kbc"
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "File must be a CSV"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "filename": "kbc.csv",
+        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;01/06/2024;OPN;01/06/2024;-12,34;100,00;;12,34;BE99123456789012;BICBEB22XXX;DupCoffee;Importerslaan 1;+++123/4567/89012;;;",
+        "fields": {
+          "bank_name": "kbc"
+        }
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 1,
+          "requires_review": true,
+          "match_source_counts": {
+            "pattern": 0,
+            "exact": 0,
+            "fuzzy": 1,
+            "new": 0
+          }
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "filename": "kbc-new.csv",
+        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;02/06/2024;OPN;02/06/2024;-5,00;95,00;;5,00;BE99123456789012;BICBEB22XXX;FreshNewPlace;Importerslaan 1;+++123/4567/89012;;;",
+        "fields": {
+          "bank_name": "kbc"
+        }
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 2,
+          "requires_review": true,
+          "match_source_counts": {
+            "pattern": 0,
+            "exact": 0,
+            "fuzzy": 0,
+            "new": 1
+          }
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "filename": "kbc-nobank.csv",
+        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;03/06/2024;OPN;03/06/2024;-6,00;89,00;;6,00;BE99123456789012;BICBEB22XXX;FreshNoBankName;Importerslaan 1;+++123/4567/89012;;;"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required multipart field: bank_name"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv/custom",
+      "multipart": {
+        "filename": "custom.csv",
+        "content": "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
+        "fields": {
+          "bank_name": "MyBank",
+          "date_format": "%Y-%m-%d",
+          "date_column": "Date",
+          "recipient_column": "Name",
+          "amount_column": "Amount",
+          "memo_column": "Memo"
+        }
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 3,
+          "requires_review": true,
+          "match_source_counts": {
+            "pattern": 0,
+            "exact": 0,
+            "fuzzy": 0,
+            "new": 1
+          }
+        }
+      }
+    },
+    {
+      "operationId": "importCsvStream",
+      "method": "POST",
+      "path": "/api/import/csv/stream",
+      "multipart": {
+        "filename": "kbc-stream.csv",
+        "content": "BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;04/06/2024;OPN;04/06/2024;-7,00;82,00;;7,00;BE99123456789012;BICBEB22XXX;FreshStream;Importerslaan 1;+++123/4567/89012;;;",
+        "fields": {
+          "bank_name": "kbc"
+        }
+      },
+      "status": 200,
+      "response": ":                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":0}\n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":70}\n\nevent: review_required\ndata: {\"batch_id\":4,\"match_source_counts\":{\"pattern\":0,\"exact\":0,\"fuzzy\":0,\"new\":1},\"percent\":70}\n\n"
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/recipients",
+      "multipart": {
+        "filename": "recipients.csv",
+        "content": "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_processed": 3,
+          "imported": 2,
+          "skipped": 0,
+          "errors": 1,
+          "bank_account_errors": 0,
+          "status": "completed_with_errors"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/categories",
+      "multipart": {
+        "filename": "categories.csv",
+        "content": "category,description\nIMPORT:FIRST,first test description\n"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_processed": 1,
+          "imported": 1,
+          "skipped": 0,
+          "errors": 0,
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/recipients",
+      "multipart": {
+        "filename": "recipients-sep.csv",
+        "content": "name;category\nSemicolon Rcpt;IMPORT:FIRST\n",
+        "fields": {
+          "separator": ";"
+        }
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_processed": 1,
+          "imported": 1,
+          "skipped": 0,
+          "errors": 0,
+          "bank_account_errors": 0,
+          "status": "completed"
+        }
+      }
+    }
+  ]
+}
