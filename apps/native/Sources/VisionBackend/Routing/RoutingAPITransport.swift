@@ -8,7 +8,9 @@ public enum PortedOperations {
     public static let ids: Set<String> = [
         "getTags", "createTag", "getSettings", "getSetting", "saveSetting", "saveSettings", "getExchangeRates",
         "refreshExchangeRates", "getAccounts", "createAccount", "updateAccount", "deleteAccount",
-        "setAccountStatementBalance", "getCategoryTree", "createCategoryNode", "updateCategoryNode",
+        "setAccountStatementBalance", "previewAccountPortfolioLots", "closeAccount", "previewAccountMerge",
+        "mergeAccounts", "setAccountOpeningBalance", "reconcileAccount",
+        "getCategoryTree", "createCategoryNode", "updateCategoryNode",
         "deleteCategoryNode", "mergeCategoryNode", "getCategories", "createCategory", "getRecipients", "getRecipient",
         "createRecipient", "updateRecipient", "deleteRecipient", "mergeRecipient", "unmergeRecipient",
         "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern",

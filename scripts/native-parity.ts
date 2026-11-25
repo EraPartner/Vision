@@ -324,6 +324,40 @@ const accountDelete = (id: string): ParityStep => ({
   method: "DELETE",
   path: `/api/accounts/${id}`,
 });
+const accountLotPreview = (id: string): ParityStep => ({
+  operationId: "previewAccountPortfolioLots",
+  method: "GET",
+  path: `/api/accounts/${id}/portfolio-lot-retag-preview`,
+});
+const accountClose = (id: string, body: unknown): ParityStep => ({
+  operationId: "closeAccount",
+  method: "POST",
+  path: `/api/accounts/${id}/close`,
+  body,
+});
+const accountMergePreview = (id: string, query = ""): ParityStep => ({
+  operationId: "previewAccountMerge",
+  method: "GET",
+  path: `/api/accounts/${id}/merge-preview${query}`,
+});
+const accountMerge = (id: string, body: unknown): ParityStep => ({
+  operationId: "mergeAccounts",
+  method: "POST",
+  path: `/api/accounts/${id}/merge`,
+  body,
+});
+const accountOpeningBalance = (id: string, body: unknown): ParityStep => ({
+  operationId: "setAccountOpeningBalance",
+  method: "POST",
+  path: `/api/accounts/${id}/opening-balance`,
+  body,
+});
+const accountReconcile = (id: string, body: unknown): ParityStep => ({
+  operationId: "reconcileAccount",
+  method: "POST",
+  path: `/api/accounts/${id}/reconcile`,
+  body,
+});
 const transactions = (query = ""): ParityStep => ({
   operationId: "getTransactions",
   method: "GET",
@@ -1131,6 +1165,63 @@ export const AREAS: Record<string, ParityArea> = {
       statementPut("999", "EURO", { balance: 1, date: "2024-01-01" }),
       statementPut("abc", "EUR", { balance: 1, date: "2024-01-01" }),
       statementPut("6", "%C3%A9ur", { balance: 1, date: "2024-01-01" }),
+
+      // P14 — the remaining account operations: portfolio-lot preview, close,
+      // merge preview/merge, opening-balance anchors and reconcile. The steps
+      // run on the state the earlier steps left: accounts 1, 2, 3, 4 and 6
+      // exist (5 was deleted), 3 is inactive, and the statement puts above
+      // rewrote the seeded readings.
+      accountLotPreview("4"),
+      accountLotPreview("999"),
+      accountClose("3", {}),
+      accountClose("3", { balance_handling: "closer" }),
+      accountClose("3", { balance_handling: "preserve" }),
+      accountMergePreview("2"),
+      accountMergePreview("2", "?into=2"),
+      accountMergePreview("2", "?into=1e3"),
+      accountMergePreview("2", "?into=999"),
+      accountMergePreview("999", "?into=1"),
+      accountMergePreview("2", "?into=1"),
+      accountOpeningBalance("4", {
+        balance: "800.125",
+        date: "2024-06-01",
+      }),
+      accountOpeningBalance("4", {
+        balance: 850,
+        date: "2024-01-01",
+      }),
+      accountOpeningBalance("6", {
+        balance: 5,
+        date: "2024-04-01",
+        currency: "eur",
+      }),
+      accountOpeningBalance("1", {}),
+      accountOpeningBalance("1", { balance: "abc", date: "2024-13-01" }),
+      accountOpeningBalance("1", {
+        balance: 5,
+        date: "2024-01-01",
+        currency: "EURO",
+      }),
+      accountOpeningBalance("999", { balance: 5, date: "2024-01-01" }),
+      accountMerge("1", { source_ids: [1] }),
+      accountMerge("1", {}),
+      accountMerge("1", []),
+      accountMerge("1", { source_ids: ["abc"] }),
+      accountMerge("1", { source_ids: [3] }),
+      accountMerge("4", { source_ids: [1] }),
+      accountMerge("4", { source_ids: [6] }),
+      accountCreate({ name: "Depend", funding_account_id: 4 }),
+      accountMerge("1", { source_ids: [4] }),
+      accountReconcile("999", { mode: "accept" }),
+      accountReconcile("2", {}),
+      accountReconcile("2", { mode: "accept" }),
+      accountReconcile("2", { mode: "accept", currency: "CHF" }),
+      accountReconcile("1", { mode: "bogus", currency: "EURO" }),
+      accountReconcile("1", { mode: "adjustment" }),
+      accountReconcile("1", { mode: "accept" }),
+      accountReconcile("6", { mode: "adjustment", currency: "usd" }),
+      accountClose("2", { balance_handling: "adjustment" }),
+      accountClose("2", { balance_handling: "adjustment" }),
       accounts("?active=all"),
     ],
   },
