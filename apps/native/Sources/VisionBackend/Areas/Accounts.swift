@@ -821,7 +821,13 @@ enum AccountsArea {
                 if !stamped.isEmpty {
                 let recipient = try systemRecipientId(session)
                 let parts = JSValue.array(
-                    stamped.map { .object(["amount": .string(SQLArguments.javaScriptText($0.amount)), "currency": .string($0.currency)]) }
+                    stamped.map { pair -> JSValue in
+                        JSValue.object(
+                            JSObject([
+                                ("amount", JSValue.string(SQLArguments.javaScriptText(pair.amount))),
+                                ("currency", JSValue.string(pair.currency)),
+                            ]))
+                    }
                 ).jsonText
                 let rows = try session.rows(
                     """
