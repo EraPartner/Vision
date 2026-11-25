@@ -449,6 +449,45 @@ const batchDelete = (id: string): ParityStep => ({
   method: "DELETE",
   path: `/api/import/batches/${id}`,
 });
+const batchPreview = (id: string): ParityStep => ({
+  operationId: "previewImportBatch",
+  method: "GET",
+  path: `/api/import/batches/${id}/preview`,
+});
+const batchOverrideRecipient = (
+  id: string,
+  rowId: string,
+  body?: unknown,
+): ParityStep =>
+  body === undefined
+    ? {
+        operationId: "overrideImportRow",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/override`,
+      }
+    : {
+        operationId: "overrideImportRow",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/override`,
+        body,
+      };
+const batchOverrideCategory = (
+  id: string,
+  rowId: string,
+  body?: unknown,
+): ParityStep =>
+  body === undefined
+    ? {
+        operationId: "overrideImportRowCategory",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/category-override`,
+      }
+    : {
+        operationId: "overrideImportRowCategory",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/category-override`,
+        body,
+      };
 const parserDelete = (id: string): ParityStep => ({
   operationId: "deleteCustomParser",
   method: "DELETE",
@@ -1595,6 +1634,70 @@ export const AREAS: Record<string, ParityArea> = {
       batchDelete("4"),
       batchDelete("6"),
       batches(),
+    ],
+  },
+  importReview: {
+    router: { module: "importRoutes.ts", mountPath: "/api/import" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES
+        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 'FOOD', 'RESTAURANTS', 'FOOD:RESTAURANTS', 'FOOD:RESTAURANTS', 1, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES
+        (10, 'GroceryA', 'grocerya', 3, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (11, 'RestoB', 'restob', 4, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipient_match_patterns (id, recipient_id, pattern, pattern_kind, priority, is_active, source, created_at, updated_at) VALUES
+        (2, 10, 'GroceryA%', 'literal_prefix', 100, 1, 'user', '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO import_batches (id, adapter_name, source_filename, status, rows_total, rows_imported, started_at, completed_at) VALUES
+        (20, 'KBC adapter', 'kbc.csv', 'awaiting_review', 5, 0, '2024-06-01T10:00:00.000000Z', NULL),
+        (21, 'ING', 'ing.csv', 'complete', 1, 1, '2024-06-02T10:00:00.000000Z', '2024-06-02T10:00:03.000000Z')`,
+      `INSERT INTO import_staging_rows (id, batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo, amount,
+         currency, resolved_recipient_id, match_source, match_similarity, matched_pattern_id, dedup_fingerprint,
+         dedup_fingerprint_version, created_at, updated_at, override_category_id, user_override_recipient_id) VALUES
+        (1, 20, 0, 'matched', '2024-06-01', 'Main', 'GroceryA', 'Coffee', vision_numeric('4.5', 20, 4), 'EUR',
+         10, 'exact', 1.0, NULL, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1, '${SEED_TIME}', '${SEED_TIME}', NULL, NULL),
+        (2, 20, 1, 'matched', '2024-06-01', 'Main', 'GroceryA market', 'Market', vision_numeric('-2.25', 20, 4), 'EUR',
+         10, 'pattern', 0.85, 2, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}', NULL, NULL),
+        (3, 20, 2, 'matched', '2024-06-02', 'Main', 'UnknownCafe', 'Lunch', vision_numeric('12', 20, 4), 'EUR',
+         NULL, 'new', NULL, NULL, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}', NULL, NULL),
+        (4, 20, 3, 'matched', '2024-06-03', 'Main', 'RestoB', 'Dinner', vision_numeric('58', 20, 4), 'EUR',
+         11, 'fuzzy', 0.9, NULL, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 1, '${SEED_TIME}', '${SEED_TIME}', 4, NULL),
+        (5, 20, 4, 'validated', '2024-06-04', 'Main', 'Later', NULL, vision_numeric('1', 20, 4), 'EUR',
+         NULL, NULL, NULL, NULL, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}', NULL, NULL),
+        (6, 21, 0, 'matched', '2024-06-02', 'Main', 'GroceryA', 'Old', vision_numeric('3', 20, 4), 'EUR',
+         10, 'exact', 1.0, NULL, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}', NULL, NULL)`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at,
+         updated_at, dedup_fingerprint, dedup_fingerprint_version) VALUES
+        (200, '2024-05-01', vision_numeric('4.5', 18, 4), 'EUR', 'Coffee before', 10, NULL, 1,
+         '${SEED_TIME}', '${SEED_TIME}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1),
+        (201, '2024-05-02', vision_numeric('58', 18, 4), 'EUR', 'Dinner before', 11, NULL, 1,
+         '${SEED_TIME}', '${SEED_TIME}', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 1)`,
+    ],
+    steps: [
+      batchPreview("abc"),
+      batchPreview("999"),
+      batchPreview("20"),
+      batchOverrideRecipient("20", "abc", { recipient_id: 11 }),
+      batchOverrideRecipient("20", "1", { recipient_id: 11 }),
+      batchPreview("20"),
+      batchOverrideRecipient("20", "1", { recipient_id: null }),
+      batchOverrideRecipient("20", "3", { recipient_id: 10 }),
+      batchOverrideRecipient("20", "5", { recipient_id: 10 }),
+      batchOverrideRecipient("20", "999", { recipient_id: 10 }),
+      batchOverrideRecipient("999", "1", { recipient_id: 10 }),
+      batchOverrideRecipient("21", "1", { recipient_id: 10 }),
+      batchOverrideRecipient("20", "1", { recipient_id: "abc" }),
+      batchOverrideRecipient("20", "1", { recipient_id: 0 }),
+      batchOverrideRecipient("20", "1", { recipient_id: [] }),
+      batchOverrideRecipient("20", "1", {}),
+      batchOverrideRecipient("20", "1"),
+      batchOverrideCategory("20", "4", { category_id: 3 }),
+      batchOverrideCategory("20", "4", {}),
+      batchOverrideCategory("20", "2", { category_id: 999 }),
+      batchOverrideCategory("20", "2", { category_id: null }),
+      batchOverrideCategory("21", "2", { category_id: 3 }),
+      batchOverrideCategory("20", "abc", {}),
+      batchOverrideCategory("20", "2", { category_id: "abc" }),
+      batchPreview("20"),
     ],
   },
   categories: {
@@ -3726,6 +3829,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const plannedArea = AREAS.planned;
   const importParsersArea = AREAS.importParsers;
   const importBatchesArea = AREAS.importBatches;
+  const importReviewArea = AREAS.importReview;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -3736,7 +3840,8 @@ function mutationAreas(): Record<string, ParityArea> {
     transactionArea === undefined ||
     plannedArea === undefined ||
     importParsersArea === undefined ||
-    importBatchesArea === undefined
+    importBatchesArea === undefined ||
+    importReviewArea === undefined
   )
     throw new Error("missing base area");
 
@@ -3906,6 +4011,106 @@ function mutationAreas(): Record<string, ParityArea> {
     }
   }
   batchSteps.push(batches());
+
+  // The review area's writes: overrides aimed at random batch/row ids with random id
+  // values, with previews between. The ids stay inside the seed's (10, 11, 3, 4) or the
+  // malformed set: a syntactically valid but nonexistent id reaches the database write
+  // and fails its foreign key, a 500 the corpus cannot meaningfully pin.
+  const reviewRandom = new Random(0x6f11);
+  const reviewSteps: ParityStep[] = [];
+  const reviewBatchIds = [
+    "20",
+    "21",
+    "999",
+    "0",
+    "-3",
+    "abc",
+    "1e3",
+    "2.5",
+    "00020",
+    "9007199254740991",
+    "9007199254740992",
+    "+20",
+    " 20 ",
+  ];
+  const reviewRowIds = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "999",
+    "0",
+    "-1",
+    "abc",
+    "4.5",
+    "0002",
+  ];
+  const reviewRecipientIds: unknown[] = [
+    null,
+    10,
+    11,
+    0,
+    -1,
+    "10",
+    "abc",
+    [],
+    {},
+    true,
+    false,
+    3.5,
+    9007199254740991,
+    2147483648,
+  ];
+  const reviewCategoryIds: unknown[] = [
+    null,
+    3,
+    4,
+    999,
+    0,
+    -1,
+    "3",
+    "abc",
+    [],
+    {},
+    true,
+    false,
+    2.5,
+    2147483648,
+  ];
+  for (let i = 0; i < 420; i++) {
+    const roll = reviewRandom.next();
+    if (roll < 0.25) {
+      reviewSteps.push(batchPreview(reviewRandom.pick(reviewBatchIds)));
+    } else if (roll < 0.65) {
+      const id = reviewRandom.pick(reviewBatchIds);
+      const rowId = reviewRandom.pick(reviewRowIds);
+      if (reviewRandom.chance(0.12)) {
+        reviewSteps.push(batchOverrideRecipient(id, rowId));
+      } else {
+        reviewSteps.push(
+          batchOverrideRecipient(id, rowId, {
+            recipient_id: reviewRandom.pick(reviewRecipientIds),
+          }),
+        );
+      }
+    } else {
+      const id = reviewRandom.pick(reviewBatchIds);
+      const rowId = reviewRandom.pick(reviewRowIds);
+      if (reviewRandom.chance(0.12)) {
+        reviewSteps.push(batchOverrideCategory(id, rowId));
+      } else {
+        reviewSteps.push(
+          batchOverrideCategory(id, rowId, {
+            category_id: reviewRandom.pick(reviewCategoryIds),
+          }),
+        );
+      }
+    }
+    if (reviewRandom.chance(0.1)) reviewSteps.push(batchPreview("20"));
+  }
+  reviewSteps.push(batchPreview("20"));
 
   const settingRandom = new Random(0x5e77);
   const settingSteps: ParityStep[] = [];
@@ -4234,6 +4439,10 @@ function mutationAreas(): Record<string, ParityArea> {
     "importBatches-mutations": {
       ...importBatchesArea,
       steps: asRecorded(batchSteps),
+    },
+    "importReview-mutations": {
+      ...importReviewArea,
+      steps: asRecorded(reviewSteps),
     },
   };
 }
