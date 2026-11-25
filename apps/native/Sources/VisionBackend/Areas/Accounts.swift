@@ -781,7 +781,7 @@ enum AccountsArea {
              LIMIT 501
             """,
             [.integer(Int64(id.rawValue)), .text(types)])
-        let eligible = rows.first.map { Int(try $0.int64("eligible")) } ?? 0
+        let eligible = (try rows.first.map { Int(try $0.int64("eligible")) }) ?? 0
         let transactionIds = eligible <= 500 ? try rows.map { try $0.integerId("id") } : []
         return HandlerResult(
             data: .object([
@@ -807,13 +807,13 @@ enum AccountsArea {
             guard let account = try session.row(
                 "SELECT id, is_active FROM accounts WHERE id = ?", [.integer(Int64(id.rawValue))])
             else { throw BackendHTTPError.notFound("Account \(id.rawValue) not found") }
-            if !(try account.bool("is_active")) { return (true, []) }
+            if !try account.bool("is_active") { return (true, []) }
             var inserted: [[String: JSONValue]] = []
             if handling == "adjustment" {  // lint:allow string-literal-compare the two balance_handling labels of accountCloseService
                 let partitions = try currentBalanceParts(session, id: id)
                 var stamped: [(amount: Double, currency: String)] = []
                 for part in partitions {
-                    let amount = Money.roundToCents(part.balance).negated().toNumber
+                    let amount = DecimalMoney.roundToCents(part.balance).negated.toNumber
                     if abs(amount) >= 0.005 {
                         stamped.append((amount, part.currency.uppercased()))
                     }
@@ -908,10 +908,8 @@ enum AccountsArea {
     static func collidingAnchorCurrencies(_ session: BackendSession, ids: [Int]) throws -> [String] {
         let json = JSValue.array(ids.map(JSValue.int)).jsonText
         let anchors = try session.rows(
-            """
-            SELECT account_id, currency FROM transactions
-             WHERE account_id IN (SELECT value FROM json_each(?)) AND transfer_source = 'opening'
-            """,
+            "SELECT account_id, currency FROM transactions
+              WHERE account_id IN (SELECT value FROM json_each(?)) AND transfer_source = 'opening'",
             [.text(json)])
         var accountsByCurrency: [String: Set<Int>] = [:]
         for anchor in anchors {
@@ -946,7 +944,7 @@ enum AccountsArea {
     static func referenceCount(_ session: BackendSession, table: String, column: String, id: AccountID) throws -> Int {
         let row = try session.row(
             "SELECT COUNT(*) AS n FROM \(table) WHERE \(column) = ?", [.integer(Int64(id.rawValue))])
-        return row.map { Int(try $0.int64("n")) } ?? 0
+        return (try row.map { Int(try $0.int64("n")) }) ?? 0
     }
 
     static func mergePreview(
@@ -981,7 +979,7 @@ enum AccountsArea {
                         try referenceCount(session, table: "portfolio_transactions", column: "account_id", id: source)),
                     "funding": .int(try referenceCount(session, table: "accounts", column: "funding_account_id", id: source)),
                 ]),
-                "projectedBalance": number(try Money.roundToCents(total).toNumber),
+                "projectedBalance": number(DecimalMoney.roundToCents(total).toNumber),
                 "projectedBalanceCurrency": .string(targetCurrency),
                 "balanceParts": .array(
                     partitions.map { .object(["currency": .string($0.currency), "balance": number($0.balance.toNumber)]) }),
@@ -1018,7 +1016,7 @@ enum AccountsArea {
         }
         if !rejected.isEmpty {
             throw BackendHTTPError.validation(
-                "source_ids must contain only integers, no accounts were merged: \(rejected.joined(separator: "; "))")
+                "source_ids must contain only integers, no accounts were merged: \(rejected.joined(separator: "; \"))")
         }
         return ids
     }
@@ -1307,7 +1305,7 @@ enum AccountsArea {
                 base = fallbackBase
             }
             let statement = try DecimalJS.from(statementText).toNumber
-            let computed = try Money.roundToCents(base.balance).toNumber
+            let computed = DecimalMoney.roundToCents(base.balance).toNumber
             let drift = try DecimalJS.from(SQLArguments.javaScriptText(statement))
                 .minus(DecimalJS.from(SQLArguments.javaScriptText(computed))).toNumber
             if abs(drift) < 0.005 {
