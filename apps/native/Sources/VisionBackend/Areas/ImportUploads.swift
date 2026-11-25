@@ -7,6 +7,9 @@ import VisionNativeCore
 /// `importRecipients` / `importCategories` uploads. The batch, review and commit routes live
 /// in the other `Import*` areas; the parses in `BankAdapters` and `CSVParse`.
 enum ImportUploadsArea {
+    /// `BankImportText`, the shared adapter text helpers of `BankImportShared.swift`.
+    private typealias Text = BankImportText
+
     // MARK: - The upload form
 
     /// `multer`'s `req.file` for `csvUpload.single("file")`.
@@ -185,18 +188,18 @@ enum ImportUploadsArea {
                 "Missing required parameters: bank_name, date_format, date_column, recipient_column, amount_column"
             )
         }
-        var config = CustomBankParserConfig()
+        var config = CustomBankParserConfig(
+            columns: CustomBankParserConfig.Columns(
+                date: JavaScriptWhitespace.trim(dateColumn),
+                recipient: JavaScriptWhitespace.trim(recipientColumn),
+                amount: JavaScriptWhitespace.trim(amountColumn),
+                memo: memoColumn.map { JavaScriptWhitespace.trim($0) } ?? ""))
         config.bankName = JavaScriptWhitespace.trim(bankName)
         config.dateFormat = JavaScriptWhitespace.trim(dateFormat)
         config.encoding = encoding ?? "utf-8"
         config.numberFormat = .string(numberFormat ?? "auto")
         config.separator = separator
         config.skipRows = skipRows
-        config.columns = CustomBankParserConfig.Columns(
-            date: JavaScriptWhitespace.trim(dateColumn),
-            recipient: JavaScriptWhitespace.trim(recipientColumn),
-            amount: JavaScriptWhitespace.trim(amountColumn),
-            memo: memoColumn.map { JavaScriptWhitespace.trim($0) } ?? "")
         return CustomSetup(adapterName: bankName, config: config)
     }
 
@@ -218,47 +221,46 @@ enum ImportUploadsArea {
     /// `buildImportResult`'s tail, for the completion answer.
     static func pipelineResult(_ result: PipelineResult) throws -> HandlerResult {
         if result.requiresReview {
-            return HandlerResult(
-                status: 202,
-                data: .object([
-                    "batch_id": .int(result.batchId),
-                    "requires_review": .bool(true),
-                    "match_source_counts": matchSourceCountsJSON(result.matchSourceCounts),
-                ]))
-        }
-        return HandlerResult(
-            status: 201,
-            data: .object([
-                "total": .int(result.total),
-                "imported": .int(result.imported ?? 0),
-                "duplicates": .int(result.duplicates ?? 0),
-                "errors": .int(result.errors ?? 0),
+            let answer: [String: JSONValue] = [
                 "batch_id": .int(result.batchId),
-                "auto_linked_count": .int(result.autoLinkedCount ?? 0),
-                "status": .string((result.errors ?? 0) > 0 ? "completed_with_errors" : "completed"),
-                "error_message": .null,
-                "links": .array([]),
-            ]))
+                "requires_review": .bool(true),
+                "match_source_counts": matchSourceCountsJSON(result.matchSourceCounts),
+            ]
+            return HandlerResult(status: 202, data: .object(answer))
+        }
+        let answer: [String: JSONValue] = [
+            "total": .int(result.total),
+            "imported": .int(result.imported ?? 0),
+            "duplicates": .int(result.duplicates ?? 0),
+            "errors": .int(result.errors ?? 0),
+            "batch_id": .int(result.batchId),
+            "auto_linked_count": .int(result.autoLinkedCount ?? 0),
+            "status": .string((result.errors ?? 0) > 0 ? "completed_with_errors" : "completed"),
+            "error_message": .null,
+            "links": .array([]),
+        ]
+        return HandlerResult(status: 201, data: .object(answer))
     }
 
     /// `matchSourceCounts` for the envelope.
     static func matchSourceCountsJSON(_ counts: MatchSourceCounts) -> JSONValue {
-        .object([
+        let answer: [String: JSONValue] = [
             "pattern": .int(counts.pattern),
             "exact": .int(counts.exact),
             "fuzzy": .int(counts.fuzzy),
             "new": .int(counts.new),
-        ])
+        ]
+        return .object(answer)
     }
 
     /// `match_source_counts` for the raw SSE frames, where key order is the answer.
     static func matchSourceCountsJSValue(_ counts: MatchSourceCounts) -> JSValue {
-        .object([
+        .object(JSObject([
             ("pattern", .number(Double(counts.pattern))),
             ("exact", .number(Double(counts.exact))),
             ("fuzzy", .number(Double(counts.fuzzy))),
             ("new", .number(Double(counts.new))),
-        ])
+        ]))
     }
 
     // MARK: - The simple imports
@@ -279,16 +281,15 @@ enum ImportUploadsArea {
         let options = try csvImportOptions(form.fields)
         let result = try importRecipientsCSV(
             session, bytes: file.bytes, separator: options.separator, encoding: options.encoding)
-        return HandlerResult(
-            status: 201,
-            data: .object([
-                "total_processed": .int(result.totalProcessed),
-                "imported": .int(result.imported),
-                "skipped": .int(result.skipped),
-                "errors": .int(result.errors),
-                "bank_account_errors": .int(result.bankAccountErrors),
-                "status": .string(result.errors > 0 ? "completed_with_errors" : "completed"),
-            ]))
+        let answer: [String: JSONValue] = [
+            "total_processed": .int(result.totalProcessed),
+            "imported": .int(result.imported),
+            "skipped": .int(result.skipped),
+            "errors": .int(result.errors),
+            "bank_account_errors": .int(result.bankAccountErrors),
+            "status": .string(result.errors > 0 ? "completed_with_errors" : "completed"),
+        ]
+        return HandlerResult(status: 201, data: .object(answer))
     }
 
     /// `POST /categories`: the same shape without the bank-account counter.
@@ -298,15 +299,14 @@ enum ImportUploadsArea {
         let options = try csvImportOptions(form.fields)
         let result = try importCategoriesCSV(
             session, bytes: file.bytes, separator: options.separator, encoding: options.encoding)
-        return HandlerResult(
-            status: 201,
-            data: .object([
-                "total_processed": .int(result.totalProcessed),
-                "imported": .int(result.imported),
-                "skipped": .int(result.skipped),
-                "errors": .int(result.errors),
-                "status": .string(result.errors > 0 ? "completed_with_errors" : "completed"),
-            ]))
+        let answer: [String: JSONValue] = [
+            "total_processed": .int(result.totalProcessed),
+            "imported": .int(result.imported),
+            "skipped": .int(result.skipped),
+            "errors": .int(result.errors),
+            "status": .string(result.errors > 0 ? "completed_with_errors" : "completed"),
+        ]
+        return HandlerResult(status: 201, data: .object(answer))
     }
 
     // MARK: - `POST /csv/stream`
@@ -323,7 +323,7 @@ enum ImportUploadsArea {
         case "committing": percent = 70 + (frac * 30).rounded()  // lint:allow string-literal-compare the pipeline's phase, as progressToPercent reads it
         default: percent = 100
         }
-        let payload = JSValue.object([
+        let payload = JSValue.object(JSObject([
             ("phase", .string(progress.phase)),
             ("current", .number(Double(progress.current))),
             ("total", .number(Double(progress.total))),
@@ -331,7 +331,7 @@ enum ImportUploadsArea {
             ("duplicates", .number(Double(progress.duplicates ?? 0))),
             ("errors", .number(Double(progress.errors ?? 0))),
             ("percent", .number(percent)),
-        ])
+        ]))
         return (payload, Int(percent))
     }
 
@@ -363,16 +363,16 @@ enum ImportUploadsArea {
             // `skipped` is undefined for the transaction pipeline, so it never serialises.
             frames.append((
                 "review_required",
-                .object([
+                .object(JSObject([
                     ("batch_id", .number(Double(result.batchId))),
                     ("match_source_counts", matchSourceCountsJSValue(result.matchSourceCounts)),
                     ("percent", .number(Double(percent))),
-                ])
+                ]))
             ))
         } else {
             frames.append((
                 "complete",
-                .object([
+                .object(JSObject([
                     ("total_processed", .number(Double(result.total))),
                     ("imported", .number(Double(result.imported ?? 0))),
                     ("duplicates", .number(Double(result.duplicates ?? 0))),
@@ -381,7 +381,7 @@ enum ImportUploadsArea {
                     ("auto_linked_count", .number(Double(result.autoLinkedCount ?? 0))),
                     ("status", .string((result.errors ?? 0) > 0 ? "completed_with_errors" : "completed")),
                     ("percent", .number(100)),
-                ])
+                ]))
             ))
         }
         return HandlerResult.fileAnswer(
@@ -394,10 +394,10 @@ enum ImportUploadsArea {
         let expected = error.status == 400 && error.code == "VALIDATION_ERROR"  // lint:allow string-literal-compare the typed ValidationError streamImport checks for
         let detail = expected ? error.message : "Import failed"
         let code = expected ? error.code : "INTERNAL_SERVER_ERROR"
-        let payload = JSValue.object([
+        let payload = JSValue.object(JSObject([
             ("detail", .string(detail)),
             ("code", .string(code)),
-        ])
+        ]))
         return HandlerResult.fileAnswer(
             Data(sseText([("error", payload)]).utf8),
             headers: ["Content-Type": "text/event-stream"])
@@ -506,20 +506,20 @@ enum ImportUploadsArea {
         let configJSON: String?
         if let customConfig {
             let config = customConfigJSON(customConfig)
-            configJSON = JSValue.object([
+            configJSON = JSValue.object(JSObject([
                 ("bank_name", .string(config.bankName)),
                 ("date_format", .string(config.dateFormat)),
                 ("encoding", .string(config.encoding)),
                 ("number_format", .string(config.numberFormat)),
                 ("separator", .string(config.separator)),
                 ("skip_rows", .number(Double(config.skipRows))),
-                ("column_mapping", .object([
+                ("column_mapping", .object(JSObject([
                     ("date", .string(config.dateColumn)),
                     ("recipient", .string(config.recipientColumn)),
                     ("amount", .string(config.amountColumn)),
                     ("memo", .string(config.memoColumn)),
-                ])),
-            ]).jsonText
+                ]))),
+            ])).jsonText
         } else {
             configJSON = nil
         }
@@ -806,7 +806,7 @@ enum ImportUploadsArea {
             }
             // One statement per chunk: the rows travel as one JSON array.
             let array = JSValue.array(values.map { value in
-                .object([("id", .number(Double(value.id)))] + value.fields)
+                .object(JSObject([("id", .number(Double(value.id)))] + value.fields))
             }).jsonText
             _ = try session.rows(
                 """
@@ -960,22 +960,22 @@ enum ImportUploadsArea {
                 let raw = try row.optionalText("recipient_raw")
                 if let raw, let info = resolved[raw] {
                     matched += 1
-                    values.append(.object([
+                    values.append(.object(JSObject([
                         ("id", .number(Double(try row.int64("id")))),
                         ("recipient_id", .number(Double(info.recipientId))),
                         ("match_source", .string(info.matchSource)),
                         ("match_similarity", info.matchSimilarity.map { JSValue.number(SQLText.float4Value($0)) } ?? .null),
                         ("matched_pattern_id", info.matchedPatternId.map { JSValue.number(Double($0)) } ?? .null),
-                    ]))
+                    ])))
                 } else {
                     unresolved += 1
-                    values.append(.object([
+                    values.append(.object(JSObject([
                         ("id", .number(Double(try row.int64("id")))),
                         ("recipient_id", .null),
                         ("match_source", .null),
                         ("match_similarity", .null),
                         ("matched_pattern_id", .null),
-                    ]))
+                    ])))
                 }
             }
             let array = JSValue.array(values).jsonText
@@ -1675,7 +1675,7 @@ enum ImportIdentity {
         }
         var digits = ""
         var hasDigits = false
-        while index < scalars.count, scalars[index] >= 0x30, scalars[index] <= 0x39 {
+        while index < scalars.count, (0x30...0x39).contains(scalars[index].value) {
             digits.unicodeScalars.append(scalars[index])
             hasDigits = true
             index += 1
@@ -1685,7 +1685,7 @@ enum ImportIdentity {
         if index < scalars.count, scalars[index] == "." {  // lint:allow string-literal-compare the decimal point, as the regex reads it
             hasFraction = true
             index += 1
-            while index < scalars.count, scalars[index] >= 0x30, scalars[index] <= 0x39 {
+            while index < scalars.count, (0x30...0x39).contains(scalars[index].value) {
                 fractionDigits.unicodeScalars.append(scalars[index])
                 index += 1
             }
