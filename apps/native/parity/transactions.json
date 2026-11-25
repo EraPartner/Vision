@@ -15127,6 +15127,266 @@
       }
     },
     {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1,
+        "bId": 7
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "operationId": "getTransaction",
+      "method": "GET",
+      "path": "/api/transactions/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "transaction_date": "2024-01-05",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": true,
+          "transfer_peer_id": 7,
+          "transfer_source": "manual",
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "edited card",
+          "amount": -12.5,
+          "amount_eur": -12.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true
+            },
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1,
+        "bId": 2
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "A transfer must link two different accounts"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "aId and bId must be two distinct transaction ids"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1,
+        "bId": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "aId and bId must be two distinct transaction ids"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": "x",
+        "bId": 2
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "aId and bId must be two distinct transaction ids"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1.5,
+        "bId": 2
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "aId and bId must be two distinct transaction ids"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1,
+        "bId": 999
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Both transactions must exist to mark a transfer"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1,
+        "bId": 13
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Both transactions must be active to mark a transfer"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 1,
+        "bId": 6
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "A transfer must link two different accounts"
+        }
+      }
+    },
+    {
+      "operationId": "markTransfer",
+      "method": "POST",
+      "path": "/api/transactions/transfers",
+      "body": {
+        "aId": 4,
+        "bId": 7
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "A transfer needs one outflow and one inflow (opposite signs)"
+        }
+      }
+    },
+    {
+      "operationId": "getTransaction",
+      "method": "GET",
+      "path": "/api/transactions/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "transaction_date": "2024-01-05",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": true,
+          "transfer_peer_id": 7,
+          "transfer_source": "manual",
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "edited card",
+          "amount": -12.5,
+          "amount_eur": -12.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true
+            },
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
       "operationId": "getTransactions",
       "method": "GET",
       "path": "/api/transactions?sort_by=date",
@@ -15291,9 +15551,9 @@
               "transaction_date": "2024-03-01",
               "bank_account": "Travel",
               "account_id": 2,
-              "is_transfer": false,
-              "transfer_peer_id": null,
-              "transfer_source": null,
+              "is_transfer": true,
+              "transfer_peer_id": 1,
+              "transfer_source": "manual",
               "recipient_id": 3,
               "recipient_name": "MARKET",
               "memo": "TOP UP",
@@ -15307,7 +15567,7 @@
               "tags": [],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15575,9 +15835,9 @@
               "transaction_date": "2024-01-05",
               "bank_account": "Main",
               "account_id": 1,
-              "is_transfer": false,
-              "transfer_peer_id": null,
-              "transfer_source": null,
+              "is_transfer": true,
+              "transfer_peer_id": 7,
+              "transfer_source": "manual",
               "recipient_id": 1,
               "recipient_name": "SHOP",
               "memo": "edited card",
