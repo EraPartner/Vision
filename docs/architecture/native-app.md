@@ -730,6 +730,18 @@ The account list ports the anchor + delta balance SQL verbatim (`Areas/AccountBa
 and does the conversion, rounding and drift with `Numeric/DecimalJS.swift`, the `decimal.js`
 arithmetic of `money.ts` (30 significant digits, half-even), not the NUMERIC rules of `ExactDecimal`.
 
+The attachment upload (`uploadAttachment`, the hand-written multipart `POST
+/api/attachments/transaction/:id`) runs in-process too: `HTTP/MultipartParts.swift` parses the
+multipart form the client's `MultipartFormData` writes, `AttachmentsArea.upload` answers multer's
+own checks in stream order (the file filter, the size limit, an unexpected field, the missing file)
+and then the content verification (`fileSniff.ts`'s magic bytes, the extension match) before it
+writes the file under `BackendDatabase`'s `attachmentsDirectory` with a random-uuid name and
+inserts the row. The corpus carries it as a `multipart` step kind (the recorder's `httpAgent`
+sends parts with `.field`/`.attach`), the random uuid of a created `stored_path` as `{{uuid}}`
+(compared by form, like a written timestamp), a binary download answer as base64 bytes, and upload
+files under the throwaway `ATTACHMENTS_DIR` of a recording; the 10 MB size branch is proven by
+`AttachmentUploadTests` (a corpus file may not weigh megabytes).
+
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each
 body sent in the key order the recorder wrote, through

@@ -332,9 +332,9 @@ or a few PRs where marked. Tick the boxes as PRs merge.
 
 ### P10 Planned payments (7). Details in section 8.
 
-- [ ] 10a `getPlannedTransactions`, `getPlannedTotals`, `getPlannedMatchSuggestions`,
+- [x] 10a `getPlannedTransactions`, `getPlannedTotals`, `getPlannedMatchSuggestions`,
       `executePlannedTransaction`, `deletePlannedTransaction`
-- [ ] 10b `createPlannedTransaction`, `updatePlannedTransaction` (loan schedule)
+- [x] 10b `createPlannedTransaction`, `updatePlannedTransaction` (loan schedule)
 
 ### P11 Transaction writes and attachments
 
@@ -342,40 +342,41 @@ TS: `routes/transactions.ts`, `transactionService.ts`, `transactionRepository.ts
 `deduplication.ts`, `plannedMatchService.autoLinkTransactions`, `accountLifecycleLock.ts`,
 `plannedExecutionGuard.ts`, `routes/attachments.ts`, `attachmentService`.
 
-- [ ] `createTransaction`. Covers the manual-v3 dedup hash and claims (`manualAmountIdentity`
+- [x] `createTransaction`. Covers the manual-v3 dedup hash and claims (`manualAmountIdentity`
       ROUND_HALF_UP to 4 dp), auto-link to planned payments (setting `autoClearPlannedOnMatch`), and
       the 409 with conflict details.
-- [ ] `updateTransaction`. Covers the hand-written explicit-null PATCH, recipient and category name
+- [x] `updateTransaction`. Covers the hand-written explicit-null PATCH, recipient and category name
       resolution, `sanitizeUpdateFields`, the account lock "Reopen the account before changing its
       ledger balance", and tags.
-- [ ] `deleteTransaction`. Covers the planned guard 409 and best-effort attachment file unlink. Pass
+- [x] `deleteTransaction`. Covers the planned guard 409 and best-effort attachment file unlink. Pass
       the attachments directory into `BackendDatabase` next to `resume(databasePath:)`; the app knows
       it as `layout.attachments`.
 - [ ] The debounced transfer reconcile (`transferReconciliationService.scheduleReconcile`: 5 s
       debounce, 10 s max wait). It also invalidates statistics caches and schedules the MV refresh.
-- [ ] `getTransactionAttachments`, `downloadAttachment` (binary), `deleteAttachment`, and the
-      hand-written multipart `uploadAttachment`.
+- [x] `getTransactionAttachments`, `downloadAttachment` (binary), `deleteAttachment` (#460).
+- [x] The hand-written multipart `uploadAttachment` (P11, `MultipartParts` parses the form; the
+      recorder's `multipart` step and `{{uuid}}` token carry the corpus).
 
 ### P12 Transfers and bulk
 
-- [ ] `markTransfer` (mark and unmark), and transfer suggestions if the client reads them
-- [ ] `bulkUpdateTransactions`, `bulkDeleteTransactions`, `bulkTagTransactions`
+- [x] `markTransfer` (mark and unmark), and transfer suggestions if the client reads them
+- [x] `bulkUpdateTransactions`, `bulkDeleteTransactions`, `bulkTagTransactions`
       (`transactionBulkService.ts`)
 
 ### P13 Exports
 
-- [ ] `exportTransactionsCsv`, `exportTransactionsJson`, and `bulkExportTransactions` (file
+- [x] `exportTransactionsCsv`, `exportTransactionsJson`, and `bulkExportTransactions` (file
       answer plus `x-exported-count`). The byte-exact CSV quoting is compared in the corpus.
 
 ### P14 Account operations that wait on transactions
 
-- [ ] `setAccountOpeningBalance`, `reconcileAccount`, `closeAccount`, `previewAccountMerge`,
+- [x] `setAccountOpeningBalance`, `reconcileAccount`, `closeAccount`, `previewAccountMerge`,
       `mergeAccounts`. Merge repoints transactions, planned rows and recipients with
       `repointAccount`.
 
 ### P15 Splits (10)
 
-- [ ] `getSplitsByTransaction`, `createSplitBatch`, `createBulkSplits`, `getSplitsOwed`,
+- [x] `getSplitsByTransaction`, `createSplitBatch`, `createBulkSplits`, `getSplitsOwed`,
       `getSplitOwedByRecipient`, `exportSplitsOwedCsv`, `paySplit`, `settleSplit`,
       `settleAllSplitsForRecipient`, `deleteSplit` (`routes/splits.ts`)
 
@@ -383,11 +384,12 @@ TS: `routes/transactions.ts`, `transactionService.ts`, `transactionRepository.ts
 
 The pure cores for these are already on main (`BankImport`, `Workbook`, from #432).
 
-- [ ] Parsers: `getCustomParsers`, `createCustomParser`, `updateCustomParser`,
+- [x] Parsers: `getCustomParsers`, `createCustomParser`, `updateCustomParser`,
       `deleteCustomParser` (`parserConfigRoutes.ts`)
-- [ ] Batches: `getImportBatches`, `deleteImportBatch`, `previewImportBatch`, `overrideImportRow`,
+- [x] Batches: `getImportBatches`, `deleteImportBatch`, `previewImportBatch`, `overrideImportRow`,
       `overrideImportRowCategory`, `commitImportBatch` (`importBatchRoutes.ts`)
-- [ ] Uploads (hand-written multipart and SSE in `Screens/Imports/ImportRequests.swift`):
+- [ ] Uploads (hand-written multipart and SSE in `Screens/Imports/ImportRequests.swift`,
+      `ImportUploadsArea` in progress):
       `importCsv`, `importCsvCustom`, `importCsvStream`, `importRecipients`, `importCategories`
       (`importRoutes.ts`, `services/importPipeline`)
 - [ ] `getSupportedAdapters`, `getInfoBanks`, `getRecurringPatterns`

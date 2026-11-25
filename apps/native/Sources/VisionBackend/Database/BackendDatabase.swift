@@ -19,14 +19,17 @@ public actor BackendDatabase: InProcessDatabaseHolder {
     }
 
     /// Opens `path` straight away, for tests and tools that own the file. `wall` replaces the
-    /// system clock, for a replay recorded at a fixed instant.
+    /// system clock, for a replay recorded at a fixed instant; `attachmentsDirectory` is the
+    /// root the upload route stores files under, as the app's layout hands it over.
     public init(
         path: String, time: SQLTimestamps = SQLTimestamps(),
-        wall: @escaping @Sendable () -> SQLTimestamps.Instant = SQLConnectionClock.systemNow
+        wall: @escaping @Sendable () -> SQLTimestamps.Instant = SQLConnectionClock.systemNow,
+        attachmentsDirectory: String? = nil
     ) {
         self.time = time
         self.wall = wall
         self.path = path
+        self.attachmentsDirectory = attachmentsDirectory
         suspended = false
     }
 

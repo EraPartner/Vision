@@ -20,7 +20,7 @@ public enum PortedOperations {
         "deleteRecipientPattern", "getTransactions", "getTransaction", "createTransaction",
         "updateTransaction", "deleteTransaction", "markTransfer", "bulkTagTransactions",
         "bulkUpdateTransactions", "bulkDeleteTransactions",
-        "getTransactionAttachments", "downloadAttachment", "deleteAttachment",
+        "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "uploadAttachment",
         "exportTransactionsCsv", "exportTransactionsJson", "bulkExportTransactions",
         "getPlannedTransactions", "getPlannedTotals", "getPlannedMatchSuggestions",
         "createPlannedTransaction", "updatePlannedTransaction",

@@ -42,6 +42,18 @@ import {
 
 export const PARITY_DIR = repoPath("apps/native/parity");
 
+/** One file part of a multipart upload, as the client's `MultipartFormData` sends it. */
+interface MultipartFilePart {
+  /** The form field the file travels under (`file` for the upload routes). */
+  name: string;
+  /** What the part's `filename=` carries: `originalname` to multer. */
+  filename: string;
+  /** The part's own `Content-Type`; absent parts are sent by busboy's default. */
+  contentType?: string;
+  /** The file's bytes (`octet-stream`-safe encoding, as the corpus holds them). */
+  base64: string;
+}
+
 interface ParityStep {
   /** The generated client's operationId the request belongs to. */
   operationId: string;
@@ -50,6 +62,15 @@ interface ParityStep {
   path: string;
   /** JSON body; absent for none. */
   body?: unknown;
+  /**
+   * A multipart/form-data body instead of a JSON one: the hand-written upload routes'
+   * file parts and text fields (`MultipartFormData` on the client, busboy's parse on the
+   * server). Absent for the JSON bodies the generated client sends.
+   */
+  multipart?: {
+    fields?: Record<string, string>;
+    files: MultipartFilePart[];
+  };
   /** Provider answers from this step on, replacing the area's `fetch`. */
   fetch?: Record<string, { status: number; body: string }>;
   /** Headers the route set itself (such as `Idempotent-Replay`). */
@@ -77,6 +98,46 @@ interface ParityArea {
 
 /** Recorded in place of today's date (APP_TIMEZONE Europe/Brussels): the replay substitutes its own. */
 export const TODAY_TOKEN = "{{today}}";
+
+/**
+ * Recorded in place of the random UUID an upload's `stored_path` carries: the replay checks
+ * the recorded value has the UUID form, as it checks a written timestamp's form only.
+ */
+export const UUID_TOKEN = "{{uuid}}";
+
+/** Bytes of a text payload, for a file part whose content is plain text. */
+const textBytes = (text: string): number[] =>
+  Array.from(text, (char) => char.charCodeAt(0));
+
+/** One multipart `file` part carrying `contentType` and `filename`. */
+function filePart(
+  bytes: number[],
+  filename: string,
+  contentType: string,
+): MultipartFilePart {
+  return {
+    name: "file",
+    filename,
+    contentType,
+    base64: Buffer.from(bytes).toString("base64"),
+  };
+}
+
+/** The `file` part of an `uploadAttachment` to `path`. */
+function upload(
+  path: string,
+  [bytes, filename, contentType]: [number[], string, string],
+): ParityStep {
+  return {
+    operationId: "uploadAttachment",
+    method: "POST",
+    path,
+    multipart: { files: [filePart(bytes, filename, contentType)] },
+  };
+}
+
+const UUID_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi;
 
 const SEED_TIME = "2025-03-01T09:00:00.000000Z";
 
@@ -2066,6 +2127,9 @@ export const AREAS: Record<string, ParityArea> = {
   },
   attachments: {
     router: { module: "attachments.ts", mountPath: "/api/attachments" },
+    // The upload steps answer 201 with `created_at`/`stored_path` the run wrote, and
+    // write the file bytes under the throwaway ATTACHMENTS_DIR; the later list and
+    // download steps read both back.
     seed: [
       `INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES
         (1, 'Main', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001')`,
@@ -2075,12 +2139,14 @@ export const AREAS: Record<string, ParityArea> = {
          created_at, updated_at) VALUES
         (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 'CARD 1234', 1, 1, 1,
          '${SEED_TIME}', '${SEED_TIME}')`,
+      // ids leave the sequence room: a default upload insert takes nextval() (vision_sequences
+      // counts default inserts only), so ids 101+ never shadow a created row (seed traps).
       `INSERT INTO attachments (id, transaction_id, filename, stored_path, mime_type, size_bytes, created_at) VALUES
-        (1, 1, 'receipt.png', '1/aaaaaaaa-0000-4000-8000-000000000001.png', 'image/png', 1024,
+        (101, 1, 'receipt.png', '1/aaaaaaaa-0000-4000-8000-000000000001.png', 'image/png', 1024,
          '2025-03-01T09:00:00.000000Z'),
-        (2, 1, 'invoice.pdf', '1/bbbbbbbb-0000-4000-8000-000000000002.pdf', 'application/pdf', 2048,
+        (102, 1, 'invoice.pdf', '1/bbbbbbbb-0000-4000-8000-000000000002.pdf', 'application/pdf', 2048,
          '2025-03-02T09:00:00.000000Z'),
-        (3, 1, 'scan.png', '1/cccccccc-0000-4000-8000-000000000003.png', 'image/png', 512,
+        (103, 1, 'scan.png', '1/cccccccc-0000-4000-8000-000000000003.png', 'image/png', 512,
          '2025-03-03T09:00:00.000000Z')`,
     ],
     steps: [
@@ -2132,7 +2198,7 @@ export const AREAS: Record<string, ParityArea> = {
       {
         operationId: "deleteAttachment",
         method: "DELETE",
-        path: "/api/attachments/1",
+        path: "/api/attachments/101",
       },
       {
         operationId: "deleteAttachment",
@@ -2143,6 +2209,140 @@ export const AREAS: Record<string, ParityArea> = {
         operationId: "deleteAttachment",
         method: "DELETE",
         path: "/api/attachments/abc",
+      },
+      // ── uploadAttachment: the hand-written multipart POST ──
+      upload("/api/attachments/transaction/1", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02, 0x03],
+        "receipt.png",
+        "image/png",
+      ]),
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/1",
+      },
+      {
+        operationId: "downloadAttachment",
+        method: "GET",
+        path: "/api/attachments/1/download",
+      },
+      upload("/api/attachments/transaction/1", [
+        [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10],
+        "photo.JPG",
+        "image/jpeg",
+      ]),
+      upload("/api/attachments/transaction/1", [
+        textBytes("%PDF-1.4\nVision"),
+        "doc.pdf",
+        "application/pdf",
+      ]),
+      upload("/api/attachments/transaction/1", [
+        textBytes("GIF89aVision"),
+        "anim.gif",
+        "image/gif",
+      ]),
+      upload("/api/attachments/transaction/1", [
+        [
+          ...textBytes("RIFF"),
+          0x24,
+          0x00,
+          0x00,
+          0x00,
+          ...textBytes("WEBPVP8 "),
+        ],
+        "shot.webp",
+        "image/webp",
+      ]),
+      // content sniff fails: text bytes named as a PNG
+      upload("/api/attachments/transaction/1", [
+        textBytes("just some plain text"),
+        "fake.png",
+        "image/png",
+      ]),
+      // a valid PNG stored under an unsupported extension
+      upload("/api/attachments/transaction/1", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "evil.exe",
+        "image/png",
+      ]),
+      // a valid PNG named .pdf: extension does not match the sniffed content
+      upload("/api/attachments/transaction/1", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "pretend.pdf",
+        "image/png",
+      ]),
+      // no extension: allowed, nothing misleading is stored
+      upload("/api/attachments/transaction/1", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "noextension",
+        "image/png",
+      ]),
+      // the file part's Content-Type is not an image or a PDF: multer's fileFilter
+      upload("/api/attachments/transaction/1", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "data.txt",
+        "text/plain",
+      ]),
+      // a text field instead of a file part
+      {
+        operationId: "uploadAttachment",
+        method: "POST",
+        path: "/api/attachments/transaction/1",
+        multipart: {
+          fields: { note: "no file here" },
+          files: [],
+        },
+      },
+      // no multipart at all: the JSON body parser runs, multer finds no buffer
+      {
+        operationId: "uploadAttachment",
+        method: "POST",
+        path: "/api/attachments/transaction/1",
+        body: { filename: "x.png" },
+      },
+      // a bad :id is rejected before multer buffers the upload
+      upload("/api/attachments/transaction/abc", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "bad.png",
+        "image/png",
+      ]),
+      upload("/api/attachments/transaction/0", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "zero.png",
+        "image/png",
+      ]),
+      // the transaction must exist (checked after the content checks)
+      upload("/api/attachments/transaction/999", [
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "orphan.png",
+        "image/png",
+      ]),
+      // an extra text field rides along and is ignored
+      {
+        operationId: "uploadAttachment",
+        method: "POST",
+        path: "/api/attachments/transaction/1",
+        multipart: {
+          fields: { caption: "monthly receipt" },
+          files: [
+            filePart([0xff, 0xd8, 0xff, 0xff], "tagged.jpg", "image/jpeg"),
+          ],
+        },
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/1",
+      },
+      {
+        operationId: "deleteAttachment",
+        method: "DELETE",
+        path: "/api/attachments/1",
+      },
+      {
+        operationId: "deleteAttachment",
+        method: "DELETE",
+        path: "/api/attachments/1",
       },
     ],
   },
@@ -4542,6 +4742,13 @@ interface AgentRequest extends PromiseLike<{
 }> {
   set(name: string, value: string): AgentRequest;
   send(body: string): AgentRequest;
+  /** `httpAgent`'s multipart helpers: a text field and a file part. */
+  field(name: string, value: string | number | boolean | Buffer): AgentRequest;
+  attach(
+    name: string,
+    file: Buffer,
+    options: { filename: string; contentType?: string | undefined },
+  ): AgentRequest;
 }
 type Agent = Record<
   "get" | "post" | "put" | "patch" | "delete",
@@ -4571,6 +4778,9 @@ async function recordArea(
   const file = path.join(dir, "vision.sqlite3");
   // Before any backend module loads its settings.
   process.env.VISION_DATABASE_PATH = file;
+  // Written upload files (the attachments storage) land beside the throwaway database,
+  // never in the repo's checkout.
+  process.env.ATTACHMENTS_DIR = path.join(dir, "attachments");
   process.env.NODE_ENV = "test";
   process.env.APP_TIMEZONE = "Europe/Brussels";
   // The routes' rate limiters guard a network listener; the in-process Swift backend has
@@ -4636,7 +4846,15 @@ async function recordArea(
     const method = step.method.toLowerCase() as
       "get" | "post" | "put" | "patch" | "delete";
     const request = agent[method](step.path);
-    if ("body" in step)
+    if (step.multipart !== undefined) {
+      for (const [name, value] of Object.entries(step.multipart.fields ?? {}))
+        request.field(name, value);
+      for (const file of step.multipart.files)
+        request.attach(file.name, Buffer.from(file.base64, "base64"), {
+          filename: file.filename,
+          contentType: file.contentType,
+        });
+    } else if ("body" in step)
       request
         .set("Content-Type", "application/json")
         .send(JSON.stringify(step.body));
@@ -4653,13 +4871,23 @@ async function recordArea(
       (contentType.startsWith("text/") || contentType.includes("ndjson")) &&
       res.text !== undefined &&
       res.text.length > 0;
-    const response = isTextAnswer
-      ? res.text
-      : (JSON.parse(
-          JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) =>
-            value === today ? TODAY_TOKEN : value,
-          ),
-        ) as unknown);
+    // A streamed file answer (the exports' text/csv and x-ndjson, and an attachment
+    // download's raw bytes) never parses into `res.body` — its raw bytes (base64, for a
+    // binary download) are the answer the corpus must hold.
+    const response = Buffer.isBuffer(res.body)
+      ? { buffer: res.body.toString("base64") }
+      : isTextAnswer
+        ? res.text
+        : (JSON.parse(
+            JSON.stringify(
+              withoutRequestId(res.body),
+              (_key, value: unknown) => {
+                if (typeof value !== "string") return value;
+                const withoutUuid = value.replace(UUID_RE, UUID_TOKEN);
+                return withoutUuid === today ? TODAY_TOKEN : withoutUuid;
+              },
+            ),
+          ) as unknown);
     // Headers the route set itself (execute's `Idempotent-Replay`), not the envelope's.
     const replay = res.headers["idempotent-replay"];
     const headers: Record<string, string> | undefined =

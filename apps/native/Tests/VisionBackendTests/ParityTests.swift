@@ -18,12 +18,51 @@ import VisionNativeCore
         let hasBody: Bool
         let status: Int
         let response: JSONValue
+        /// The multipart upload the step sends instead of a JSON body: the hand-written
+        /// upload routes' file parts and text fields, built the way `httpAgent` sends them.
+        let multipart: Multipart?
         /// Provider answers from this step on, replacing the corpus's.
         let fetch: [String: Stub]?
         /// Headers the route set itself, such as `Idempotent-Replay`.
         let headers: [String: String]?
 
-        enum CodingKeys: String, CodingKey { case operationId, method, path, body, status, response, fetch, headers }
+        enum CodingKeys: String, CodingKey {
+            case operationId, method, path, body, status, response, multipart, fetch, headers
+        }
+
+        struct Multipart: Decodable {
+            struct FilePart: Decodable {
+                let name: String
+                let filename: String
+                let contentType: String?
+                let base64: String
+            }
+
+            let fields: [String: String]?
+            let files: [FilePart]
+
+            /// The request's `Content-Type` (the boundary the body builds with) and its bytes,
+            /// as the recorder's `httpAgent` writes them: each part between `--boundary`
+            /// markers, closed by `--boundary--`.
+            func encoded() -> (contentType: String, body: Data) {
+                let boundary = "VisionParity\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+                var body = Data()
+                for (name, value) in fields ?? [:] {
+                    body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+                }
+                for file in files {
+                    body.append(
+                        Data(
+                            "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(file.name)\"; "
+                                + "filename=\"\(file.filename)\"\r\nContent-Type: \(file.contentType ?? "application/octet-stream")\r\n\r\n"
+                                .utf8))
+                    body.append(Data(base64Encoded: file.base64) ?? Data())
+                    body.append(Data("\r\n".utf8))
+                }
+                body.append(Data("--\(boundary)--\r\n".utf8))
+                return ("multipart/form-data; boundary=\(boundary)", body)
+            }
+        }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -33,6 +72,7 @@ import VisionNativeCore
             hasBody = container.contains(.body)
             status = try container.decode(Int.self, forKey: .status)
             response = try container.decode(JSONValue.self, forKey: .response)
+            multipart = try container.decodeIfPresent(Multipart.self, forKey: .multipart)
             fetch = try container.decodeIfPresent([String: Stub].self, forKey: .fetch)
             headers = try container.decodeIfPresent([String: String].self, forKey: .headers)
         }
@@ -133,6 +173,30 @@ import VisionNativeCore
             && SQLRow.isoMilliseconds(fromCanonical: String(text.dropLast()) + "000Z") != nil
     }
 
+    static let uuidToken = "{{uuid}}"
+
+    static func isUuidForm(_ text: String) -> Bool {
+        text.count == 36 && text.split(separator: "-", omittingEmptySubsequences: false).map { $0.count } == [8, 4, 4, 4, 12]
+    }
+
+    /// A `{{uuid}}` the run recorded: the answer holds a random UUID (as a written
+    /// timestamp holds a written time), so the comparison checks the form only.
+    static func uuidDifference(_ expected: String, _ actual: String, at path: String) -> String? {
+        var wanted = Substring(expected)
+        var got = Substring(actual)
+        while let range = wanted.range(of: uuidToken) {
+            let prefix = wanted[wanted.startIndex..<range.lowerBound]
+            guard got.hasPrefix(prefix) else { return "\(path): \(actual) is not \(expected)" }
+            got = got.dropFirst(prefix.count)
+            guard got.count >= 36, isUuidForm(String(got.prefix(36))) else {
+                return "\(path): \(actual) has no UUID where \(expected) has one"
+            }
+            got = got.dropFirst(36)
+            wanted = wanted[range.upperBound...]
+        }
+        return got == wanted ? nil : "\(path): \(actual) is not \(expected)"
+    }
+
     /// The first difference between `expected` and `actual`, or nil when they match.
     static func difference(
         _ expected: JSONValue, _ actual: JSONValue, at path: String, seedTimes: Set<String>, today: String = ""
@@ -162,6 +226,8 @@ import VisionNativeCore
             return nil
         case (.string(let want), .string(let got)) where want == todayToken:
             return got == today ? nil : "\(path): \(got) is not today (\(today))"
+        case (.string(let want), .string(let got)) where want.contains(uuidToken):
+            return uuidDifference(want, got, at: path)
         case (.string(let want), .string(let got)) where isTimestampForm(want) && !seedTimes.contains(want):
             // A timestamp the run wrote must not be one the seed wrote: a write that skipped
             // `updated_at = now()` would keep the seed's.
@@ -196,7 +262,9 @@ import VisionNativeCore
             now = Int64((Date().timeIntervalSince1970 * 1000).rounded(.down))
         }
         let wall: @Sendable () -> SQLTimestamps.Instant = { SQLTimestamps.Instant(ms: now) }
-        let database = BackendDatabase(path: file.path, time: recorderTime, wall: wall)
+        let database = BackendDatabase(
+            path: file.path, time: recorderTime, wall: wall,
+            attachmentsDirectory: file.deletingLastPathComponent().appendingPathComponent("attachments").path)
         let fetcher = StubFetcher(stubs: corpus.fetch ?? [:])
         let backend = InProcessBackend.live(database: database, fetcher: fetcher)
         let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
@@ -211,10 +279,16 @@ import VisionNativeCore
             if let next = step.fetch { fetcher.replace(next) }
             let url = try #require(URL(string: "http://127.0.0.1:3001" + Self.fetchEncoded(step.path)))
             let method = try #require(HTTPMethod(rawValue: step.method), "\(label)")
-            let request = APIRequest(
-                method: method, url: url, headers: step.hasBody ? ["Content-Type": "application/json"] : [:],
-                body: step.hasBody ? rawSteps[index].objectValue?["body"].map { Data($0.jsonText.utf8) } : nil,
-                timeout: 30)
+            var headers = step.hasBody ? ["Content-Type": "application/json"] : [:]
+            var body: Data? = nil
+            if let multipart = step.multipart {
+                let encoded = multipart.encoded()
+                headers["Content-Type"] = encoded.contentType
+                body = encoded.body
+            } else if step.hasBody {
+                body = rawSteps[index].objectValue?["body"].map { Data($0.jsonText.utf8) }
+            }
+            let request = APIRequest(method: method, url: url, headers: headers, body: body, timeout: 30)
             let matched = try #require(backend.match(request), "\(label) is not ported")
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
@@ -229,9 +303,21 @@ import VisionNativeCore
             // A streamed file answer (the exports' text/csv and x-ndjson) never parses as
             // the envelope: the corpus holds its raw text, compared byte-for-byte with the
             // today token applied.
+            // A binary answer (an attachment download) is recorded as the base64 of its
+            // bytes; the response body is compared with them exactly.
+            if case .object(let expected)? = step.response, expected.count == 1,
+                case .string(let base64)? = expected["buffer"]
+            {
+                #expect(response.body == Data(base64Encoded: base64), "\(label)")
+                continue
+            }
             if case .string(let expected) = step.response {
                 let actual = String(decoding: response.body, as: UTF8.self)
-                #expect(actual == expected.replacingOccurrences(of: todayToken, with: today), "\(label)")
+                let wanted = expected.replacingOccurrences(of: todayToken, with: today)
+                let found = wanted.contains(uuidToken)
+                    ? Self.uuidDifference(wanted, actual, at: "response")
+                    : (actual == wanted ? nil : "response: \(actual) is not \(wanted)")
+                #expect(found == nil, "\(label): \(found ?? "")")
                 continue
             }
             let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
