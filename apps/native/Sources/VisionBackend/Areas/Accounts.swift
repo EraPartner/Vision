@@ -1189,6 +1189,10 @@ enum AccountsArea {
         var day = ""
         if dateText.isEmpty {
             issues.append("date is required and must be an ISO date (YYYY-MM-DD)")
+        } else if !TransactionsArea.isYmdShape(dateText) {
+            // `validateDateString`'s regex reject keeps its own wording before the
+            // month/day range read adds "date is not a valid date".
+            issues.append("date must be in YYYY-MM-DD format")
         } else if openingBalanceDate(dateText) == nil {
             issues.append("date is not a valid date")
         } else {
