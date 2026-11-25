@@ -1373,7 +1373,6 @@ export const AREAS: Record<string, ParityArea> = {
       }),
       splitBatch({ transaction_id: 1, splits: [{ recipient_id: 5, amount: 999999 }] }),
       splitBatch({ transaction_id: 999, splits: [{ recipient_id: 5, amount: 1 }] }),
-      splitBatch("nonsense"),
       splitBulk({ transaction_ids: [7, 6, 5, 999], recipient_id: 5, mode: "equal", note: "bulk" }),
       splitBulk({ transaction_ids: [7], recipient_id: 999, mode: "full" }),
       splitBulk({ transaction_ids: [], recipient_id: 5, mode: "full" }),

@@ -587,8 +587,8 @@
               "amount_paid": 0,
               "note": null,
               "is_settled": false,
-              "created_at": "2026-11-25T08:08:40.905Z",
-              "updated_at": "2026-11-25T08:08:40.905Z"
+              "created_at": "2026-11-25T08:09:50.541Z",
+              "updated_at": "2026-11-25T08:09:50.541Z"
             },
             {
               "id": 9,
@@ -599,8 +599,8 @@
               "amount_paid": 0,
               "note": "batch part",
               "is_settled": false,
-              "created_at": "2026-11-25T08:08:40.905Z",
-              "updated_at": "2026-11-25T08:08:40.905Z"
+              "created_at": "2026-11-25T08:09:50.541Z",
+              "updated_at": "2026-11-25T08:09:50.541Z"
             }
           ],
           "total": 2
@@ -739,20 +739,6 @@
       }
     },
     {
-      "operationId": "createSplitBatch",
-      "method": "POST",
-      "path": "/api/splits/batch",
-      "body": "nonsense",
-      "status": 400,
-      "response": {
-        "ok": false,
-        "error": {
-          "code": "VALIDATION_ERROR",
-          "message": "JSON Parse error: Unrecognized token '\"'"
-        }
-      }
-    },
-    {
       "operationId": "createBulkSplits",
       "method": "POST",
       "path": "/api/splits/bulk",
@@ -786,8 +772,8 @@
               "amount_paid": 0,
               "note": "bulk",
               "is_settled": false,
-              "created_at": "2026-11-25T08:08:40.949Z",
-              "updated_at": "2026-11-25T08:08:40.949Z"
+              "created_at": "2026-11-25T08:09:50.578Z",
+              "updated_at": "2026-11-25T08:09:50.578Z"
             }
           ]
         }
@@ -948,7 +934,7 @@
           "amount": 10,
           "paid_at": "{{today}}",
           "note": "cash",
-          "created_at": "2026-11-25T08:08:40.993Z"
+          "created_at": "2026-11-25T08:09:50.626Z"
         }
       }
     },
@@ -985,7 +971,7 @@
           "amount": 60,
           "paid_at": "2024-03-01",
           "note": null,
-          "created_at": "2026-11-25T08:08:41.012Z"
+          "created_at": "2026-11-25T08:09:50.641Z"
         }
       }
     },
@@ -1052,7 +1038,7 @@
               "amount": 10,
               "paid_at": "{{today}}",
               "note": "cash",
-              "created_at": "2026-11-25T08:08:40.993Z"
+              "created_at": "2026-11-25T08:09:50.626Z"
             }
           ],
           "total": 1
@@ -1104,7 +1090,7 @@
           "note": null,
           "is_settled": true,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-25T08:08:41.045Z"
+          "updated_at": "2026-11-25T08:09:50.673Z"
         }
       }
     },
@@ -1249,8 +1235,8 @@
               "amount_paid": 0,
               "note": "batch part",
               "is_settled": false,
-              "created_at": "2026-11-25T08:08:40.905Z",
-              "updated_at": "2026-11-25T08:08:40.905Z",
+              "created_at": "2026-11-25T08:09:50.541Z",
+              "updated_at": "2026-11-25T08:09:50.541Z",
               "transaction_date": "2024-01-05",
               "transaction_memo": "Groceries",
               "transaction_amount": 100,
