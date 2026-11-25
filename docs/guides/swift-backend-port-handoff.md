@@ -388,11 +388,22 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
       `deleteCustomParser` (`parserConfigRoutes.ts`)
 - [x] Batches: `getImportBatches`, `deleteImportBatch`, `previewImportBatch`, `overrideImportRow`,
       `overrideImportRowCategory`, `commitImportBatch` (`importBatchRoutes.ts`)
-- [ ] Uploads (hand-written multipart and SSE in `Screens/Imports/ImportRequests.swift`,
-      `ImportUploadsArea` in progress):
-      `importCsv`, `importCsvCustom`, `importCsvStream`, `importRecipients`, `importCategories`
-      (`importRoutes.ts`, `services/importPipeline`)
-- [ ] `getSupportedAdapters`, `getInfoBanks`, `getRecurringPatterns`
+- [ ] Uploads: `importCsv`, `importCsvCustom`, `importCsvStream`, `importRecipients`,
+      `importCategories` (hand-written multipart and SSE in `Screens/Imports/ImportRequests.swift`,
+      `importRoutes.ts`, `services/importPipeline`). Already in place from the later PRs: the
+      recorder's `multipart` step kind and `HTTP/MultipartParts.swift` (P11e) parse the form,
+      `ImportCommitArea.commitBatch` owns the commit phase, and `BankAdapters`/`CSVParse` own the
+      adapter parse. Suggested sub-slices: (e1) `importRecipients`/`importCategories`
+      (`dataImportService.ts`, the set-based resolve with its per-row fallback), (e2)
+      `importCsv`/`importCsvCustom` (`services/importPipeline` stage/validate/match:
+      `assignImportIdentities`, `findBestRecipientMatches`, `loadActivePatterns`/`applyPatterns`
+      are still to port), (e3) `importCsvStream` (the SSE shell: a corpus step answers its raw
+      event text; the in-process `stream` feeds it in one chunk). `runImportPipeline`'s commit
+      tail (reconcileTransfers, forecast-cache clears, MV refresh) reuses the debounced
+      transfer-reconcile item above.
+- [x] `getSupportedAdapters`, `getInfoBanks`, `getRecurringPatterns` (`Areas/Info.swift`;
+      the corpus area is `info`, recorded on the fixed clock because `recurring-patterns` reads
+      `sub_interval(today(), '3 years')`)
 
 ### P17 Portfolio core and prices
 

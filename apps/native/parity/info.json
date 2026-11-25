@@ -1,0 +1,207 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES\n        (1, 'Main', 'EUR', 'checking', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000001'),\n        (2, 'Travel', 'USD', 'savings', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000002'),\n        (3, 'Dormant', 'EUR', 'checking', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000003')",
+    "INSERT INTO categories (id, general, detail, name, path_name, legacy_compatible, created_at, updated_at) VALUES\n        (21, 'SPORT', 'FITNESS', 'FITNESS', 'SPORT > FITNESS', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipients (id, name, normalized_name, default_category_id, primary_recipient_id, is_active, created_at, updated_at) VALUES\n        (1, 'GYMFIT', 'GYMFIT', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'SALARY CO', 'CO SALARY', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'CITY GYM', 'CITY GYM', 21, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 'CITY GYM NORTH', 'CITY GYM NORTH', NULL, 3, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, 'TENANT', 'TENANT', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (6, 'ONCE SHOP', 'ONCE SHOP', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (7, 'NOISY SHOP', 'NOISY SHOP', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (8, 'PRICE UP', 'PRICE UP', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at, updated_at) VALUES\n        (101, '2024-02-01', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (102, '2024-02-08', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (103, '2024-02-15', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (104, '2024-02-22', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM', 1, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (105, '2024-02-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (106, '2024-03-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (107, '2024-04-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (108, '2024-05-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', 2, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (109, '2024-06-01', vision_numeric('-5', 18, 4), 'EUR', 'REFUND', 2, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (110, '2024-01-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (111, '2024-02-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (112, '2024-03-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (113, '2024-04-10', vision_numeric('-15', 18, 4), 'EUR', 'GYM CITY', 4, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (114, '2024-02-10', vision_numeric('-100', 18, 4), 'EUR', 'RENT', 5, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (115, '2024-02-20', vision_numeric('-100', 18, 4), 'EUR', 'RENT', 5, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (116, '2024-03-02', vision_numeric('-100', 18, 4), 'EUR', 'RENT', 5, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (117, '2024-03-12', vision_numeric('-100', 18, 4), 'USD', 'RENT', 5, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (118, '2024-03-12', vision_numeric('-100', 18, 4), 'USD', 'RENT INACTIVE', 5, 2, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (119, '2024-02-01', vision_numeric('-19.9', 18, 4), 'EUR', 'ONLY ONE', 6, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (120, '2024-03-01', vision_numeric('-19.9', 18, 4), 'EUR', 'ONLY ONE MORE', 6, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (121, '2024-02-01', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (122, '2024-02-06', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (123, '2024-03-08', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (124, '2024-05-07', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (125, '2024-06-08', vision_numeric('-3', 18, 4), 'EUR', 'NOISE', 7, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (126, '2024-02-15', vision_numeric('-10', 18, 4), 'EUR', 'PLAN', 8, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (127, '2024-03-15', vision_numeric('-10', 18, 4), 'EUR', 'PLAN', 8, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (128, '2024-04-15', vision_numeric('-10', 18, 4), 'EUR', 'PLAN', 8, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (129, '2024-05-15', vision_numeric('-12', 18, 4), 'EUR', 'PLAN RAISED', 8, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, comment, url,\n         account_id, recipient_id, category_id, is_recurring, recurrence_pattern, recurrence_end_date,\n         max_occurrences, is_loan, loan_type, loan_principal, loan_annual_interest_rate, loan_term_months,\n         loan_start_date, loan_payment_day, is_executed, is_active, created_at, updated_at) VALUES\n        (1, '2026-06-01', vision_numeric('2500', 18, 4), 'EUR', 'SALARY', NULL, NULL, 1, 2, NULL,\n         1, 'monthly', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, '2026-06-08', vision_numeric('-29.5', 18, 4), 'EUR', 'GYM INACTIVE', NULL, NULL, 1, 1, NULL,\n         1, 'weekly', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "now": "2026-06-15T09:00:00.000Z",
+  "steps": [
+    {
+      "operationId": "getSupportedAdapters",
+      "method": "GET",
+      "path": "/api/info/supported-adapters",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "key": "belfius",
+              "name": "Belfius"
+            },
+            {
+              "key": "revolut",
+              "name": "Revolut"
+            },
+            {
+              "key": "ing",
+              "name": "ING"
+            },
+            {
+              "key": "bnp",
+              "name": "BNP Paribas Fortis"
+            },
+            {
+              "key": "kbc",
+              "name": "KBC"
+            },
+            {
+              "key": "vision",
+              "name": "Vision"
+            },
+            {
+              "key": "sabb",
+              "name": "SABB"
+            },
+            {
+              "key": "wise",
+              "name": "Wise"
+            }
+          ],
+          "total": 8
+        }
+      }
+    },
+    {
+      "operationId": "getInfoBanks",
+      "method": "GET",
+      "path": "/api/info/banks",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            "Main",
+            "Travel"
+          ],
+          "total": 2
+        }
+      }
+    },
+    {
+      "operationId": "getRecurringPatterns",
+      "method": "GET",
+      "path": "/api/info/recurring-patterns",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "patterns": [
+            {
+              "recipientId": 1,
+              "recipientName": "GYMFIT",
+              "direction": "expense",
+              "detectedPattern": "weekly",
+              "intervalDays": 7,
+              "consistency": 100,
+              "occurrences": 4,
+              "averageAmount": 29.5,
+              "latestAmount": 29.5,
+              "currency": "EUR",
+              "categoryId": null,
+              "categoryName": null,
+              "bankAccount": null,
+              "accountId": null,
+              "firstSeen": "2024-02-01",
+              "lastSeen": "2024-02-22",
+              "predictedNext": "2024-02-29",
+              "amountChanges": [],
+              "isAlreadyPlanned": false,
+              "confidence": 80
+            },
+            {
+              "recipientId": 2,
+              "recipientName": "SALARY CO",
+              "direction": "income",
+              "detectedPattern": "monthly",
+              "intervalDays": 30,
+              "consistency": 100,
+              "occurrences": 4,
+              "averageAmount": 2500,
+              "latestAmount": 2500,
+              "currency": "EUR",
+              "categoryId": null,
+              "categoryName": null,
+              "bankAccount": "Travel",
+              "accountId": 2,
+              "firstSeen": "2024-02-01",
+              "lastSeen": "2024-05-01",
+              "predictedNext": "2024-05-31",
+              "amountChanges": [],
+              "isAlreadyPlanned": true,
+              "confidence": 80
+            },
+            {
+              "recipientId": 3,
+              "recipientName": "CITY GYM",
+              "direction": "expense",
+              "detectedPattern": "monthly",
+              "intervalDays": 31,
+              "consistency": 100,
+              "occurrences": 4,
+              "averageAmount": 15,
+              "latestAmount": 15,
+              "currency": "EUR",
+              "categoryId": 21,
+              "categoryName": "FITNESS",
+              "bankAccount": "Main",
+              "accountId": 1,
+              "firstSeen": "2024-01-10",
+              "lastSeen": "2024-04-10",
+              "predictedNext": "2024-05-11",
+              "amountChanges": [],
+              "isAlreadyPlanned": false,
+              "confidence": 80
+            },
+            {
+              "recipientId": 5,
+              "recipientName": "TENANT",
+              "direction": "expense",
+              "detectedPattern": "custom",
+              "intervalDays": 10,
+              "consistency": 95,
+              "occurrences": 4,
+              "averageAmount": 100,
+              "latestAmount": 100,
+              "currency": "EUR",
+              "categoryId": null,
+              "categoryName": null,
+              "bankAccount": "Travel",
+              "accountId": 2,
+              "firstSeen": "2024-02-10",
+              "lastSeen": "2024-03-12",
+              "predictedNext": "2024-03-22",
+              "amountChanges": [],
+              "isAlreadyPlanned": false,
+              "confidence": 78
+            },
+            {
+              "recipientId": 8,
+              "recipientName": "PRICE UP",
+              "direction": "expense",
+              "detectedPattern": "monthly",
+              "intervalDays": 30,
+              "consistency": 100,
+              "occurrences": 4,
+              "averageAmount": 10.5,
+              "latestAmount": 12,
+              "currency": "EUR",
+              "categoryId": null,
+              "categoryName": null,
+              "bankAccount": "Main",
+              "accountId": 1,
+              "firstSeen": "2024-02-15",
+              "lastSeen": "2024-05-15",
+              "predictedNext": "2024-06-14",
+              "amountChanges": [
+                {
+                  "date": "2024-05-15T00:00:00.000Z",
+                  "previousAmount": 10,
+                  "newAmount": 12,
+                  "percentChange": 20,
+                  "direction": "increased"
+                }
+              ],
+              "isAlreadyPlanned": false,
+              "confidence": 70
+            }
+          ],
+          "total": 5
+        }
+      }
+    }
+  ]
+}

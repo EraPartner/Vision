@@ -28,6 +28,7 @@ public enum PortedOperations {
         "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser",
         "getImportBatches", "deleteImportBatch",
         "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch",
+        "uploadAttachment", "getSupportedAdapters", "getInfoBanks", "getRecurringPatterns",
     ]
 }
 
@@ -155,6 +156,7 @@ public struct InProcessBackend: Sendable {
         ImportBatchesArea.register(&backend, database: database)
         ImportReviewArea.register(&backend, database: database)
         ImportCommitArea.register(&backend, database: database)
+        InfoArea.register(&backend, database: database)
         return backend
     }
 
