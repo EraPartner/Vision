@@ -3651,6 +3651,7 @@ interface AgentRequest extends PromiseLike<{
   status: number;
   body: unknown;
   headers: Record<string, string | string[] | undefined>;
+  text?: string | undefined;
 }> {
   set(name: string, value: string): AgentRequest;
   send(body: string): AgentRequest;
@@ -3757,7 +3758,10 @@ async function recordArea(
     // A streamed file answer (the exports' text/csv and x-ndjson) never parses into
     // `res.body` — its raw text is the answer the corpus must hold; everything
     // else round-trips the parsed body 1:1, and a 204 keeps recording `{}`.
-    const contentType = res.headers["content-type"] ?? "";
+    const rawContentType = res.headers["content-type"];
+    const contentType = Array.isArray(rawContentType)
+      ? rawContentType[0] ?? ""
+      : rawContentType ?? "";
     const isTextAnswer =
       (contentType.startsWith("text/") || contentType.includes("ndjson")) &&
       res.text !== undefined &&
