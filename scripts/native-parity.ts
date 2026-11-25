@@ -457,23 +457,37 @@ const batchPreview = (id: string): ParityStep => ({
 const batchOverrideRecipient = (
   id: string,
   rowId: string,
-  body: unknown,
-): ParityStep => ({
-  operationId: "overrideImportRow",
-  method: "POST",
-  path: `/api/import/batches/${id}/rows/${rowId}/override`,
-  body,
-});
+  body?: unknown,
+): ParityStep =>
+  body === undefined
+    ? {
+        operationId: "overrideImportRow",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/override`,
+      }
+    : {
+        operationId: "overrideImportRow",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/override`,
+        body,
+      };
 const batchOverrideCategory = (
   id: string,
   rowId: string,
-  body: unknown,
-): ParityStep => ({
-  operationId: "overrideImportRowCategory",
-  method: "POST",
-  path: `/api/import/batches/${id}/rows/${rowId}/category-override`,
-  body,
-});
+  body?: unknown,
+): ParityStep =>
+  body === undefined
+    ? {
+        operationId: "overrideImportRowCategory",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/category-override`,
+      }
+    : {
+        operationId: "overrideImportRowCategory",
+        method: "POST",
+        path: `/api/import/batches/${id}/rows/${rowId}/category-override`,
+        body,
+      };
 const parserDelete = (id: string): ParityStep => ({
   operationId: "deleteCustomParser",
   method: "DELETE",
