@@ -454,6 +454,11 @@ const batchPreview = (id: string): ParityStep => ({
   method: "GET",
   path: `/api/import/batches/${id}/preview`,
 });
+const batchCommit = (id: string): ParityStep => ({
+  operationId: "commitImportBatch",
+  method: "POST",
+  path: `/api/import/batches/${id}/commit`,
+});
 const batchOverrideRecipient = (
   id: string,
   rowId: string,
@@ -1698,6 +1703,66 @@ export const AREAS: Record<string, ParityArea> = {
       batchOverrideCategory("20", "abc", {}),
       batchOverrideCategory("20", "2", { category_id: "abc" }),
       batchPreview("20"),
+    ],
+  },
+  importCommit: {
+    router: { module: "importRoutes.ts", mountPath: "/api/import" },
+    seed: [
+      `INSERT INTO accounts (id, name, currency, type, is_active, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'EUR', 'checking', 1, '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001')`,
+      `INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES
+        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES
+        (10, 'DupCoffee', 'dupcoffee', 3, 1, '${SEED_TIME}', '${SEED_TIME}'),
+        (11, 'Savery', 'savery', NULL, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO import_batches (id, adapter_name, source_filename, status, rows_total, rows_imported, started_at, completed_at) VALUES
+        (30, 'kbc', 'kbc.csv', 'awaiting_review', 5, 0, '2024-06-01T10:00:00.000000Z', NULL),
+        (31, 'ing', 'ing.csv', 'matching', 1, 0, '2024-06-02T10:00:00.000000Z', NULL),
+        (21, 'generic', 'old.csv', 'complete', 0, 0, '2024-06-03T10:00:00.000000Z', '2024-06-03T10:00:09.000000Z')`,
+      `INSERT INTO import_staging_rows (id, batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo, amount,
+         balance, comment, currency, resolved_recipient_id, user_override_recipient_id, match_source, matched_pattern_id,
+         dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence, source_record_hash, created_at, updated_at) VALUES
+        (101, 30, 0, 'matched', '2024-06-01', 'Main', 'DupCoffee', ' Coffee ', vision_numeric('4.5', 20, 4),
+         vision_numeric('100', 18, 4), 'first', 'EUR ', 10, NULL, 'exact', NULL,
+         'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1, NULL, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (102, 30, 1, 'matched', '2024-06-05', ' Savery', 'Savery', 'Rent', vision_numeric('58', 20, 4),
+         vision_numeric('158', 18, 4), NULL, 'EUR', 11, NULL, 'fuzzy', NULL,
+         'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', 1, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (103, 30, 2, 'matched', '2024-06-03', NULL, 'Nobody', 'No recipient', vision_numeric('0.5', 20, 4),
+         NULL, NULL, 'EUR', NULL, NULL, 'new', NULL,
+         'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', 1, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (104, 30, 3, 'matched', '2024-06-10', NULL, 'DupCoffee', ' Market ', vision_numeric('-2.25', 20, 4),
+         vision_numeric('97.75', 18, 4), NULL, 'EUR', 10, NULL, 'pattern', NULL,
+         NULL, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (105, 30, 4, 'matched', '2024-06-12', 'Main', 'DupCoffee', 'Fresh', vision_numeric('-7.5', 20, 4),
+         vision_numeric('105.25', 18, 4), NULL, NULL, 10, NULL, 'new', NULL,
+         NULL, NULL, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at,
+         updated_at, dedup_fingerprint, dedup_fingerprint_version) VALUES
+        (200, '2024-05-01', vision_numeric('4.5', 18, 4), 'EUR', ' Coffee before', 10, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1),
+        (201, '2024-06-10', vision_numeric('-2.25', 18, 4), 'EUR', ' Market ', 10, NULL, 1,
+         '${SEED_TIME}', '${SEED_TIME}', NULL, NULL)`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, recipient_id, is_recurring,
+         is_executed, is_active, created_at, updated_at) VALUES
+        (1, '2024-06-05', vision_numeric('58', 18, 4), 'EUR', 'Savery rent', 11, 0, 0, 1,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      batchCommit("abc"),
+      batchCommit("999"),
+      batchCommit("21"),
+      batchCommit("31"),
+      batches(),
+      batchCommit("30"),
+      batchCommit("30"),
+      batches(),
+      batchPreview("30"),
     ],
   },
   categories: {

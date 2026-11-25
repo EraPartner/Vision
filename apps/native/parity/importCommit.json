@@ -1,0 +1,242 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, currency, type, is_active, created_at, updated_at, import_identity) VALUES\n        (1, 'Main', 'EUR', 'checking', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000001')",
+    "INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES\n        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES\n        (10, 'DupCoffee', 'dupcoffee', 3, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (11, 'Savery', 'savery', NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO import_batches (id, adapter_name, source_filename, status, rows_total, rows_imported, started_at, completed_at) VALUES\n        (30, 'kbc', 'kbc.csv', 'awaiting_review', 5, 0, '2024-06-01T10:00:00.000000Z', NULL),\n        (31, 'ing', 'ing.csv', 'matching', 1, 0, '2024-06-02T10:00:00.000000Z', NULL),\n        (21, 'generic', 'old.csv', 'complete', 0, 0, '2024-06-03T10:00:00.000000Z', '2024-06-03T10:00:09.000000Z')",
+    "INSERT INTO import_staging_rows (id, batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo, amount,\n         balance, comment, currency, resolved_recipient_id, user_override_recipient_id, match_source, matched_pattern_id,\n         dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence, source_record_hash, created_at, updated_at) VALUES\n        (101, 30, 0, 'matched', '2024-06-01', 'Main', 'DupCoffee', ' Coffee ', vision_numeric('4.5', 20, 4),\n         vision_numeric('100', 18, 4), 'first', 'EUR ', 10, NULL, 'exact', NULL,\n         'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1, NULL, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (102, 30, 1, 'matched', '2024-06-05', ' Savery', 'Savery', 'Rent', vision_numeric('58', 20, 4),\n         vision_numeric('158', 18, 4), NULL, 'EUR', 11, NULL, 'fuzzy', NULL,\n         'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', 1, NULL, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (103, 30, 2, 'matched', '2024-06-03', NULL, 'Nobody', 'No recipient', vision_numeric('0.5', 20, 4),\n         NULL, NULL, 'EUR', NULL, NULL, 'new', NULL,\n         'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', 1, NULL, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (104, 30, 3, 'matched', '2024-06-10', NULL, 'DupCoffee', ' Market ', vision_numeric('-2.25', 20, 4),\n         vision_numeric('97.75', 18, 4), NULL, 'EUR', 10, NULL, 'pattern', NULL,\n         NULL, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (105, 30, 4, 'matched', '2024-06-12', 'Main', 'DupCoffee', 'Fresh', vision_numeric('-7.5', 20, 4),\n         vision_numeric('105.25', 18, 4), NULL, NULL, 10, NULL, 'new', NULL,\n         NULL, NULL, NULL, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at,\n         updated_at, dedup_fingerprint, dedup_fingerprint_version) VALUES\n        (200, '2024-05-01', vision_numeric('4.5', 18, 4), 'EUR', ' Coffee before', 10, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1),\n        (201, '2024-06-10', vision_numeric('-2.25', 18, 4), 'EUR', ' Market ', 10, NULL, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', NULL, NULL)",
+    "INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, recipient_id, is_recurring,\n         is_executed, is_active, created_at, updated_at) VALUES\n        (1, '2024-06-05', vision_numeric('58', 18, 4), 'EUR', 'Savery rent', 11, 0, 0, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "commitImportBatch",
+      "method": "POST",
+      "path": "/api/import/batches/abc/commit",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "commitImportBatch",
+      "method": "POST",
+      "path": "/api/import/batches/999/commit",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Import batch 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "commitImportBatch",
+      "method": "POST",
+      "path": "/api/import/batches/21/commit",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Batch 21 is not in a reviewable state (status: complete)"
+        }
+      }
+    },
+    {
+      "operationId": "commitImportBatch",
+      "method": "POST",
+      "path": "/api/import/batches/31/commit",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Batch 31 is not in a reviewable state (status: matching)"
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 0,
+              "id": "21",
+              "adapter_name": "generic",
+              "source_filename": "old.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 0,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-03T10:00:00.000Z",
+              "completed_at": "2024-06-03T10:00:09.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "31",
+              "adapter_name": "ing",
+              "source_filename": "ing.csv",
+              "source_size_bytes": null,
+              "status": "matching",
+              "rows_total": 1,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-02T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "30",
+              "adapter_name": "kbc",
+              "source_filename": "kbc.csv",
+              "source_size_bytes": null,
+              "status": "awaiting_review",
+              "rows_total": 5,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-01T10:00:00.000Z",
+              "completed_at": null
+            }
+          ],
+          "total": 3,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "commitImportBatch",
+      "method": "POST",
+      "path": "/api/import/batches/30/commit",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 30,
+          "total": 5,
+          "imported": 2,
+          "duplicates": 2,
+          "errors": 1,
+          "auto_linked_count": 1,
+          "status": "completed_with_errors",
+          "error_message": null,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "commitImportBatch",
+      "method": "POST",
+      "path": "/api/import/batches/30/commit",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Batch 30 is not in a reviewable state (status: complete)"
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 0,
+              "id": "21",
+              "adapter_name": "generic",
+              "source_filename": "old.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 0,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-03T10:00:00.000Z",
+              "completed_at": "2024-06-03T10:00:09.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "31",
+              "adapter_name": "ing",
+              "source_filename": "ing.csv",
+              "source_size_bytes": null,
+              "status": "matching",
+              "rows_total": 1,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-02T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 2,
+              "id": "30",
+              "adapter_name": "kbc",
+              "source_filename": "kbc.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 5,
+              "rows_imported": 2,
+              "rows_duplicate": 2,
+              "rows_error": 1,
+              "error_summary": null,
+              "started_at": "2024-06-01T10:00:00.000Z",
+              "completed_at": "2026-11-25T20:21:23.098Z"
+            }
+          ],
+          "total": 3,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "previewImportBatch",
+      "method": "GET",
+      "path": "/api/import/batches/30/preview",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 30,
+          "groups": [],
+          "totals": {
+            "exact": 0,
+            "fuzzy": 0,
+            "pattern": 0,
+            "new": 0,
+            "unresolved": 0
+          },
+          "already_imported": 0
+        }
+      }
+    }
+  ]
+}
