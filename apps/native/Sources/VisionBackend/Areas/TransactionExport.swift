@@ -60,20 +60,20 @@ enum TransactionExportArea {
 
     /// The export query: the list's filter shape plus the multi-value `account_ids` and
     /// `bank_accounts` spellings the export schema adds.
-    static func exportQuery(_ request: InProcessRequest) throws -> (where: TransactionWhere, includeBalance: Bool) {
+    static func exportQuery(_ request: InProcessRequest) throws -> (filters: TransactionWhere, includeBalance: Bool) {
         var issues: [String] = []
         let (filters, query) = TransactionsArea.filterFields(request, &issues)
-        var where = filters
+        var selection = filters
         let accountIds = TransactionsArea.idList(TransactionsArea.raw(request, "account_ids"), "account_ids", &issues)
-        if let accountIds { where.accountIds = Array(accountIds.prefix(TransactionsWhere.maxListSize)) }
+        if let accountIds { selection.accountIds = Array(accountIds.prefix(TransactionsWhere.maxListSize)) }
         if let raw = TransactionsArea.raw(request, "bank_accounts"), raw != .null {
             let list = AccountsArea.looseText(raw).split(separator: ",")
                 .map { JavaScriptWhitespace.trim(String($0)) }
                 .filter { !$0.isEmpty }
-            where.bankAccounts = list.isEmpty ? nil : Array(list.prefix(TransactionsWhere.maxListSize))
+            selection.bankAccounts = list.isEmpty ? nil : Array(list.prefix(TransactionsWhere.maxListSize))
         }
         guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
-        return (where, query.includeBalance)
+        return (selection, query.includeBalance)
     }
 
     // MARK: - The chunks
@@ -154,9 +154,9 @@ enum TransactionExportArea {
 
     /// `streamExport`'s loop over the keyset chunks, collecting the whole answer.
     static func stream(
-        _ session: BackendSession, where: TransactionWhere, format: String, includeBalance: Bool
+        _ session: BackendSession, selection: TransactionWhere, format: String, includeBalance: Bool
     ) throws -> (body: String, rowCount: Int) {
-        let clause = where.clause
+        let clause = selection.clause
         let probe = try session.row(
             "SELECT 1 \(BulkSelection.exportJoins) WHERE \(clause.sql) LIMIT 1", clause.arguments)
         if probe == nil {
@@ -229,8 +229,8 @@ enum TransactionExportArea {
     static func export(
         _ session: BackendSession, request: InProcessRequest, format: String
     ) throws -> HandlerResult {
-        let (where, includeBalance) = try exportQuery(request)
-        let (body, _) = try stream(session, where: where, format: format, includeBalance: includeBalance)
+        let (selection, includeBalance) = try exportQuery(request)
+        let (body, _) = try stream(session, selection: selection, format: format, includeBalance: includeBalance)
         return HandlerResult.fileAnswer(Data(body.utf8), headers: [
             "Content-Type": format == "csv" ? "text/csv" : "application/x-ndjson",  // lint:allow string-literal-compare the export format name is a fixed literal
             "Content-Disposition": "attachment; filename=\(filename(format: format))",
