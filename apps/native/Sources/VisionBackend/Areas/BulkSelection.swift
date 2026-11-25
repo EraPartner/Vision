@@ -179,56 +179,56 @@ enum BulkSelection {
         let uncategorised = try optionalBoolean(
             try pick(filter, "uncategorised", "uncategorised"), "uncategorised", fallback: false)
 
-        var where = TransactionWhere()
-        where.transactionId = try optionalId(
+        var filters = TransactionWhere()
+        filters.transactionId = try optionalId(
             try pick(filter, "transactionId", "transaction_id"), "transaction_id"
         ).map { TransactionID(rawValue: $0) }
-        where.startDate = try optionalYmd(
+        filters.startDate = try optionalYmd(
             try pick(filter, "startDate", "start_date"), "start_date")
-        where.endDate = try optionalYmd(try pick(filter, "endDate", "end_date"), "end_date")
-        where.accountId = try optionalId(
+        filters.endDate = try optionalYmd(try pick(filter, "endDate", "end_date"), "end_date")
+        filters.accountId = try optionalId(
             try pick(filter, "accountId", "account_id"), "account_id"
         ).map { AccountID(rawValue: $0) }
-        where.bankAccount = try optionalString(
+        filters.bankAccount = try optionalString(
             try pick(filter, "bankAccount", "bank_account"), "bank_account")
-        where.bankAccounts = try optionalStringArray(
+        filters.bankAccounts = try optionalStringArray(
             try pick(filter, "bankAccounts", "bank_accounts"), "bank_accounts")
-        where.categoryId = try optionalId(
+        filters.categoryId = try optionalId(
             try pick(filter, "categoryId", "category_id"), "category_id"
         ).map { CategoryID(rawValue: $0) }
-        where.categoryIds = try optionalIdArray(
+        filters.categoryIds = try optionalIdArray(
             try pick(filter, "categoryIds", "category_ids"), "category_ids")
-        where.recipientId = try optionalId(
+        filters.recipientId = try optionalId(
             try pick(filter, "recipientId", "recipient_id"), "recipient_id"
         ).map { RecipientID(rawValue: $0) }
-        where.recipientGroupId = try optionalId(
+        filters.recipientGroupId = try optionalId(
             try pick(filter, "recipientGroupId", "recipient_group_id"), "recipient_group_id"
         ).map { RecipientID(rawValue: $0) }
-        where.recipientName = try optionalString(
+        filters.recipientName = try optionalString(
             try pick(filter, "recipientName", "recipient_name"), "recipient_name")
         let search = try optionalString(try pick(filter, "search", "search"), "search")
         if let search, search.count > 200 {
             throw BackendHTTPError.validation("search must be at most 200 characters")
         }
-        where.search = search
-        where.active = try optionalBoolean(
+        filters.search = search
+        filters.active = try optionalBoolean(
             try pick(filter, "active", "active"), "active", fallback: true)
-        where.transactionType = try parseTransactionType(
+        filters.transactionType = try parseTransactionType(
             try pick(filter, "transactionType", "transaction_type"))
-        where.amountMin = parseAmountFilter(
+        filters.amountMin = parseAmountFilter(
             try optionalAmount(try pick(filter, "amountMin", "amount_min"), "amount_min"),
             signed: amountSigned)
-        where.amountMax = parseAmountFilter(
+        filters.amountMax = parseAmountFilter(
             try optionalAmount(try pick(filter, "amountMax", "amount_max"), "amount_max"),
             signed: amountSigned)
-        where.amountSigned = amountSigned
-        where.tagSlugs = try optionalTagSlugs(try pick(filter, "tagSlugs", "tags"), "tags")
+        filters.amountSigned = amountSigned
+        filters.tagSlugs = try optionalTagSlugs(try pick(filter, "tagSlugs", "tags"), "tags")
 
-        if !uncategorised { return (where, false) }
-        where.categoryId = nil
-        where.categoryIds = nil
-        where.active = true
-        return (where, true)
+        if !uncategorised { return (filters, false) }
+        filters.categoryId = nil
+        filters.categoryIds = nil
+        filters.active = true
+        return (filters, true)
     }
 
     /// `validateBulkSelection` + `resolveBulkSelection`: the concrete ids the action targets.
@@ -271,8 +271,8 @@ enum BulkSelection {
         if filter != nil, filter != .null, filterObject == nil {
             throw BackendHTTPError.validation("`filter` must be an object")
         }
-        let (where, uncategorised) = try normalize(filterObject ?? JSObject())
-        let clause = where.clause
+        let (filters, uncategorised) = try normalize(filterObject ?? JSObject())
+        let clause = filters.clause
         let sql = uncategorised ? "\(clause.sql) AND \(uncategorisedClause)" : clause.sql
         let countRows = try session.rows(
             "SELECT COUNT(*) AS n \(exportJoins) WHERE \(sql)", clause.arguments)
