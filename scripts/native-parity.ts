@@ -2120,6 +2120,93 @@ export const AREAS: Record<string, ParityArea> = {
         path: "/api/transactions/bulk-delete",
         body: {},
       },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv",
+      },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv?include_balance=true",
+      },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv?account_id=1",
+      },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv?start_date=2024-02-01&end_date=2024-03-01",
+      },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv?account_ids=1,2",
+      },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv?search=nope",
+      },
+      {
+        operationId: "exportTransactionsCsv",
+        method: "GET",
+        path: "/api/transactions/export/csv?start_date=bad",
+      },
+      {
+        operationId: "exportTransactionsJson",
+        method: "GET",
+        path: "/api/transactions/export/json",
+      },
+      {
+        operationId: "exportTransactionsJson",
+        method: "GET",
+        path: "/api/transactions/export/json?recipient_id=999",
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: { ids: [1, 3], format: "csv" },
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: { ids: [2], format: "json" },
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: { ids: [1] },
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: { filter: { account_id: 1 }, expected_count: 20, format: "json" },
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: { ids: [999] },
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: { ids: [1], format: "zip" },
+      },
+      {
+        operationId: "bulkExportTransactions",
+        method: "POST",
+        path: "/api/transactions/bulk-export",
+        body: {},
+      },
       transactions("?sort_by=date"),
     ],
   },
@@ -3667,11 +3754,21 @@ async function recordArea(
         .send(JSON.stringify(step.body));
     const res = await request;
     const today = todayAppDateString();
-    const response = JSON.parse(
-      JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) =>
-        value === today ? TODAY_TOKEN : value,
-      ),
-    ) as unknown;
+    // A streamed file answer (the exports' text/csv and x-ndjson) never parses into
+    // `res.body` — its raw text is the answer the corpus must hold; everything
+    // else round-trips the parsed body 1:1, and a 204 keeps recording `{}`.
+    const contentType = res.headers["content-type"] ?? "";
+    const isTextAnswer =
+      (contentType.startsWith("text/") || contentType.includes("ndjson")) &&
+      res.text !== undefined &&
+      res.text.length > 0;
+    const response = isTextAnswer
+      ? res.text
+      : JSON.parse(
+          JSON.stringify(withoutRequestId(res.body), (_key, value: unknown) =>
+            value === today ? TODAY_TOKEN : value,
+          ),
+        ) as unknown;
     // Headers the route set itself (execute's `Idempotent-Replay`), not the envelope's.
     const replay = res.headers["idempotent-replay"];
     const headers: Record<string, string> | undefined =
