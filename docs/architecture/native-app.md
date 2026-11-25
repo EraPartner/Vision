@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-15
+date: 2026-11-24
 updated: 2026-11-15
 tags:
   [
@@ -607,8 +607,32 @@ Unicode ILIKE regular expression of `recipientRepository.ts` (`Areas/RecipientTe
 transaction reads `getTransactions` and `getTransaction` follow (`Areas/Transactions.swift`): every
 list filter of `buildTransactionWhere` (`Areas/TransactionWhere.swift`), the uncategorised queue,
 per-account running balances and `normalize_to_eur` at the latest stored rates. The list count is
-exact on every request; the TypeScript repository caches it for 2 seconds. Transaction writes,
-transfers, bulk actions and exports stay on Bun until their own phases. A refresh
+exact on every request; the TypeScript repository caches it for 2 seconds. The transaction writes follow
+(port 11): create (`createTransaction`) mirrors the manual dedup claim chain — the `manual-v3`
+sha256 identity, the claim join with its live field fallback, the 409 `Duplicate transaction
+detected` with `existing_transaction_id`, and the `allow_duplicate` bypass — update
+(`updateTransaction`) resolves `recipient_name` only when `recipient_id` is nulled, rewrites
+`date` as `transaction_date`, and refuses a ledger-touching PATCH on a closed account with
+`Reopen the account before changing its ledger balance`, and delete (`deleteTransaction`)
+refuses a planned-execution link (409) and unlinks the row's attachments on disk; the create
+also clears a matching planned payment through the same ±5-day bucket and tolerance match
+as the suggestions (idempotent when the pair already exists), reported as `auto_linked`.
+Transfers, bulk actions and exports stay on Bun until their own phases. The planned payments follow
+(port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
+`filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
+(`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored
+rates, the match suggestions (`getPlannedMatchSuggestions`) within the ±5-day, max(1, 5 %)
+tolerance of `lib/plannedMatching.ts`, and execute (`executePlannedTransaction`), which runs in
+one write transaction and answers a replay of the same pair with `Idempotent-Replay: true`
+(`HandlerResult.headers`), and delete (`deletePlannedTransaction`). The writes complete the area
+(port 10b): create (`createPlannedTransaction`) reuses `Areas/LoanSchedule.swift` for the loan
+branch and mirrors the raw `INSERT` with `ts_date`/`vision_numeric` bindings, and update
+(`updatePlannedTransaction`) resolves `recipient_name`/`category_name`, applies the loan patch
+defaults and rewrites the installment rows in the same write transaction as the field update, with
+the write plugin's canonical decimal/boolean/date conversions in the `SET`. The recurrence grammar and
+its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
+area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
+suggestions and the execute default date replay the same on every day. A refresh
 fetches the ECB daily feed and open.er-api through `ProviderFetching` (an ephemeral `URLSession`,
 5 seconds each), writes the fetched rates dated today in the session's zone, and records provider
 health; a stale list without `db_only` starts it in the background, as `warmCache` does.

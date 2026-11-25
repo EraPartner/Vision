@@ -9,8 +9,12 @@
     "INSERT INTO tags (id, slug, color, is_active, created_at, updated_at) VALUES\n        (1, 'holiday', '#00aaff', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'work', NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'old', '#999999', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
     "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('USD', vision_numeric('0.9', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.95', 20, 10), '2024-12-31', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.15', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('JPY', vision_numeric('0', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
     "INSERT INTO transactions (id, date, amount, currency, balance, memo, comment, recipient_id, category_id,\n         account_id, is_active, bank_sequence, is_transfer, transfer_peer_id, transfer_source, created_at,\n         updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', NULL, 'CARD 1234', NULL, 1, NULL, 1, 1, NULL, 0,\n         NULL, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, '2024-01-06', vision_numeric('-3.2', 18, 4), 'EUR', vision_numeric('500', 18, 4), NULL, 'latte', 2,\n         NULL, 1, 1, NULL, 0, NULL, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, '2024-01-06', vision_numeric('-40', 18, 4), 'EUR', NULL, 'WEEKLY', NULL, 3, NULL, 1, 1,\n         vision_numeric('3', 18, 0), 0, NULL, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, '2024-01-07', vision_numeric('2500', 18, 4), 'EUR', NULL, 'SALARY', NULL, 4, 10, 1, 1, NULL, 0, NULL,\n         NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, '2024-02-01', vision_numeric('-9.99', 18, 4), 'EUR', NULL, NULL, NULL, 5, NULL, 1, 1, NULL, 0, NULL,\n         NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (6, '2024-02-02', vision_numeric('-4.5', 18, 4), 'EUR', NULL, NULL, 'bis', 6, NULL, 1, 1, NULL, 0, NULL,\n         NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (7, '2024-03-01', vision_numeric('250.5', 18, 4), 'USD', vision_numeric('1250.5', 18, 4), 'TOP UP', NULL, 3,\n         NULL, 2, 1, NULL, 0, NULL, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (8, '2024-03-02', vision_numeric('-75', 18, 4), 'GBP', NULL, 'HOTEL', NULL, 7, 10, 2, 1, NULL, 0, NULL, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (9, '2024-03-03', vision_numeric('-1000', 18, 4), 'JPY', NULL, NULL, NULL, 3, NULL, 2, 1, NULL, 0, NULL, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (10, '2024-03-04', vision_numeric('-12', 18, 4), 'CHF', NULL, NULL, NULL, 3, NULL, 2, 1, NULL, 0, NULL, NULL,\n         NULL, '2025-03-01T09:00:00.000000Z'),\n        (11, '2024-03-05', vision_numeric('-100', 18, 4), 'EUR', NULL, 'TO SAVINGS', NULL, 3, NULL, 1, 1, NULL, 1,\n         12, 'manual', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (12, '2024-03-05', vision_numeric('100', 18, 4), 'EUR', NULL, 'FROM MAIN', NULL, 3, NULL, 2, 1, NULL, 1, 11,\n         'manual', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (13, '2024-03-06', vision_numeric('-7.25', 18, 4), 'EUR', NULL, 'OLD ROW', NULL, 1, 3, 1, 0, NULL, 0, NULL,\n         NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (14, '2024-01-06', vision_numeric('1.005', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, 1, 1,\n         vision_numeric('1', 18, 0), 0, NULL, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (15, '2024-04-01', vision_numeric('-20', 18, 4), 'EUR', NULL, NULL, NULL, 3, NULL, NULL, 1, NULL, 0, NULL,\n         NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
-    "INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (1, 1), (1, 2), (3, 3), (5, 2), (8, 1)"
+    "INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (1, 1), (1, 2), (3, 3), (5, 2), (8, 1)",
+    "INSERT INTO accounts (id, name, currency, type, is_active, created_at, updated_at, import_identity) VALUES\n        (3, 'Closed', 'EUR', 'checking', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000003')",
+    "INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, account_id, recipient_id,\n         is_executed, is_active, created_at, updated_at) VALUES\n        (1, '2024-01-14', vision_numeric('-15.5', 18, 4), 'EUR', 'AUTO PLAN', 1, 1, 0, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, '2024-01-06', vision_numeric('-40', 18, 4), 'EUR', 'LINKED', 1, 3, 0, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO planned_transaction_executions (id, planned_transaction_id, executed_transaction_id,\n         execution_date, created_at) VALUES\n        (1, 2, 3, '2024-01-06', '2025-03-01T09:00:00.000000Z')"
   ],
+  "now": "2026-06-15T09:00:00.000Z",
   "steps": [
     {
       "operationId": "getTransactions",
@@ -14596,6 +14600,1018 @@
         "error": {
           "code": "VALIDATION_ERROR",
           "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "transaction_date": "2024-01-10",
+        "amount": -15.5,
+        "account_id": 1,
+        "recipient_id": 1,
+        "memo": "manual one",
+        "currency": "EUR"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 16,
+          "transaction_date": "2024-01-10",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "MANUAL ONE",
+          "amount": -15.5,
+          "amount_eur": -15.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": [],
+          "auto_linked": 1
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "transaction_date": "2024-01-10",
+        "amount": -15.5,
+        "account_id": 1,
+        "recipient_id": 1,
+        "memo": "manual one",
+        "currency": "EUR"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "Duplicate transaction detected",
+          "details": {
+            "existing_transaction_id": 16
+          }
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "transaction_date": "2024-01-10",
+        "amount": -15.5,
+        "account_id": 1,
+        "recipient_id": 1,
+        "memo": "manual one",
+        "currency": "EUR",
+        "allow_duplicate": true
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 17,
+          "transaction_date": "2024-01-10",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "MANUAL ONE",
+          "amount": -15.5,
+          "amount_eur": -15.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": [],
+          "auto_linked": null
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "memo": "no fields"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: date, account_id, recipient_id, amount"
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "transaction_date": "2024-01-10",
+        "amount": 0,
+        "account_id": 1,
+        "recipient_id": 1,
+        "currency": "EUR"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount must be a non-zero finite number within range"
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "transaction_date": "2024-01-10",
+        "amount": -5,
+        "account_id": 1,
+        "recipient_id": "1e3",
+        "currency": "EUR"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "recipient_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "date": "2024-01-11",
+        "amount": "-7.251",
+        "account_id": 2,
+        "recipient_id": 3,
+        "memo": "tagged create",
+        "currency": "usd",
+        "category_id": 10,
+        "tags": [
+          "work",
+          "holiday"
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 18,
+          "transaction_date": "2024-01-11",
+          "bank_account": "Travel",
+          "account_id": 2,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 3,
+          "recipient_name": "MARKET",
+          "memo": "TAGGED CREATE",
+          "amount": -7.251,
+          "amount_eur": -7.251,
+          "currency": "USD",
+          "balance": null,
+          "category_id": 10,
+          "category_name": "TRAVEL:HOTEL",
+          "comment": null,
+          "tags": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true
+            },
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": [],
+          "auto_linked": null
+        }
+      }
+    },
+    {
+      "operationId": "updateTransaction",
+      "method": "PATCH",
+      "path": "/api/transactions/1",
+      "body": {
+        "memo": "edited card"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "transaction_date": "2024-01-05",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "edited card",
+          "amount": -12.5,
+          "amount_eur": -12.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [
+            {
+              "id": 1,
+              "slug": "holiday",
+              "color": "#00aaff",
+              "is_active": true
+            },
+            {
+              "id": 2,
+              "slug": "work",
+              "color": null,
+              "is_active": true
+            }
+          ],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateTransaction",
+      "method": "PATCH",
+      "path": "/api/transactions/15",
+      "body": {
+        "recipient_name": "market",
+        "recipient_id": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 15,
+          "transaction_date": "2024-04-01",
+          "bank_account": null,
+          "account_id": null,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 3,
+          "recipient_name": "MARKET",
+          "memo": null,
+          "amount": -20,
+          "amount_eur": -20,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": null,
+          "category_name": null,
+          "comment": null,
+          "tags": [],
+          "is_active": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updateTransaction",
+      "method": "PATCH",
+      "path": "/api/transactions/1",
+      "body": {
+        "account_id": 3
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Reopen the account before changing its ledger balance"
+        }
+      }
+    },
+    {
+      "operationId": "updateTransaction",
+      "method": "PATCH",
+      "path": "/api/transactions/1",
+      "body": {
+        "transaction_date": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_date: transaction_date cannot be cleared"
+        }
+      }
+    },
+    {
+      "operationId": "updateTransaction",
+      "method": "PATCH",
+      "path": "/api/transactions/1",
+      "body": {
+        "amount": "abc"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount: amount must be a number within range"
+        }
+      }
+    },
+    {
+      "operationId": "updateTransaction",
+      "method": "PATCH",
+      "path": "/api/transactions/999",
+      "body": {
+        "memo": "missing"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Transaction with ID 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "deleteTransaction",
+      "method": "DELETE",
+      "path": "/api/transactions/5",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteTransaction",
+      "method": "DELETE",
+      "path": "/api/transactions/3",
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A selected transaction is linked to a planned payment. Remove that planned payment explicitly before deleting the transaction"
+        }
+      }
+    },
+    {
+      "operationId": "deleteTransaction",
+      "method": "DELETE",
+      "path": "/api/transactions/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Transaction with ID 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "transaction_date": "2024-01-15",
+        "amount": -15.5,
+        "account_id": 1,
+        "recipient_id": 1,
+        "memo": "autolink",
+        "currency": "EUR"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 19,
+          "transaction_date": "2024-01-15",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "AUTOLINK",
+          "amount": -15.5,
+          "amount_eur": -15.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": [],
+          "auto_linked": null
+        }
+      }
+    },
+    {
+      "operationId": "getTransaction",
+      "method": "GET",
+      "path": "/api/transactions/16",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 16,
+          "transaction_date": "2024-01-10",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 1,
+          "recipient_name": "SHOP",
+          "memo": "MANUAL ONE",
+          "amount": -15.5,
+          "amount_eur": -15.5,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 2,
+          "category_name": "FOOD:GROCERIES",
+          "comment": null,
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createTransaction",
+      "method": "POST",
+      "path": "/api/transactions",
+      "body": {
+        "date": "2024-01-16",
+        "amount": -3,
+        "account_id": 1,
+        "recipient_id": 2
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 20,
+          "transaction_date": "2024-01-16",
+          "bank_account": "Main",
+          "account_id": 1,
+          "is_transfer": false,
+          "transfer_peer_id": null,
+          "transfer_source": null,
+          "recipient_id": 2,
+          "recipient_name": "CAFÉ ÉCLAIR",
+          "memo": null,
+          "amount": -3,
+          "amount_eur": -3,
+          "currency": "EUR",
+          "balance": null,
+          "category_id": 3,
+          "category_name": "LEISURE:COFFEE",
+          "comment": null,
+          "tags": [],
+          "is_active": true,
+          "created_at": "2026-06-15T09:00:00.000Z",
+          "updated_at": "2026-06-15T09:00:00.000Z",
+          "links": [],
+          "auto_linked": null
+        }
+      }
+    },
+    {
+      "operationId": "getTransactions",
+      "method": "GET",
+      "path": "/api/transactions?sort_by=date",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 15,
+              "transaction_date": "2024-04-01",
+              "bank_account": null,
+              "account_id": null,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": null,
+              "amount": -20,
+              "amount_eur": -20,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 12,
+              "transaction_date": "2024-03-05",
+              "bank_account": "Travel",
+              "account_id": 2,
+              "is_transfer": true,
+              "transfer_peer_id": 11,
+              "transfer_source": "manual",
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": "FROM MAIN",
+              "amount": 100,
+              "amount_eur": 100,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 11,
+              "transaction_date": "2024-03-05",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": true,
+              "transfer_peer_id": 12,
+              "transfer_source": "manual",
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": "TO SAVINGS",
+              "amount": -100,
+              "amount_eur": -100,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 10,
+              "transaction_date": "2024-03-04",
+              "bank_account": "Travel",
+              "account_id": 2,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": null,
+              "amount": -12,
+              "amount_eur": -12,
+              "currency": "CHF",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": null,
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 9,
+              "transaction_date": "2024-03-03",
+              "bank_account": "Travel",
+              "account_id": 2,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": null,
+              "amount": -1000,
+              "amount_eur": -1000,
+              "currency": "JPY",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 8,
+              "transaction_date": "2024-03-02",
+              "bank_account": "Travel",
+              "account_id": 2,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 7,
+              "recipient_name": null,
+              "memo": "HOTEL",
+              "amount": -75,
+              "amount_eur": -75,
+              "currency": "GBP",
+              "balance": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
+              "comment": null,
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 7,
+              "transaction_date": "2024-03-01",
+              "bank_account": "Travel",
+              "account_id": 2,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": "TOP UP",
+              "amount": 250.5,
+              "amount_eur": 250.5,
+              "currency": "USD",
+              "balance": 1250.5,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 6,
+              "transaction_date": "2024-02-02",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 6,
+              "recipient_name": "CAFÉ ÉCLAIR",
+              "memo": null,
+              "amount": -4.5,
+              "amount_eur": -4.5,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
+              "comment": "bis",
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 20,
+              "transaction_date": "2024-01-16",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 2,
+              "recipient_name": "CAFÉ ÉCLAIR",
+              "memo": null,
+              "amount": -3,
+              "amount_eur": -3,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 3,
+              "category_name": "LEISURE:COFFEE",
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 19,
+              "transaction_date": "2024-01-15",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "AUTOLINK",
+              "amount": -15.5,
+              "amount_eur": -15.5,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 2,
+              "category_name": "FOOD:GROCERIES",
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 18,
+              "transaction_date": "2024-01-11",
+              "bank_account": "Travel",
+              "account_id": 2,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": "TAGGED CREATE",
+              "amount": -7.251,
+              "amount_eur": -7.251,
+              "currency": "USD",
+              "balance": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
+              "comment": null,
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                },
+                {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 17,
+              "transaction_date": "2024-01-10",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "MANUAL ONE",
+              "amount": -15.5,
+              "amount_eur": -15.5,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 2,
+              "category_name": "FOOD:GROCERIES",
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 16,
+              "transaction_date": "2024-01-10",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "MANUAL ONE",
+              "amount": -15.5,
+              "amount_eur": -15.5,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 2,
+              "category_name": "FOOD:GROCERIES",
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2026-06-15T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 4,
+              "transaction_date": "2024-01-07",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 4,
+              "recipient_name": "MARKET",
+              "memo": "SALARY",
+              "amount": 2500,
+              "amount_eur": 2500,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 14,
+              "transaction_date": "2024-01-06",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": null,
+              "amount": 1.005,
+              "amount_eur": 1.005,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 3,
+              "transaction_date": "2024-01-06",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
+              "memo": "WEEKLY",
+              "amount": -40,
+              "amount_eur": -40,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": null,
+              "category_name": null,
+              "comment": null,
+              "tags": [
+                {
+                  "id": 3,
+                  "slug": "old",
+                  "color": "#999999",
+                  "is_active": false
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 2,
+              "transaction_date": "2024-01-06",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 2,
+              "recipient_name": "CAFÉ ÉCLAIR",
+              "memo": null,
+              "amount": -3.2,
+              "amount_eur": -3.2,
+              "currency": "EUR",
+              "balance": 500,
+              "category_id": 3,
+              "category_name": "LEISURE:COFFEE",
+              "comment": "latte",
+              "tags": [],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "links": []
+            },
+            {
+              "id": 1,
+              "transaction_date": "2024-01-05",
+              "bank_account": "Main",
+              "account_id": 1,
+              "is_transfer": false,
+              "transfer_peer_id": null,
+              "transfer_source": null,
+              "recipient_id": 1,
+              "recipient_name": "SHOP",
+              "memo": "edited card",
+              "amount": -12.5,
+              "amount_eur": -12.5,
+              "currency": "EUR",
+              "balance": null,
+              "category_id": 2,
+              "category_name": "FOOD:GROCERIES",
+              "comment": null,
+              "tags": [
+                {
+                  "id": 1,
+                  "slug": "holiday",
+                  "color": "#00aaff",
+                  "is_active": true
+                },
+                {
+                  "id": 2,
+                  "slug": "work",
+                  "color": null,
+                  "is_active": true
+                }
+              ],
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
+              "links": []
+            }
+          ],
+          "total": 18,
+          "limit": 50,
+          "offset": 0,
+          "links": []
         }
       }
     }

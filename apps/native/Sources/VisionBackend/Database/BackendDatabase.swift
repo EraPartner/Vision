@@ -11,14 +11,21 @@ public actor BackendDatabase: InProcessDatabaseHolder {
     private var suspended = true
     private var session: BackendSession?
     private let time: SQLTimestamps
+    private let wall: @Sendable () -> SQLTimestamps.Instant
 
     public init(time: SQLTimestamps = SQLTimestamps()) {
         self.time = time
+        wall = SQLConnectionClock.systemNow
     }
 
-    /// Opens `path` straight away, for tests and tools that own the file.
-    public init(path: String, time: SQLTimestamps = SQLTimestamps()) {
+    /// Opens `path` straight away, for tests and tools that own the file. `wall` replaces the
+    /// system clock, for a replay recorded at a fixed instant.
+    public init(
+        path: String, time: SQLTimestamps = SQLTimestamps(),
+        wall: @escaping @Sendable () -> SQLTimestamps.Instant = SQLConnectionClock.systemNow
+    ) {
         self.time = time
+        self.wall = wall
         self.path = path
         suspended = false
     }
@@ -47,7 +54,7 @@ public actor BackendDatabase: InProcessDatabaseHolder {
     private func openSession() throws -> BackendSession {
         guard !suspended, let path else { throw APIError.backendUnavailable }
         if let session { return session }
-        let clock = SQLConnectionClock()
+        let clock = SQLConnectionClock(wall: wall)
         let connection = try VisionDatabase.open(path: path, role: .writer, time: time, clock: clock)
         let opened = BackendSession(connection: connection, clock: clock, time: time)
         session = opened
@@ -63,6 +70,7 @@ public final class BackendSession {
     let clock: SQLConnectionClock
     /// The session's time zone, the backend's `APP_TIMEZONE`.
     let time: SQLTimestamps
+    private var savepoints = 0
 
     init(connection: SQLiteConnection, clock: SQLConnectionClock, time: SQLTimestamps) {
         self.connection = connection
@@ -72,16 +80,15 @@ public final class BackendSession {
 
     /// `todayAppDateString()`: today's calendar day in the session's zone, `YYYY-MM-DD`.
     func today() -> String {
-        SQLTimestamps.formatDate(time.localDate(of: Self.currentInstant()))
+        SQLTimestamps.formatDate(time.localDate(of: currentInstant()))
     }
 
-    private static func currentInstant() -> SQLTimestamps.Instant {
-        SQLTimestamps.Instant(ms: Int64((Date().timeIntervalSince1970 * 1000).rounded(.down)))
-    }
+    /// `new Date()`: the wall clock in milliseconds.
+    func currentInstant() -> SQLTimestamps.Instant { clock.wall() }
 
     private func statement<T>(_ body: () throws -> T) rethrows -> T {
         let inTransaction = clock.transactionStart != nil
-        if !inTransaction { clock.statementStart = Self.currentInstant() }
+        if !inTransaction { clock.statementStart = currentInstant() }
         defer { if !inTransaction { clock.statementStart = nil } }
         return try body()
     }
@@ -96,10 +103,25 @@ public final class BackendSession {
         try rows(sql, arguments).first
     }
 
-    /// `withTransaction`: BEGIN IMMEDIATE, COMMIT on success, ROLLBACK on a throw.
+    /// `withTransaction`: BEGIN IMMEDIATE, COMMIT on success, ROLLBACK on a throw. Inside a
+    /// transaction it nests as connection.ts does: a savepoint, rolled back to on a throw.
     public func transaction<T>(_ body: () throws -> T) throws -> T {
+        if clock.transactionStart != nil {
+            savepoints += 1
+            let name = "vision_nested_tx_\(savepoints)"
+            try connection.execute("SAVEPOINT \(name)")
+            do {
+                let result = try body()
+                try connection.execute("RELEASE SAVEPOINT \(name)")
+                return result
+            } catch {
+                try? connection.execute("ROLLBACK TO SAVEPOINT \(name)")
+                try? connection.execute("RELEASE SAVEPOINT \(name)")
+                throw error
+            }
+        }
         try connection.execute("BEGIN IMMEDIATE")
-        clock.transactionStart = Self.currentInstant()
+        clock.transactionStart = currentInstant()
         defer { clock.transactionStart = nil }
         do {
             let result = try body()

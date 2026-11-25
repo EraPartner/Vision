@@ -132,6 +132,20 @@ enum TransactionsArea {
                 return HandlerResult(data: row.json)
             }
         }
+        backend.serve(OpenAPIOperations.CreateTransaction.self) { request in
+            let fields = try TransactionsArea.createFields(request)
+            return try await database.run { session in try TransactionsArea.create(session, fields: fields) }
+        }
+        backend.serve(OpenAPIOperations.UpdateTransaction.self) { request in
+            let id = try TransactionsArea.pathId(request)
+            return try await database.run { session in
+                try TransactionsArea.update(session, id: id, request: request)
+            }
+        }
+        backend.serve(OpenAPIOperations.DeleteTransaction.self) { request in
+            let id = try TransactionsArea.pathId(request)
+            return try await database.run { session in try TransactionsArea.delete(session, id: id) }
+        }
     }
 
     // MARK: - Request input
@@ -582,5 +596,595 @@ enum TransactionsArea {
         }
         body["items"] = .array(rows.map(\.json))
         return HandlerResult(data: .object(body))
+    }
+
+    // MARK: - POST / (create, port 11)
+
+    /// The SQL a raw body value binds, as `toSqlParam` over node:sqlite writes it: every
+    /// number a double, a boolean its 1/0 double, arrays and objects their `JSON.stringify`
+    /// text, and NaN a raised TypeError.
+    static func looseSQL(_ value: JSValue?) throws -> SQLValue {
+        switch value {
+        case nil, .null?:
+            return .null
+        case .bool(let flag)?:
+            return .real(flag ? 1 : 0)
+        case .number(let number)?:
+            if number.isNaN { throw UnhandledJSError("NaN cannot be bound to SQLite") }
+            return .real(number)
+        case .string(let text)?:
+            return .text(text)
+        case .array?, .object?:
+            return .text(value?.jsonText ?? "null")
+        }
+    }
+
+    /// `assertCurrency`: null and "" clear; anything else must read as ISO (upper-cased).
+    static func currencyCode(_ value: JSValue?, issues: inout [String]) -> String? {
+        guard let value, value != .null, value != .string("") else { return nil }
+        let code = JavaScriptWhitespace.trim(value.javaScriptString.uppercased())
+        guard AccountsArea.isCurrencyCode(code) else {
+            issues.append("currency: currency must be a 3-letter ISO code")
+            return nil
+        }
+        return code
+    }
+
+    /// `validateId`: a positive integer up to int32, as number or digits string.
+    static func validId(_ value: JSValue?) -> Int? {
+        if let text = value?.stringValue, !text.isEmpty, text.utf8.allSatisfy({ (48...57).contains($0) }) {
+            return Int(text).flatMap { $0 >= 1 && $0 <= 2_147_483_647 ? $0 : nil }
+        }
+        guard case .number(let number)? = value, number.isFinite else { return nil }
+        guard number == number.rounded(), number >= 1, number <= 2_147_483_647 else { return nil }
+        return Int(number)
+    }
+
+    /// `createTransactionSchema`: the leaf checks in shape order, then the superRefine
+    /// checks (zod collects both, reading a failed leaf as undefined).
+    static func createFields(_ request: InProcessRequest) throws -> JSObject {
+        let body = try RequestBody.parseJavaScript(request.body)
+        guard case .object(var object)? = body ?? .object(JSObject()) else {
+            throw BackendHTTPError.validation(
+                "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
+        }
+        var issues: [String] = []
+        var account: Int?
+
+        // tags: only "is an array" is checked; the items pass through unchecked.
+        if let tags = object["tags"] {
+            if case .array = tags {} else {
+                issues.append("tags: tags must be an array of strings")
+            }
+        }
+        // account_id/category_id: null clears; a present value must be a positive int.
+        for field in ["account_id", "category_id"] {
+            if let value = object[field] {
+                if value == .null { continue }
+                if let id = validId(value) {
+                    object[field] = .number(Double(id))
+                    if field == "account_id" { account = id }
+                } else {
+                    issues.append("\(field): \(field) must be a positive integer")
+                }
+            }
+        }
+        // allow_duplicate: a boolean when present.
+        if let flag = object["allow_duplicate"] {
+            if case .bool = flag {} else {
+                issues.append("allow_duplicate: Invalid input: expected boolean, received \(flag.zodTypeName)")
+            }
+        }
+        // currency: absent, null and "" all clear.
+        TransactionsArea.currencyCode(object["currency"], issues: &issues)
+            .map { object["currency"] = .string($0) }
+        // bank_account: retired — anything but absence fails.
+        if let bankAccount = object["bank_account"] {
+            issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
+        }
+
+        // superRefine, always after the leaves; a failed account_id reads as undefined.
+        let txDate = orNull(object["transaction_date"]) ?? orNull(object["date"])
+        let recipient = object["recipient_id"]
+        let amount = object["amount"]
+        if txDate == nil || account == nil || recipient == nil || !truthy(recipient ?? .null)
+            || amount == nil || amount == .null
+        {
+            issues.append("Missing required fields: date, account_id, recipient_id, amount")
+            guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+            return object
+        }
+        let amountNum = amount?.javaScriptNumber ?? .nan
+        if !amountNum.isFinite || amountNum == 0 || abs(amountNum) > 1_000_000_000_000 {
+            issues.append("amount must be a non-zero finite number within range")
+        }
+        if validId(recipient) == nil {
+            issues.append("recipient_id must be a positive integer")
+        }
+        guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+        return object
+    }
+
+    /// JavaScript truthiness, the `data.x || data.y` of the route's date pick.
+    static func truthy(_ value: JSValue) -> Bool {
+        switch value {
+        case .null: return false
+        case .bool(let flag): return flag
+        case .number(let number): return number != 0 && !number.isNaN
+        case .string(let text): return !text.isEmpty
+        default: return true
+        }
+    }
+
+    /// `x || undefined`: falsy reads as nil.
+    static func orNull(_ value: JSValue?) -> JSValue? {
+        (value.map(truthy) ?? false) ? value : nil
+    }
+
+    /// `manualAmountIdentity`: the NUMERIC(18,4) value as decimal.js prints it, ties
+    /// away from zero. A value decimal.js cannot parse raises.
+    static func manualAmountIdentity(_ amount: JSValue?) throws -> String {
+        let text: String
+        if case .number(let number)? = amount { text = SQLArguments.javaScriptText(number) } else {
+            text = amount?.javaScriptString ?? ""
+        }
+        guard let decimal = try? DecimalJS.from(text) else {
+            throw UnhandledJSError("[decimaljs] Invalid argument: not a valid number")
+        }
+        return decimal.toDecimalPlaces(4).description
+    }
+
+    /// `createManualTransactionHash`: the versioned identity of a manual create.
+    // lint:allow raw-id the TypeScript helper hashes the account row id as a plain number
+    static func manualHash(_ data: JSObject, date: String, accountId: Int) throws -> String {
+        let recipientHash: JSValue
+        if let recipient = data["recipient_id"], recipient != .null {
+            recipientHash = .string(recipient.javaScriptString)
+        } else {
+            recipientHash = .null
+        }
+        let hashInput = JSValue.array([
+            .string("manual-v3"),
+            .string(String(date.prefix(10))),
+            .string(try manualAmountIdentity(data["amount"])),
+            recipientHash,
+            .string(JavaScriptWhitespace.trim((data["memo"] ?? .null).javaScriptString).uppercased()),
+            .string("id:\(accountId)"),
+            .string(JavaScriptWhitespace.trim((data["currency"] ?? .null).javaScriptString).uppercased()),
+        ])
+        return SHA256Digest.hex(Array(hashInput.jsonText.utf8))
+    }
+
+    /// The manual dedup predicate of `isManualDuplicate`, bound as its raw sql held it.
+    static func duplicatePredicate(
+        _ date: String, _ identity: String, _ data: JSObject,
+        // lint:allow raw-id the predicate binds the account row id as a plain integer
+        accountId: Int
+    ) throws -> [SQLValue] {
+        let memo = JavaScriptWhitespace.trim((data["memo"] ?? .null).javaScriptString).uppercased()
+        let currency = JavaScriptWhitespace.trim((data["currency"] ?? .null).javaScriptString).uppercased()
+        let recipientParam: SQLValue
+        if let recipient = data["recipient_id"], recipient != .null {
+            recipientParam = try looseSQL(recipient)
+        } else {
+            recipientParam = .null
+        }
+        return try [
+            .text(String(date.prefix(10))),
+            .text(identity),
+            recipientParam,
+            .text(memo),
+            .integer(Int64(accountId)),
+            .integer(Int64(accountId)),
+            .integer(Int64(accountId)),
+            .text(""),
+            .text(currency),
+        ]
+    }
+
+    /// The predicate's SQL text: the claim join and the field fallback both hold it.
+    static let duplicateWhere = """
+    t.date = ? AND dec_eq(t.amount, ?) AND t.recipient_id IS ? \
+    AND UPPER(COALESCE(btrim(t.memo, char(9, 10, 11, 12, 13, 32, 160, 5760, 8192, 8193, 8194, \
+    8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8232, 8233, 8239, 8287, 12288, 65279)), '')) = ? \
+    AND ((? IS NOT NULL AND t.account_id = ?) OR (? IS NULL AND COALESCE(UPPER(acct.name), '') = ?)) \
+    AND UPPER(t.currency) = ? AND t.is_active = 1
+    """
+
+    /// POST "/": the manual dedup claim chain, the insert and the auto-link of
+    /// `createManualTransaction`.
+    static func create(_ session: BackendSession, fields data: JSObject) throws -> HandlerResult {
+        guard let txValue = orNull(data["transaction_date"]) ?? orNull(data["date"]) else {
+            throw UnhandledJSError("createManualTransaction: transaction_date missing")
+        }
+        let txDate = txValue.javaScriptString
+        guard let account = validId(data["account_id"]) else {
+            throw UnhandledJSError("createManualTransaction: account_id missing")
+        }
+        let identity = try manualAmountIdentity(data["amount"])
+        let hash = try manualHash(data, date: txDate, accountId: account)
+
+        let created = try session.transaction { () throws -> TransactionID in
+            // The account must be active; a manual create always carries one.
+            let active = try session.row(
+                "SELECT id FROM accounts WHERE id = ? AND is_active = 1", [.integer(Int64(account))])
+            if active == nil {
+                throw BackendHTTPError.validation("account_id must reference an active account")
+            }
+            // The claim hint first, then the live field predicate.
+            let predicate = try duplicatePredicate(txDate, identity, data, accountId: account)
+            let claim = try session.row(
+                """
+                SELECT m.transaction_id FROM manual_transaction_dedup_claims AS m \
+                INNER JOIN transactions AS t ON t.id = m.transaction_id AND t.is_active = 1 \
+                LEFT JOIN accounts AS acct ON acct.id = t.account_id \
+                WHERE m.deduplication_hash = ? AND \(duplicateWhere) LIMIT 1
+                """, [.text(hash)] + predicate)
+            let existing: Int?
+            if let claim {
+                existing = try claim.integerId("transaction_id")
+            } else {
+                let fieldMatch = try session.row(
+                    """
+                    SELECT t.id FROM transactions AS t \
+                    LEFT JOIN accounts AS acct ON acct.id = t.account_id \
+                    WHERE \(duplicateWhere) LIMIT 1
+                    """, predicate)
+                existing = try fieldMatch.map { try $0.integerId("id") }
+            }
+            if let existing, data["allow_duplicate"] != .bool(true) {
+                throw BackendHTTPError(
+                    status: 409, code: "CONFLICT", message: "Duplicate transaction detected",
+                    details: .object(["existing_transaction_id": .int(existing)]))
+            }
+            let tagSlugs: [JSValue]?
+            if case .array(let slugs)? = data["tags"] { tagSlugs = slugs } else { tagSlugs = nil }
+            let inserted = try session.row(
+                """
+                INSERT INTO transactions (date, account_id, recipient_id, amount, memo, currency, category_id, comment, is_active) \
+                VALUES (?, ?, ?, vision_numeric(?, 18, 4), ?, ?, ?, ?, 1) RETURNING id
+                """,
+                try [
+                    looseSQL(.string(txDate)),
+                    .integer(Int64(account)),
+                    looseSQL(data["recipient_id"]),
+                    decimalText(data["amount"]),
+                    looseSQL(try uppercasedText(data["memo"]) ?? .null),
+                    looseSQL(orNull(data["currency"]).map { .string($0.javaScriptString.uppercased()) }
+                        ?? .string("EUR")),
+                    looseSQL(data["category_id"]),
+                    looseSQL(data["comment"]),
+                ])
+            guard let inserted else { throw UnhandledJSError("Transaction insert did not return a row") }
+            let id = TransactionID(rawValue: try inserted.integerId("id"))
+            if let tagSlugs {
+                try setTransactionTags(session, id, tagSlugs)
+            }
+            try session.rows(
+                """
+                INSERT INTO manual_transaction_dedup_claims (deduplication_hash, transaction_id, updated_at) \
+                VALUES (?, ?, now()) \
+                ON CONFLICT (deduplication_hash) DO UPDATE SET transaction_id = excluded.transaction_id, updated_at = now()
+                """, [.text(hash), .integer(Int64(id.rawValue))])
+            return id
+        }
+
+        // The auto-clear of a matching planned payment; a failure never fails the create.
+        let autoLinked: Int?
+        do {
+            autoLinked = try PlannedArea.autoLink(
+                session, transaction: created, fields: data, txDate: txDate, accountId: account)
+        } catch {
+            autoLinked = nil
+        }
+        let row = try TransactionsArea.getById(session, created)
+        var fields = row?.json ?? .null
+        if case .object(var object) = fields {
+            object["auto_linked"] = autoLinked.map { JSValue.int($0).envelopeValue } ?? .null
+            fields = .object(object)
+        }
+        return HandlerResult(status: 201, data: fields)
+    }
+
+    /// A truthy string body value, upper-cased; `toUpperCase` raised a TypeError on
+    /// anything else, which surfaced as the sanitized 500.
+    static func uppercasedText(_ value: JSValue?) throws -> JSValue? {
+        guard let value, truthy(value) else { return value }
+        guard case .string(let text) = value else {
+            throw UnhandledJSError("value.toUpperCase is not a function")
+        }
+        return .string(text.uppercased())
+    }
+
+    /// `decimalParam`: a number binds as its decimal text, anything else raw.
+    static func decimalText(_ value: JSValue?) throws -> SQLValue {
+        if case .number(let number)? = value { return .text(SQLArguments.javaScriptText(number)) }
+        return try looseSQL(value)
+    }
+
+    /// `setTransactionTags`: replace the attached tags with the active slugs given.
+    static func setTransactionTags(_ session: BackendSession, _ id: TransactionID, _ slugs: [JSValue]) throws {
+        try session.rows("DELETE FROM transaction_tags WHERE transaction_id = ?", [id.sqlValue])
+        let resolved = try session.rows(
+            """
+            SELECT id FROM tags WHERE slug IN (SELECT value FROM json_each(?)) AND is_active = 1
+            """, [.text(JSValue.array(slugs).jsonText)])
+        guard !resolved.isEmpty else { return }
+        let ids = try JSValue.array(resolved.map { try .int($0.integerId("id")) })
+        try session.rows(
+            """
+            INSERT INTO transaction_tags (transaction_id, tag_id) \
+            SELECT ?, value FROM json_each(?) WHERE true \
+            ON CONFLICT DO NOTHING
+            """, [id.sqlValue, .text(ids.jsonText)])
+    }
+
+    // MARK: - PATCH /:id (update, port 11)
+
+    /// The columns `sanitizeUpdateFields("transactions", …)` allows.
+    static let updatableColumns: Set<String> = [
+        "date", "transaction_date", "account_id", "recipient_id", "amount", "memo", "currency",
+        "category_id", "comment", "is_active",
+    ]
+
+    /// `normalizeTransactionPatchFields` + `patchTransactionSchema`: the read-only keys
+    /// strip, the `date` remap, then the leaf checks in shape order.
+    static func patchFields(_ request: InProcessRequest) throws -> JSObject {
+        let body = try RequestBody.parseJavaScript(request.body)
+        guard case .object(var object)? = body ?? .object(JSObject()) else {
+            throw BackendHTTPError.validation(
+                "Invalid input: expected object, received \((body ?? .null).zodTypeName)")
+        }
+        var issues: [String] = []
+        for key in ["links", "id", "created_at"] { object[key] = nil }
+        if let date = object["date"] {
+            object["date"] = nil
+            object["transaction_date"] = date
+        }
+        if let tags = object["tags"] {
+            if case .array = tags {} else {
+                issues.append("tags: tags must be an array of strings")
+            }
+        }
+        // transaction_date: guardField — falsy clears, then `assertYmd`'s own message.
+        if let value = object["transaction_date"] {
+            if !truthy(value) {
+                issues.append("transaction_date: transaction_date cannot be cleared")
+            } else {
+                var dateIssues: [String] = []
+                if truthy(value) { _ = ymd(value, "transaction_date", &dateIssues) }
+                if dateIssues.isEmpty, !isJSString(value) {
+                    dateIssues.append("transaction_date: transaction_date must be in YYYY-MM-DD format")
+                }
+                issues.append(contentsOf: dateIssues.map { "transaction_date: \($0)" })
+            }
+        }
+        // amount: null and "" refuse, and the number replaces the raw input.
+        if let amount = object["amount"] {
+            if amount == .null || amount == .string("") {
+                issues.append("amount: amount must be a number within range")
+            } else {
+                let number = amount.javaScriptNumber
+                if !number.isFinite || abs(number) > 1_000_000_000_000 {
+                    issues.append("amount: amount must be a number within range")
+                } else {
+                    object["amount"] = .number(number)
+                }
+            }
+        }
+        // currency: a clear refuses; anything else must read as ISO.
+        if let currency = object["currency"] {
+            if currency == .null || currency == .string("") {
+                issues.append("currency: currency cannot be cleared")
+            } else if currency != .null {
+                _ = TransactionsArea.currencyCode(currency, issues: &issues)
+                    .map { object["currency"] = .string($0) }
+            }
+        }
+        if let bankAccount = object["bank_account"] {
+            issues.append("bank_account: Invalid input: expected never, received \(bankAccount.zodTypeName)")
+        }
+        for field in ["account_id", "recipient_id", "category_id"] {
+            guard let value = object[field], value != .null else { continue }
+            if let id = validId(value) {
+                object[field] = .number(Double(id))
+            } else {
+                issues.append("\(field): \(field) must be a positive integer")
+            }
+        }
+        guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+        return object
+    }
+
+    /// A string body value, as `z.string()` accepts.
+    static func isJSString(_ value: JSValue?) -> Bool {
+        if case .string? = value { return true }
+        return false
+    }
+
+    /// PATCH `/:id`: `transactionService.update` over `transactionRepository.update` —
+    /// the name resolution, the closed-account guard, the allow-listed SET and the tags, in
+    /// one write transaction.
+    static func update(
+        _ session: BackendSession, id: TransactionID, request: InProcessRequest
+    ) throws -> HandlerResult {
+        var fields = try patchFields(request)
+        // `resolveRecipientIdByName` / `resolveCategoryIdByName` — only when the id is
+        // nullish (not merely falsy), as the service reads it.
+        if let name = orNull(fields["recipient_name"]), fields["recipient_id"] == nil
+            || fields["recipient_id"] == .null
+        {
+            guard case .string(let text) = name else { throw UnhandledJSError("recipient_name is not a string") }
+            let normalized = RecipientText.normalizeForMatching(text)
+            guard let row = try session.row(
+                "SELECT id FROM recipients WHERE normalized_name = ? LIMIT 1", [.text(normalized)])
+            else { throw BackendHTTPError.validation("Recipient with name '\(text)' does not exist") }
+            fields["recipient_id"] = .number(Double(try row.integerId("id")))
+        }
+        fields["recipient_name"] = nil
+        if let name = orNull(fields["category_name"]), fields["category_id"] == nil
+            || fields["category_id"] == .null
+        {
+            let normalized = JavaScriptWhitespace.trim(AccountsArea.looseText(name).uppercased())
+            let byPath = try session.rows(
+                "SELECT id FROM categories WHERE path_name = ? AND is_active = 1 ORDER BY id LIMIT 2",
+                [.text(normalized)])
+            if byPath.count > 1 {
+                throw BackendHTTPError.validation(
+                    "Category path '\(normalized)' is ambiguous. Select the category by id.")
+            }
+            if let match = byPath.first {
+                fields["category_id"] = .number(Double(try match.integerId("id")))
+            } else {
+                guard let delimiter = normalized.firstIndex(of: ":"), delimiter != normalized.startIndex else {
+                    throw BackendHTTPError.validation(
+                        "Invalid category name format '\(normalized)'. Select a category id or use 'General:Detail'.")
+                }
+                let general = JavaScriptWhitespace.trim(String(normalized[normalized.startIndex..<delimiter]))
+                let detail = JavaScriptWhitespace.trim(String(normalized[normalized.index(after: delimiter)...]))
+                let legacy = try session.rows(
+                    """
+                    SELECT id FROM categories WHERE general = ? AND detail = ? AND is_active = 1
+                    UNION
+                    SELECT c.id FROM category_merge_aliases AS a
+                     INNER JOIN categories AS c ON c.id = a.target_category_id
+                     WHERE a.general = ? AND a.detail = ? AND c.is_active = 1
+                    ORDER BY id LIMIT 2
+                    """, [.text(general), .text(detail), .text(general), .text(detail)])
+                guard legacy.count == 1, let match = legacy.first else {
+                    throw BackendHTTPError.validation(
+                        "Category '\(normalized)' does not exist. Please create it first or use an existing category.")
+                }
+                fields["category_id"] = .number(Double(try match.integerId("id")))
+            }
+        }
+        fields["category_name"] = nil
+
+        var sanitized: [(String, JSValue)] = []
+        var tags: [JSValue]?
+        for (key, value) in fields.entries {
+            if key == "tags" {  // lint:allow string-literal-compare the allow-list keys are the TypeScript literals
+                if case .array(let slugs) = value { tags = slugs }
+                continue
+            }
+            let normalized = JavaScriptWhitespace.trim(key.lowercased())
+            if TransactionsArea.updatableColumns.contains(normalized) { sanitized.append((normalized, value)) }
+        }
+        // A PATCH that moves a ledger balance must find both accounts open.
+        let ledgerTouching: Set<String> = [
+            "amount", "date", "transaction_date", "currency", "account_id", "is_active",
+        ]
+        var targetAccount: Int?
+        if let index = sanitized.firstIndex(where: { $0.0 == "account_id" }) {  // lint:allow string-literal-compare the column key is a TypeScript literal
+            if case .number(let number) = sanitized[index].1, number != 0 {
+                targetAccount = Int(number)
+            }
+        }
+
+        let found = try session.transaction { () throws -> Bool in
+            if sanitized.contains(where: { ledgerTouching.contains($0.0) }) {
+                let ownership = try session.rows(
+                    """
+                    SELECT id, account_id FROM transactions WHERE id IN \
+                    (SELECT value FROM json_each(?)) ORDER BY id
+                    """, [.text(JSValue.array([.int(id.rawValue)]).jsonText)])
+                var accountIds = Set(ownership.compactMap { try? $0.optionalInt64("account_id") })
+                if let targetAccount { accountIds.insert(Int64(targetAccount)) }
+                guard !accountIds.isEmpty else { return false }
+                let accounts = try session.rows(
+                    """
+                    SELECT id, is_active FROM accounts WHERE id IN \
+                    (SELECT value FROM json_each(?)) ORDER BY id
+                    """, [.text(JSValue.array(accountIds.sorted().map { .int(Int($0)) }).jsonText)])
+                if accounts.count != accountIds.count
+                    || accounts.contains(where: { (try? $0.bool("is_active")) != true })
+                {
+                    throw BackendHTTPError.validation(
+                        "Reopen the account before changing its ledger balance")
+                }
+            }
+            // The canonical account identity, checked on every PATCH that carries it.
+            if let index = sanitized.firstIndex(where: { $0.0 == "account_id" }) {  // lint:allow string-literal-compare the column key is a TypeScript literal
+                if case .number(let number) = sanitized[index].1, number != 0, number.isFinite {
+                    let active = try session.row(
+                        "SELECT id FROM accounts WHERE id = ? AND is_active = 1",
+                        [.real(number)])
+                    if active == nil {
+                        throw BackendHTTPError.validation(
+                            "account_id must reference an active account")
+                    }
+                }
+            }
+            var changes: [(String, SQLValue)] = []
+            for (key, value) in sanitized {
+                let column = key == "transaction_date" ? "date" : key  // lint:allow string-literal-compare the column key is a TypeScript literal
+                if key == "amount" {  // lint:allow string-literal-compare the column key is a TypeScript literal
+                    changes.append((column, try decimalText(value)))
+                } else if key == "is_active" {  // lint:allow string-literal-compare the column key is a TypeScript literal
+                    if let flag = try SQLBooleanInput.read(value) {
+                        changes.append((column, .integer(flag ? 1 : 0)))
+                    } else {
+                        changes.append((column, .null))
+                    }
+                } else if key == "transaction_date" || key == "date" {  // lint:allow string-literal-compare the column keys are the TypeScript literals
+                    if let text = value.stringValue {
+                        changes.append((column, .text(try session.time.dateInputText(text))))
+                    } else {
+                        changes.append((column, try looseSQL(value)))
+                    }
+                } else {
+                    changes.append((column, try looseSQL(value)))
+                }
+            }
+            if !changes.isEmpty {
+                let assignments = changes.map { "\($0.0) = ?" }.joined(separator: ", ")
+                let updated = try session.rows(
+                    """
+                    UPDATE transactions SET \(assignments), updated_at = now() \
+                    WHERE id = ? RETURNING id
+                    """, changes.map(\.1) + [id.sqlValue])
+                guard !updated.isEmpty else { return false }
+            } else {
+                let exists = try session.row("SELECT id FROM transactions WHERE id = ?", [id.sqlValue])
+                guard exists != nil else { return false }
+            }
+            if let tags {
+                try setTransactionTags(session, id, tags)
+            }
+            return true
+        }
+        guard found else { throw BackendHTTPError.notFound("Transaction with ID \(id.rawValue) not found") }
+        return HandlerResult(data: try getById(session, id)?.json ?? .null)
+    }
+
+    // MARK: - DELETE /:id (port 11)
+
+    /// DELETE `/:id`: `hardDeleteWithCleanup` — the planned-execution guard refuses a
+    /// linked row, then the attachments' paths are collected before the CASCADE, the row
+    /// goes, and the stored files are unlinked best-effort.
+    static func delete(_ session: BackendSession, id: TransactionID) throws -> HandlerResult {
+        let paths = try session.rows(
+            "SELECT stored_path FROM attachments WHERE transaction_id = ?", [id.sqlValue])
+        let deleted = try session.transaction { () throws -> Int? in
+            let linked = try session.row(
+                """
+                SELECT 1 FROM planned_transaction_executions \
+                WHERE executed_transaction_id IN (SELECT value FROM json_each(?)) LIMIT 1
+                """, [.text(JSValue.array([.int(id.rawValue)]).jsonText)])
+            if linked != nil {
+                throw BackendHTTPError.conflict(
+                    "A selected transaction is linked to a planned payment. Remove that planned payment explicitly before deleting the transaction")
+            }
+            let removed = try session.rows(
+                "DELETE FROM transactions WHERE id = ? RETURNING id", [id.sqlValue])
+            return removed.isEmpty ? nil : try removed[0].integerId("id")
+        }
+        guard deleted != nil else { throw BackendHTTPError.notFound("Transaction with ID \(id.rawValue) not found") }
+        for row in paths {
+            if let path = try row.optionalText("stored_path") {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
+        return HandlerResult.noContent
     }
 }

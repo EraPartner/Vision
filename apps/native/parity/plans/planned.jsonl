@@ -1,0 +1,406 @@
+{"op":["step",null],"r":null}
+{"op":["valid",null],"r":false}
+{"op":["step",5],"r":null}
+{"op":["valid",5],"r":false}
+{"op":["step",true],"r":null}
+{"op":["valid",true],"r":false}
+{"op":["step",[]],"r":null}
+{"op":["valid",[]],"r":false}
+{"op":["step",{}],"r":null}
+{"op":["valid",{}],"r":false}
+{"op":["step",""],"r":null}
+{"op":["valid",""],"r":false}
+{"op":["step","  "],"r":null}
+{"op":["valid","  "],"r":false}
+{"op":["step","monthly"],"r":{"unit":"month","amount":1}}
+{"op":["valid","monthly"],"r":true}
+{"op":["step"," MONTHLY "],"r":{"unit":"month","amount":1}}
+{"op":["valid"," MONTHLY "],"r":true}
+{"op":["step","\tDaily\n"],"r":{"unit":"day","amount":1}}
+{"op":["valid","\tDaily\n"],"r":true}
+{"op":["step","WeEkLy"],"r":{"unit":"day","amount":7}}
+{"op":["valid","WeEkLy"],"r":true}
+{"op":["step","biweekly"],"r":{"unit":"day","amount":14}}
+{"op":["valid","biweekly"],"r":true}
+{"op":["step","quarterly"],"r":{"unit":"month","amount":3}}
+{"op":["valid","quarterly"],"r":true}
+{"op":["step","yearly"],"r":{"unit":"month","amount":12}}
+{"op":["valid","yearly"],"r":true}
+{"op":["step","every 1 day"],"r":{"unit":"day","amount":1}}
+{"op":["valid","every 1 day"],"r":true}
+{"op":["step","every 3 days"],"r":{"unit":"day","amount":3}}
+{"op":["valid","every 3 days"],"r":true}
+{"op":["step","Every 7 Days"],"r":{"unit":"day","amount":7}}
+{"op":["valid","Every 7 Days"],"r":true}
+{"op":["step","every 0 days"],"r":null}
+{"op":["valid","every 0 days"],"r":false}
+{"op":["step","every 04 days"],"r":{"unit":"day","amount":4}}
+{"op":["valid","every 04 days"],"r":true}
+{"op":["step","every 40 days"],"r":{"unit":"day","amount":40}}
+{"op":["valid","every 40 days"],"r":true}
+{"op":["step","every 999999 days"],"r":{"unit":"day","amount":999999}}
+{"op":["valid","every 999999 days"],"r":true}
+{"op":["step","every 2 day"],"r":{"unit":"day","amount":2}}
+{"op":["valid","every 2 day"],"r":true}
+{"op":["step","every 2 dayss"],"r":null}
+{"op":["valid","every 2 dayss"],"r":false}
+{"op":["step","everyx 2 days"],"r":null}
+{"op":["valid","everyx 2 days"],"r":false}
+{"op":["step","every days"],"r":null}
+{"op":["valid","every days"],"r":false}
+{"op":["step","every -1 days"],"r":null}
+{"op":["valid","every -1 days"],"r":false}
+{"op":["step","every 1e3 days"],"r":null}
+{"op":["valid","every 1e3 days"],"r":false}
+{"op":["step","every 2 days"],"r":{"unit":"day","amount":2}}
+{"op":["valid","every 2 days"],"r":true}
+{"op":["step","every\t2\ndays"],"r":{"unit":"day","amount":2}}
+{"op":["valid","every\t2\ndays"],"r":true}
+{"op":["step","every 2 days "],"r":{"unit":"day","amount":2}}
+{"op":["valid","every 2 days "],"r":true}
+{"op":["step"," every 2 days"],"r":{"unit":"day","amount":2}}
+{"op":["valid"," every 2 days"],"r":true}
+{"op":["step","every 2  days"],"r":{"unit":"day","amount":2}}
+{"op":["valid","every 2  days"],"r":true}
+{"op":["step","3 days"],"r":null}
+{"op":["valid","3 days"],"r":false}
+{"op":["step","fortnightly"],"r":null}
+{"op":["valid","fortnightly"],"r":false}
+{"op":["step","Monthly,quarterly"],"r":null}
+{"op":["valid","Monthly,quarterly"],"r":false}
+{"op":["step","évery 2 days"],"r":null}
+{"op":["valid","évery 2 days"],"r":false}
+{"op":["step","every ı days"],"r":null}
+{"op":["valid","every ı days"],"r":false}
+{"op":["step","every 2 DAYS?"],"r":null}
+{"op":["valid","every 2 DAYS?"],"r":false}
+{"op":["factor",null],"r":null}
+{"op":["factor",5],"r":null}
+{"op":["factor",true],"r":null}
+{"op":["factor",[]],"r":null}
+{"op":["factor",{}],"r":null}
+{"op":["factor",""],"r":null}
+{"op":["factor","  "],"r":null}
+{"op":["factor","monthly"],"r":"1"}
+{"op":["factor"," MONTHLY "],"r":"1"}
+{"op":["factor","\tDaily\n"],"r":"30.4375"}
+{"op":["factor","WeEkLy"],"r":"4.34821428571428571428571428571"}
+{"op":["factor","biweekly"],"r":"2.17410714285714285714285714286"}
+{"op":["factor","quarterly"],"r":"0.333333333333333333333333333333"}
+{"op":["factor","yearly"],"r":"0.0833333333333333333333333333333"}
+{"op":["factor","every 1 day"],"r":"30.4375"}
+{"op":["factor","every 3 days"],"r":"10.1458333333333333333333333333"}
+{"op":["factor","Every 7 Days"],"r":"4.34821428571428571428571428571"}
+{"op":["factor","every 0 days"],"r":null}
+{"op":["factor","every 04 days"],"r":"7.609375"}
+{"op":["factor","every 40 days"],"r":"0.7609375"}
+{"op":["factor","every 999999 days"],"r":"0.0000304375304375304375304375304375"}
+{"op":["factor","every 2 day"],"r":"15.21875"}
+{"op":["factor","every 2 dayss"],"r":null}
+{"op":["factor","everyx 2 days"],"r":null}
+{"op":["factor","every days"],"r":null}
+{"op":["factor","every -1 days"],"r":null}
+{"op":["factor","every 1e3 days"],"r":null}
+{"op":["factor","every 2 days"],"r":"15.21875"}
+{"op":["factor","every\t2\ndays"],"r":"15.21875"}
+{"op":["factor","every 2 days "],"r":"15.21875"}
+{"op":["factor"," every 2 days"],"r":"15.21875"}
+{"op":["factor","every 2  days"],"r":"15.21875"}
+{"op":["factor","3 days"],"r":null}
+{"op":["factor","fortnightly"],"r":null}
+{"op":["factor","Monthly,quarterly"],"r":null}
+{"op":["factor","évery 2 days"],"r":null}
+{"op":["factor","every ı days"],"r":null}
+{"op":["factor","every 2 DAYS?"],"r":null}
+{"op":["step","every 99999999999999999999 days"],"r":{"unit":"day","amount":100000000000000000000}}
+{"op":["valid","every 99999999999999999999 days"],"r":true}
+{"op":["next","2026-01-31","monthly"],"r":"2026-02-28"}
+{"op":["next","2024-01-31","monthly"],"r":"2024-02-29"}
+{"op":["next","2028-01-31","monthly"],"r":"2028-02-29"}
+{"op":["next","2026-03-31","monthly"],"r":"2026-04-30"}
+{"op":["next","2026-10-31","monthly"],"r":"2026-11-30"}
+{"op":["next","2026-08-31","monthly"],"r":"2026-09-30"}
+{"op":["next","2026-02-28","monthly"],"r":"2026-03-28"}
+{"op":["next","2024-02-29","yearly"],"r":"2025-02-28"}
+{"op":["next","2028-02-29","yearly"],"r":"2029-02-28"}
+{"op":["next","2026-02-29","yearly"],"r":"2027-02-28"}
+{"op":["next","2026-01-31","quarterly"],"r":"2026-04-30"}
+{"op":["next","2026-11-30","quarterly"],"r":"2027-02-28"}
+{"op":["next","2026-06-15","daily"],"r":"2026-06-16"}
+{"op":["next","2026-06-15","weekly"],"r":"2026-06-22"}
+{"op":["next","2026-06-15","biweekly"],"r":"2026-06-29"}
+{"op":["next","2026-06-15","every 10 days"],"r":"2026-06-25"}
+{"op":["next","2026-06-15","every 1 day"],"r":"2026-06-16"}
+{"op":["next","2026-01-01","every 90 days"],"r":"2026-04-01"}
+{"op":["next","0001-01-01","daily"],"r":"0001-01-02"}
+{"op":["next","9999-12-31","daily"],"r":"+010000-01"}
+{"op":["next","0001-01-01","yearly"],"r":"1902-01-01"}
+{"op":["next","9999-12-31","monthly"],"r":"Expected YYYY-MM-DD, got: 10000-02-01"}
+{"op":["next","2026-06-15","fortnightly"],"r":null}
+{"op":["next","2026-06-15",null],"r":null}
+{"op":["next","2026-03-27","weekly"],"r":"2026-04-03"}
+{"op":["next","2026-10-25","weekly"],"r":"2026-11-01"}
+{"op":["fastForward","2026-01-01","daily","2026-06-15"],"r":"2026-06-14"}
+{"op":["fastForward","2025-06-01","weekly","2026-06-15"],"r":"2026-06-07"}
+{"op":["fastForward","2025-01-01","every 3 days","2026-06-15"],"r":"2026-06-10"}
+{"op":["fastForward","2026-06-14","daily","2026-06-15"],"r":"2026-06-14"}
+{"op":["fastForward","2026-06-15","daily","2026-06-16"],"r":"2026-06-15"}
+{"op":["fastForward","2025-06-14","weekly","2026-06-15"],"r":"2026-06-06"}
+{"op":["fastForward","2024-01-01","every 30 days","2026-06-15"],"r":"2026-04-20"}
+{"op":["fastForward","2025-01-01","monthly","2026-06-15"],"r":"2025-01-01"}
+{"op":["fastForward","2026-06-15",null,"2026-12-31"],"r":"2026-06-15"}
+{"op":["fastForward","2025-12-31","yearly","2026-06-15"],"r":"2025-12-31"}
+{"op":["expand","2026-06-15",false,null,"2026-07-15",500],"r":["2026-06-15"]}
+{"op":["expand","2026-07-16",false,null,"2026-07-15",500],"r":[]}
+{"op":["expand","2026-06-15",true,null,"2026-07-15",500],"r":["2026-06-15"]}
+{"op":["expand","2026-01-31",true,"monthly","2026-04-15",500],"r":["2026-01-31","2026-02-28","2026-03-28"]}
+{"op":["expand","2024-01-31",true,"monthly","2024-04-15",500],"r":["2024-01-31","2024-02-29","2024-03-29"]}
+{"op":["expand","2028-01-31",true,"monthly","2028-04-15",500],"r":["2028-01-31","2028-02-29","2028-03-29"]}
+{"op":["expand","2026-06-15",true,"daily","2026-06-27",500],"r":["2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19","2026-06-20","2026-06-21","2026-06-22","2026-06-23","2026-06-24","2026-06-25","2026-06-26","2026-06-27"]}
+{"op":["expand","2026-06-15",true,"daily","2026-12-31",7],"r":["2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19","2026-06-20","2026-06-21"]}
+{"op":["expand","2026-06-15",true,"weekly","2027-06-15",500],"r":["2026-06-15","2026-06-22","2026-06-29","2026-07-06","2026-07-13","2026-07-20","2026-07-27","2026-08-03","2026-08-10","2026-08-17","2026-08-24","2026-08-31","2026-09-07","2026-09-14","2026-09-21","2026-09-28","2026-10-05","2026-10-12","2026-10-19","2026-10-26","2026-11-02","2026-11-09","2026-11-16","2026-11-23","2026-11-30","2026-12-07","2026-12-14","2026-12-21","2026-12-28","2027-01-04","2027-01-11","2027-01-18","2027-01-25","2027-02-01","2027-02-08","2027-02-15","2027-02-22","2027-03-01","2027-03-08","2027-03-15","2027-03-22","2027-03-29","2027-04-05","2027-04-12","2027-04-19","2027-04-26","2027-05-03","2027-05-10","2027-05-17","2027-05-24","2027-05-31","2027-06-07","2027-06-14"]}
+{"op":["expand","2026-06-15",true,"every 3 days","2026-07-05",500],"r":["2026-06-15","2026-06-18","2026-06-21","2026-06-24","2026-06-27","2026-06-30","2026-07-03"]}
+{"op":["expand","2026-06-15",true,"fortnightly","2026-07-05",500],"r":["2026-06-15"]}
+{"op":["expand","2026-06-15",true,null,"2026-07-05",500],"r":["2026-06-15"]}
+{"op":["expand","2026-06-15",false,"daily","2026-07-05",500],"r":["2026-06-15"]}
+{"op":["expand","2026-06-15",true,"yearly","2027-06-15",500],"r":["2026-06-15","2027-06-15"]}
+{"op":["expand","2024-02-29",true,"yearly","2029-01-01",500],"r":["2024-02-29","2025-02-28","2026-02-28","2027-02-28","2028-02-28"]}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":"1","currency":"EUR","amount":-12.5,"planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"eur","amount":"-12.5000","transaction_date":"2026-06-15"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":2,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":null,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":null,"amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"USD","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"eur","amount":"-12.5","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"0","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"0","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"abc","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"100","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-105","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"100","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-106","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-20","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-20.99","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-20","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-21.01","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-15"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-05"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-04"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":null},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-13-01"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10T05:00:00.000Z"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10T23:59:59.999Z"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":" 2026-06-10 "},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":5},{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":"EUR","amount":" -12.5 ","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":"2","currency":"EUR","amount":"-5000","planned_date":"2026-06-10"},{"recipient_cluster_id":2,"currency":"EUR","amount":"-5025","transaction_date":"2026-06-10"}],"r":true}
+{"op":["match",{"recipient_cluster_id":0,"currency":"XXX","amount":"-0.5","planned_date":"2026-06-15"},{"recipient_cluster_id":2,"currency":"usd","amount":"12.5","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"-Infinity","planned_date":"5"},{"recipient_cluster_id":0,"currency":"usd","amount":"Infinity","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"XXX","amount":"abc","planned_date":"2026-13-01"},{"recipient_cluster_id":1,"currency":"XXX","amount":"-Infinity","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"eu r","amount":"1e3","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":"2","currency":"usd","amount":"12.5","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"usd","amount":"0","planned_date":"2027-01-01"},{"recipient_cluster_id":0,"currency":"EUR","amount":"-0.5","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"EUR","amount":"-12.5","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":0,"currency":"XXX","amount":"99.99","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"EUR","amount":"0.1","planned_date":"2026-06-10"},{"recipient_cluster_id":"2","currency":"XXX","amount":"-Infinity","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"","amount":" 20 ","planned_date":"5"},{"recipient_cluster_id":1,"currency":"","amount":"-Infinity","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":null,"amount":" 20 ","planned_date":""},{"recipient_cluster_id":2,"currency":null,"amount":"12.5","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"EUR","amount":"-0.5","planned_date":""},{"recipient_cluster_id":2,"currency":"eu r","amount":"0.1","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"","amount":"abc","planned_date":"5"},{"recipient_cluster_id":2,"currency":"usd","amount":"-Infinity","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"abc","planned_date":"2026-06-15"},{"recipient_cluster_id":"2","currency":"XXX","amount":"-100","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"eu r","amount":"99.99","planned_date":"2026-13-01"},{"recipient_cluster_id":null,"currency":"EUR","amount":"0.1","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"","amount":"1e3","planned_date":"2027-01-01"},{"recipient_cluster_id":2,"currency":"eu r","amount":"abc","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"","amount":"abc","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":2,"currency":"XXX","amount":"0","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"XXX","amount":"0.1","planned_date":"2026-06-10"},{"recipient_cluster_id":"2","currency":"eu r","amount":"-100","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"usd","amount":"-100","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":0,"currency":"XXX","amount":"12.5","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"EUR","amount":"Infinity","planned_date":"5"},{"recipient_cluster_id":2,"currency":null,"amount":"-Infinity","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":" 20 ","planned_date":"2026-13-01"},{"recipient_cluster_id":1,"currency":null,"amount":"Infinity","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"","amount":" 20 ","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":2,"currency":null,"amount":"0.1","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"usd","amount":"1e3","planned_date":"2026-06-16"},{"recipient_cluster_id":2,"currency":"EUR","amount":"-Infinity","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"","amount":"abc","planned_date":"5"},{"recipient_cluster_id":2,"currency":null,"amount":"99.99","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"XXX","amount":"99.99","planned_date":""},{"recipient_cluster_id":null,"currency":"eu r","amount":"99.99","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"usd","amount":"-0.5","planned_date":"2026-06-16"},{"recipient_cluster_id":2,"currency":null,"amount":"abc","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"XXX","amount":"1e3","planned_date":"2026-06-15"},{"recipient_cluster_id":2,"currency":"","amount":"-12.5","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":"0.1","planned_date":"2026-06-15"},{"recipient_cluster_id":1,"currency":"usd","amount":"99.99","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":" 20 ","planned_date":"5"},{"recipient_cluster_id":"2","currency":"eu r","amount":"-0.5","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"","amount":" 20 ","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":2,"currency":"usd","amount":"-0.5","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"","amount":"-0.5","planned_date":"2026-06-16"},{"recipient_cluster_id":2,"currency":"EUR","amount":"0.1","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":"1e3","planned_date":""},{"recipient_cluster_id":null,"currency":"eu r","amount":"12.5","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"eu r","amount":"-0.5","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":1,"currency":"EUR","amount":"12.5","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"12.5","planned_date":"2026-06-16"},{"recipient_cluster_id":"2","currency":"usd","amount":"0","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"eu r","amount":"-100","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":0,"currency":"EUR","amount":"abc","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"","amount":"0","planned_date":"5"},{"recipient_cluster_id":0,"currency":"eu r","amount":"abc","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"eu r","amount":" 20 ","planned_date":""},{"recipient_cluster_id":0,"currency":"eu r","amount":" 20 ","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":"12.5","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":"2","currency":"EUR","amount":"0.1","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"XXX","amount":"abc","planned_date":"2027-01-01"},{"recipient_cluster_id":1,"currency":"eu r","amount":"99.99","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":"abc","planned_date":""},{"recipient_cluster_id":0,"currency":"EUR","amount":" 20 ","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"usd","amount":"-0.5","planned_date":"2026-13-01"},{"recipient_cluster_id":"2","currency":"EUR","amount":"-12.5","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"EUR","amount":"Infinity","planned_date":null},{"recipient_cluster_id":1,"currency":null,"amount":"0.1","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"","amount":"99.99","planned_date":"2026-06-10"},{"recipient_cluster_id":2,"currency":null,"amount":"-Infinity","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"eu r","amount":"-Infinity","planned_date":"2026-06-16"},{"recipient_cluster_id":1,"currency":"eu r","amount":"99.99","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"EUR","amount":"1e3","planned_date":"2027-01-01"},{"recipient_cluster_id":null,"currency":"eu r","amount":" 20 ","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"usd","amount":"-12.5","planned_date":"2026-06-15"},{"recipient_cluster_id":0,"currency":"eu r","amount":"1e3","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"eu r","amount":"99.99","planned_date":"2027-01-01"},{"recipient_cluster_id":2,"currency":null,"amount":"Infinity","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"usd","amount":"0.1","planned_date":"2026-06-10"},{"recipient_cluster_id":null,"currency":"usd","amount":"-100","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"eu r","amount":"-12.5","planned_date":"5"},{"recipient_cluster_id":0,"currency":"eu r","amount":"-12.5","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"XXX","amount":"0","planned_date":null},{"recipient_cluster_id":2,"currency":"eu r","amount":"Infinity","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"-12.5","planned_date":"2026-13-01"},{"recipient_cluster_id":0,"currency":"EUR","amount":"abc","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"EUR","amount":"-Infinity","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":"2","currency":"usd","amount":"0","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"EUR","amount":"Infinity","planned_date":"2027-01-01"},{"recipient_cluster_id":"2","currency":"XXX","amount":"-Infinity","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"0","planned_date":"5"},{"recipient_cluster_id":"2","currency":null,"amount":"-0.5","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"","amount":"1e3","planned_date":"2026-06-15"},{"recipient_cluster_id":"2","currency":"usd","amount":"-12.5","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"EUR","amount":" 20 ","planned_date":""},{"recipient_cluster_id":0,"currency":"eu r","amount":"-12.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"XXX","amount":"1e3","planned_date":"2026-06-15"},{"recipient_cluster_id":2,"currency":"XXX","amount":"0.1","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"XXX","amount":"0","planned_date":"2026-06-10"},{"recipient_cluster_id":2,"currency":null,"amount":"-Infinity","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"usd","amount":"12.5","planned_date":"2027-01-01"},{"recipient_cluster_id":2,"currency":null,"amount":"-Infinity","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"usd","amount":"Infinity","planned_date":"2026-06-16"},{"recipient_cluster_id":null,"currency":"usd","amount":"abc","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":null,"amount":"0","planned_date":"2026-06-15"},{"recipient_cluster_id":1,"currency":"eu r","amount":"-12.5","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"EUR","amount":"abc","planned_date":"5"},{"recipient_cluster_id":0,"currency":"XXX","amount":"-100","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"","amount":"-12.5","planned_date":"2027-01-01"},{"recipient_cluster_id":2,"currency":"","amount":"abc","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":null,"amount":"-Infinity","planned_date":""},{"recipient_cluster_id":1,"currency":"EUR","amount":" 20 ","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"XXX","amount":"-0.5","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":"2","currency":"usd","amount":"-100","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"usd","amount":"0","planned_date":"2026-13-01"},{"recipient_cluster_id":null,"currency":"EUR","amount":"0.1","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"","amount":"99.99","planned_date":"5"},{"recipient_cluster_id":null,"currency":"","amount":"12.5","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":"abc","planned_date":"2026-13-01"},{"recipient_cluster_id":"2","currency":null,"amount":"abc","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":null,"amount":" 20 ","planned_date":"5"},{"recipient_cluster_id":null,"currency":"","amount":"Infinity","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":null,"amount":"12.5","planned_date":""},{"recipient_cluster_id":0,"currency":null,"amount":"0","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"eu r","amount":"0","planned_date":"2027-01-01"},{"recipient_cluster_id":1,"currency":"XXX","amount":"1e3","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"XXX","amount":"0","planned_date":""},{"recipient_cluster_id":"2","currency":null,"amount":"-Infinity","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":" 20 ","planned_date":"2026-13-01"},{"recipient_cluster_id":2,"currency":"XXX","amount":"0.1","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"","amount":"0.1","planned_date":"2026-06-16"},{"recipient_cluster_id":null,"currency":"eu r","amount":"-0.5","transaction_date":"2026-06-10"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":null,"amount":"0.1","planned_date":null},{"recipient_cluster_id":1,"currency":"","amount":"abc","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"eu r","amount":"-Infinity","planned_date":null},{"recipient_cluster_id":0,"currency":"","amount":"-Infinity","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"","amount":"0","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":null,"currency":"XXX","amount":"0.1","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"EUR","amount":"12.5","planned_date":"2026-06-10"},{"recipient_cluster_id":1,"currency":null,"amount":"0.1","transaction_date":"5"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":null,"amount":"Infinity","planned_date":"2027-01-01"},{"recipient_cluster_id":null,"currency":"eu r","amount":"-12.5","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"eu r","amount":"-100","planned_date":null},{"recipient_cluster_id":2,"currency":"EUR","amount":"abc","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"99.99","planned_date":"2026-06-15"},{"recipient_cluster_id":2,"currency":"","amount":"-100","transaction_date":"2026-13-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"eu r","amount":"0.1","planned_date":"2026-06-10"},{"recipient_cluster_id":null,"currency":"","amount":"-12.5","transaction_date":"2026-06-10T10:00:00Z"}],"r":false}
+{"op":["match",{"recipient_cluster_id":null,"currency":"usd","amount":"abc","planned_date":"5"},{"recipient_cluster_id":1,"currency":"eu r","amount":"12.5","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"EUR","amount":"-Infinity","planned_date":""},{"recipient_cluster_id":0,"currency":"EUR","amount":"-12.5","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":null,"amount":"1e3","planned_date":"2026-06-15"},{"recipient_cluster_id":0,"currency":"","amount":"0","transaction_date":"2026-06-15"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":"XXX","amount":"Infinity","planned_date":"2027-01-01"},{"recipient_cluster_id":0,"currency":"EUR","amount":"0","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"XXX","amount":"-Infinity","planned_date":"2026-06-10"},{"recipient_cluster_id":2,"currency":"","amount":"-Infinity","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":"1","currency":"EUR","amount":"0.1","planned_date":"2026-06-10T10:00:00Z"},{"recipient_cluster_id":1,"currency":"eu r","amount":"Infinity","transaction_date":"2026-06-16"}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"eu r","amount":"abc","planned_date":""},{"recipient_cluster_id":2,"currency":null,"amount":"0.1","transaction_date":"2027-01-01"}],"r":false}
+{"op":["match",{"recipient_cluster_id":0,"currency":null,"amount":"-0.5","planned_date":"2026-13-01"},{"recipient_cluster_id":"2","currency":"EUR","amount":"abc","transaction_date":null}],"r":false}
+{"op":["match",{"recipient_cluster_id":2,"currency":"XXX","amount":"Infinity","planned_date":null},{"recipient_cluster_id":0,"currency":"XXX","amount":"-0.5","transaction_date":""}],"r":false}
+{"op":["match",{"recipient_cluster_id":1,"currency":"usd","amount":"0","planned_date":""},{"recipient_cluster_id":null,"currency":"usd","amount":"abc","transaction_date":"2026-06-16"}],"r":false}
+{"op":["next","2028-02-29","fortnightly"],"r":null}
+{"op":["expand","2028-02-29",false,"fortnightly","2027-01-31",500],"r":[]}
+{"op":["next","2028-02-29",null],"r":null}
+{"op":["expand","2028-02-29",false,null,"2028-02-29",1],"r":["2028-02-29"]}
+{"op":["next","2026-06-15","monthly"],"r":"2026-07-15"}
+{"op":["expand","2026-06-15",true,"monthly","2026-06-15",1],"r":["2026-06-15"]}
+{"op":["next","2028-02-29","monthly"],"r":"2028-03-29"}
+{"op":["expand","2028-02-29",true,"monthly","2028-02-29",3],"r":["2028-02-29"]}
+{"op":["next","2026-01-31","weekly"],"r":"2026-02-07"}
+{"op":["expand","2026-01-31",true,"weekly","2026-01-31",500],"r":["2026-01-31"]}
+{"op":["next","2026-06-15",null],"r":null}
+{"op":["expand","2026-06-15",true,null,"2026-06-15",500],"r":["2026-06-15"]}
+{"op":["next","2026-06-15","every 5 days"],"r":"2026-06-20"}
+{"op":["expand","2026-06-15",false,"every 5 days","2026-06-15",500],"r":["2026-06-15"]}
+{"op":["next","2026-01-31","weekly"],"r":"2026-02-07"}
+{"op":["expand","2026-01-31",false,"weekly","2027-01-31",1],"r":["2026-01-31"]}
+{"op":["next","2028-02-29","monthly"],"r":"2028-03-29"}
+{"op":["expand","2028-02-29",false,"monthly","2028-02-29",500],"r":["2028-02-29"]}
+{"op":["next","2028-02-29",""],"r":null}
+{"op":["expand","2028-02-29",false,"","2026-12-31",500],"r":[]}
+{"op":["next","2028-02-29","monthly"],"r":"2028-03-29"}
+{"op":["expand","2028-02-29",false,"monthly","2026-12-31",500],"r":[]}
+{"op":["next","2026-03-01","fortnightly"],"r":null}
+{"op":["expand","2026-03-01",true,"fortnightly","2027-01-31",3],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","monthly"],"r":"2026-04-01"}
+{"op":["expand","2026-03-01",false,"monthly","2027-01-31",1],"r":["2026-03-01"]}
+{"op":["next","2026-01-31",null],"r":null}
+{"op":["expand","2026-01-31",true,null,"2026-12-31",1],"r":["2026-01-31"]}
+{"op":["next","2026-06-15","weekly"],"r":"2026-06-22"}
+{"op":["expand","2026-06-15",false,"weekly","2026-12-31",500],"r":["2026-06-15"]}
+{"op":["next","2026-03-01",""],"r":null}
+{"op":["expand","2026-03-01",false,"","2026-06-15",3],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","weekly"],"r":"2026-03-08"}
+{"op":["expand","2026-03-01",true,"weekly","2026-03-01",3],"r":["2026-03-01"]}
+{"op":["next","2026-01-31","every 5 days"],"r":"2026-02-05"}
+{"op":["expand","2026-01-31",false,"every 5 days","2026-01-31",3],"r":["2026-01-31"]}
+{"op":["next","2026-03-01","fortnightly"],"r":null}
+{"op":["expand","2026-03-01",true,"fortnightly","2026-03-01",12],"r":["2026-03-01"]}
+{"op":["next","2028-02-29",null],"r":null}
+{"op":["expand","2028-02-29",false,null,"2026-06-15",3],"r":[]}
+{"op":["next","2026-01-31","every 5 days"],"r":"2026-02-05"}
+{"op":["expand","2026-01-31",true,"every 5 days","2026-06-15",500],"r":["2026-01-31","2026-02-05","2026-02-10","2026-02-15","2026-02-20","2026-02-25","2026-03-02","2026-03-07","2026-03-12","2026-03-17","2026-03-22","2026-03-27","2026-04-01","2026-04-06","2026-04-11","2026-04-16","2026-04-21","2026-04-26","2026-05-01","2026-05-06","2026-05-11","2026-05-16","2026-05-21","2026-05-26","2026-05-31","2026-06-05","2026-06-10","2026-06-15"]}
+{"op":["next","2026-06-15",null],"r":null}
+{"op":["expand","2026-06-15",false,null,"2026-12-31",1],"r":["2026-06-15"]}
+{"op":["next","2026-03-01","yearly"],"r":"2027-03-01"}
+{"op":["expand","2026-03-01",false,"yearly","2026-06-15",12],"r":["2026-03-01"]}
+{"op":["next","2026-01-31","yearly"],"r":"2027-01-31"}
+{"op":["expand","2026-01-31",false,"yearly","2026-06-15",500],"r":["2026-01-31"]}
+{"op":["next","2028-02-29",""],"r":null}
+{"op":["expand","2028-02-29",false,"","2027-01-31",12],"r":[]}
+{"op":["next","2026-06-15","fortnightly"],"r":null}
+{"op":["expand","2026-06-15",false,"fortnightly","2026-12-31",12],"r":["2026-06-15"]}
+{"op":["next","2026-01-31","yearly"],"r":"2027-01-31"}
+{"op":["expand","2026-01-31",true,"yearly","2026-12-31",12],"r":["2026-01-31"]}
+{"op":["next","2026-03-01","daily"],"r":"2026-03-02"}
+{"op":["expand","2026-03-01",true,"daily","2027-01-31",1],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","fortnightly"],"r":null}
+{"op":["expand","2026-03-01",false,"fortnightly","2026-06-15",12],"r":["2026-03-01"]}
+{"op":["next","2028-02-29","every 5 days"],"r":"2028-03-05"}
+{"op":["expand","2028-02-29",false,"every 5 days","2026-12-31",500],"r":[]}
+{"op":["next","2026-03-01",null],"r":null}
+{"op":["expand","2026-03-01",false,null,"2027-01-31",500],"r":["2026-03-01"]}
+{"op":["next","2026-06-15","daily"],"r":"2026-06-16"}
+{"op":["expand","2026-06-15",true,"daily","2027-01-31",500],"r":["2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19","2026-06-20","2026-06-21","2026-06-22","2026-06-23","2026-06-24","2026-06-25","2026-06-26","2026-06-27","2026-06-28","2026-06-29","2026-06-30","2026-07-01","2026-07-02","2026-07-03","2026-07-04","2026-07-05","2026-07-06","2026-07-07","2026-07-08","2026-07-09","2026-07-10","2026-07-11","2026-07-12","2026-07-13","2026-07-14","2026-07-15","2026-07-16","2026-07-17","2026-07-18","2026-07-19","2026-07-20","2026-07-21","2026-07-22","2026-07-23","2026-07-24","2026-07-25","2026-07-26","2026-07-27","2026-07-28","2026-07-29","2026-07-30","2026-07-31","2026-08-01","2026-08-02","2026-08-03","2026-08-04","2026-08-05","2026-08-06","2026-08-07","2026-08-08","2026-08-09","2026-08-10","2026-08-11","2026-08-12","2026-08-13","2026-08-14","2026-08-15","2026-08-16","2026-08-17","2026-08-18","2026-08-19","2026-08-20","2026-08-21","2026-08-22","2026-08-23","2026-08-24","2026-08-25","2026-08-26","2026-08-27","2026-08-28","2026-08-29","2026-08-30","2026-08-31","2026-09-01","2026-09-02","2026-09-03","2026-09-04","2026-09-05","2026-09-06","2026-09-07","2026-09-08","2026-09-09","2026-09-10","2026-09-11","2026-09-12","2026-09-13","2026-09-14","2026-09-15","2026-09-16","2026-09-17","2026-09-18","2026-09-19","2026-09-20","2026-09-21","2026-09-22","2026-09-23","2026-09-24","2026-09-25","2026-09-26","2026-09-27","2026-09-28","2026-09-29","2026-09-30","2026-10-01","2026-10-02","2026-10-03","2026-10-04","2026-10-05","2026-10-06","2026-10-07","2026-10-08","2026-10-09","2026-10-10","2026-10-11","2026-10-12","2026-10-13","2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20","2026-10-21","2026-10-22","2026-10-23","2026-10-24","2026-10-25","2026-10-26","2026-10-27","2026-10-28","2026-10-29","2026-10-30","2026-10-31","2026-11-01","2026-11-02","2026-11-03","2026-11-04","2026-11-05","2026-11-06","2026-11-07","2026-11-08","2026-11-09","2026-11-10","2026-11-11","2026-11-12","2026-11-13","2026-11-14","2026-11-15","2026-11-16","2026-11-17","2026-11-18","2026-11-19","2026-11-20","2026-11-21","2026-11-22","2026-11-23","2026-11-24","2026-11-25","2026-11-26","2026-11-27","2026-11-28","2026-11-29","2026-11-30","2026-12-01","2026-12-02","2026-12-03","2026-12-04","2026-12-05","2026-12-06","2026-12-07","2026-12-08","2026-12-09","2026-12-10","2026-12-11","2026-12-12","2026-12-13","2026-12-14","2026-12-15","2026-12-16","2026-12-17","2026-12-18","2026-12-19","2026-12-20","2026-12-21","2026-12-22","2026-12-23","2026-12-24","2026-12-25","2026-12-26","2026-12-27","2026-12-28","2026-12-29","2026-12-30","2026-12-31","2027-01-01","2027-01-02","2027-01-03","2027-01-04","2027-01-05","2027-01-06","2027-01-07","2027-01-08","2027-01-09","2027-01-10","2027-01-11","2027-01-12","2027-01-13","2027-01-14","2027-01-15","2027-01-16","2027-01-17","2027-01-18","2027-01-19","2027-01-20","2027-01-21","2027-01-22","2027-01-23","2027-01-24","2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-01-30","2027-01-31"]}
+{"op":["next","2026-03-01","weekly"],"r":"2026-03-08"}
+{"op":["expand","2026-03-01",false,"weekly","2027-01-31",1],"r":["2026-03-01"]}
+{"op":["next","2026-01-31","weekly"],"r":"2026-02-07"}
+{"op":["expand","2026-01-31",true,"weekly","2026-06-15",3],"r":["2026-01-31","2026-02-07","2026-02-14"]}
+{"op":["next","2028-02-29","every 5 days"],"r":"2028-03-05"}
+{"op":["expand","2028-02-29",false,"every 5 days","2027-01-31",3],"r":[]}
+{"op":["next","2026-01-31","fortnightly"],"r":null}
+{"op":["expand","2026-01-31",true,"fortnightly","2026-12-31",1],"r":["2026-01-31"]}
+{"op":["next","2026-03-01","weekly"],"r":"2026-03-08"}
+{"op":["expand","2026-03-01",true,"weekly","2027-01-31",12],"r":["2026-03-01","2026-03-08","2026-03-15","2026-03-22","2026-03-29","2026-04-05","2026-04-12","2026-04-19","2026-04-26","2026-05-03","2026-05-10","2026-05-17"]}
+{"op":["next","2026-01-31","fortnightly"],"r":null}
+{"op":["expand","2026-01-31",true,"fortnightly","2027-01-31",3],"r":["2026-01-31"]}
+{"op":["next","2028-02-29","yearly"],"r":"2029-02-28"}
+{"op":["expand","2028-02-29",true,"yearly","2028-02-29",3],"r":["2028-02-29"]}
+{"op":["next","2028-02-29","weekly"],"r":"2028-03-07"}
+{"op":["expand","2028-02-29",false,"weekly","2026-12-31",1],"r":[]}
+{"op":["next","2028-02-29","fortnightly"],"r":null}
+{"op":["expand","2028-02-29",true,"fortnightly","2026-12-31",12],"r":[]}
+{"op":["next","2026-03-01","every 5 days"],"r":"2026-03-06"}
+{"op":["expand","2026-03-01",true,"every 5 days","2027-01-31",3],"r":["2026-03-01","2026-03-06","2026-03-11"]}
+{"op":["next","2028-02-29","daily"],"r":"2028-03-01"}
+{"op":["expand","2028-02-29",false,"daily","2026-06-15",500],"r":[]}
+{"op":["next","2026-01-31",null],"r":null}
+{"op":["expand","2026-01-31",false,null,"2026-01-31",3],"r":["2026-01-31"]}
+{"op":["next","2026-03-01",""],"r":null}
+{"op":["expand","2026-03-01",false,"","2026-12-31",500],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","every 5 days"],"r":"2026-03-06"}
+{"op":["expand","2026-03-01",false,"every 5 days","2027-01-31",1],"r":["2026-03-01"]}
+{"op":["next","2028-02-29",""],"r":null}
+{"op":["expand","2028-02-29",true,"","2026-12-31",1],"r":[]}
+{"op":["next","2026-01-31","monthly"],"r":"2026-02-28"}
+{"op":["expand","2026-01-31",true,"monthly","2026-06-15",3],"r":["2026-01-31","2026-02-28","2026-03-28"]}
+{"op":["next","2026-01-31","monthly"],"r":"2026-02-28"}
+{"op":["expand","2026-01-31",true,"monthly","2026-01-31",3],"r":["2026-01-31"]}
+{"op":["next","2026-01-31",null],"r":null}
+{"op":["expand","2026-01-31",true,null,"2026-12-31",12],"r":["2026-01-31"]}
+{"op":["next","2026-03-01","yearly"],"r":"2027-03-01"}
+{"op":["expand","2026-03-01",false,"yearly","2026-03-01",12],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","yearly"],"r":"2027-03-01"}
+{"op":["expand","2026-03-01",false,"yearly","2026-12-31",12],"r":["2026-03-01"]}
+{"op":["next","2028-02-29","weekly"],"r":"2028-03-07"}
+{"op":["expand","2028-02-29",false,"weekly","2026-06-15",500],"r":[]}
+{"op":["next","2028-02-29","yearly"],"r":"2029-02-28"}
+{"op":["expand","2028-02-29",false,"yearly","2027-01-31",3],"r":[]}
+{"op":["next","2026-03-01",""],"r":null}
+{"op":["expand","2026-03-01",false,"","2026-03-01",500],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","daily"],"r":"2026-03-02"}
+{"op":["expand","2026-03-01",false,"daily","2026-12-31",3],"r":["2026-03-01"]}
+{"op":["next","2026-03-01","daily"],"r":"2026-03-02"}
+{"op":["expand","2026-03-01",true,"daily","2026-03-01",12],"r":["2026-03-01"]}
+{"op":["next","2026-01-31",""],"r":null}
+{"op":["expand","2026-01-31",false,"","2026-06-15",1],"r":["2026-01-31"]}
+{"op":["next","2026-03-01","fortnightly"],"r":null}
+{"op":["expand","2026-03-01",true,"fortnightly","2026-12-31",1],"r":["2026-03-01"]}
+{"op":["next","2026-06-15",""],"r":null}
+{"op":["expand","2026-06-15",true,"","2026-06-15",3],"r":["2026-06-15"]}

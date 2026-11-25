@@ -223,6 +223,16 @@ import type {
   ThemeTokens,
 } from "../apps/node-backend/src/services/reports/index.ts";
 import { buildThemeCss } from "../apps/node-backend/src/services/reports/themeCss.ts";
+import {
+  __parseRecurrenceStep,
+  expandOccurrences,
+  fastForwardYmd,
+  isValidPattern,
+  monthlyOccurrenceFactor,
+  nextOccurrenceYmd,
+} from "../apps/node-backend/src/lib/calculations/recurrence.ts";
+import { matchesTolerance } from "../apps/node-backend/src/lib/plannedMatching.ts";
+import { generateLoanRepaymentSchedule } from "../apps/node-backend/src/services/calculations/loanSchedule.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { repoPath } from "./lib/nativeCodegen.ts";
 
@@ -253,6 +263,10 @@ const HALF_EVEN = 6;
 const CORPUS = repoPath(
   "apps/native/parity/plans/portfolio-import-reconciliation.jsonl",
 );
+/** `{ op, r }` lines of the planned-payment helpers: see `evaluatePlanned`. */
+const PLANNED = repoPath("apps/native/parity/plans/planned.jsonl");
+/** `{ op, r }` lines of the loan schedule generator: see `evaluateLoan`. */
+const LOAN = repoPath("apps/native/parity/plans/loan-schedule.jsonl");
 /** `{ input, result | error }` lines of `evaluateAnalysisFormulas`. */
 const FORMULAS = repoPath("apps/native/parity/plans/analysis-formulas.jsonl");
 /** `{ op, r }` lines: see `evaluateFoundation`. */
@@ -1546,6 +1560,76 @@ export async function evaluateMigrations(op: unknown[]): Promise<unknown> {
   });
 }
 
+/**
+ * One operation of the planned-payment helpers (`lib/calculations/recurrence.ts` and
+ * `lib/plannedMatching.ts`): the pattern grammar, its steppers, the horizon expansion,
+ * the monthly occurrence factor and the match tolerance. `r` holds the answer, or the
+ * message the helper threw.
+ */
+function evaluatePlanned(op: readonly unknown[]): unknown {
+  const [name, ...args] = op;
+  const pattern = (index: number): string | null => {
+    const value = args[index];
+    if (typeof value === "string") return value;
+    return null;
+  };
+  try {
+    switch (name) {
+      case "step": {
+        const step = __parseRecurrenceStep(args[0]);
+        return step === undefined
+          ? null
+          : { unit: step.unit, amount: step.amount };
+      }
+      case "valid":
+        return isValidPattern(args[0]);
+      case "next":
+        return nextOccurrenceYmd(String(args[0]), pattern(1)) ?? null;
+      case "fastForward":
+        return fastForwardYmd(String(args[0]), pattern(1), String(args[2]));
+      case "factor": {
+        const factor = monthlyOccurrenceFactor(pattern(0));
+        return factor === undefined ? null : factor.toFixed();
+      }
+      case "expand":
+        return expandOccurrences(
+          {
+            planned_date: String(args[0]),
+            is_recurring: args[1] === true,
+            recurrence_pattern: typeof args[2] === "string" ? args[2] : null,
+          },
+          String(args[3]),
+          { maxOccurrences: Number(args[4]) },
+        );
+      case "match":
+        return matchesTolerance(
+          args[0] as Parameters<typeof matchesTolerance>[0],
+          args[1] as Parameters<typeof matchesTolerance>[1],
+        );
+      default:
+        throw new Error(`unknown planned operation: ${String(name)}`);
+    }
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/**
+ * One operation of the loan schedule generator
+ * (`services/calculations/loanSchedule.ts`): `["loan", config]` answers the
+ * installment table, or the message the generator threw.
+ */
+function evaluateLoan(op: readonly unknown[]): unknown {
+  const [name, ...args] = op;
+  if (name !== "loan")
+    throw new Error(`unknown loan operation: ${String(name)}`);
+  try {
+    return generateLoanRepaymentSchedule(args[0] as Record<string, unknown>);
+  } catch (error) {
+    return error instanceof ValidationError ? error.message : String(error);
+  }
+}
+
 async function rerecordAsync(
   file: string,
   line: (recorded: string) => Promise<unknown>,
@@ -1678,6 +1762,22 @@ if (isEntrypoint(import.meta)) {
     (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: evaluate(op) };
+    },
+    check,
+  );
+  rerecord(
+    PLANNED,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluatePlanned(op) };
+    },
+    check,
+  );
+  rerecord(
+    LOAN,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluateLoan(op) };
     },
     check,
   );

@@ -20,8 +20,10 @@ import VisionNativeCore
         let response: JSONValue
         /// Provider answers from this step on, replacing the corpus's.
         let fetch: [String: Stub]?
+        /// Headers the route set itself, such as `Idempotent-Replay`.
+        let headers: [String: String]?
 
-        enum CodingKeys: String, CodingKey { case operationId, method, path, body, status, response, fetch }
+        enum CodingKeys: String, CodingKey { case operationId, method, path, body, status, response, fetch, headers }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -32,12 +34,16 @@ import VisionNativeCore
             status = try container.decode(Int.self, forKey: .status)
             response = try container.decode(JSONValue.self, forKey: .response)
             fetch = try container.decodeIfPresent([String: Stub].self, forKey: .fetch)
+            headers = try container.decodeIfPresent([String: String].self, forKey: .headers)
         }
     }
 
     struct Corpus: Decodable {
         let seed: [String]
         let fetch: [String: Stub]?
+        /// The instant the whole corpus recorded under (`setSystemTime`); nil when it
+        /// recorded on the wall clock.
+        let now: String?
         let steps: [Step]
     }
 
@@ -181,7 +187,16 @@ import VisionNativeCore
         let corpus = try JSONDecoder().decode(Corpus.self, from: data)
         let file = try migratedDatabase(seed: corpus.seed)
         defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-        let database = BackendDatabase(path: file.path, time: recorderTime)
+        // The instant the corpus recorded under: a today-dependent area replays on the
+        // same wall clock, an ordinary one on the real one.
+        let now: Int64
+        if let recorded = corpus.now, let instant = Instant(recorded) {
+            now = Int64((instant.date.timeIntervalSince1970 * 1000).rounded(.down))
+        } else {
+            now = Int64((Date().timeIntervalSince1970 * 1000).rounded(.down))
+        }
+        let wall: @Sendable () -> SQLTimestamps.Instant = { SQLTimestamps.Instant(ms: now) }
+        let database = BackendDatabase(path: file.path, time: recorderTime, wall: wall)
         let fetcher = StubFetcher(stubs: corpus.fetch ?? [:])
         let backend = InProcessBackend.live(database: database, fetcher: fetcher)
         let transport = RoutingAPITransport(backend: backend, fallback: NoFallback(), streamFallback: NoFallback())
@@ -204,9 +219,14 @@ import VisionNativeCore
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
             #expect(response.status == step.status, "\(label)")
+            // Headers the route set itself, such as execute's `Idempotent-Replay`.
+            for (wanted, value) in step.headers ?? [:] {
+                let got = response.headers.first { $0.key.lowercased() == wanted.lowercased() }?.value
+                #expect(got == value, "\(label): header \(wanted)")
+            }
             // A 204 has no body; the recorder writes it as `{}`.
             let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
-            let today = SQLTimestamps.formatDate(recorderTime.localDate(of: .init(ms: Int64(Date().timeIntervalSince1970 * 1000))))
+            let today = SQLTimestamps.formatDate(recorderTime.localDate(of: .init(ms: now)))
             let found = difference(
                 step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
             #expect(found == nil, "\(label): \(found ?? "")")
@@ -250,6 +270,10 @@ import VisionNativeCore
         try await Self.replay("transactions")
     }
 
+    @Test func planned() async throws {
+        try await Self.replay("planned")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
@@ -258,7 +282,7 @@ import VisionNativeCore
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
-        "recipients-mutations", "transactions-mutations",
+        "recipients-mutations", "transactions-mutations", "planned-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
