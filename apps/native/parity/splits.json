@@ -1,0 +1,1260 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO recipients (id, name, normalized_name, primary_recipient_id, notes, is_active, created_at, updated_at) VALUES\n        (1, 'Alice', 'alice', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'Alicia', 'alicia', 1, 'alias', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'Bob', 'bob', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 'Carol', 'carol', 3, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, 'Dora', 'dora', NULL, NULL, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n         closed_at, created_at, updated_at, import_identity) VALUES\n        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000011'),\n        (2, 'Travel', NULL, NULL, 'USD', 'savings', 'semi_liquid', 0, 1, 'none', 'joint', 1, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000012')",
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('USD', vision_numeric('0.9', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.15', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active, created_at,\n         updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('100', 18, 4), 'EUR', 'Groceries', 1, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, '2024-01-20', vision_numeric('-60', 18, 4), 'EUR', 'Concert', 3, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, '2024-01-25', vision_numeric('250.5', 18, 4), 'USD', 'Hotel', 4, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, '2024-02-01', vision_numeric('30', 18, 4), 'CHF', 'Ski pass', 3, 2, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, '2024-02-10', vision_numeric('0', 18, 4), 'EUR', 'Free', 5, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (6, '2024-02-15', vision_numeric('80', 18, 4), 'EUR', 'Dinner', 1, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (7, '2024-02-20', vision_numeric('100', 18, 4), 'EUR', 'Tickets', 5, 1, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transaction_splits (id, transaction_id, recipient_id, amount, note, is_settled, created_at, updated_at) VALUES\n        (1, 1, 1, vision_numeric('40', 18, 4), NULL, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 2, 3, vision_numeric('60', 18, 4), 'full share', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 3, 4, vision_numeric('100', 18, 4), NULL, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 4, 3, vision_numeric('20', 18, 4), NULL, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, 1, 2, vision_numeric('10', 18, 4), 'part', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (6, 3, 3, vision_numeric('50', 18, 4), NULL, 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (7, 6, 5, vision_numeric('80', 18, 4), 'already settled', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO split_payments (id, split_id, amount, paid_at, note, created_at) VALUES\n        (1, 3, vision_numeric('40', 18, 4), '2024-01-26', 'first', '2025-03-01T09:00:00.000000Z'),\n        (2, 4, vision_numeric('5', 18, 4), '2024-02-02', NULL, '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getSplitsOwed",
+      "method": "GET",
+      "path": "/api/splits/owed",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "recipient_id": 3,
+              "recipient_name": "Bob",
+              "total_owed": 195,
+              "total_paid": 36,
+              "remaining": 159,
+              "split_count": 4,
+              "unconverted_count": 1,
+              "unconverted_currencies": [
+                "CHF"
+              ]
+            },
+            {
+              "recipient_id": 1,
+              "recipient_name": "Alice",
+              "total_owed": 50,
+              "total_paid": 0,
+              "remaining": 50,
+              "split_count": 2,
+              "unconverted_count": 0,
+              "unconverted_currencies": []
+            }
+          ],
+          "total": 2,
+          "summary": {
+            "currency": "EUR",
+            "remaining": 209,
+            "unconverted_count": 1,
+            "unconverted_currencies": [
+              "CHF"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsOwed",
+      "method": "GET",
+      "path": "/api/splits/owed?currency=usd",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "recipient_id": 3,
+              "recipient_name": "Bob",
+              "total_owed": 216.67,
+              "total_paid": 40,
+              "remaining": 176.67,
+              "split_count": 4,
+              "unconverted_count": 1,
+              "unconverted_currencies": [
+                "CHF"
+              ]
+            },
+            {
+              "recipient_id": 1,
+              "recipient_name": "Alice",
+              "total_owed": 55.56,
+              "total_paid": 0,
+              "remaining": 55.56,
+              "split_count": 2,
+              "unconverted_count": 0,
+              "unconverted_currencies": []
+            }
+          ],
+          "total": 2,
+          "summary": {
+            "currency": "USD",
+            "remaining": 232.23,
+            "unconverted_count": 1,
+            "unconverted_currencies": [
+              "CHF"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsOwed",
+      "method": "GET",
+      "path": "/api/splits/owed?currency=EURO",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsOwed",
+      "method": "GET",
+      "path": "/api/splits/owed?limit=1&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "recipient_id": 1,
+              "recipient_name": "Alice",
+              "total_owed": 50,
+              "total_paid": 0,
+              "remaining": 50,
+              "split_count": 2,
+              "unconverted_count": 0,
+              "unconverted_currencies": []
+            }
+          ],
+          "total": 2,
+          "limit": 1,
+          "offset": 1,
+          "summary": {
+            "currency": "EUR",
+            "remaining": 209,
+            "unconverted_count": 1,
+            "unconverted_currencies": [
+              "CHF"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getSplitOwedByRecipient",
+      "method": "GET",
+      "path": "/api/splits/owed/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "transaction_id": 1,
+              "recipient_id": 1,
+              "recipient_name": null,
+              "amount": 40,
+              "amount_paid": 0,
+              "note": null,
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "transaction_date": "2024-01-05",
+              "transaction_memo": "Groceries",
+              "transaction_amount": 100,
+              "transaction_currency": "EUR",
+              "bank_account": "Main",
+              "transaction_recipient_name": "Alice",
+              "remaining": 40
+            },
+            {
+              "id": 5,
+              "transaction_id": 1,
+              "recipient_id": 2,
+              "recipient_name": null,
+              "amount": 10,
+              "amount_paid": 0,
+              "note": "part",
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "transaction_date": "2024-01-05",
+              "transaction_memo": "Groceries",
+              "transaction_amount": 100,
+              "transaction_currency": "EUR",
+              "bank_account": "Main",
+              "transaction_recipient_name": "Alice",
+              "remaining": 10
+            }
+          ],
+          "total": 2,
+          "summary": {
+            "currency": "EUR",
+            "remaining": 50,
+            "unconverted_count": 0,
+            "unconverted_currencies": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getSplitOwedByRecipient",
+      "method": "GET",
+      "path": "/api/splits/owed/1?limit=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "transaction_id": 1,
+              "recipient_id": 1,
+              "recipient_name": null,
+              "amount": 40,
+              "amount_paid": 0,
+              "note": null,
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "transaction_date": "2024-01-05",
+              "transaction_memo": "Groceries",
+              "transaction_amount": 100,
+              "transaction_currency": "EUR",
+              "bank_account": "Main",
+              "transaction_recipient_name": "Alice",
+              "remaining": 40
+            }
+          ],
+          "total": 2,
+          "limit": 1,
+          "offset": 0,
+          "summary": {
+            "currency": "EUR",
+            "remaining": 50,
+            "unconverted_count": 0,
+            "unconverted_currencies": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getSplitOwedByRecipient",
+      "method": "GET",
+      "path": "/api/splits/owed/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getSplitOwedByRecipient",
+      "method": "GET",
+      "path": "/api/splits/owed/999?currency=USD",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "summary": {
+            "currency": "USD",
+            "remaining": 0,
+            "unconverted_count": 0,
+            "unconverted_currencies": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "exportSplitsOwedCsv",
+      "method": "GET",
+      "path": "/api/splits/owed/3/export/csv",
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment\n2024-01-20,Main,Bob,Concert,60,EUR,,,\n2024-01-25,Travel,Bob,Hotel,60,USD,,,\n2024-01-25,Travel,Bob,Hotel,50,USD,,,\n2024-02-01,Travel,Bob,Ski pass,15,CHF,,,"
+    },
+    {
+      "operationId": "exportSplitsOwedCsv",
+      "method": "GET",
+      "path": "/api/splits/owed/5/export/csv",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "No unsettled owed transactions found for recipient"
+        }
+      }
+    },
+    {
+      "operationId": "exportSplitsOwedCsv",
+      "method": "GET",
+      "path": "/api/splits/owed/999/export/csv",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "No unsettled owed transactions found for recipient"
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsByTransaction",
+      "method": "GET",
+      "path": "/api/splits/transaction/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "transaction_id": 1,
+              "recipient_id": 1,
+              "recipient_name": "Alice",
+              "amount": 40,
+              "amount_paid": 0,
+              "note": null,
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 5,
+              "transaction_id": 1,
+              "recipient_id": 2,
+              "recipient_name": "Alicia",
+              "amount": 10,
+              "amount_paid": 0,
+              "note": "part",
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 2
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsByTransaction",
+      "method": "GET",
+      "path": "/api/splits/transaction/1?limit=1&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "transaction_id": 1,
+              "recipient_id": 2,
+              "recipient_name": "Alicia",
+              "amount": 10,
+              "amount_paid": 0,
+              "note": "part",
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 2,
+          "limit": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsByTransaction",
+      "method": "GET",
+      "path": "/api/splits/transaction/999",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsByTransaction",
+      "method": "GET",
+      "path": "/api/splits/transaction/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": 6,
+        "recipient_id": 5,
+        "amount": 25,
+        "note": "half"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Split amount exceeds transaction total"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": 6,
+        "recipient_id": 5,
+        "amount": 100
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Split amount exceeds transaction total"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": 6,
+        "recipient_id": 5,
+        "amount": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Split amount must be a positive number"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: transaction_id, recipient_id, amount"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": "abc",
+        "recipient_id": 1,
+        "amount": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": 1,
+        "recipient_id": 1,
+        "amount": "abc"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount must be a finite number"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": 0,
+        "recipient_id": 1,
+        "amount": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: transaction_id, recipient_id, amount"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
+        "transaction_id": 999,
+        "recipient_id": 1,
+        "amount": 5
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Transaction not found"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": 1,
+        "splits": [
+          {
+            "recipient_id": 5,
+            "amount": 20
+          },
+          {
+            "recipient_id": 2,
+            "amount": "12.5",
+            "note": "batch part"
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 8,
+              "transaction_id": 1,
+              "recipient_id": 5,
+              "recipient_name": "Dora",
+              "amount": 20,
+              "amount_paid": 0,
+              "note": null,
+              "is_settled": false,
+              "created_at": "2026-11-25T08:09:50.541Z",
+              "updated_at": "2026-11-25T08:09:50.541Z"
+            },
+            {
+              "id": 9,
+              "transaction_id": 1,
+              "recipient_id": 2,
+              "recipient_name": "Alicia",
+              "amount": 12.5,
+              "amount_paid": 0,
+              "note": "batch part",
+              "is_settled": false,
+              "created_at": "2026-11-25T08:09:50.541Z",
+              "updated_at": "2026-11-25T08:09:50.541Z"
+            }
+          ],
+          "total": 2
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": 6,
+        "splits": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required fields: transaction_id, splits[]"
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": "abc",
+        "splits": [
+          {
+            "recipient_id": 5,
+            "amount": 1
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": 1,
+        "splits": [
+          {
+            "recipient_id": 1,
+            "amount": "x"
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid splits, no splits were created: splits[0] (amount: amount must be a finite number)"
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": 1,
+        "splits": [
+          {
+            "recipient_id": 1,
+            "amount": 1
+          },
+          {
+            "recipient_id": 4,
+            "amount": "zz"
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid splits, no splits were created: splits[1] (amount: amount must be a finite number)"
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": 1,
+        "splits": [
+          {
+            "recipient_id": 5,
+            "amount": 999999
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Split amount exceeds transaction total"
+        }
+      }
+    },
+    {
+      "operationId": "createSplitBatch",
+      "method": "POST",
+      "path": "/api/splits/batch",
+      "body": {
+        "transaction_id": 999,
+        "splits": [
+          {
+            "recipient_id": 5,
+            "amount": 1
+          }
+        ]
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Transaction not found"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [
+          7,
+          6,
+          5,
+          999
+        ],
+        "recipient_id": 5,
+        "mode": "equal",
+        "note": "bulk"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "requested": 4,
+          "split": 1,
+          "skipped_already_split": 1,
+          "skipped_zero_amount": 1,
+          "skipped_missing": 1,
+          "items": [
+            {
+              "id": 10,
+              "transaction_id": 7,
+              "recipient_id": 5,
+              "recipient_name": "Dora",
+              "amount": 50,
+              "amount_paid": 0,
+              "note": "bulk",
+              "is_settled": false,
+              "created_at": "2026-11-25T08:09:50.578Z",
+              "updated_at": "2026-11-25T08:09:50.578Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [
+          7
+        ],
+        "recipient_id": 999,
+        "mode": "full"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Recipient not found"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [],
+        "recipient_id": 5,
+        "mode": "full"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: transaction_ids must be a non-empty array of up to 500 IDs"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": "123",
+        "recipient_id": 5,
+        "mode": "full"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: transaction_ids must be a non-empty array of up to 500 IDs"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [
+          999
+        ],
+        "recipient_id": 5,
+        "mode": "half"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "mode: mode must be one of: equal, full"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [
+          "abc",
+          "1.5"
+        ],
+        "recipient_id": 5,
+        "mode": "equal"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: transaction_ids[0] must be a positive integer, transaction_ids[1] must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [
+          7
+        ],
+        "recipient_id": "x",
+        "mode": "equal"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "recipient_id: recipient_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createBulkSplits",
+      "method": "POST",
+      "path": "/api/splits/bulk",
+      "body": {
+        "transaction_ids": [
+          7
+        ],
+        "recipient_id": 5,
+        "mode": "equal",
+        "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "note: Too big: expected string to have <=500 characters"
+        }
+      }
+    },
+    {
+      "operationId": "paySplit",
+      "method": "POST",
+      "path": "/api/splits/1/pay",
+      "body": {
+        "amount": 10,
+        "note": "cash"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "split_id": 1,
+          "amount": 10,
+          "paid_at": "{{today}}",
+          "note": "cash",
+          "created_at": "2026-11-25T08:09:50.626Z"
+        }
+      }
+    },
+    {
+      "operationId": "paySplit",
+      "method": "POST",
+      "path": "/api/splits/1/pay",
+      "body": {
+        "amount": 100
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Payment would exceed split outstanding balance"
+        }
+      }
+    },
+    {
+      "operationId": "paySplit",
+      "method": "POST",
+      "path": "/api/splits/2/pay",
+      "body": {
+        "amount": 60,
+        "paid_at": "2024-03-01"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4,
+          "split_id": 2,
+          "amount": 60,
+          "paid_at": "2024-03-01",
+          "note": null,
+          "created_at": "2026-11-25T08:09:50.641Z"
+        }
+      }
+    },
+    {
+      "operationId": "paySplit",
+      "method": "POST",
+      "path": "/api/splits/2/pay",
+      "body": {
+        "amount": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Split is already settled"
+        }
+      }
+    },
+    {
+      "operationId": "paySplit",
+      "method": "POST",
+      "path": "/api/splits/1/pay",
+      "body": {
+        "amount": 0
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Payment amount must be a positive number"
+        }
+      }
+    },
+    {
+      "operationId": "paySplit",
+      "method": "POST",
+      "path": "/api/splits/999/pay",
+      "body": {
+        "amount": 1
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Split not found"
+        }
+      }
+    },
+    {
+      "operationId": "getSplitPayments",
+      "method": "GET",
+      "path": "/api/splits/1/payments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "split_id": 1,
+              "amount": 10,
+              "paid_at": "{{today}}",
+              "note": "cash",
+              "created_at": "2026-11-25T08:09:50.626Z"
+            }
+          ],
+          "total": 1
+        }
+      }
+    },
+    {
+      "operationId": "getSplitPayments",
+      "method": "GET",
+      "path": "/api/splits/1/payments?limit=1&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 1,
+          "limit": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "operationId": "getSplitPayments",
+      "method": "GET",
+      "path": "/api/splits/999/payments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0
+        }
+      }
+    },
+    {
+      "operationId": "settleSplit",
+      "method": "POST",
+      "path": "/api/splits/6/settle",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 6,
+          "transaction_id": 3,
+          "recipient_id": 3,
+          "recipient_name": "Bob",
+          "amount": 50,
+          "amount_paid": 0,
+          "note": null,
+          "is_settled": true,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-25T08:09:50.673Z"
+        }
+      }
+    },
+    {
+      "operationId": "settleSplit",
+      "method": "POST",
+      "path": "/api/splits/999/settle",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Split not found"
+        }
+      }
+    },
+    {
+      "operationId": "settleAllSplitsForRecipient",
+      "method": "POST",
+      "path": "/api/splits/owed/3/settle-all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "settled_count": 2
+        }
+      }
+    },
+    {
+      "operationId": "deleteSplit",
+      "method": "DELETE",
+      "path": "/api/splits/4",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteSplit",
+      "method": "DELETE",
+      "path": "/api/splits/4",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Split not found"
+        }
+      }
+    },
+    {
+      "operationId": "getSplitsOwed",
+      "method": "GET",
+      "path": "/api/splits/owed",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "recipient_id": 5,
+              "recipient_name": "Dora",
+              "total_owed": 70,
+              "total_paid": 0,
+              "remaining": 70,
+              "split_count": 2,
+              "unconverted_count": 0,
+              "unconverted_currencies": []
+            },
+            {
+              "recipient_id": 1,
+              "recipient_name": "Alice",
+              "total_owed": 62.5,
+              "total_paid": 10,
+              "remaining": 52.5,
+              "split_count": 3,
+              "unconverted_count": 0,
+              "unconverted_currencies": []
+            }
+          ],
+          "total": 2,
+          "summary": {
+            "currency": "EUR",
+            "remaining": 122.5,
+            "unconverted_count": 0,
+            "unconverted_currencies": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getSplitOwedByRecipient",
+      "method": "GET",
+      "path": "/api/splits/owed/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "transaction_id": 1,
+              "recipient_id": 1,
+              "recipient_name": null,
+              "amount": 40,
+              "amount_paid": 10,
+              "note": null,
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "transaction_date": "2024-01-05",
+              "transaction_memo": "Groceries",
+              "transaction_amount": 100,
+              "transaction_currency": "EUR",
+              "bank_account": "Main",
+              "transaction_recipient_name": "Alice",
+              "remaining": 30
+            },
+            {
+              "id": 5,
+              "transaction_id": 1,
+              "recipient_id": 2,
+              "recipient_name": null,
+              "amount": 10,
+              "amount_paid": 0,
+              "note": "part",
+              "is_settled": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "transaction_date": "2024-01-05",
+              "transaction_memo": "Groceries",
+              "transaction_amount": 100,
+              "transaction_currency": "EUR",
+              "bank_account": "Main",
+              "transaction_recipient_name": "Alice",
+              "remaining": 10
+            },
+            {
+              "id": 9,
+              "transaction_id": 1,
+              "recipient_id": 2,
+              "recipient_name": null,
+              "amount": 12.5,
+              "amount_paid": 0,
+              "note": "batch part",
+              "is_settled": false,
+              "created_at": "2026-11-25T08:09:50.541Z",
+              "updated_at": "2026-11-25T08:09:50.541Z",
+              "transaction_date": "2024-01-05",
+              "transaction_memo": "Groceries",
+              "transaction_amount": 100,
+              "transaction_currency": "EUR",
+              "bank_account": "Main",
+              "transaction_recipient_name": "Alice",
+              "remaining": 12.5
+            }
+          ],
+          "total": 3,
+          "summary": {
+            "currency": "EUR",
+            "remaining": 52.5,
+            "unconverted_count": 0,
+            "unconverted_currencies": []
+          }
+        }
+      }
+    }
+  ]
+}

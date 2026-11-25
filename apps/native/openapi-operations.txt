@@ -94,12 +94,14 @@ bulkTagTransactions
 markTransfer
 createRecipient
 getSplitsByTransaction
+createSplit
 createSplitBatch
 createBulkSplits
 getSplitsOwed
 getSplitOwedByRecipient
 exportSplitsOwedCsv
 paySplit
+getSplitPayments
 settleSplit
 settleAllSplitsForRecipient
 deleteSplit

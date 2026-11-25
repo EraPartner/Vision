@@ -266,6 +266,10 @@ import VisionNativeCore
         try await Self.replay("accounts")
     }
 
+    @Test func splits() async throws {
+        try await Self.replay("splits")
+    }
+
     @Test func categories() async throws {
         try await Self.replay("categories")
     }
