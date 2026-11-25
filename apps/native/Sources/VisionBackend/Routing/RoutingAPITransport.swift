@@ -10,6 +10,9 @@ public enum PortedOperations {
         "refreshExchangeRates", "getAccounts", "createAccount", "updateAccount", "deleteAccount",
         "setAccountStatementBalance", "previewAccountPortfolioLots", "closeAccount", "previewAccountMerge",
         "mergeAccounts", "setAccountOpeningBalance", "reconcileAccount",
+        "getSplitsByTransaction", "createSplit", "createSplitBatch", "createBulkSplits",
+        "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit",
+        "getSplitPayments", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit",
         "getCategoryTree", "createCategoryNode", "updateCategoryNode",
         "deleteCategoryNode", "mergeCategoryNode", "getCategories", "createCategory", "getRecipients", "getRecipient",
         "createRecipient", "updateRecipient", "deleteRecipient", "mergeRecipient", "unmergeRecipient",
@@ -136,6 +139,7 @@ public struct InProcessBackend: Sendable {
         SettingsArea.register(&backend, database: database)
         ExchangeRatesArea.register(&backend, database: database, fetcher: fetcher)
         AccountsArea.register(&backend, database: database)
+        SplitsArea.register(&backend, database: database)
         CategoriesArea.register(&backend, database: database, views: views)
         RecipientsArea.register(&backend, database: database, views: views)
         TransactionsArea.register(&backend, database: database)
