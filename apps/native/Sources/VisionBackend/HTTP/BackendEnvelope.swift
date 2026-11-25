@@ -38,15 +38,24 @@ public struct HandlerResult: Sendable, Equatable {
     public let data: JSONValue
     /// Headers the route sets beside the envelope's, such as `Idempotent-Replay`.
     public let headers: [String: String]
+    /// `res.sendFile`: the raw bytes of a file answer, served with `headers`; the
+    /// envelope and `data` do not apply.
+    public let file: Data?
 
-    public init(status: Int = 200, data: JSONValue, headers: [String: String] = [:]) {
+    public init(status: Int = 200, data: JSONValue, headers: [String: String] = [:], file: Data? = nil) {
         self.status = status
         self.data = data
         self.headers = headers
+        self.file = file
     }
 
     /// `res.status(204).send()`: no envelope and no body.
     public static let noContent = HandlerResult(status: 204, data: .null)
+
+    /// `res.sendFile`: the file's bytes with the route's own headers, no envelope.
+    public static func fileAnswer(_ bytes: Data, headers: [String: String]) -> HandlerResult {
+        HandlerResult(status: 200, data: .null, headers: headers, file: bytes)
+    }
 }
 
 /// The ADR-026 envelope as the data plane's middleware writes it: `requestId`, `wrapResponse`
@@ -93,6 +102,11 @@ enum BackendEnvelope {
         if result.status == 204 {
             return APIResponse(status: 204, body: Data(), headers: ["x-request-id": requestId])
         }
+        if let file = result.file {
+            return APIResponse(
+                status: result.status, body: file,
+                headers: ["x-request-id": requestId].merging(result.headers) { _, route in route })
+        }
         var response = try response(
             status: result.status,
             body: .object(["ok": .bool(true), "data": result.data, "meta": .object(["requestId": .string(requestId)])]),
@@ -118,10 +132,6 @@ enum BackendEnvelope {
             if let details = error.details { fields["details"] = details }
         } else {
             status = 500
-            #if DEBUG
-            // The parity failures print the masked 500s' causes to the test log.
-            print("[parity] masked server error: \(String(describing: error))")
-            #endif
             fields = [
                 "code": .string("INTERNAL_SERVER_ERROR"),
                 "message": .string("An internal server error occurred. Please try again later."),

@@ -39,9 +39,14 @@ public actor BackendDatabase: InProcessDatabaseHolder {
         suspended = true
     }
 
-    public func resume(databasePath: String) {
+    /// The attachments root the delete/download routes read and write files under, as the
+    /// app's layout knows it; nil until the runtime hands it over.
+    public private(set) var attachmentsDirectory: String?
+
+    public func resume(databasePath: String, attachmentsDirectory: String? = nil) {
         if databasePath != path { session = nil }
         path = databasePath
+        self.attachmentsDirectory = attachmentsDirectory
         suspended = false
     }
 

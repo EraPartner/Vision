@@ -1433,6 +1433,89 @@ export const AREAS: Record<string, ParityArea> = {
     },
     steps: [ratesList("?db_only=true"), ratesRefresh, ratesList("?db_only=1")],
   },
+  attachments: {
+    router: { module: "attachments.ts", mountPath: "/api/attachments" },
+    seed: [
+      `INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'EUR', 'checking', '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000001')`,
+      `INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES
+        (1, 'SHOP', 'SHOP', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         created_at, updated_at) VALUES
+        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 'CARD 1234', 1, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO attachments (id, transaction_id, filename, stored_path, mime_type, size_bytes, created_at) VALUES
+        (1, 1, 'receipt.png', '1/aaaaaaaa-0000-4000-8000-000000000001.png', 'image/png', 1024,
+         '2025-03-01T09:00:00.000000Z'),
+        (2, 1, 'invoice.pdf', '1/bbbbbbbb-0000-4000-8000-000000000002.pdf', 'application/pdf', 2048,
+         '2025-03-02T09:00:00.000000Z'),
+        (3, 1, 'scan.png', '1/cccccccc-0000-4000-8000-000000000003.png', 'image/png', 512,
+         '2025-03-03T09:00:00.000000Z')`,
+    ],
+    steps: [
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/1",
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/1?limit=1&offset=1",
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/1?limit=0",
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/1?limit=a",
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/999",
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/abc",
+      },
+      {
+        operationId: "getTransactionAttachments",
+        method: "GET",
+        path: "/api/attachments/transaction/0",
+      },
+      {
+        operationId: "downloadAttachment",
+        method: "GET",
+        path: "/api/attachments/999/download",
+      },
+      {
+        operationId: "downloadAttachment",
+        method: "GET",
+        path: "/api/attachments/abc/download",
+      },
+      {
+        operationId: "deleteAttachment",
+        method: "DELETE",
+        path: "/api/attachments/1",
+      },
+      {
+        operationId: "deleteAttachment",
+        method: "DELETE",
+        path: "/api/attachments/999",
+      },
+      {
+        operationId: "deleteAttachment",
+        method: "DELETE",
+        path: "/api/attachments/abc",
+      },
+    ],
+  },
+
   transactions: {
     router: { module: "transactions.ts", mountPath: "/api/transactions" },
     // The write steps' created/updated timestamps and the dedup/auto-link

@@ -1,0 +1,261 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES\n        (1, 'Main', 'EUR', 'checking', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000001')",
+    "INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES\n        (1, 'SHOP', 'SHOP', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,\n         created_at, updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 'CARD 1234', 1, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO attachments (id, transaction_id, filename, stored_path, mime_type, size_bytes, created_at) VALUES\n        (1, 1, 'receipt.png', '1/aaaaaaaa-0000-4000-8000-000000000001.png', 'image/png', 1024,\n         '2025-03-01T09:00:00.000000Z'),\n        (2, 1, 'invoice.pdf', '1/bbbbbbbb-0000-4000-8000-000000000002.pdf', 'application/pdf', 2048,\n         '2025-03-02T09:00:00.000000Z'),\n        (3, 1, 'scan.png', '1/cccccccc-0000-4000-8000-000000000003.png', 'image/png', 512,\n         '2025-03-03T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "transaction_id": 1,
+              "filename": "scan.png",
+              "stored_path": "1/cccccccc-0000-4000-8000-000000000003.png",
+              "mime_type": "image/png",
+              "size_bytes": 512,
+              "created_at": "2025-03-03T09:00:00.000Z"
+            },
+            {
+              "id": "2",
+              "transaction_id": 1,
+              "filename": "invoice.pdf",
+              "stored_path": "1/bbbbbbbb-0000-4000-8000-000000000002.pdf",
+              "mime_type": "application/pdf",
+              "size_bytes": 2048,
+              "created_at": "2025-03-02T09:00:00.000Z"
+            },
+            {
+              "id": "1",
+              "transaction_id": 1,
+              "filename": "receipt.png",
+              "stored_path": "1/aaaaaaaa-0000-4000-8000-000000000001.png",
+              "mime_type": "image/png",
+              "size_bytes": 1024,
+              "created_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3
+        }
+      }
+    },
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/1?limit=1&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "2",
+              "transaction_id": 1,
+              "filename": "invoice.pdf",
+              "stored_path": "1/bbbbbbbb-0000-4000-8000-000000000002.pdf",
+              "mime_type": "application/pdf",
+              "size_bytes": 2048,
+              "created_at": "2025-03-02T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/1?limit=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "transaction_id": 1,
+              "filename": "scan.png",
+              "stored_path": "1/cccccccc-0000-4000-8000-000000000003.png",
+              "mime_type": "image/png",
+              "size_bytes": 512,
+              "created_at": "2025-03-03T09:00:00.000Z"
+            },
+            {
+              "id": "2",
+              "transaction_id": 1,
+              "filename": "invoice.pdf",
+              "stored_path": "1/bbbbbbbb-0000-4000-8000-000000000002.pdf",
+              "mime_type": "application/pdf",
+              "size_bytes": 2048,
+              "created_at": "2025-03-02T09:00:00.000Z"
+            },
+            {
+              "id": "1",
+              "transaction_id": 1,
+              "filename": "receipt.png",
+              "stored_path": "1/aaaaaaaa-0000-4000-8000-000000000001.png",
+              "mime_type": "image/png",
+              "size_bytes": 1024,
+              "created_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 1000,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/1?limit=a",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "transaction_id": 1,
+              "filename": "scan.png",
+              "stored_path": "1/cccccccc-0000-4000-8000-000000000003.png",
+              "mime_type": "image/png",
+              "size_bytes": 512,
+              "created_at": "2025-03-03T09:00:00.000Z"
+            },
+            {
+              "id": "2",
+              "transaction_id": 1,
+              "filename": "invoice.pdf",
+              "stored_path": "1/bbbbbbbb-0000-4000-8000-000000000002.pdf",
+              "mime_type": "application/pdf",
+              "size_bytes": 2048,
+              "created_at": "2025-03-02T09:00:00.000Z"
+            },
+            {
+              "id": "1",
+              "transaction_id": 1,
+              "filename": "receipt.png",
+              "stored_path": "1/aaaaaaaa-0000-4000-8000-000000000001.png",
+              "mime_type": "image/png",
+              "size_bytes": 1024,
+              "created_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 3,
+          "limit": 1000,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/999",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0
+        }
+      }
+    },
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getTransactionAttachments",
+      "method": "GET",
+      "path": "/api/attachments/transaction/0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "downloadAttachment",
+      "method": "GET",
+      "path": "/api/attachments/999/download",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Attachment not found"
+        }
+      }
+    },
+    {
+      "operationId": "downloadAttachment",
+      "method": "GET",
+      "path": "/api/attachments/abc/download",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deleteAttachment",
+      "method": "DELETE",
+      "path": "/api/attachments/1",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deleteAttachment",
+      "method": "DELETE",
+      "path": "/api/attachments/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Attachment not found"
+        }
+      }
+    },
+    {
+      "operationId": "deleteAttachment",
+      "method": "DELETE",
+      "path": "/api/attachments/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    }
+  ]
+}
