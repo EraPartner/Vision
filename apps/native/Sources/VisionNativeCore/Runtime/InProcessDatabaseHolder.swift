@@ -7,6 +7,7 @@ import Foundation
 public protocol InProcessDatabaseHolder: Sendable {
     /// Closes the connection and refuses work until `resume`. Returns once no statement runs.
     func suspend() async
-    /// Allows work again; the connection opens `databasePath` on its next use.
-    func resume(databasePath: String) async
+    /// Allows work again; the connection opens `databasePath` on its next use, and serves
+    /// attachments rooted at `attachmentsDirectory` (nil: none configured).
+    func resume(databasePath: String, attachmentsDirectory: String?) async
 }
