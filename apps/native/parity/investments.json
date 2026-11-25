@@ -1,0 +1,520 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n         is_active, price_provider, notes, created_at, updated_at) VALUES\n        (1, 'ACME Corp', 'ACME', 'stock', 'EUR', vision_numeric('150.50', 18, 6), NULL,\n         1, 'manual', 'growth stock', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,\n         1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('42', 18, 6), NULL,\n         0, 'manual', 'closed', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n         fees, taxes, currency, note, created_at, updated_at) VALUES\n        (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),\n         vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n         'initial buy', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,\n         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 2, 'rent_income', '2024-02-01', vision_numeric('950.40', 18, 4), NULL, NULL,\n         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'february rent',\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "ACME Corp",
+          "symbol": "ACME",
+          "asset_class": "stock",
+          "currency": "EUR",
+          "current_price": 150.5,
+          "interest_rate": null,
+          "maturity_date": null,
+          "location": null,
+          "municipality": null,
+          "cadastral_income": null,
+          "municipality_tax_rate": null,
+          "notes": "growth stock",
+          "is_active": true,
+          "price_provider": "manual",
+          "price_provider_id": null,
+          "price_provider_url": null,
+          "price_provider_latest_url": null,
+          "price_provider_latest_path": null,
+          "price_provider_history_url": null,
+          "price_provider_history_path": null,
+          "price_provider_history_ts_path": null,
+          "price_provider_history_price_path": null,
+          "price_updated_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "show_in_ticker": true
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Investment not found"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "name": "Old Fund",
+          "symbol": "OLDF",
+          "asset_class": "etf",
+          "currency": "EUR",
+          "current_price": 42,
+          "interest_rate": null,
+          "maturity_date": null,
+          "location": null,
+          "municipality": null,
+          "cadastral_income": null,
+          "municipality_tax_rate": null,
+          "notes": "closed",
+          "is_active": false,
+          "price_provider": "manual",
+          "price_provider_id": null,
+          "price_provider_url": null,
+          "price_provider_latest_url": null,
+          "price_provider_latest_path": null,
+          "price_provider_history_url": null,
+          "price_provider_history_path": null,
+          "price_provider_history_ts_path": null,
+          "price_provider_history_price_path": null,
+          "price_updated_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "show_in_ticker": true
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/999/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 999,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1,2&investment_ids=abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: abc"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1,2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 3,
+              "investment_id": 2,
+              "type": "rent_income",
+              "date": "2024-02-01",
+              "amount": 950.4,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "february rent",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 3,
+          "limit": 3,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "computedAt": "2026-11-25T21:24:24.854Z",
+          "totalValue": 1505,
+          "uncoveredValue": 0,
+          "uncoveredWeightPercent": 0,
+          "coveredCashValue": 0,
+          "coveredCashWeightPercent": 0,
+          "fundSources": [],
+          "issuer": {
+            "rows": [],
+            "classifiedValue": 0,
+            "classifiedWeightPercent": 0,
+            "unclassifiedValue": 1505,
+            "unclassifiedWeightPercent": 100
+          },
+          "sector": {
+            "rows": [],
+            "classifiedValue": 0,
+            "classifiedWeightPercent": 0,
+            "unclassifiedValue": 1505,
+            "unclassifiedWeightPercent": 100
+          },
+          "issuerCountry": {
+            "rows": [],
+            "classifiedValue": 0,
+            "classifiedWeightPercent": 0,
+            "unclassifiedValue": 1505,
+            "unclassifiedWeightPercent": 100
+          },
+          "warnings": [],
+          "scopeNotes": [
+            "Issuer country is explicit source metadata, not listing or revenue geography.",
+            "No economic foreign-exchange exposure is inferred."
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposureClassifications",
+      "method": "GET",
+      "path": "/api/investments/exposure/classifications",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            }
+          ],
+          "issuers": [],
+          "sectors": []
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

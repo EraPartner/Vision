@@ -1705,6 +1705,101 @@ export const AREAS: Record<string, ParityArea> = {
       batchPreview("20"),
     ],
   },
+  investments: {
+    router: { module: "investments.ts", mountPath: "/api/investments" },
+    seed: [
+      `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'ACME Corp', 'ACME', 'stock', 'EUR', vision_numeric('150.50', 18, 6), NULL,
+         1, 'manual', 'growth stock', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,
+         1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('42', 18, 6), NULL,
+         0, 'manual', 'closed', '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, created_at, updated_at) VALUES
+        (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'initial buy', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,
+         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 2, 'rent_income', '2024-02-01', vision_numeric('950.40', 18, 4), NULL, NULL,
+         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'february rent',
+         '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      {
+        operationId: "getInvestments",
+        method: "GET",
+        path: "/api/investments",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/1",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/abc",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/999",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/3",
+      },
+      {
+        operationId: "getInvestmentSummary",
+        method: "GET",
+        path: "/api/investments/1/summary",
+      },
+      {
+        operationId: "getInvestmentSummary",
+        method: "GET",
+        path: "/api/investments/999/summary",
+      },
+      {
+        operationId: "getInvestmentTransactions",
+        method: "GET",
+        path: "/api/investments/1/transactions",
+      },
+      {
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: "/api/investments/transactions",
+      },
+      {
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: "/api/investments/transactions?investment_ids=1,2&investment_ids=abc",
+      },
+      {
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: "/api/investments/transactions?investment_ids=1,2",
+      },
+      {
+        operationId: "getPortfolioExposure",
+        method: "GET",
+        path: "/api/investments/exposure",
+      },
+      {
+        operationId: "getPortfolioExposureClassifications",
+        method: "GET",
+        path: "/api/investments/exposure/classifications",
+      },
+      {
+        operationId: "listInvestmentProviders",
+        method: "GET",
+        path: "/api/investments/providers",
+      },
+    ],
+  },
   importCommit: {
     router: { module: "importRoutes.ts", mountPath: "/api/import" },
     seed: [
