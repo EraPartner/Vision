@@ -635,7 +635,15 @@ caps, `expected_count` required in filter mode, the account-lock refusal
 (“Reopen the account before changing its ledger balance”), the update's presence-driven SET
 with up-front FK checks, the delete's planned-execution guard and its attachment files removed
 best-effort after the commit, both counted through the export joins with the uncategorised
-queue predicate. Bulk export stays on Bun until its own phase. The planned payments follow
+queue predicate. Bulk export stays on Bun until its own phase. The transaction attachments follow
+(`Areas/Attachments.swift`): the list (newest first, opt-in pagination under the 1000 cap, the
+row id serialised as a string and `created_at` as the timestamp's text), the download as a
+raw file answer (`HandlerResult.file`, served with `Content-Type` and the inline
+`Content-Disposition` of both the ascii fallback and the `filename*` form; a row without
+bytes on disk answers the clean 404), and the delete (row first, file removed best-effort
+after). `resume(databasePath:)` now carries the attachments directory (`layout.attachments`)
+so both file operations resolve inside it; the multipart upload has no client operation and
+stays on Bun. The planned payments follow
 (port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
 `filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
 (`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored

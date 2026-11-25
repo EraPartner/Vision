@@ -38,15 +38,24 @@ public struct HandlerResult: Sendable, Equatable {
     public let data: JSONValue
     /// Headers the route sets beside the envelope's, such as `Idempotent-Replay`.
     public let headers: [String: String]
+    /// `res.sendFile`: the raw bytes of a file answer, served with `headers`; the
+    /// envelope and `data` do not apply.
+    public let file: Data?
 
-    public init(status: Int = 200, data: JSONValue, headers: [String: String] = [:]) {
+    public init(status: Int = 200, data: JSONValue, headers: [String: String] = [:], file: Data? = nil) {
         self.status = status
         self.data = data
         self.headers = headers
+        self.file = file
     }
 
     /// `res.status(204).send()`: no envelope and no body.
     public static let noContent = HandlerResult(status: 204, data: .null)
+
+    /// `res.sendFile`: the file's bytes with the route's own headers, no envelope.
+    public static func fileAnswer(_ bytes: Data, headers: [String: String]) -> HandlerResult {
+        HandlerResult(status: 200, data: .null, headers: headers, file: bytes)
+    }
 }
 
 /// The ADR-026 envelope as the data plane's middleware writes it: `requestId`, `wrapResponse`
@@ -92,6 +101,11 @@ enum BackendEnvelope {
     static func success(_ result: HandlerResult, requestId: String) throws -> APIResponse {
         if result.status == 204 {
             return APIResponse(status: 204, body: Data(), headers: ["x-request-id": requestId])
+        }
+        if let file = result.file {
+            return APIResponse(
+                status: result.status, body: file,
+                headers: ["x-request-id": requestId].merging(result.headers) { _, route in route })
         }
         var response = try response(
             status: result.status,

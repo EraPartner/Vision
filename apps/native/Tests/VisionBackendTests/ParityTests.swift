@@ -274,6 +274,10 @@ import VisionNativeCore
         try await Self.replay("planned")
     }
 
+    @Test func attachments() async throws {
+        try await Self.replay("attachments")
+    }
+
     @Test func exchangeRates() async throws {
         try await Self.replay("exchange-rates")
         try await Self.replay("exchange-rates-empty")
