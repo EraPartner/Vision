@@ -643,7 +643,14 @@ raw file answer (`HandlerResult.file`, served with `Content-Type` and the inline
 bytes on disk answers the clean 404), and the delete (row first, file removed best-effort
 after). `resume(databasePath:)` now carries the attachments directory (`layout.attachments`)
 so both file operations resolve inside it; the multipart upload has no client operation and
-stays on Bun. The planned payments follow
+stays on Bun. The exports follow (P13, `Areas/TransactionExport.swift`): the filter-shaped
+`GET /export/csv` and `/export/json` and the selector-shaped `POST /bulk-export` (format defaulting
+to csv, `X-Exported-Count`), all streaming the keyset-paginated chunk query over the export joins
+through one file answer — the probe 404, the byte-exact CSV grid (formula-neutralised, quoted
+only when a cell demands it, numeric strings safe for the round-trip, the per-account Decimal
+running balance of `include_balance`, tag slugs semicolon-joined) and the NDJSON line per row
+in `JSON.stringify`'s key order. The recorder holds a streamed answer as its raw text, so the
+corpus compares the file bytes exactly. The planned payments follow
 (port 10a, `Areas/Planned.swift`): the list (`getPlannedTransactions`) with every filter of
 `filterPlannedTransactions` and its batched executions/schedule/tags loads, the totals
 (`getPlannedTotals`) that count every recurring occurrence on its own day at the latest stored

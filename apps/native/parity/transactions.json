@@ -16037,6 +16037,191 @@
       }
     },
     {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv",
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2024-01-05,Main,SHOP,edited card,-12.5000,EUR,,FOOD:GROCERIES,,work\n2024-01-06,Main,MARKET,,-3.2000,EUR,500.0000,,latte,\n2024-01-06,Main,MARKET,WEEKLY,-40.0000,EUR,,TRAVEL:HOTEL,,work\n2024-01-06,Main,MARKET,,1.0050,EUR,,,,\n2024-01-07,Main,MARKET,SALARY,2500.0000,EUR,,TRAVEL:HOTEL,,\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-11,Travel,MARKET,TAGGED CREATE,-7.2510,USD,,TRAVEL:HOTEL,,holiday;work\n2024-01-15,Main,SHOP,AUTOLINK,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-16,Main,CAFÉ ÉCLAIR,,-3.0000,EUR,,LEISURE:COFFEE,,\n2024-02-02,Main,CAFÉ ÉCLAIR,,-4.5000,EUR,,TRAVEL:HOTEL,bis,\n2024-03-01,Travel,MARKET,TOP UP,250.5000,USD,1250.5000,TRAVEL:HOTEL,,\n2024-03-02,Travel,,HOTEL,-75.0000,GBP,,TRAVEL:HOTEL,,holiday\n2024-03-03,Travel,MARKET,,-1000.0000,JPY,,TRAVEL:HOTEL,,\n2024-03-04,Travel,MARKET,,-12.0000,CHF,,TRAVEL:HOTEL,,\n2024-03-05,Main,MARKET,TO SAVINGS,-100.0000,EUR,,,,\n2024-03-05,Travel,MARKET,FROM MAIN,100.0000,EUR,,TRAVEL:HOTEL,,\n"
+    },
+    {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv?include_balance=true",
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance\n2024-01-05,Main,SHOP,edited card,-12.5000,EUR,,FOOD:GROCERIES,,work,-12.5\n2024-01-06,Main,MARKET,,-3.2000,EUR,500.0000,,latte,,-15.7\n2024-01-06,Main,MARKET,WEEKLY,-40.0000,EUR,,TRAVEL:HOTEL,,work,-55.7\n2024-01-06,Main,MARKET,,1.0050,EUR,,,,,-54.695\n2024-01-07,Main,MARKET,SALARY,2500.0000,EUR,,TRAVEL:HOTEL,,,2445.305\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,,2429.805\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,,2414.305\n2024-01-11,Travel,MARKET,TAGGED CREATE,-7.2510,USD,,TRAVEL:HOTEL,,holiday;work,-7.251\n2024-01-15,Main,SHOP,AUTOLINK,-15.5000,EUR,,FOOD:GROCERIES,,,2398.805\n2024-01-16,Main,CAFÉ ÉCLAIR,,-3.0000,EUR,,LEISURE:COFFEE,,,2395.805\n2024-02-02,Main,CAFÉ ÉCLAIR,,-4.5000,EUR,,TRAVEL:HOTEL,bis,,2391.305\n2024-03-01,Travel,MARKET,TOP UP,250.5000,USD,1250.5000,TRAVEL:HOTEL,,,243.249\n2024-03-02,Travel,,HOTEL,-75.0000,GBP,,TRAVEL:HOTEL,,holiday,168.249\n2024-03-03,Travel,MARKET,,-1000.0000,JPY,,TRAVEL:HOTEL,,,-831.751\n2024-03-04,Travel,MARKET,,-12.0000,CHF,,TRAVEL:HOTEL,,,-843.751\n2024-03-05,Main,MARKET,TO SAVINGS,-100.0000,EUR,,,,,2291.305\n2024-03-05,Travel,MARKET,FROM MAIN,100.0000,EUR,,TRAVEL:HOTEL,,,-743.751\n"
+    },
+    {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv?account_id=1",
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2024-01-05,Main,SHOP,edited card,-12.5000,EUR,,FOOD:GROCERIES,,work\n2024-01-06,Main,MARKET,,-3.2000,EUR,500.0000,,latte,\n2024-01-06,Main,MARKET,WEEKLY,-40.0000,EUR,,TRAVEL:HOTEL,,work\n2024-01-06,Main,MARKET,,1.0050,EUR,,,,\n2024-01-07,Main,MARKET,SALARY,2500.0000,EUR,,TRAVEL:HOTEL,,\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-15,Main,SHOP,AUTOLINK,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-16,Main,CAFÉ ÉCLAIR,,-3.0000,EUR,,LEISURE:COFFEE,,\n2024-02-02,Main,CAFÉ ÉCLAIR,,-4.5000,EUR,,TRAVEL:HOTEL,bis,\n2024-03-05,Main,MARKET,TO SAVINGS,-100.0000,EUR,,,,\n"
+    },
+    {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv?start_date=2024-02-01&end_date=2024-03-01",
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2024-02-02,Main,CAFÉ ÉCLAIR,,-4.5000,EUR,,TRAVEL:HOTEL,bis,\n2024-03-01,Travel,MARKET,TOP UP,250.5000,USD,1250.5000,TRAVEL:HOTEL,,\n"
+    },
+    {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv?account_ids=1,2",
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2024-01-05,Main,SHOP,edited card,-12.5000,EUR,,FOOD:GROCERIES,,work\n2024-01-06,Main,MARKET,,-3.2000,EUR,500.0000,,latte,\n2024-01-06,Main,MARKET,WEEKLY,-40.0000,EUR,,TRAVEL:HOTEL,,work\n2024-01-06,Main,MARKET,,1.0050,EUR,,,,\n2024-01-07,Main,MARKET,SALARY,2500.0000,EUR,,TRAVEL:HOTEL,,\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-10,Main,SHOP,MANUAL ONE,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-11,Travel,MARKET,TAGGED CREATE,-7.2510,USD,,TRAVEL:HOTEL,,holiday;work\n2024-01-15,Main,SHOP,AUTOLINK,-15.5000,EUR,,FOOD:GROCERIES,,\n2024-01-16,Main,CAFÉ ÉCLAIR,,-3.0000,EUR,,LEISURE:COFFEE,,\n2024-02-02,Main,CAFÉ ÉCLAIR,,-4.5000,EUR,,TRAVEL:HOTEL,bis,\n2024-03-01,Travel,MARKET,TOP UP,250.5000,USD,1250.5000,TRAVEL:HOTEL,,\n2024-03-02,Travel,,HOTEL,-75.0000,GBP,,TRAVEL:HOTEL,,holiday\n2024-03-03,Travel,MARKET,,-1000.0000,JPY,,TRAVEL:HOTEL,,\n2024-03-04,Travel,MARKET,,-12.0000,CHF,,TRAVEL:HOTEL,,\n2024-03-05,Main,MARKET,TO SAVINGS,-100.0000,EUR,,,,\n2024-03-05,Travel,MARKET,FROM MAIN,100.0000,EUR,,TRAVEL:HOTEL,,\n"
+    },
+    {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv?search=nope",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "No transactions found matching filters"
+        }
+      }
+    },
+    {
+      "operationId": "exportTransactionsCsv",
+      "method": "GET",
+      "path": "/api/transactions/export/csv?start_date=bad",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "start_date must be in YYYY-MM-DD format"
+        }
+      }
+    },
+    {
+      "operationId": "exportTransactionsJson",
+      "method": "GET",
+      "path": "/api/transactions/export/json",
+      "status": 200,
+      "response": "{\"id\":1,\"date\":\"2024-01-05\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"edited card\",\"amount\":\"-12.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[\"work\"]}\n{\"id\":2,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"-3.2000\",\"currency\":\"EUR\",\"balance\":\"500.0000\",\"category\":null,\"comment\":\"latte\",\"tags\":[]}\n{\"id\":3,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":\"WEEKLY\",\"amount\":\"-40.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[\"work\"]}\n{\"id\":14,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"1.0050\",\"currency\":\"EUR\",\"balance\":null,\"category\":null,\"comment\":null,\"tags\":[]}\n{\"id\":4,\"date\":\"2024-01-07\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":\"SALARY\",\"amount\":\"2500.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[]}\n{\"id\":16,\"date\":\"2024-01-10\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"MANUAL ONE\",\"amount\":\"-15.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[]}\n{\"id\":17,\"date\":\"2024-01-10\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"MANUAL ONE\",\"amount\":\"-15.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[]}\n{\"id\":18,\"date\":\"2024-01-11\",\"bank_account\":\"Travel\",\"recipient\":\"MARKET\",\"memo\":\"TAGGED CREATE\",\"amount\":\"-7.2510\",\"currency\":\"USD\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[\"holiday\",\"work\"]}\n{\"id\":19,\"date\":\"2024-01-15\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"AUTOLINK\",\"amount\":\"-15.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[]}\n{\"id\":20,\"date\":\"2024-01-16\",\"bank_account\":\"Main\",\"recipient\":\"CAFÉ ÉCLAIR\",\"memo\":null,\"amount\":\"-3.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"LEISURE:COFFEE\",\"comment\":null,\"tags\":[]}\n{\"id\":6,\"date\":\"2024-02-02\",\"bank_account\":\"Main\",\"recipient\":\"CAFÉ ÉCLAIR\",\"memo\":null,\"amount\":\"-4.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":\"bis\",\"tags\":[]}\n{\"id\":7,\"date\":\"2024-03-01\",\"bank_account\":\"Travel\",\"recipient\":\"MARKET\",\"memo\":\"TOP UP\",\"amount\":\"250.5000\",\"currency\":\"USD\",\"balance\":\"1250.5000\",\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[]}\n{\"id\":8,\"date\":\"2024-03-02\",\"bank_account\":\"Travel\",\"recipient\":\"\",\"memo\":\"HOTEL\",\"amount\":\"-75.0000\",\"currency\":\"GBP\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[\"holiday\"]}\n{\"id\":9,\"date\":\"2024-03-03\",\"bank_account\":\"Travel\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"-1000.0000\",\"currency\":\"JPY\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[]}\n{\"id\":10,\"date\":\"2024-03-04\",\"bank_account\":\"Travel\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"-12.0000\",\"currency\":\"CHF\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[]}\n{\"id\":11,\"date\":\"2024-03-05\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":\"TO SAVINGS\",\"amount\":\"-100.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":null,\"comment\":null,\"tags\":[]}\n{\"id\":12,\"date\":\"2024-03-05\",\"bank_account\":\"Travel\",\"recipient\":\"MARKET\",\"memo\":\"FROM MAIN\",\"amount\":\"100.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[]}\n"
+    },
+    {
+      "operationId": "exportTransactionsJson",
+      "method": "GET",
+      "path": "/api/transactions/export/json?recipient_id=999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "No transactions found matching filters"
+        }
+      }
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {
+        "ids": [
+          1,
+          3
+        ],
+        "format": "csv"
+      },
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2024-01-05,Main,SHOP,edited card,-12.5000,EUR,,FOOD:GROCERIES,,work\n2024-01-06,Main,MARKET,WEEKLY,-40.0000,EUR,,TRAVEL:HOTEL,,work\n"
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {
+        "ids": [
+          2
+        ],
+        "format": "json"
+      },
+      "status": 200,
+      "response": "{\"id\":2,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"-3.2000\",\"currency\":\"EUR\",\"balance\":\"500.0000\",\"category\":null,\"comment\":\"latte\",\"tags\":[]}\n"
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {
+        "ids": [
+          1
+        ]
+      },
+      "status": 200,
+      "response": "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2024-01-05,Main,SHOP,edited card,-12.5000,EUR,,FOOD:GROCERIES,,work\n"
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {
+        "filter": {
+          "account_id": 1
+        },
+        "expected_count": 20,
+        "format": "json"
+      },
+      "status": 200,
+      "response": "{\"id\":1,\"date\":\"2024-01-05\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"edited card\",\"amount\":\"-12.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[\"work\"]}\n{\"id\":2,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"-3.2000\",\"currency\":\"EUR\",\"balance\":\"500.0000\",\"category\":null,\"comment\":\"latte\",\"tags\":[]}\n{\"id\":3,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":\"WEEKLY\",\"amount\":\"-40.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[\"work\"]}\n{\"id\":14,\"date\":\"2024-01-06\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":null,\"amount\":\"1.0050\",\"currency\":\"EUR\",\"balance\":null,\"category\":null,\"comment\":null,\"tags\":[]}\n{\"id\":4,\"date\":\"2024-01-07\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":\"SALARY\",\"amount\":\"2500.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":null,\"tags\":[]}\n{\"id\":16,\"date\":\"2024-01-10\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"MANUAL ONE\",\"amount\":\"-15.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[]}\n{\"id\":17,\"date\":\"2024-01-10\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"MANUAL ONE\",\"amount\":\"-15.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[]}\n{\"id\":19,\"date\":\"2024-01-15\",\"bank_account\":\"Main\",\"recipient\":\"SHOP\",\"memo\":\"AUTOLINK\",\"amount\":\"-15.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"FOOD:GROCERIES\",\"comment\":null,\"tags\":[]}\n{\"id\":20,\"date\":\"2024-01-16\",\"bank_account\":\"Main\",\"recipient\":\"CAFÉ ÉCLAIR\",\"memo\":null,\"amount\":\"-3.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"LEISURE:COFFEE\",\"comment\":null,\"tags\":[]}\n{\"id\":6,\"date\":\"2024-02-02\",\"bank_account\":\"Main\",\"recipient\":\"CAFÉ ÉCLAIR\",\"memo\":null,\"amount\":\"-4.5000\",\"currency\":\"EUR\",\"balance\":null,\"category\":\"TRAVEL:HOTEL\",\"comment\":\"bis\",\"tags\":[]}\n{\"id\":11,\"date\":\"2024-03-05\",\"bank_account\":\"Main\",\"recipient\":\"MARKET\",\"memo\":\"TO SAVINGS\",\"amount\":\"-100.0000\",\"currency\":\"EUR\",\"balance\":null,\"category\":null,\"comment\":null,\"tags\":[]}\n"
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {
+        "ids": [
+          999
+        ]
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "No transactions found matching filters"
+        }
+      }
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {
+        "ids": [
+          1
+        ],
+        "format": "zip"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`format` must be 'csv' or 'json'"
+        }
+      }
+    },
+    {
+      "operationId": "bulkExportTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-export",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Either `ids` or `filter` must be provided"
+        }
+      }
+    },
+    {
       "operationId": "getTransactions",
       "method": "GET",
       "path": "/api/transactions?sort_by=date",

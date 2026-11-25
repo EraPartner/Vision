@@ -225,8 +225,16 @@ import VisionNativeCore
                 #expect(got == value, "\(label): header \(wanted)")
             }
             // A 204 has no body; the recorder writes it as `{}`.
-            let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let today = SQLTimestamps.formatDate(recorderTime.localDate(of: .init(ms: now)))
+            // A streamed file answer (the exports' text/csv and x-ndjson) never parses as
+            // the envelope: the corpus holds its raw text, compared byte-for-byte with the
+            // today token applied.
+            if case .string(let expected) = step.response {
+                let actual = String(decoding: response.body, as: UTF8.self)
+                #expect(actual == expected.replacingOccurrences(of: todayToken, with: today), "\(label)")
+                continue
+            }
+            let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let found = difference(
                 step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
             #expect(found == nil, "\(label): \(found ?? "")")
