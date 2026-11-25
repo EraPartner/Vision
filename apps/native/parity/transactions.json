@@ -15544,6 +15544,499 @@
       }
     },
     {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2,
+          3
+        ],
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 2,
+          "requested": 2,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "category_id": null
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 1,
+          "requested": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "recipient_id": 3
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 1,
+          "requested": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {}
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`fields` must contain at least one of: category_id, recipient_id, is_active"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "category_id": 0
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "category_id: `fields.category_id` must be a positive integer or null"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "category_id": 999
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Category 999 does not exist or is inactive"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "recipient_id": 999
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Recipient 999 does not exist or is inactive"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`fields` must be an object with at least one updatable property"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          1
+        ],
+        "fields": {
+          "category_id": 10
+        },
+        "expected_count": 2
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`expected_count` is only valid with `filter`"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "account_id": 2
+        },
+        "expected_count": 5001,
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`expected_count` must be an integer between 1 and 5000 in filter mode"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "account_id": 2
+        },
+        "expected_count": 4,
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 6,
+          "requested": 4,
+          "matched": 6
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "category_id": "x"
+        },
+        "expected_count": 1,
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "category_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "foo": 1
+        },
+        "expected_count": 1,
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`filter` contains unknown field(s): foo"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "transactionId": 1,
+          "transaction_id": 1
+        },
+        "expected_count": 1,
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Provide either `transactionId` or `transaction_id`, not both"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "search": "no such thing"
+        },
+        "expected_count": 1,
+        "fields": {
+          "category_id": 10
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 0,
+          "requested": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "filter": {
+          "uncategorised": true
+        },
+        "expected_count": 1,
+        "fields": {
+          "is_active": true
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 4,
+          "requested": 1,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "recipient_id": 1.5
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "recipient_id: `fields.recipient_id` must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "bulkUpdateTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-update",
+      "body": {
+        "ids": [
+          2
+        ],
+        "fields": {
+          "is_active": "yes"
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "is_active: `fields.is_active` must be a boolean"
+        }
+      }
+    },
+    {
+      "operationId": "bulkDeleteTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-delete",
+      "body": {
+        "ids": [
+          15
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "deleted": 1,
+          "requested": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "operationId": "bulkDeleteTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-delete",
+      "body": {
+        "ids": [
+          3
+        ]
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A selected transaction is linked to a planned payment. Remove that planned payment explicitly before deleting the transaction"
+        }
+      }
+    },
+    {
+      "operationId": "bulkDeleteTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-delete",
+      "body": {
+        "ids": [
+          999
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "deleted": 0,
+          "requested": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "operationId": "bulkDeleteTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-delete",
+      "body": {
+        "filter": {
+          "transaction_id": 999
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "`expected_count` must be an integer between 1 and 5000 in filter mode"
+        }
+      }
+    },
+    {
+      "operationId": "bulkDeleteTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-delete",
+      "body": {
+        "filter": {
+          "transaction_id": 999
+        },
+        "expected_count": 1
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "deleted": 0,
+          "requested": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "operationId": "bulkDeleteTransactions",
+      "method": "POST",
+      "path": "/api/transactions/bulk-delete",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Either `ids` or `filter` must be provided"
+        }
+      }
+    },
+    {
       "operationId": "getTransactions",
       "method": "GET",
       "path": "/api/transactions?sort_by=date",
@@ -15552,30 +16045,6 @@
         "ok": true,
         "data": {
           "items": [
-            {
-              "id": 15,
-              "transaction_date": "2024-04-01",
-              "bank_account": null,
-              "account_id": null,
-              "is_transfer": false,
-              "transfer_peer_id": null,
-              "transfer_source": null,
-              "recipient_id": 3,
-              "recipient_name": "MARKET",
-              "memo": null,
-              "amount": -20,
-              "amount_eur": -20,
-              "currency": "EUR",
-              "balance": null,
-              "category_id": null,
-              "category_name": null,
-              "comment": null,
-              "tags": [],
-              "is_active": true,
-              "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2026-06-15T09:00:00.000Z",
-              "links": []
-            },
             {
               "id": 12,
               "transaction_date": "2024-03-05",
@@ -15591,13 +16060,13 @@
               "amount_eur": 100,
               "currency": "EUR",
               "balance": null,
-              "category_id": null,
-              "category_name": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
               "comment": null,
               "tags": [],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15621,7 +16090,7 @@
               "tags": [],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15639,13 +16108,13 @@
               "amount_eur": -12,
               "currency": "CHF",
               "balance": null,
-              "category_id": null,
-              "category_name": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
               "comment": null,
               "tags": [],
               "is_active": true,
               "created_at": null,
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15663,13 +16132,13 @@
               "amount_eur": -1000,
               "currency": "JPY",
               "balance": null,
-              "category_id": null,
-              "category_name": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
               "comment": null,
               "tags": [],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15700,7 +16169,7 @@
               ],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15718,8 +16187,8 @@
               "amount_eur": 250.5,
               "currency": "USD",
               "balance": 1250.5,
-              "category_id": null,
-              "category_name": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
               "comment": null,
               "tags": [],
               "is_active": true,
@@ -15929,7 +16398,7 @@
               "tags": [],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15947,8 +16416,8 @@
               "amount_eur": -40,
               "currency": "EUR",
               "balance": null,
-              "category_id": null,
-              "category_name": null,
+              "category_id": 10,
+              "category_name": "TRAVEL:HOTEL",
               "comment": null,
               "tags": [
                 {
@@ -15966,7 +16435,7 @@
               ],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -15977,20 +16446,20 @@
               "is_transfer": false,
               "transfer_peer_id": null,
               "transfer_source": null,
-              "recipient_id": 2,
-              "recipient_name": "CAFÉ ÉCLAIR",
+              "recipient_id": 3,
+              "recipient_name": "MARKET",
               "memo": null,
               "amount": -3.2,
               "amount_eur": -3.2,
               "currency": "EUR",
               "balance": 500,
-              "category_id": 3,
-              "category_name": "LEISURE:COFFEE",
+              "category_id": null,
+              "category_name": null,
               "comment": "latte",
               "tags": [],
               "is_active": true,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-06-15T09:00:00.000Z",
               "links": []
             },
             {
@@ -16025,7 +16494,7 @@
               "links": []
             }
           ],
-          "total": 18,
+          "total": 17,
           "limit": 50,
           "offset": 0,
           "links": []
