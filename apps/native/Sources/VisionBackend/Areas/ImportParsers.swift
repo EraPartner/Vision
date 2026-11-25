@@ -40,7 +40,7 @@ enum ImportParsersArea {
     /// `normalizeParserName`: trimmed text, or one `ValidationError`.
     static func normalizeName(_ value: JSValue?) throws -> String? {
         guard case .string(let text)? = value else { return nil }
-        let trimmed = RequestInput.trim(text)
+        let trimmed = JavaScriptWhitespace.trim(text)
         guard !trimmed.isEmpty else { return nil }
         return trimmed
     }
@@ -50,7 +50,7 @@ enum ImportParsersArea {
         guard case .string(let raw) = value else {
             throw BackendHTTPError.validation("Unsupported CSV encoding")
         }
-        let encoding = RequestInput.trim(raw.lowercased())
+        let encoding = JavaScriptWhitespace.trim(raw.lowercased())
         if utf8Encodings.contains(encoding) { return "utf-8" }
         if latin1Encodings.contains(encoding) { return "latin1" }
         if windowsEncodings.contains(encoding) { return "windows-1252" }
@@ -75,7 +75,7 @@ enum ImportParsersArea {
     /// The required columns of `parserConfigSchema`: `config.<key> is required`.
     static func requiredColumn(_ object: JSObject, _ key: String) -> (String, Bool) {
         guard case .string(let text)? = object[key] else { return ("", false) }
-        let trimmed = RequestInput.trim(text)
+        let trimmed = JavaScriptWhitespace.trim(text)
         return trimmed.isEmpty ? ("", false) : (trimmed, true)
     }
 
@@ -98,13 +98,13 @@ enum ImportParsersArea {
         }
         // memoColumn: a string trimmed, anything else (and an absent key) the empty string.
         if case .string(let memo)? = input["memoColumn"] {
-            output["memoColumn"] = .string(RequestInput.trim(memo))
+            output["memoColumn"] = .string(JavaScriptWhitespace.trim(memo))
         } else {
             output["memoColumn"] = .string("")
         }
         // dateFormat: a non-empty string, else %Y-%m-%d.
-        if case .string(let format)? = input["dateFormat"], !RequestInput.trim(format).isEmpty {
-            output["dateFormat"] = .string(RequestInput.trim(format))
+        if case .string(let format)? = input["dateFormat"], !JavaScriptWhitespace.trim(format).isEmpty {
+            output["dateFormat"] = .string(JavaScriptWhitespace.trim(format))
         } else {
             output["dateFormat"] = .string("%Y-%m-%d")
         }
@@ -215,11 +215,11 @@ enum ImportParsersArea {
 
     /// `GET /parsers` (`getAll(kind)`): the rows by name, with the collection shape.
     static func list(_ session: BackendSession) throws -> HandlerResult {
-        let items = try session
-            .rows("SELECT \(columns) FROM custom_parser_configs WHERE kind = ? ORDER BY name", [
+        let rows = try session.rows(
+            "SELECT \(columns) FROM custom_parser_configs WHERE kind = ? ORDER BY name", [
                 .text("transaction"),
             ])
-            .map { .object(try parserJSON($0)) }
+        let items = try rows.map { row -> JSONValue in .object(try parserJSON(row)) }
         return HandlerResult(
             data: .object(["items": .array(items), "total": .int(items.count)]))
     }
