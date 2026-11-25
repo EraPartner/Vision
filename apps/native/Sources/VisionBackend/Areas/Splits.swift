@@ -128,7 +128,7 @@ enum SplitsArea {
                 SELECT dec_abs(t.amount) AS transaction_total,
                        COALESCE(dec_sum(ts.amount), '0') AS current_split_total
                   FROM transactions t
-             LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+                LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
                  WHERE t.id = ?
                  GROUP BY t.id, t.amount
                 """,
@@ -170,7 +170,7 @@ enum SplitsArea {
                 """
                 SELECT \(splitColumns), '0' AS amount_paid, r.name AS recipient_name
                   FROM transaction_splits ts
-             LEFT JOIN recipients r ON ts.recipient_id = r.id
+                LEFT JOIN recipients r ON ts.recipient_id = r.id
                  WHERE ts.id = ?
                 """,
                 [.integer(Int64(try key.integerId("id")))])
@@ -203,7 +203,7 @@ enum SplitsArea {
                    CAST(COUNT(a.split_id) AS TEXT) AS split_count
               FROM agg_split_outstanding a
               JOIN recipients r ON r.id = a.recipient_id
-         LEFT JOIN recipients pr ON pr.id = r.primary_recipient_id
+            LEFT JOIN recipients pr ON pr.id = r.primary_recipient_id
               JOIN transaction_splits ts ON ts.id = a.split_id
               JOIN transactions t ON t.id = ts.transaction_id
              WHERE ts.is_settled = 0
@@ -371,9 +371,9 @@ enum SplitsArea {
                    COALESCE(\(paid), '0') AS amount_paid
               FROM transaction_splits ts
               JOIN transactions t ON ts.transaction_id = t.id
-         LEFT JOIN recipients r ON t.recipient_id = r.id
-         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-         LEFT JOIN accounts acct ON t.account_id = acct.id
+            LEFT JOIN recipients r ON t.recipient_id = r.id
+            LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+            LEFT JOIN accounts acct ON t.account_id = acct.id
              WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = 0
              ORDER BY t.date DESC\(pageClause)
             """,
@@ -453,8 +453,8 @@ enum SplitsArea {
             SELECT \(splitColumns), r.name AS recipient_name,
                    COALESCE(dec_sum(sp.amount), '0') AS amount_paid
               FROM transaction_splits ts
-         LEFT JOIN recipients r ON r.id = ts.recipient_id
-         LEFT JOIN split_payments sp ON sp.split_id = ts.id
+            LEFT JOIN recipients r ON r.id = ts.recipient_id
+            LEFT JOIN split_payments sp ON sp.split_id = ts.id
              WHERE ts.transaction_id = ?
              GROUP BY ts.id, r.name
              ORDER BY ts.created_at\(pageClause)
@@ -521,12 +521,12 @@ enum SplitsArea {
                    t.comment
               FROM transaction_splits ts
               JOIN transactions t ON ts.transaction_id = t.id
-         LEFT JOIN accounts acct ON t.account_id = acct.id
-         LEFT JOIN recipients tr ON t.recipient_id = tr.id
-         LEFT JOIN recipients pr ON tr.primary_recipient_id = pr.id
-         LEFT JOIN categories c ON t.category_id = c.id
-         LEFT JOIN categories rc ON tr.default_category_id = rc.id
-         LEFT JOIN categories pc ON pr.default_category_id = pc.id
+            LEFT JOIN accounts acct ON t.account_id = acct.id
+            LEFT JOIN recipients tr ON t.recipient_id = tr.id
+            LEFT JOIN recipients pr ON tr.primary_recipient_id = pr.id
+            LEFT JOIN categories c ON t.category_id = c.id
+            LEFT JOIN categories rc ON tr.default_category_id = rc.id
+            LEFT JOIN categories pc ON pr.default_category_id = pc.id
              WHERE ts.recipient_id IN (SELECT id FROM recipient_group)
                AND ts.is_settled = 0
                AND dec_sign(dec_sub(ts.amount, COALESCE(\(paid), '0'))) > 0
@@ -700,7 +700,7 @@ enum SplitsArea {
                 """
                 SELECT \(splitColumns), '0' AS amount_paid, r.name AS recipient_name
                   FROM transaction_splits ts
-             LEFT JOIN recipients r ON ts.recipient_id = r.id
+                LEFT JOIN recipients r ON ts.recipient_id = r.id
                  WHERE ts.id IN (SELECT value FROM json_each(?))
                  ORDER BY ts.id
                 """,
@@ -788,7 +788,8 @@ enum SplitsArea {
                 }
                 // `computeBulkSplitAmount`: half or the whole absolute total, on cents.
                 let share = DecimalMoney.roundToCents(
-                    mode == "full" ? totals.total.abs  // lint:allow string-literal-compare the two bulk preset labels of lib/calculations/splits.ts : try totals.total.abs.dividedBy(DecimalJS.from("2")))
+                    // lint:allow string-literal-compare the two bulk preset labels of lib/calculations/splits.ts
+                    mode == "full" ? totals.total.abs : try totals.total.abs.dividedBy(DecimalJS.from("2")))
                 if share.isZero || !share.isFinite {
                     skippedZero += 1
                     continue
@@ -881,7 +882,7 @@ enum SplitsArea {
                     SELECT \(splitColumns), COALESCE(\(paid), '0') AS amount_paid,
                            r.name AS recipient_name
                       FROM transaction_splits ts
-                 LEFT JOIN recipients r ON ts.recipient_id = r.id
+                    LEFT JOIN recipients r ON ts.recipient_id = r.id
                      WHERE ts.id = ?
                     """,
                     [.integer(Int64(id.rawValue))])
