@@ -224,7 +224,7 @@ enum ImportReviewArea {
     static func override(
         _ session: BackendSession, batch: Int, row: Int, column: String, value: Int?
     ) throws -> HandlerResult {
-        try session.transaction {
+        return try session.transaction {
             try lockBatchUnderReview(session, batch: batch)
             let written = try session.rows(
                 """
