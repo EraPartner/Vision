@@ -807,7 +807,7 @@ enum AccountsArea {
             guard let account = try session.row(
                 "SELECT id, is_active FROM accounts WHERE id = ?", [.integer(Int64(id.rawValue))])
             else { throw BackendHTTPError.notFound("Account \(id.rawValue) not found") }
-            if !try account.bool("is_active") { return (true, []) }
+            if !(try account.bool("is_active")) { return (true, []) }
             var inserted: [[String: JSONValue]] = []
             if handling == "adjustment" {  // lint:allow string-literal-compare the two balance_handling labels of accountCloseService
                 let partitions = try currentBalanceParts(session, id: id)
@@ -908,8 +908,10 @@ enum AccountsArea {
     static func collidingAnchorCurrencies(_ session: BackendSession, ids: [Int]) throws -> [String] {
         let json = JSValue.array(ids.map(JSValue.int)).jsonText
         let anchors = try session.rows(
-            "SELECT account_id, currency FROM transactions
-              WHERE account_id IN (SELECT value FROM json_each(?)) AND transfer_source = 'opening'",
+            """
+            SELECT account_id, currency FROM transactions
+             WHERE account_id IN (SELECT value FROM json_each(?)) AND transfer_source = 'opening'
+            """,
             [.text(json)])
         var accountsByCurrency: [String: Set<Int>] = [:]
         for anchor in anchors {
@@ -1016,7 +1018,7 @@ enum AccountsArea {
         }
         if !rejected.isEmpty {
             throw BackendHTTPError.validation(
-                "source_ids must contain only integers, no accounts were merged: \(rejected.joined(separator: "; \"))")
+                "source_ids must contain only integers, no accounts were merged: \(rejected.joined(separator: "; "))")
         }
         return ids
     }
