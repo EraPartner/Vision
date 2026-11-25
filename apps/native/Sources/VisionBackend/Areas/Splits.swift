@@ -250,18 +250,18 @@ enum SplitsArea {
         }
         // `computeOwedSummary`: cents-rounded figures, zero-remaining groups dropped,
         // remaining descending (JS sort is stable — the SQL order breaks ties).
-        var projected: [(recipientId: RecipientID, fields: [[String: JSONValue]], remaining: Double)] = []
+        var projected: [(recipientId: RecipientID, fields: [String: JSONValue], remaining: Double)] = []
         for (offset, id) in order.enumerated() {
             let entry = recipients[offset]
             let totalOwed = DecimalMoney.roundToCents(entry.owed.reduce(DecimalJS.zero) { $0.plus($1) }).toNumber
             let totalPaid = DecimalMoney.roundToCents(entry.paid.reduce(DecimalJS.zero) { $0.plus($1) }).toNumber
             let remaining = DecimalMoney.roundToCents(
-                DecimalJS.from(SQLArguments.javaScriptText(max(0, totalOwed - totalPaid)))).toNumber
+                try DecimalJS.from(SQLArguments.javaScriptText(max(0, totalOwed - totalPaid)))).toNumber
             guard remaining > 0 else { continue }
             projected.append((
                 id,
                 [
-                    "recipient_id": .int(id), "recipient_name": .string(entry.name),
+                    "recipient_id": .int(id.rawValue), "recipient_name": .string(entry.name),
                     "total_owed": AccountsArea.number(totalOwed),
                     "total_paid": AccountsArea.number(totalPaid),
                     "remaining": AccountsArea.number(remaining),
@@ -278,7 +278,7 @@ enum SplitsArea {
             projected.append((
                 id,
                 [
-                    "recipient_id": .int(id), "recipient_name": .string(entry.name),
+                    "recipient_id": .int(id.rawValue), "recipient_name": .string(entry.name),
                     "total_owed": AccountsArea.number(0), "total_paid": AccountsArea.number(0),
                     "remaining": AccountsArea.number(0), "split_count": .int(entry.splitCount),
                 ],
@@ -303,7 +303,7 @@ enum SplitsArea {
             ]) { _, new in new }
         }
         let remaining = DecimalMoney.roundToCents(
-            sorted.map { DecimalJS.from(SQLArguments.javaScriptText($0.element.remaining)) }
+            try sorted.map { try DecimalJS.from(SQLArguments.javaScriptText($0.element.remaining)) }
                 .reduce(DecimalJS.zero) { $0.plus($1) })
         let summary = JSONValue.object([
             "currency": .string(target), "remaining": AccountsArea.number(remaining.toNumber),
@@ -414,7 +414,7 @@ enum SplitsArea {
         let target = try owedCurrency(request)
         let page = page(request)
         let (all, summary) = try owedSummary(session, target: target)
-        let items = page.map { page -> [JSONValue] in
+        let items = page.map { page -> [[String: JSONValue]] in
             let first = min(Int(page.offset.value), all.count)
             let last = min(first + Int(page.limit.value), all.count)
             return Array(all[first..<last])
@@ -460,7 +460,7 @@ enum SplitsArea {
              ORDER BY ts.created_at\(pageClause)
             """,
             arguments)
-        let items = try rows.map { .object(try splitFields($0)) }
+        let items = try rows.map { JSONValue.object(try splitFields($0)) }
         let total = try page.map { _ -> Int in
             guard
                 let count = try session.row(
@@ -553,7 +553,7 @@ enum SplitsArea {
             ].joined(separator: ",")
         }
         let csv = ([header] + lines).joined(separator: "\n")
-        let stamp = session.currentInstant().text
+        let stamp = try SQLTimestamps.formatInstant(session.currentInstant())
             .replacingOccurrences(of: ":", with: "-")
             .replacingOccurrences(of: ".", with: "-")
         let filename = "owed_transactions_recipient_\(recipient.rawValue)_\(String(stamp.prefix(19))).csv"
@@ -605,7 +605,7 @@ enum SplitsArea {
                 throw BackendHTTPError.notFound("Transaction not found")
             }
             try validateAllocation(
-                new: DecimalJS.from(SQLArguments.javaScriptText(input.amount)),
+                new: try DecimalJS.from(SQLArguments.javaScriptText(input.amount)),
                 transactionTotal: totals.total, currentSplitTotal: totals.splits)
             return try insertSplit(
                 session, transaction: input.transaction, recipient: input.recipient,
@@ -675,8 +675,8 @@ enum SplitsArea {
                     throw BackendHTTPError.validation("Split amount must be a positive number")
                 }
             }
-            let sum = prepared.reduce(DecimalJS.zero) {
-                $0.plus(DecimalJS.from(SQLArguments.javaScriptText($1.amount)))
+            let sum = try prepared.reduce(DecimalJS.zero) {
+                $0.plus(try DecimalJS.from(SQLArguments.javaScriptText($1.amount)))
             }
             try validateAllocation(new: sum, transactionTotal: totals.total, currentSplitTotal: totals.splits)
             var marks: [String] = []
@@ -790,7 +790,7 @@ enum SplitsArea {
                 let share = DecimalMoney.roundToCents(
                     // lint:allow string-literal-compare the two bulk preset labels of lib/calculations/splits.ts
                     mode == "full" ? totals.total.abs : try totals.total.abs.dividedBy(DecimalJS.from("2")))
-                if share.isZero || !share.isFinite {
+                if share.isZero || !share.toNumber.isFinite {
                     skippedZero += 1
                     continue
                 }
@@ -833,7 +833,7 @@ enum SplitsArea {
             if try split.bool("is_settled") {
                 throw BackendHTTPError.validation("Split is already settled")
             }
-            let amount = DecimalJS.from(SQLArguments.javaScriptText(input.amount)).toDecimalPlaces(4)
+            let amount = try DecimalJS.from(SQLArguments.javaScriptText(input.amount)).toDecimalPlaces(4)
             let paidRow = try session.row(
                 "SELECT COALESCE(dec_sum(amount), '0') AS paid FROM split_payments WHERE split_id = ?",
                 [.integer(Int64(id.rawValue))])
