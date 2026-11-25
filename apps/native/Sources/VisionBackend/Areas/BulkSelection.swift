@@ -71,6 +71,13 @@ enum BulkSelection {
         return number
     }
 
+    /// `parseAmountFilter` over an already-validated `optionalAmount` number: magnitude
+    /// unless `signed`, nil for a missing or unparseable value.
+    static func amountFilter(_ value: Double?, signed: Bool) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return signed ? value : abs(value)
+    }
+
     static func optionalIdArray(_ value: JSValue?, _ field: String) throws -> [Int]? {
         guard let value, value != .null else { return nil }
         guard case .array(let items) = value else {
@@ -95,7 +102,7 @@ enum BulkSelection {
         }
         if items.isEmpty { return nil }
         return try items.map { item in
-            guard case .string(let text)? = item,
+            guard case .string(let text) = item,
                 !JavaScriptWhitespace.trim(text).isEmpty
             else {
                 throw BackendHTTPError.validation(
@@ -215,10 +222,10 @@ enum BulkSelection {
             try pick(filter, "active", "active"), "active", fallback: true)
         filters.transactionType = try parseTransactionType(
             try pick(filter, "transactionType", "transaction_type"))
-        filters.amountMin = parseAmountFilter(
+        filters.amountMin = amountFilter(
             try optionalAmount(try pick(filter, "amountMin", "amount_min"), "amount_min"),
             signed: amountSigned)
-        filters.amountMax = parseAmountFilter(
+        filters.amountMax = amountFilter(
             try optionalAmount(try pick(filter, "amountMax", "amount_max"), "amount_max"),
             signed: amountSigned)
         filters.amountSigned = amountSigned
