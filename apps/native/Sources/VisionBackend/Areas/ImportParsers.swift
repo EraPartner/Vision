@@ -10,9 +10,6 @@ enum ImportParsersArea {
     /// `COLUMNS` of `customParserConfigRepository.ts`, in its order.
     static let columns = "id, name, kind, config_json, created_at, updated_at"
 
-    /// The portfolio kind shares this area's name conflict.
-    static let nameConstraint = "uq_custom_parser_configs_name_kind"
-
     /// `normalizeCsvEncoding`'s accepted encodings, by their normalized name.
     static let utf8Encodings = ["", "utf-8", "utf8"]
     static let latin1Encodings = ["latin1", "latin-1", "iso-8859-1"]
@@ -20,6 +17,8 @@ enum ImportParsersArea {
     static let csvNumberFormats = ["auto", "decimal_dot", "decimal_comma"]
     /// The SQLSTATE of a unique-constraint violation, `isParserNameConflict`'s `code === "23505"`.
     static let uniqueViolationCodes = ["23505"]
+    /// The table whose (name, kind) unique index the conflict is.
+    static let parserConfigTable = ["custom_parser_configs"]
 
     // MARK: - Body parsing
 
@@ -45,16 +44,19 @@ enum ImportParsersArea {
         return trimmed
     }
 
-    /// `normalizeCsvEncoding`: the accepted encodings and their aliases.
-    static func normalizeEncoding(_ value: JSValue) throws -> String {
+    /// `normalizeCsvEncoding`: the accepted encodings and their aliases. The guard's
+    /// message becomes one issue of the enclosing parse, so other fields' issues keep it.
+    static func normalizeEncoding(_ value: JSValue, issues: inout [String]) -> String {
         guard case .string(let raw) = value else {
-            throw BackendHTTPError.validation("Unsupported CSV encoding")
+            issues.append("Unsupported CSV encoding")
+            return "utf-8"
         }
         let encoding = JavaScriptWhitespace.trim(raw.lowercased())
         if utf8Encodings.contains(encoding) { return "utf-8" }
         if latin1Encodings.contains(encoding) { return "latin1" }
         if windowsEncodings.contains(encoding) { return "windows-1252" }
-        throw BackendHTTPError.validation("Unsupported CSV encoding \"\(raw)\"")
+        issues.append("Unsupported CSV encoding \"\(raw)\"")
+        return "utf-8"
     }
 
     /// `String(value)` over a JSValue, for `parseInt(String(value), 10)`.
@@ -120,7 +122,7 @@ enum ImportParsersArea {
         case .none, .null:
             encoding = "utf-8"
         case .some(let present):
-            encoding = try normalizeEncoding(present)
+            encoding = normalizeEncoding(present, issues: &issues)
         }
         output["encoding"] = .string(encoding)
         // number_format: the enum, with zod's message for anything else.
@@ -200,15 +202,20 @@ enum ImportParsersArea {
         ]
     }
 
-    /// `isParserNameConflict`: the (name, kind) unique index reported as 23505.
+    /// `isParserNameConflict`: the (name, kind) unique violation of this table. The
+    /// translated error carries the SQLSTATE and the table; the constraint name is only
+    /// resolved when the connection wires the schema resolver in, so the table is the
+    /// stable witness (the pkey never conflicts here: the id is the autoincrement's).
     static func writeError(_ error: any Error, name: String?) -> any Error {
-        guard let databaseError = error as? DatabaseError,
+        if let databaseError = error as? DatabaseError,
             uniqueViolationCodes.contains(databaseError.code),
-            databaseError.constraint == nameConstraint
-        else { return error }
-        // `conflictMessage(name)`: undefined prints as the literal text in JS.
-        let label = (name.map { $0 } ?? "undefined")
-        return BackendHTTPError.conflict("A parser named \"\(label)\" already exists")
+            parserConfigTable.contains(databaseError.table ?? "")
+        {
+            // `conflictMessage(name)`: undefined prints as the literal text in JS.
+            let label = name ?? "undefined"
+            return BackendHTTPError.conflict("A parser named \"\(label)\" already exists")
+        }
+        return error
     }
 
     // MARK: - Handlers
@@ -267,10 +274,15 @@ enum ImportParsersArea {
         }
         arguments.append(.integer(Int64(id)))
         do {
-            let row = try session.row(
-                "UPDATE custom_parser_configs SET \(sets.joined(separator: ", ")) WHERE id = ? RETURNING \(columns)",
+            let written = try session.row(
+                "UPDATE custom_parser_configs SET \(sets.joined(separator: ", ")) WHERE id = ? RETURNING id",
                 arguments)
-            guard let row else { throw BackendHTTPError.notFound("Parser config not found") }
+            guard written != nil else { throw BackendHTTPError.notFound("Parser config not found") }
+            // RETURNING shows the row as the UPDATE left it, before the AFTER UPDATE
+            // trigger stamped `updated_at = now()`; the type re-reads the row.
+            guard let row = try byId(session, id) else {
+                throw BackendHTTPError.notFound("Parser config not found")
+            }
             return HandlerResult(data: .object(try parserJSON(row)))
         } catch let error {
             throw writeError(error, name: body.name)
