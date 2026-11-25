@@ -439,6 +439,16 @@ const parserUpdate = (id: string, body: unknown): ParityStep => ({
   path: `/api/import/parsers/${id}`,
   body,
 });
+const batches = (query = ""): ParityStep => ({
+  operationId: "getImportBatches",
+  method: "GET",
+  path: `/api/import/batches${query}`,
+});
+const batchDelete = (id: string): ParityStep => ({
+  operationId: "deleteImportBatch",
+  method: "DELETE",
+  path: `/api/import/batches/${id}`,
+});
 const parserDelete = (id: string): ParityStep => ({
   operationId: "deleteCustomParser",
   method: "DELETE",
@@ -1519,6 +1529,72 @@ export const AREAS: Record<string, ParityArea> = {
       parserDelete("2.5"),
       parserDelete("bogus"),
       parserList(),
+    ],
+  },
+  importBatches: {
+    router: { module: "importRoutes.ts", mountPath: "/api/import" },
+    seed: [
+      `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-000000000021')`,
+      `INSERT INTO recipients (id, name, normalized_name, is_active, notes, created_at, updated_at) VALUES
+        (10, 'ImportedOne', 'importedone', 1, 'auto-created during the import',
+         '2024-06-01T10:00:01.000000Z', '2024-06-01T10:00:01.000000Z'),
+        (11, 'KeptOldRef', 'keptoldref', 1, NULL, '2024-05-01T09:00:00.000000Z', '2024-05-01T09:00:00.000000Z')`,
+      `INSERT INTO import_batches (id, adapter_name, source_filename, source_size_bytes, status, rows_total,
+         rows_imported, rows_duplicate, rows_error, error_summary, started_at, completed_at) VALUES
+        (1, 'KBC adapter', 'kbc.csv', 312, 'complete', 3, 2, 1, 0, NULL,
+         '2024-06-01T10:00:00.000000Z', '2024-06-01T10:00:05.000000Z'),
+        (2, 'BeKey', 'bekey.xlsx', NULL, 'aborted', 2, 1, 0, 1, 'boom',
+         '2024-06-02T10:00:00.000000Z', '2024-06-02T10:00:02.000000Z'),
+        (3, 'ING', 'ing.csv', 10, 'staging', 10, 0, 0, 0, NULL,
+         '2024-06-03T09:00:00.000000Z', NULL),
+        (4, 'KBC adapter', 'kbc2.csv', 8, 'awaiting_review', 8, 6, 2, 0, NULL,
+         '2024-06-04T09:00:00.000000Z', NULL),
+        (5, 'Belfius', NULL, NULL, 'failed', 4, 0, 0, 4, 'could not parse the header',
+         '2024-06-05T09:00:00.000000Z', '2024-06-05T09:00:01.000000Z'),
+        (6, 'PlannedLinked', 'linked.csv', NULL, 'complete', 1, 1, 0, 0, NULL,
+         '2024-06-06T09:00:00.000000Z', '2024-06-06T09:00:03.000000Z')`,
+      `INSERT INTO import_staging_rows (id, batch_id, row_index, status, tx_date, bank_account, recipient_raw,
+         memo, amount, currency, resolved_recipient_id, created_at, updated_at, match_source) VALUES
+        (1, 1, 1, 'matched', '2024-06-01', 'Main', 'ImportedOne', 'Coffee', vision_numeric('4.5', 20, 4), 'EUR',
+         10, '2024-06-01T10:00:01.000000Z', '2024-06-01T10:00:01.000000Z', 'new')`,
+      `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         created_at, updated_at, import_batch_id) VALUES
+        (100, '2024-06-01', vision_numeric('4.5', 18, 4), 'EUR', 'Coffee', 10, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}', 1),
+        (101, '2024-06-01', vision_numeric('-10', 18, 4), 'EUR', 'Bread', 11, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}', 1),
+        (102, '2024-05-20', vision_numeric('-3', 18, 4), 'EUR', 'Old bread', 11, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}', NULL),
+        (103, '2024-06-06', vision_numeric('5', 18, 4), 'EUR', 'Quarterly', 11, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}', 6)`,
+      `INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, is_recurring) VALUES
+        (7, '2024-06-06', vision_numeric('5', 18, 4), 'EUR', 'Quarterly', 0)`,
+      `INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id,
+         execution_date, created_at) VALUES
+        (7, 103, '2024-06-06', '${SEED_TIME}')`,
+    ],
+    steps: [
+      batches(),
+      batches("?limit=2&offset=1"),
+      batches("?limit=abc&offset=-5"),
+      batches("?limit=500"),
+      batches("?limit=1&offset=999"),
+      batchDelete("abc"),
+      batchDelete("0"),
+      batchDelete("1e3"),
+      batchDelete("2.5"),
+      batchDelete("999"),
+      batchDelete("3"),
+      batchDelete("2"),
+      batchDelete("1"),
+      batchDelete("1"),
+      batchDelete("4"),
+      batchDelete("6"),
+      batches(),
     ],
   },
   categories: {
@@ -3649,6 +3725,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const transactionArea = AREAS.transactions;
   const plannedArea = AREAS.planned;
   const importParsersArea = AREAS.importParsers;
+  const importBatchesArea = AREAS.importBatches;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -3658,7 +3735,8 @@ function mutationAreas(): Record<string, ParityArea> {
     recipientArea === undefined ||
     transactionArea === undefined ||
     plannedArea === undefined ||
-    importParsersArea === undefined
+    importParsersArea === undefined ||
+    importBatchesArea === undefined
   )
     throw new Error("missing base area");
 
@@ -3793,6 +3871,41 @@ function mutationAreas(): Record<string, ParityArea> {
     }
   }
   parserStep.push(parserList());
+
+  const batchRandom = new Random(0x4b7c);
+  const batchSteps: ParityStep[] = [];
+  const batchIds = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "999",
+    "0",
+    "-3",
+    "abc",
+    "1e3",
+    "2.5",
+    "00001",
+    "9007199254740991",
+    "9007199254740992",
+    "0x10",
+    "+5",
+    " 12 ",
+    "",
+  ];
+  for (let i = 0; i < 420; i++) {
+    const roll = batchRandom.next();
+    if (roll < 0.55) {
+      batchSteps.push(batchDelete(batchRandom.pick(batchIds)));
+    } else {
+      batchSteps.push(
+        batches(`?${randomQuery(batchRandom, ["limit", "offset", "status"])}`),
+      );
+    }
+  }
+  batchSteps.push(batches());
 
   const settingRandom = new Random(0x5e77);
   const settingSteps: ParityStep[] = [];
@@ -4117,6 +4230,10 @@ function mutationAreas(): Record<string, ParityArea> {
     "importParsers-mutations": {
       ...importParsersArea,
       steps: asRecorded(parserStep),
+    },
+    "importBatches-mutations": {
+      ...importBatchesArea,
+      steps: asRecorded(batchSteps),
     },
   };
 }
