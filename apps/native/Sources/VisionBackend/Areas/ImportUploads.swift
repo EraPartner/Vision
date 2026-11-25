@@ -255,12 +255,12 @@ enum ImportUploadsArea {
 
     /// `match_source_counts` for the raw SSE frames, where key order is the answer.
     static func matchSourceCountsJSValue(_ counts: MatchSourceCounts) -> JSValue {
-        .object(JSObject([
-            ("pattern", .number(Double(counts.pattern))),
-            ("exact", .number(Double(counts.exact))),
-            ("fuzzy", .number(Double(counts.fuzzy))),
-            ("new", .number(Double(counts.new))),
-        ]))
+        var fields = JSObject()
+        fields["pattern"] = .number(Double(counts.pattern))
+        fields["exact"] = .number(Double(counts.exact))
+        fields["fuzzy"] = .number(Double(counts.fuzzy))
+        fields["new"] = .number(Double(counts.new))
+        return .object(fields)
     }
 
     // MARK: - The simple imports
@@ -323,16 +323,15 @@ enum ImportUploadsArea {
         case "committing": percent = 70 + (frac * 30).rounded()  // lint:allow string-literal-compare the pipeline's phase, as progressToPercent reads it
         default: percent = 100
         }
-        let payload = JSValue.object(JSObject([
-            ("phase", .string(progress.phase)),
-            ("current", .number(Double(progress.current))),
-            ("total", .number(Double(progress.total))),
-            ("imported", .number(Double(progress.imported ?? 0))),
-            ("duplicates", .number(Double(progress.duplicates ?? 0))),
-            ("errors", .number(Double(progress.errors ?? 0))),
-            ("percent", .number(percent)),
-        ]))
-        return (payload, Int(percent))
+        var fields = JSObject()
+        fields["phase"] = .string(progress.phase)
+        fields["current"] = .number(Double(progress.current))
+        fields["total"] = .number(Double(progress.total))
+        fields["imported"] = .number(Double(progress.imported ?? 0))
+        fields["duplicates"] = .number(Double(progress.duplicates ?? 0))
+        fields["errors"] = .number(Double(progress.errors ?? 0))
+        fields["percent"] = .number(percent)
+        return (JSValue.object(fields), Int(percent))
     }
 
     /// `streamImport`: the SSE stream of one synchronous pipeline run. A validation
@@ -361,28 +360,22 @@ enum ImportUploadsArea {
         }
         if result.requiresReview {
             // `skipped` is undefined for the transaction pipeline, so it never serialises.
-            frames.append((
-                "review_required",
-                .object(JSObject([
-                    ("batch_id", .number(Double(result.batchId))),
-                    ("match_source_counts", matchSourceCountsJSValue(result.matchSourceCounts)),
-                    ("percent", .number(Double(percent))),
-                ]))
-            ))
+            var reviewFields = JSObject()
+            reviewFields["batch_id"] = .number(Double(result.batchId))
+            reviewFields["match_source_counts"] = matchSourceCountsJSValue(result.matchSourceCounts)
+            reviewFields["percent"] = .number(Double(percent))
+            frames.append(("review_required", .object(reviewFields)))
         } else {
-            frames.append((
-                "complete",
-                .object(JSObject([
-                    ("total_processed", .number(Double(result.total))),
-                    ("imported", .number(Double(result.imported ?? 0))),
-                    ("duplicates", .number(Double(result.duplicates ?? 0))),
-                    ("errors", .number(Double(result.errors ?? 0))),
-                    ("batch_id", .number(Double(result.batchId))),
-                    ("auto_linked_count", .number(Double(result.autoLinkedCount ?? 0))),
-                    ("status", .string((result.errors ?? 0) > 0 ? "completed_with_errors" : "completed")),
-                    ("percent", .number(100)),
-                ]))
-            ))
+            var completeFields = JSObject()
+            completeFields["total_processed"] = .number(Double(result.total))
+            completeFields["imported"] = .number(Double(result.imported ?? 0))
+            completeFields["duplicates"] = .number(Double(result.duplicates ?? 0))
+            completeFields["errors"] = .number(Double(result.errors ?? 0))
+            completeFields["batch_id"] = .number(Double(result.batchId))
+            completeFields["auto_linked_count"] = .number(Double(result.autoLinkedCount ?? 0))
+            completeFields["status"] = .string((result.errors ?? 0) > 0 ? "completed_with_errors" : "completed")
+            completeFields["percent"] = .number(100)
+            frames.append(("complete", .object(completeFields)))
         }
         return HandlerResult.fileAnswer(
             Data(sseText(frames).utf8), headers: ["Content-Type": "text/event-stream"])
@@ -394,10 +387,10 @@ enum ImportUploadsArea {
         let expected = error.status == 400 && error.code == "VALIDATION_ERROR"  // lint:allow string-literal-compare the typed ValidationError streamImport checks for
         let detail = expected ? error.message : "Import failed"
         let code = expected ? error.code : "INTERNAL_SERVER_ERROR"
-        let payload = JSValue.object(JSObject([
-            ("detail", .string(detail)),
-            ("code", .string(code)),
-        ]))
+        var fields = JSObject()
+        fields["detail"] = .string(detail)
+        fields["code"] = .string(code)
+        let payload = JSValue.object(fields)
         return HandlerResult.fileAnswer(
             Data(sseText([("error", payload)]).utf8),
             headers: ["Content-Type": "text/event-stream"])
@@ -506,20 +499,20 @@ enum ImportUploadsArea {
         let configJSON: String?
         if let customConfig {
             let config = customConfigJSON(customConfig)
-            configJSON = JSValue.object(JSObject([
-                ("bank_name", .string(config.bankName)),
-                ("date_format", .string(config.dateFormat)),
-                ("encoding", .string(config.encoding)),
-                ("number_format", .string(config.numberFormat)),
-                ("separator", .string(config.separator)),
-                ("skip_rows", .number(Double(config.skipRows))),
-                ("column_mapping", .object(JSObject([
-                    ("date", .string(config.dateColumn)),
-                    ("recipient", .string(config.recipientColumn)),
-                    ("amount", .string(config.amountColumn)),
-                    ("memo", .string(config.memoColumn)),
-                ]))),
-            ])).jsonText
+            var custom = JSObject()
+            custom["bank_name"] = .string(config.bankName)
+            custom["date_format"] = .string(config.dateFormat)
+            custom["encoding"] = .string(config.encoding)
+            custom["number_format"] = .string(config.numberFormat)
+            custom["separator"] = .string(config.separator)
+            custom["skip_rows"] = .number(Double(config.skipRows))
+            var mapping = JSObject()
+            mapping["date"] = .string(config.dateColumn)
+            mapping["recipient"] = .string(config.recipientColumn)
+            mapping["amount"] = .string(config.amountColumn)
+            mapping["memo"] = .string(config.memoColumn)
+            custom["column_mapping"] = .object(mapping)
+            configJSON = JSValue.object(custom).jsonText
         } else {
             configJSON = nil
         }
@@ -778,36 +771,33 @@ enum ImportUploadsArea {
         var seen = 0
         for start in stride(from: 0, to: total, by: 500) {
             let chunk = pending[start..<min(start + 500, total)]
-            var values: [(id: Int64, fields: [(String, JSValue)])] = []
+            var updateValues: [JSValue] = []
             for row in chunk {
                 guard let identity = identityById[row.id] else {
                     throw PipelineFailure(text: "every pending row is one of batchRows, which keyed identityById")
                 }
+                var fields = JSObject()
                 if let issue = validateRow(row) {
                     errors += 1
-                    values.append((row.id, [
-                        ("status", .string("error")),
-                        ("fingerprint", .null),
-                        ("source_record_hash", identity.sourceRecordHash.map(JSValue.string) ?? .null),
-                        ("fingerprint_version", .null),
-                        ("occurrence", .null),
-                        ("error_message", .string(issue)),
-                    ]))
+                    fields["status"] = .string("error")
+                    fields["fingerprint"] = .null
+                    fields["source_record_hash"] = identity.sourceRecordHash.map(JSValue.string) ?? .null
+                    fields["fingerprint_version"] = .null
+                    fields["occurrence"] = .null
+                    fields["error_message"] = .string(issue)
                 } else {
-                    values.append((row.id, [
-                        ("status", .string("validated")),
-                        ("fingerprint", .string(identity.fingerprint)),
-                        ("source_record_hash", identity.sourceRecordHash.map(JSValue.string) ?? .null),
-                        ("fingerprint_version", .number(Double(identity.version))),
-                        ("occurrence", .number(Double(identity.occurrence))),
-                        ("error_message", .null),
-                    ]))
+                    fields["status"] = .string("validated")
+                    fields["fingerprint"] = .string(identity.fingerprint)
+                    fields["source_record_hash"] = identity.sourceRecordHash.map(JSValue.string) ?? .null
+                    fields["fingerprint_version"] = .number(Double(identity.version))
+                    fields["occurrence"] = .number(Double(identity.occurrence))
+                    fields["error_message"] = .null
                 }
+                fields["id"] = .number(Double(row.id))
+                updateValues.append(.object(fields))
             }
             // One statement per chunk: the rows travel as one JSON array.
-            let array = JSValue.array(values.map { value in
-                .object(JSObject([("id", .number(Double(value.id)))] + value.fields))
-            }).jsonText
+            let array = JSValue.array(updateValues).jsonText
             _ = try session.rows(
                 """
                 UPDATE import_staging_rows
@@ -955,30 +945,27 @@ enum ImportUploadsArea {
         var seen = 0
         for start in stride(from: 0, to: staged.count, by: 500) {
             let chunk = staged[start..<min(start + 500, staged.count)]
-            var values: [JSValue] = []
+            var updateValues: [JSValue] = []
             for row in chunk {
                 let raw = try row.optionalText("recipient_raw")
+                var fields = JSObject()
+                fields["id"] = .number(Double(try row.int64("id")))
                 if let raw, let info = resolved[raw] {
                     matched += 1
-                    values.append(.object(JSObject([
-                        ("id", .number(Double(try row.int64("id")))),
-                        ("recipient_id", .number(Double(info.recipientId))),
-                        ("match_source", .string(info.matchSource)),
-                        ("match_similarity", info.matchSimilarity.map { JSValue.number(SQLText.float4Value($0)) } ?? .null),
-                        ("matched_pattern_id", info.matchedPatternId.map { JSValue.number(Double($0)) } ?? .null),
-                    ])))
+                    fields["recipient_id"] = .number(Double(info.recipientId))
+                    fields["match_source"] = .string(info.matchSource)
+                    fields["match_similarity"] = info.matchSimilarity.map { JSValue.number(SQLText.float4Value($0)) } ?? .null
+                    fields["matched_pattern_id"] = info.matchedPatternId.map { JSValue.number(Double($0)) } ?? .null
                 } else {
                     unresolved += 1
-                    values.append(.object(JSObject([
-                        ("id", .number(Double(try row.int64("id")))),
-                        ("recipient_id", .null),
-                        ("match_source", .null),
-                        ("match_similarity", .null),
-                        ("matched_pattern_id", .null),
-                    ])))
+                    fields["recipient_id"] = .null
+                    fields["match_source"] = .null
+                    fields["match_similarity"] = .null
+                    fields["matched_pattern_id"] = .null
                 }
+                updateValues.append(.object(fields))
             }
-            let array = JSValue.array(values).jsonText
+            let array = JSValue.array(updateValues).jsonText
             _ = try session.rows(
                 """
                 UPDATE import_staging_rows
