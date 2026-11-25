@@ -42,6 +42,8 @@ Therefore the merge loop, after each squash-merge lands on `main`:
 4. While CI runs, continue the next phase elsewhere (corpus recording, the next port) —
    do not wait idle — and re-check CI before committing further stack changes.
 
+A green-but-never-armed PR is the other way this bites: auto-merge can only be queued
+while a required check is still pending, so arm it the moment CI starts, not after.
 Verification of the loop: #459 merged itself (squash `f9f19d27`), #460 was retargeted to
 `main` and only started CI once its branch was rebuilt on the new `main` and pushed
 (`synchronize`), at which point its checks turned pending.
