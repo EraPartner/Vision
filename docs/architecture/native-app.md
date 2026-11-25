@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-24
+date: 2026-11-25
 updated: 2026-11-15
 tags:
   [
@@ -662,7 +662,14 @@ one write transaction and answers a replay of the same pair with `Idempotent-Rep
 branch and mirrors the raw `INSERT` with `ts_date`/`vision_numeric` bindings, and update
 (`updatePlannedTransaction`) resolves `recipient_name`/`category_name`, applies the loan patch
 defaults and rewrites the installment rows in the same write transaction as the field update, with
-the write plugin's canonical decimal/boolean/date conversions in the `SET`. The recurrence grammar and
+the write plugin's canonical decimal/boolean/date conversions in the `SET`. The saved import
+parsers follow (P16a, `Areas/ImportParsers.swift`): the shared `registerParserRoutes` CRUD of
+`routes/parserConfigRoutes.ts` as `routes/importRoutes.ts` registers it for the transaction kind —
+`getCustomParsers` (kind-filtered, name-ordered), `createCustomParser`, `updateCustomParser` and
+`deleteCustomParser` over `custom_parser_configs`, with `normalizeParserName`, the strip-mode
+`parserConfigSchema` (its normalised defaults are stored through `vision_jsonb`, so the canonical
+key order comes from SQLite itself) and the `(name, kind)` unique conflict mapped from the 23505
+to the route's wording. The portfolio kind shares the table and lands with P18. The recurrence grammar and
 its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
 area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
 suggestions and the execute default date replay the same on every day. A refresh

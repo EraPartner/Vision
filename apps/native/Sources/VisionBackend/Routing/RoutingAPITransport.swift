@@ -25,6 +25,7 @@ public enum PortedOperations {
         "getPlannedTransactions", "getPlannedTotals", "getPlannedMatchSuggestions",
         "createPlannedTransaction", "updatePlannedTransaction",
         "executePlannedTransaction", "deletePlannedTransaction",
+        "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser",
     ]
 }
 
@@ -148,6 +149,7 @@ public struct InProcessBackend: Sendable {
         TransactionBulkArea.register(&backend, database: database)
         AttachmentsArea.register(&backend, database: database)
         TransactionExportArea.register(&backend, database: database)
+        ImportParsersArea.register(&backend, database: database)
         return backend
     }
 
