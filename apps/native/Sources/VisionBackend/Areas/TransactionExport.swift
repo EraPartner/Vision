@@ -65,12 +65,12 @@ enum TransactionExportArea {
         let (filters, query) = TransactionsArea.filterFields(request, &issues)
         var selection = filters
         let accountIds = TransactionsArea.idList(TransactionsArea.raw(request, "account_ids"), "account_ids", &issues)
-        if let accountIds { selection.accountIds = Array(accountIds.prefix(TransactionsWhere.maxListSize)) }
+        if let accountIds { selection.accountIds = Array(accountIds.prefix(TransactionWhere.maxListSize)) }
         if let raw = TransactionsArea.raw(request, "bank_accounts"), raw != .null {
             let list = AccountsArea.looseText(raw).split(separator: ",")
                 .map { JavaScriptWhitespace.trim(String($0)) }
                 .filter { !$0.isEmpty }
-            selection.bankAccounts = list.isEmpty ? nil : Array(list.prefix(TransactionsWhere.maxListSize))
+            selection.bankAccounts = list.isEmpty ? nil : Array(list.prefix(TransactionWhere.maxListSize))
         }
         guard issues.isEmpty else { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
         return (selection, query.includeBalance)
@@ -118,18 +118,18 @@ enum TransactionExportArea {
         /// `buildCsvRow`.
         func csvRow(runningBalance: String?) -> String {
             var cols = [
-                Self.escape(date),
-                Self.escape(bankAccount),
-                Self.escape(recipientName),
-                Self.escape(memo),
-                Self.escape(amount),
-                Self.escape(currency),
-                Self.escape(balance),
-                Self.escape(categoryName),
-                Self.escape(comment),
-                Self.escape(tagSlugs.joined(separator: ";")),
+                TransactionExportArea.escape(date),
+                TransactionExportArea.escape(bankAccount),
+                TransactionExportArea.escape(recipientName),
+                TransactionExportArea.escape(memo),
+                TransactionExportArea.escape(amount),
+                TransactionExportArea.escape(currency),
+                TransactionExportArea.escape(balance),
+                TransactionExportArea.escape(categoryName),
+                TransactionExportArea.escape(comment),
+                TransactionExportArea.escape(tagSlugs.joined(separator: ";")),
             ]
-            if let runningBalance { cols.append(Self.escape(runningBalance)) }
+            if let runningBalance { cols.append(TransactionExportArea.escape(runningBalance)) }
             return cols.joined(separator: ",")
         }
 
@@ -164,7 +164,7 @@ enum TransactionExportArea {
         }
         var body = ""
         var rowCount = 0
-        var runningBalances: [Int?: ExactDecimal] = [:]
+        var runningBalances: [Int?: DecimalJS] = [:]
         var cursorDate: String?
         // lint:allow raw-id the keyset cursor rows are identified by their plain row id
         var cursorId: Int?
@@ -199,8 +199,8 @@ enum TransactionExportArea {
                     var running: String?
                     if includeBalance {
                         let key = row.accountId
-                        let amount = try ExactDecimal.parse(row.amount)
-                        let next = (runningBalances[key] ?? ExactDecimal.zero).adding(amount)
+                        let amount = try DecimalJS.from(row.amount)
+                        let next = (runningBalances[key] ?? DecimalJS.zero).plus(amount)
                         runningBalances[key] = next
                         running = next.description
                     }
@@ -266,7 +266,7 @@ enum TransactionExportArea {
         }
         var body2 = ""
         var rowCount = 0
-        var runningBalances: [Int?: ExactDecimal] = [:]
+        var runningBalances: [Int?: DecimalJS] = [:]
         let csvHeader = includeBalance
             ? "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance"
             : "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags"
@@ -293,8 +293,8 @@ enum TransactionExportArea {
                     var running: String?
                     if includeBalance {
                         let key = row.accountId
-                        let amount = try ExactDecimal.parse(row.amount)
-                        let next = (runningBalances[key] ?? ExactDecimal.zero).adding(amount)
+                        let amount = try DecimalJS.from(row.amount)
+                        let next = (runningBalances[key] ?? DecimalJS.zero).plus(amount)
                         runningBalances[key] = next
                         running = next.description
                     }
