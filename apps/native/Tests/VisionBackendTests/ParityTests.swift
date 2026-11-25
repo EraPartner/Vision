@@ -175,7 +175,7 @@ import VisionNativeCore
     static let uuidToken = "{{uuid}}"
 
     static func isUuidForm(_ text: String) -> Bool {
-        text.count == 36 && text.split(separator: "-", omittingEmptySubsequences: false).map { $0.count } == [8, 4, 4, 4, 12]
+        text.count == 36 && text.split(separator: Character("-"), omittingEmptySubsequences: false).map { $0.count } == [8, 4, 4, 4, 12]
     }
 
     /// A `{{uuid}}` the run recorded: the answer holds a random UUID (as a written
