@@ -1,0 +1,642 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n         closed_at, created_at, updated_at, import_identity) VALUES\n        (1, 'Main', 'Main account', 'KBC', 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-000000000021')",
+    "INSERT INTO recipients (id, name, normalized_name, is_active, notes, created_at, updated_at) VALUES\n        (10, 'ImportedOne', 'importedone', 1, 'auto-created during the import',\n         '2024-06-01T10:00:01.000000Z', '2024-06-01T10:00:01.000000Z'),\n        (11, 'KeptOldRef', 'keptoldref', 1, NULL, '2024-05-01T09:00:00.000000Z', '2024-05-01T09:00:00.000000Z')",
+    "INSERT INTO import_batches (id, adapter_name, source_filename, source_size_bytes, status, rows_total,\n         rows_imported, rows_duplicate, rows_error, error_summary, started_at, completed_at) VALUES\n        (1, 'KBC adapter', 'kbc.csv', 312, 'complete', 3, 2, 1, 0, NULL,\n         '2024-06-01T10:00:00.000000Z', '2024-06-01T10:00:05.000000Z'),\n        (2, 'BeKey', 'bekey.xlsx', NULL, 'aborted', 2, 1, 0, 1, 'boom',\n         '2024-06-02T10:00:00.000000Z', '2024-06-02T10:00:02.000000Z'),\n        (3, 'ING', 'ing.csv', 10, 'staging', 10, 0, 0, 0, NULL,\n         '2024-06-03T09:00:00.000000Z', NULL),\n        (4, 'KBC adapter', 'kbc2.csv', 8, 'awaiting_review', 8, 6, 2, 0, NULL,\n         '2024-06-04T09:00:00.000000Z', NULL),\n        (5, 'Belfius', NULL, NULL, 'failed', 4, 0, 0, 4, 'could not parse the header',\n         '2024-06-05T09:00:00.000000Z', '2024-06-05T09:00:01.000000Z'),\n        (6, 'PlannedLinked', 'linked.csv', NULL, 'complete', 1, 1, 0, 0, NULL,\n         '2024-06-06T09:00:00.000000Z', '2024-06-06T09:00:03.000000Z')",
+    "INSERT INTO import_staging_rows (id, batch_id, row_index, status, tx_date, bank_account, recipient_raw,\n         memo, amount, currency, resolved_recipient_id, created_at, updated_at, match_source) VALUES\n        (1, 1, 1, 'matched', '2024-06-01', 'Main', 'ImportedOne', 'Coffee', vision_numeric('4.5', 20, 4), 'EUR',\n         10, '2024-06-01T10:00:01.000000Z', '2024-06-01T10:00:01.000000Z', 'new')",
+    "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,\n         created_at, updated_at, import_batch_id) VALUES\n        (100, '2024-06-01', vision_numeric('4.5', 18, 4), 'EUR', 'Coffee', 10, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', 1),\n        (101, '2024-06-01', vision_numeric('-10', 18, 4), 'EUR', 'Bread', 11, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', 1),\n        (102, '2024-05-20', vision_numeric('-3', 18, 4), 'EUR', 'Old bread', 11, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', NULL),\n        (103, '2024-06-06', vision_numeric('5', 18, 4), 'EUR', 'Quarterly', 11, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', 6)",
+    "INSERT INTO planned_transactions (id, planned_date, amount, currency, memo, is_recurring) VALUES\n        (7, '2024-06-06', vision_numeric('5', 18, 4), 'EUR', 'Quarterly', 0)",
+    "INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id,\n         execution_date, created_at) VALUES\n        (7, 103, '2024-06-06', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 1,
+              "id": "6",
+              "adapter_name": "PlannedLinked",
+              "source_filename": "linked.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 1,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-06T09:00:00.000Z",
+              "completed_at": "2024-06-06T09:00:03.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "5",
+              "adapter_name": "Belfius",
+              "source_filename": null,
+              "source_size_bytes": null,
+              "status": "failed",
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2024-06-05T09:00:00.000Z",
+              "completed_at": "2024-06-05T09:00:01.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "4",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc2.csv",
+              "source_size_bytes": "8",
+              "status": "awaiting_review",
+              "rows_total": 8,
+              "rows_imported": 6,
+              "rows_duplicate": 2,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-04T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "3",
+              "adapter_name": "ING",
+              "source_filename": "ing.csv",
+              "source_size_bytes": "10",
+              "status": "staging",
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-03T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "2",
+              "adapter_name": "BeKey",
+              "source_filename": "bekey.xlsx",
+              "source_size_bytes": null,
+              "status": "aborted",
+              "rows_total": 2,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": "boom",
+              "started_at": "2024-06-02T10:00:00.000Z",
+              "completed_at": "2024-06-02T10:00:02.000Z"
+            },
+            {
+              "transactions_remaining": 2,
+              "id": "1",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc.csv",
+              "source_size_bytes": "312",
+              "status": "complete",
+              "rows_total": 3,
+              "rows_imported": 2,
+              "rows_duplicate": 1,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-01T10:00:00.000Z",
+              "completed_at": "2024-06-01T10:00:05.000Z"
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches?limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 0,
+              "id": "5",
+              "adapter_name": "Belfius",
+              "source_filename": null,
+              "source_size_bytes": null,
+              "status": "failed",
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2024-06-05T09:00:00.000Z",
+              "completed_at": "2024-06-05T09:00:01.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "4",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc2.csv",
+              "source_size_bytes": "8",
+              "status": "awaiting_review",
+              "rows_total": 8,
+              "rows_imported": 6,
+              "rows_duplicate": 2,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-04T09:00:00.000Z",
+              "completed_at": null
+            }
+          ],
+          "total": 6,
+          "limit": 2,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches?limit=abc&offset=-5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 1,
+              "id": "6",
+              "adapter_name": "PlannedLinked",
+              "source_filename": "linked.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 1,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-06T09:00:00.000Z",
+              "completed_at": "2024-06-06T09:00:03.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "5",
+              "adapter_name": "Belfius",
+              "source_filename": null,
+              "source_size_bytes": null,
+              "status": "failed",
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2024-06-05T09:00:00.000Z",
+              "completed_at": "2024-06-05T09:00:01.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "4",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc2.csv",
+              "source_size_bytes": "8",
+              "status": "awaiting_review",
+              "rows_total": 8,
+              "rows_imported": 6,
+              "rows_duplicate": 2,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-04T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "3",
+              "adapter_name": "ING",
+              "source_filename": "ing.csv",
+              "source_size_bytes": "10",
+              "status": "staging",
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-03T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "2",
+              "adapter_name": "BeKey",
+              "source_filename": "bekey.xlsx",
+              "source_size_bytes": null,
+              "status": "aborted",
+              "rows_total": 2,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": "boom",
+              "started_at": "2024-06-02T10:00:00.000Z",
+              "completed_at": "2024-06-02T10:00:02.000Z"
+            },
+            {
+              "transactions_remaining": 2,
+              "id": "1",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc.csv",
+              "source_size_bytes": "312",
+              "status": "complete",
+              "rows_total": 3,
+              "rows_imported": 2,
+              "rows_duplicate": 1,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-01T10:00:00.000Z",
+              "completed_at": "2024-06-01T10:00:05.000Z"
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches?limit=500",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 1,
+              "id": "6",
+              "adapter_name": "PlannedLinked",
+              "source_filename": "linked.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 1,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-06T09:00:00.000Z",
+              "completed_at": "2024-06-06T09:00:03.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "5",
+              "adapter_name": "Belfius",
+              "source_filename": null,
+              "source_size_bytes": null,
+              "status": "failed",
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2024-06-05T09:00:00.000Z",
+              "completed_at": "2024-06-05T09:00:01.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "4",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc2.csv",
+              "source_size_bytes": "8",
+              "status": "awaiting_review",
+              "rows_total": 8,
+              "rows_imported": 6,
+              "rows_duplicate": 2,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-04T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "3",
+              "adapter_name": "ING",
+              "source_filename": "ing.csv",
+              "source_size_bytes": "10",
+              "status": "staging",
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-03T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "2",
+              "adapter_name": "BeKey",
+              "source_filename": "bekey.xlsx",
+              "source_size_bytes": null,
+              "status": "aborted",
+              "rows_total": 2,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": "boom",
+              "started_at": "2024-06-02T10:00:00.000Z",
+              "completed_at": "2024-06-02T10:00:02.000Z"
+            },
+            {
+              "transactions_remaining": 2,
+              "id": "1",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc.csv",
+              "source_size_bytes": "312",
+              "status": "complete",
+              "rows_total": 3,
+              "rows_imported": 2,
+              "rows_duplicate": 1,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-01T10:00:00.000Z",
+              "completed_at": "2024-06-01T10:00:05.000Z"
+            }
+          ],
+          "total": 6,
+          "limit": 200,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches?limit=1&offset=999",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 6,
+          "limit": 1,
+          "offset": 999
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/1e3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/2.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Import batch 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Cannot rollback a batch that is still in progress"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/2",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Batch is already aborted"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "deleted": 2,
+          "recipientsRemoved": 1
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/1",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Batch is already aborted"
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/4",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "deleted": 0,
+          "recipientsRemoved": 0
+        }
+      }
+    },
+    {
+      "operationId": "deleteImportBatch",
+      "method": "DELETE",
+      "path": "/api/import/batches/6",
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A selected transaction is linked to a planned payment. Remove that planned payment explicitly before deleting the transaction"
+        }
+      }
+    },
+    {
+      "operationId": "getImportBatches",
+      "method": "GET",
+      "path": "/api/import/batches",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "transactions_remaining": 1,
+              "id": "6",
+              "adapter_name": "PlannedLinked",
+              "source_filename": "linked.csv",
+              "source_size_bytes": null,
+              "status": "complete",
+              "rows_total": 1,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-06T09:00:00.000Z",
+              "completed_at": "2024-06-06T09:00:03.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "5",
+              "adapter_name": "Belfius",
+              "source_filename": null,
+              "source_size_bytes": null,
+              "status": "failed",
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2024-06-05T09:00:00.000Z",
+              "completed_at": "2024-06-05T09:00:01.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "4",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc2.csv",
+              "source_size_bytes": "8",
+              "status": "aborted",
+              "rows_total": 8,
+              "rows_imported": 0,
+              "rows_duplicate": 2,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-04T09:00:00.000Z",
+              "completed_at": "2026-11-25T16:25:38.835Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "3",
+              "adapter_name": "ING",
+              "source_filename": "ing.csv",
+              "source_size_bytes": "10",
+              "status": "staging",
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-03T09:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "2",
+              "adapter_name": "BeKey",
+              "source_filename": "bekey.xlsx",
+              "source_size_bytes": null,
+              "status": "aborted",
+              "rows_total": 2,
+              "rows_imported": 1,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": "boom",
+              "started_at": "2024-06-02T10:00:00.000Z",
+              "completed_at": "2024-06-02T10:00:02.000Z"
+            },
+            {
+              "transactions_remaining": 0,
+              "id": "1",
+              "adapter_name": "KBC adapter",
+              "source_filename": "kbc.csv",
+              "source_size_bytes": "312",
+              "status": "aborted",
+              "rows_total": 3,
+              "rows_imported": 0,
+              "rows_duplicate": 1,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2024-06-01T10:00:00.000Z",
+              "completed_at": "2026-11-25T16:25:38.795Z"
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    }
+  ]
+}

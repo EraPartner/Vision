@@ -26,6 +26,7 @@ public enum PortedOperations {
         "createPlannedTransaction", "updatePlannedTransaction",
         "executePlannedTransaction", "deletePlannedTransaction",
         "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser",
+        "getImportBatches", "deleteImportBatch",
     ]
 }
 
@@ -150,6 +151,7 @@ public struct InProcessBackend: Sendable {
         AttachmentsArea.register(&backend, database: database)
         TransactionExportArea.register(&backend, database: database)
         ImportParsersArea.register(&backend, database: database)
+        ImportBatchesArea.register(&backend, database: database)
         return backend
     }
 

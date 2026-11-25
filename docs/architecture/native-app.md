@@ -669,7 +669,14 @@ parsers follow (P16a, `Areas/ImportParsers.swift`): the shared `registerParserRo
 `deleteCustomParser` over `custom_parser_configs`, with `normalizeParserName`, the strip-mode
 `parserConfigSchema` (its normalised defaults are stored through `vision_jsonb`, so the canonical
 key order comes from SQLite itself) and the `(name, kind)` unique conflict mapped from the 23505
-to the route's wording. The portfolio kind shares the table and lands with P18. The recurrence grammar and
+to the route's wording. The portfolio kind shares the table and lands with P18. The batch history
+follows (P16b, `Areas/ImportBatches.swift`): `getImportBatches` — the LEFT JOIN over
+`import_batches`/`transactions` with its always-on pagination (default 50, cap 200) and the
+BIGINT ids travelling as text — and `deleteImportBatch`, the rollback delete in one write
+transaction with the advisory and in-transaction status reads, the account-lifecycle lock and the
+planned-execution guard reused from `TransactionBulkArea`, and the orphaned auto-created
+recipients cleanup (candidates from the batch's staging rows born during the import window). The
+review operations (preview, overrides, commit) and the uploads follow as their own slices. The recurrence grammar and
 its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
 area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
 suggestions and the execute default date replay the same on every day. A refresh
