@@ -683,8 +683,17 @@ each group's identity from its first row, `formatCategoryLabel`'s `": "` join be
 path-name legacy-compatibility CASE, and the match-source totals — plus `overrideImportRow` and
 `overrideImportRowCategory` (`parseOverrideId`-guarded optional FK ids, `categoryExists`, the
 `lockBatchUnderReview` `awaiting_review` 409 inside the write transaction, the matched-status
-filtered UPDATE and its `Row … not found … or not in matched status` answer). The commit and the
-uploads follow as their own slices. The recurrence grammar and
+filtered UPDATE and its `Row … not found … or not in matched status` answer). The commit follows
+(P16d, `Areas/ImportCommit.swift`): the reviewability gate, the `committing` claim with its 409,
+the unresolved-recipient rows decided into `error` up front, the chunked (1000 rows) dedup ledger —
+the bulk identity probe and INSERT of `commitFingerprintRows` when every row carries the versioned
+fingerprint identity, else the per-row fallback (`findImportFingerprint`, the legacy field-count
+probe, `insertImportedRow` with its own `ON CONFLICT DO NOTHING`), each staging row's
+committed/duplicate/error flip — the ADR-088 account resolve-or-create (`ON CONFLICT
+lower(btrim(name))`) with the reopen conflict, the per-chunk counter checkpoints, the post-commit
+`complete` + `completed_at`, and `autoLinkTransactions`' mutually-unambiguous planned-payment
+clearing through the execute port's `executeRow` with the expected occurrence. The uploads follow as
+their own slice. The recurrence grammar and
 its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
 area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
 suggestions and the execute default date replay the same on every day. A refresh
