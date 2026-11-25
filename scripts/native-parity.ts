@@ -60,7 +60,7 @@ interface ParityStep {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** Path and query, as the client sends them. */
   path: string;
-  /** JSON body; absent for none. */
+  /** JSON body; absent for none. Never combined with `multipart`. */
   body?: unknown;
   /**
    * A multipart/form-data body instead of a JSON one: the hand-written upload routes'
@@ -520,6 +520,47 @@ const batchCommit = (id: string): ParityStep => ({
   method: "POST",
   path: `/api/import/batches/${id}/commit`,
 });
+const csvUploadStep = (
+  path: string,
+  {
+    filename,
+    contentType,
+    content,
+    fields,
+  }: {
+    filename: string;
+    contentType?: string;
+    content: string;
+    fields?: Record<string, string>;
+  },
+): ParityStep => ({
+  operationId: "importCsv",
+  method: "POST",
+  path,
+  multipart: {
+    ...(fields !== undefined ? { fields } : {}),
+    files:
+      filename === ""
+        ? []
+        : [
+            {
+              name: "file",
+              filename,
+              contentType: contentType ?? "text/csv",
+              base64: Buffer.from(content).toString("base64"),
+            },
+          ],
+  },
+});
+const kbcLine = (
+  date: string,
+  amount: string,
+  balance: string,
+  credit: string,
+  debit: string,
+  counterparty: string,
+): string =>
+  `BE31001122334455;KBCAUTOTEST;BE;EUR;STMT01;${date};OPN;${date};${amount};${balance};${credit};${debit};BE99123456789012;BICBEB22XXX;${counterparty};Importerslaan 1;+++123/4567/89012;;;`;
 const batchOverrideRecipient = (
   id: string,
   rowId: string,
@@ -1764,6 +1805,210 @@ export const AREAS: Record<string, ParityArea> = {
       batchOverrideCategory("20", "abc", {}),
       batchOverrideCategory("20", "2", { category_id: "abc" }),
       batchPreview("20"),
+    ],
+  },
+  importUploads: {
+    router: { module: "importRoutes.ts", mountPath: "/api/import" },
+    seed: [
+      `INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES
+        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES
+        (10, 'DupCoffee', 'dupcoffee', 3, 1, '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      csvUploadStep("/api/import/csv", {
+        filename: "",
+        content: "",
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "x.txt",
+        contentType: "text/plain",
+        content: "a;b\nc;d",
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "kbc.csv",
+        content: kbcLine(
+          "01/06/2024",
+          "-12,34",
+          "100,00",
+          "",
+          "12,34",
+          "DupCoffee",
+        ),
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "kbc-new.csv",
+        content: kbcLine(
+          "02/06/2024",
+          "-5,00",
+          "95,00",
+          "",
+          "5,00",
+          "FreshNewPlace",
+        ),
+        fields: { bank_name: "kbc" },
+      }),
+      csvUploadStep("/api/import/csv", {
+        filename: "kbc-nobank.csv",
+        content: kbcLine(
+          "03/06/2024",
+          "-6,00",
+          "89,00",
+          "",
+          "6,00",
+          "FreshNoBankName",
+        ),
+      }),
+      csvUploadStep("/api/import/csv/custom", {
+        filename: "custom.csv",
+        content:
+          "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
+        fields: {
+          bank_name: "MyBank",
+          date_format: "%Y-%m-%d",
+          date_column: "Date",
+          recipient_column: "Name",
+          amount_column: "Amount",
+          memo_column: "Memo",
+        },
+      }),
+      {
+        operationId: "importCsvStream",
+        method: "POST",
+        path: "/api/import/csv/stream",
+        multipart: {
+          fields: { bank_name: "kbc" },
+          files: [
+            {
+              name: "file",
+              filename: "kbc-stream.csv",
+              contentType: "text/csv",
+              base64: Buffer.from(
+                kbcLine(
+                  "04/06/2024",
+                  "-7,00",
+                  "82,00",
+                  "",
+                  "7,00",
+                  "FreshStream",
+                ),
+              ).toString("base64"),
+            },
+          ],
+        },
+      },
+      csvUploadStep("/api/import/recipients", {
+        filename: "recipients.csv",
+        content:
+          "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row",
+      }),
+      csvUploadStep("/api/import/categories", {
+        filename: "categories.csv",
+        content: "category,description\nIMPORT:FIRST,first test description\n",
+      }),
+      csvUploadStep("/api/import/recipients", {
+        filename: "recipients-sep.csv",
+        content: "name;category\nSemicolon Rcpt;IMPORT:FIRST\n",
+        fields: { separator: ";" },
+      }),
+    ],
+  },
+  investments: {
+    router: { module: "investments.ts", mountPath: "/api/investments" },
+    seed: [
+      `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'ACME Corp', 'ACME', 'stock', 'EUR', vision_numeric('150.50', 18, 6), NULL,
+         1, 'manual', 'growth stock', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,
+         1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('42', 18, 6), NULL,
+         0, 'manual', 'closed', '${SEED_TIME}', '${SEED_TIME}')`,
+      `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, created_at, updated_at) VALUES
+        (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'initial buy', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,
+         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 2, 'rent_income', '2024-02-01', vision_numeric('950.40', 18, 4), NULL, NULL,
+         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'february rent',
+         '${SEED_TIME}', '${SEED_TIME}')`,
+    ],
+    steps: [
+      {
+        operationId: "getInvestments",
+        method: "GET",
+        path: "/api/investments",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/1",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/abc",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/999",
+      },
+      {
+        operationId: "getInvestment",
+        method: "GET",
+        path: "/api/investments/3",
+      },
+      {
+        operationId: "getInvestmentSummary",
+        method: "GET",
+        path: "/api/investments/1/summary",
+      },
+      {
+        operationId: "getInvestmentSummary",
+        method: "GET",
+        path: "/api/investments/999/summary",
+      },
+      {
+        operationId: "getInvestmentTransactions",
+        method: "GET",
+        path: "/api/investments/1/transactions",
+      },
+      {
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: "/api/investments/transactions",
+      },
+      {
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: "/api/investments/transactions?investment_ids=1,2&investment_ids=abc",
+      },
+      {
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: "/api/investments/transactions?investment_ids=1,2",
+      },
+      {
+        operationId: "getPortfolioExposure",
+        method: "GET",
+        path: "/api/investments/exposure",
+      },
+      {
+        operationId: "getPortfolioExposureClassifications",
+        method: "GET",
+        path: "/api/investments/exposure/classifications",
+      },
+      {
+        operationId: "listInvestmentProviders",
+        method: "GET",
+        path: "/api/investments/providers",
+      },
     ],
   },
   importCommit: {

@@ -1,0 +1,281 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO categories (id, general, detail, path_name, name, legacy_compatible, is_active, created_at, updated_at) VALUES\n        (3, 'FOOD', 'GROCERIES', 'FOOD:GROCERIES', 'Food: Groceries', 0, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipients (id, name, normalized_name, default_category_id, is_active, created_at, updated_at) VALUES\n        (10, 'DupCoffee', 'dupcoffee', 3, 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "fields": {
+          "bank_name": "kbc"
+        },
+        "files": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "No file uploaded. Send a CSV file as multipart form-data with field name \"file\"."
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "fields": {
+          "bank_name": "kbc"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "x.txt",
+            "contentType": "text/plain",
+            "base64": "YTtiCmM7ZA=="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "File must be a CSV"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "fields": {
+          "bank_name": "kbc"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzAxLzA2LzIwMjQ7T1BOOzAxLzA2LzIwMjQ7LTEyLDM0OzEwMCwwMDs7MTIsMzQ7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtEdXBDb2ZmZWU7SW1wb3J0ZXJzbGFhbiAxOysrKzEyMy80NTY3Lzg5MDEyOzs7"
+          }
+        ]
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 1,
+          "requires_review": true,
+          "match_source_counts": {
+            "pattern": 0,
+            "exact": 0,
+            "fuzzy": 1,
+            "new": 0
+          }
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "fields": {
+          "bank_name": "kbc"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc-new.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzAyLzA2LzIwMjQ7T1BOOzAyLzA2LzIwMjQ7LTUsMDA7OTUsMDA7OzUsMDA7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtGcmVzaE5ld1BsYWNlO0ltcG9ydGVyc2xhYW4gMTsrKysxMjMvNDU2Ny84OTAxMjs7Ow=="
+          }
+        ]
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 2,
+          "requires_review": true,
+          "match_source_counts": {
+            "pattern": 0,
+            "exact": 0,
+            "fuzzy": 0,
+            "new": 1
+          }
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv",
+      "multipart": {
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc-nobank.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzAzLzA2LzIwMjQ7T1BOOzAzLzA2LzIwMjQ7LTYsMDA7ODksMDA7OzYsMDA7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtGcmVzaE5vQmFua05hbWU7SW1wb3J0ZXJzbGFhbiAxOysrKzEyMy80NTY3Lzg5MDEyOzs7"
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing required multipart field: bank_name"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "bank_name": "MyBank",
+          "date_format": "%Y-%m-%d",
+          "date_column": "Date",
+          "recipient_column": "Name",
+          "amount_column": "Amount",
+          "memo_column": "Memo"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "custom.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxOYW1lLEFtb3VudCxNZW1vCjIwMjQtMDctMDEsRnJlc2hDdXN0b20sMTAuNTAsQ3VzdG9tIG1lbW8K"
+          }
+        ]
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 3,
+          "requires_review": true,
+          "match_source_counts": {
+            "pattern": 0,
+            "exact": 0,
+            "fuzzy": 0,
+            "new": 1
+          }
+        }
+      }
+    },
+    {
+      "operationId": "importCsvStream",
+      "method": "POST",
+      "path": "/api/import/csv/stream",
+      "multipart": {
+        "fields": {
+          "bank_name": "kbc"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "kbc-stream.csv",
+            "contentType": "text/csv",
+            "base64": "QkUzMTAwMTEyMjMzNDQ1NTtLQkNBVVRPVEVTVDtCRTtFVVI7U1RNVDAxOzA0LzA2LzIwMjQ7T1BOOzA0LzA2LzIwMjQ7LTcsMDA7ODIsMDA7OzcsMDA7QkU5OTEyMzQ1Njc4OTAxMjtCSUNCRUIyMlhYWDtGcmVzaFN0cmVhbTtJbXBvcnRlcnNsYWFuIDE7KysrMTIzLzQ1NjcvODkwMTI7Ozs="
+          }
+        ]
+      },
+      "status": 200,
+      "response": ":                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":0}\n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":70}\n\nevent: review_required\ndata: {\"batch_id\":4,\"match_source_counts\":{\"pattern\":0,\"exact\":0,\"fuzzy\":0,\"new\":1},\"percent\":70}\n\n"
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/recipients",
+      "multipart": {
+        "files": [
+          {
+            "name": "file",
+            "filename": "recipients.csv",
+            "contentType": "text/csv",
+            "base64": "bmFtZSxjYXRlZ29yeQpJbXBvcnRlZCBPbmUsRk9PRDpHUk9DRVJJRVMKSW1wb3J0ZWQgVHdvLAosd29ydGhsZXNzIHJvdw=="
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_processed": 3,
+          "imported": 2,
+          "skipped": 0,
+          "errors": 1,
+          "bank_account_errors": 0,
+          "status": "completed_with_errors"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/categories",
+      "multipart": {
+        "files": [
+          {
+            "name": "file",
+            "filename": "categories.csv",
+            "contentType": "text/csv",
+            "base64": "Y2F0ZWdvcnksZGVzY3JpcHRpb24KSU1QT1JUOkZJUlNULGZpcnN0IHRlc3QgZGVzY3JpcHRpb24K"
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_processed": 1,
+          "imported": 1,
+          "skipped": 0,
+          "errors": 0,
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "operationId": "importCsv",
+      "method": "POST",
+      "path": "/api/import/recipients",
+      "multipart": {
+        "fields": {
+          "separator": ";"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "recipients-sep.csv",
+            "contentType": "text/csv",
+            "base64": "bmFtZTtjYXRlZ29yeQpTZW1pY29sb24gUmNwdDtJTVBPUlQ6RklSU1QK"
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "total_processed": 1,
+          "imported": 1,
+          "skipped": 0,
+          "errors": 0,
+          "bank_account_errors": 0,
+          "status": "completed"
+        }
+      }
+    }
+  ]
+}
