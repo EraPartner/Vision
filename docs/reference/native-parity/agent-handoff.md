@@ -13,6 +13,39 @@ description: "Resumable checkpoint for the Swift port: published branch, current
 > [!warning] Historical log
 > This log ends at the retirement of the first Swift port ([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]). The `codex/native-phase-*` branches and `native-branch.yml` it names are gone. [[docs/adr/249-revive-swift-app|ADR-249]] revived the app as native-only (no web view or bridge) and removed audit history, cloud AI, the Life scenario and the admin token; Swift is now built by the manual `swift-build` workflow. See [[docs/architecture/native-app|the architecture page]] for the current state.
 
+## The merge loop for stacked backend-port PRs (the CI-base rule)
+
+`ci.yml` and `codeql.yml` trigger on `pull_request` **only when the PR's base branch is
+`main`** (`pull_request.branches: [main]`, and `types: [opened, synchronize, reopened]` —
+no `edited`). Two consequences that must shape every continuation step:
+
+- A slice PR based on the branch below it (the stack) reports "no checks" forever. That is
+  expected, not a failure — but it means **a stack slice must never be armed for
+  auto-merge while its base is a feature branch**: GitHub would wait on required checks
+  that never start.
+- Retargeting a PR to `main` alone (GitHub's automatic retarget when the base branch is
+  deleted by a squash-merge) fires an `edited` event, which does **not** start CI. The run
+  only starts on the next `synchronize` — the rebuilt branch push.
+
+Therefore the merge loop, after each squash-merge lands on `main`:
+
+1. `git fetch`, confirm `origin/main` advanced, and confirm the merged PR is `MERGED`
+   (auto-merge is armed per PR with GraphQL `enablePullRequestAutoMerge` — squash, branch
+   deletion on — plus `gh pr ready`; the gh CLI merge path is blocked by an environment
+   policy, so the queue is the whole mechanism).
+2. Rebuild the next slice: `git checkout -B <slice> origin/main`, cherry-pick the slice's
+   own commits (dropping the ones the merge already delivered), push with
+   `--force-with-lease`. **This push is what starts CI** — never leave a retargeted PR
+   without it.
+3. Confirm the new PR tip shows checks starting (`gh pr checks <PR>`), confirm the base is
+   `main` (fix with `gh pr edit --base main`), then arm auto-merge.
+4. While CI runs, continue the next phase elsewhere (corpus recording, the next port) —
+   do not wait idle — and re-check CI before committing further stack changes.
+
+Verification of the loop: #459 merged itself (squash `f9f19d27`), #460 was retargeted to
+`main` and only started CI once its branch was rebuilt on the new `main` and pushed
+(`synchronize`), at which point its checks turned pending.
+
 ## Resume here (2026-10-17 continuation)
 
 Branch **`codex/native-phase-3g`**; push only to this branch, no PR (owner's choice on
