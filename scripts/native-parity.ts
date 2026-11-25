@@ -3829,6 +3829,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const plannedArea = AREAS.planned;
   const importParsersArea = AREAS.importParsers;
   const importBatchesArea = AREAS.importBatches;
+  const importReviewArea = AREAS.importReview;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -3839,7 +3840,8 @@ function mutationAreas(): Record<string, ParityArea> {
     transactionArea === undefined ||
     plannedArea === undefined ||
     importParsersArea === undefined ||
-    importBatchesArea === undefined
+    importBatchesArea === undefined ||
+    importReviewArea === undefined
   )
     throw new Error("missing base area");
 
@@ -4009,6 +4011,106 @@ function mutationAreas(): Record<string, ParityArea> {
     }
   }
   batchSteps.push(batches());
+
+  // The review area's writes: overrides aimed at random batch/row ids with random id
+  // values, with previews between. The ids stay inside the seed's (10, 11, 3, 4) or the
+  // malformed set: a syntactically valid but nonexistent id reaches the database write
+  // and fails its foreign key, a 500 the corpus cannot meaningfully pin.
+  const reviewRandom = new Random(0x6f11);
+  const reviewSteps: ParityStep[] = [];
+  const reviewBatchIds = [
+    "20",
+    "21",
+    "999",
+    "0",
+    "-3",
+    "abc",
+    "1e3",
+    "2.5",
+    "00020",
+    "9007199254740991",
+    "9007199254740992",
+    "+20",
+    " 20 ",
+  ];
+  const reviewRowIds = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "999",
+    "0",
+    "-1",
+    "abc",
+    "4.5",
+    "0002",
+  ];
+  const reviewRecipientIds: unknown[] = [
+    null,
+    10,
+    11,
+    0,
+    -1,
+    "10",
+    "abc",
+    [],
+    {},
+    true,
+    false,
+    3.5,
+    9007199254740991,
+    2147483648,
+  ];
+  const reviewCategoryIds: unknown[] = [
+    null,
+    3,
+    4,
+    999,
+    0,
+    -1,
+    "3",
+    "abc",
+    [],
+    {},
+    true,
+    false,
+    2.5,
+    2147483648,
+  ];
+  for (let i = 0; i < 420; i++) {
+    const roll = reviewRandom.next();
+    if (roll < 0.25) {
+      reviewSteps.push(batchPreview(reviewRandom.pick(reviewBatchIds)));
+    } else if (roll < 0.65) {
+      const id = reviewRandom.pick(reviewBatchIds);
+      const rowId = reviewRandom.pick(reviewRowIds);
+      if (reviewRandom.chance(0.12)) {
+        reviewSteps.push(batchOverrideRecipient(id, rowId));
+      } else {
+        reviewSteps.push(
+          batchOverrideRecipient(id, rowId, {
+            recipient_id: reviewRandom.pick(reviewRecipientIds),
+          }),
+        );
+      }
+    } else {
+      const id = reviewRandom.pick(reviewBatchIds);
+      const rowId = reviewRandom.pick(reviewRowIds);
+      if (reviewRandom.chance(0.12)) {
+        reviewSteps.push(batchOverrideCategory(id, rowId));
+      } else {
+        reviewSteps.push(
+          batchOverrideCategory(id, rowId, {
+            category_id: reviewRandom.pick(reviewCategoryIds),
+          }),
+        );
+      }
+    }
+    if (reviewRandom.chance(0.1)) reviewSteps.push(batchPreview("20"));
+  }
+  reviewSteps.push(batchPreview("20"));
 
   const settingRandom = new Random(0x5e77);
   const settingSteps: ParityStep[] = [];
@@ -4337,6 +4439,10 @@ function mutationAreas(): Record<string, ParityArea> {
     "importBatches-mutations": {
       ...importBatchesArea,
       steps: asRecorded(batchSteps),
+    },
+    "importReview-mutations": {
+      ...importReviewArea,
+      steps: asRecorded(reviewSteps),
     },
   };
 }

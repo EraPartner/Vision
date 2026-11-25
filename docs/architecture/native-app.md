@@ -3,7 +3,7 @@ title: Vision Native App Architecture
 type: architecture-doc
 status: active
 date: 2026-11-25
-updated: 2026-11-15
+updated: 2026-11-25
 tags:
   [
     architecture,
@@ -676,7 +676,15 @@ BIGINT ids travelling as text — and `deleteImportBatch`, the rollback delete i
 transaction with the advisory and in-transaction status reads, the account-lifecycle lock and the
 planned-execution guard reused from `TransactionBulkArea`, and the orphaned auto-created
 recipients cleanup (candidates from the batch's staging rows born during the import window). The
-review operations (preview, overrides, commit) and the uploads follow as their own slices. The recurrence grammar and
+review operations follow (P16c, `Areas/ImportReview.swift`): `previewImportBatch` — the preview
+SQL's four LEFT JOINs with the `already_imported` dedup-fingerprint EXISTS, grouped by effective
+recipient (`COALESCE(user_override_recipient_id, resolved_recipient_id)`) in insertion order with
+each group's identity from its first row, `formatCategoryLabel`'s `": "` join behind the
+path-name legacy-compatibility CASE, and the match-source totals — plus `overrideImportRow` and
+`overrideImportRowCategory` (`parseOverrideId`-guarded optional FK ids, `categoryExists`, the
+`lockBatchUnderReview` `awaiting_review` 409 inside the write transaction, the matched-status
+filtered UPDATE and its `Row … not found … or not in matched status` answer). The commit and the
+uploads follow as their own slices. The recurrence grammar and
 its steppers are `Time/Recurrence.swift`, recorded as `parity/plans/planned.jsonl`; the whole
 area records under a fixed clock (`ParityArea.now`, `setSystemTime`), so the totals, the
 suggestions and the execute default date replay the same on every day. A refresh
