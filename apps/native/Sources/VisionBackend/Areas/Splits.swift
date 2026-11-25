@@ -739,7 +739,7 @@ enum SplitsArea {
         if let rawNote = object["note"], rawNote != .null {
             if let text = rawNote.stringValue {
                 note = text
-                guard text.count <= 500 else {
+                if text.count > 500 {
                     issues.append("note: Too big: expected string to have <=500 characters")
                 }
             } else {
