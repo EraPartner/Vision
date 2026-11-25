@@ -237,11 +237,6 @@ import VisionNativeCore
             let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let found = difference(
                 step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
-            if found != nil {
-                // PARITY-DEBUG (temporary): the masked 500 hides its cause; print what Swift answered.
-                print("PARITY-DEBUG \(label): found \(found ?? "")")
-                print("PARITY-DEBUG \(label): got \(String(decoding: response.body, as: UTF8.self))")
-            }
             #expect(found == nil, "\(label): \(found ?? "")")
             if case .object(let fields) = body, case .object(let meta)? = fields["meta"] {
                 #expect(meta["requestId"] != nil, "\(label)")

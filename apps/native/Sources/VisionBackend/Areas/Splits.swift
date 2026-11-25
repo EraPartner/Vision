@@ -364,6 +364,7 @@ enum SplitsArea {
             """
             \(recipientGroup())
             SELECT \(splitColumns),
+                   NULL AS recipient_name,
                    t.date AS transaction_date, t.memo AS transaction_memo,
                    t.amount AS transaction_amount, t.currency AS transaction_currency,
                    acct.name AS bank_account,
@@ -428,24 +429,14 @@ enum SplitsArea {
         let recipient = RecipientID(rawValue: try pathId(request))
         let target = try owedCurrency(request)
         let page = page(request)
-        let splits: [[String: JSONValue]]
-        let summary: JSONValue
-        // TEMPORARY parity-debug aid: name the exact throw behind the masked 500.
-        do {
-            splits = try owedByRecipient(session, recipient: recipient, page: page)
-            summary = try owedRecipientSummary(session, recipient: recipient, target: target)
-        } catch let error as BackendHTTPError {
-            throw error
-        } catch {
-            throw BackendHTTPError.validation("PARITY-DEBUG \(String(describing: error))")
-        }
+        let splits = try owedByRecipient(session, recipient: recipient, page: page)
         let total = (try page.map { _ in try countOwed(session, recipient: recipient) }) ?? splits.count
         var body: [String: JSONValue] = ["items": .array(splits.map(JSONValue.object)), "total": .int(total)]
         if let page {
             body["limit"] = page.limit.json
             body["offset"] = page.offset.json
         }
-        body["summary"] = summary
+        body["summary"] = try owedRecipientSummary(session, recipient: recipient, target: target)
         return HandlerResult(data: .object(body))
     }
 
