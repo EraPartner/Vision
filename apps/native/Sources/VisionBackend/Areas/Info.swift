@@ -203,7 +203,11 @@ enum InfoArea {
             guard let lastSeen = latest.date else { continue }
             let next = try CalendarDays.adding(detected.medianDays, to: lastSeen)
 
-            patterns.append(.object([
+            let confidence: Int = Int(min(100, JavaScriptNumber.round(
+                Double(detected.consistency) * 0.5
+                    + (min(Double(txns.count), 12) / 12) * 30
+                    + (amountChanges.isEmpty ? 20 : 10))))
+            let item: [String: JSONValue] = [
                 "recipientId": .int(group.recipient.rawValue),
                 "recipientName": .string(group.recipientName),
                 "direction": .string(group.income ? "income" : "expense"),
@@ -223,11 +227,9 @@ enum InfoArea {
                 "predictedNext": .string(next),
                 "amountChanges": .array(amountChanges.map { $0.json }),
                 "isAlreadyPlanned": .bool(plannedIds.contains(group.recipient)),
-                "confidence": .int(Int(min(100, JavaScriptNumber.round(
-                    Double(detected.consistency) * 0.5
-                        + (min(Double(txns.count), 12) / 12) * 30
-                        + (amountChanges.isEmpty ? 20 : 10))))),
-            ]))
+                "confidence": .int(confidence),
+            ]
+            patterns.append(.object(item))
         }
 
         // `patterns.sort((a, b) => b.confidence - a.confidence)`: a stable descending sort.
