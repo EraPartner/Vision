@@ -955,8 +955,8 @@
           "funding_account_id": null,
           "is_active": true,
           "closed_at": null,
-          "created_at": "2026-11-12T10:52:47.243Z",
-          "updated_at": "2026-11-12T10:52:47.243Z",
+          "created_at": "2026-11-25T07:45:45.434Z",
+          "updated_at": "2026-11-25T07:45:45.434Z",
           "links": []
         }
       }
@@ -1191,8 +1191,8 @@
           "funding_account_id": 4,
           "is_active": true,
           "closed_at": null,
-          "created_at": "2026-11-12T10:52:47.333Z",
-          "updated_at": "2026-11-12T10:52:47.333Z",
+          "created_at": "2026-11-25T07:45:45.507Z",
+          "updated_at": "2026-11-25T07:45:45.507Z",
           "links": []
         }
       }
@@ -1312,7 +1312,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T10:52:47.379Z",
+          "updated_at": "2026-11-25T07:45:45.538Z",
           "links": []
         }
       }
@@ -1343,9 +1343,9 @@
           "has_cash_sleeve": true,
           "funding_account_id": null,
           "is_active": false,
-          "closed_at": "2026-11-12T10:52:47.391Z",
+          "closed_at": "2026-11-25T07:45:45.544Z",
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T10:52:47.391Z",
+          "updated_at": "2026-11-25T07:45:45.544Z",
           "links": []
         }
       }
@@ -1377,9 +1377,9 @@
           "has_cash_sleeve": true,
           "funding_account_id": null,
           "is_active": false,
-          "closed_at": "2026-11-12T10:52:47.391Z",
+          "closed_at": "2026-11-25T07:45:45.544Z",
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T10:52:47.399Z",
+          "updated_at": "2026-11-25T07:45:45.551Z",
           "links": []
         }
       }
@@ -1412,7 +1412,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T10:52:47.405Z",
+          "updated_at": "2026-11-25T07:45:45.557Z",
           "links": []
         }
       }
@@ -1494,7 +1494,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T10:52:47.428Z",
+          "updated_at": "2026-11-25T07:45:45.575Z",
           "links": []
         }
       }
@@ -1671,7 +1671,7 @@
           "is_active": true,
           "closed_at": null,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-12T10:52:47.487Z",
+          "updated_at": "2026-11-25T07:45:45.624Z",
           "links": []
         }
       }
@@ -2228,6 +2228,809 @@
       }
     },
     {
+      "operationId": "previewAccountPortfolioLots",
+      "method": "GET",
+      "path": "/api/accounts/4/portfolio-lot-retag-preview",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 4,
+          "eligible_count": 0,
+          "transaction_ids": [],
+          "limit": 500,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountPortfolioLots",
+      "method": "GET",
+      "path": "/api/accounts/999/portfolio-lot-retag-preview",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "closeAccount",
+      "method": "POST",
+      "path": "/api/accounts/3/close",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance_handling is required and must be 'preserve' or 'adjustment'"
+        }
+      }
+    },
+    {
+      "operationId": "closeAccount",
+      "method": "POST",
+      "path": "/api/accounts/3/close",
+      "body": {
+        "balance_handling": "closer"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance_handling is required and must be 'preserve' or 'adjustment'"
+        }
+      }
+    },
+    {
+      "operationId": "closeAccount",
+      "method": "POST",
+      "path": "/api/accounts/3/close",
+      "body": {
+        "balance_handling": "preserve"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 3,
+          "balance_handling": "preserve",
+          "already_closed": true,
+          "adjustments": [],
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountMerge",
+      "method": "GET",
+      "path": "/api/accounts/2/merge-preview",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "into must be a positive integer account id"
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountMerge",
+      "method": "GET",
+      "path": "/api/accounts/2/merge-preview?into=2",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "An account cannot be merged into itself"
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountMerge",
+      "method": "GET",
+      "path": "/api/accounts/2/merge-preview?into=1e3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "into must be a positive integer account id"
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountMerge",
+      "method": "GET",
+      "path": "/api/accounts/2/merge-preview?into=999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountMerge",
+      "method": "GET",
+      "path": "/api/accounts/999/merge-preview?into=1",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "previewAccountMerge",
+      "method": "GET",
+      "path": "/api/accounts/2/merge-preview?into=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "into": 1,
+          "source": 2,
+          "reassigned": {
+            "transactions": 5,
+            "planned": 0,
+            "portfolio": 0,
+            "funding": 0
+          },
+          "projectedBalance": 1354.88,
+          "projectedBalanceCurrency": "EUR",
+          "balanceParts": [
+            {
+              "currency": "CHF",
+              "balance": 12
+            },
+            {
+              "currency": "EUR",
+              "balance": 1039.985
+            },
+            {
+              "currency": "GBP",
+              "balance": 77.7777
+            },
+            {
+              "currency": "JPY",
+              "balance": 8
+            },
+            {
+              "currency": "USD",
+              "balance": 250.5
+            }
+          ],
+          "projectedBalanceIncomplete": true,
+          "unconvertedCurrencies": [
+            "CHF",
+            "JPY"
+          ],
+          "stampsInterleaved": false,
+          "openingAnchorCollision": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/4/opening-balance",
+      "body": {
+        "balance": "800.125",
+        "date": "2024-06-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "transaction": {
+            "id": 15,
+            "date": "2024-06-01T00:00:00.000Z",
+            "amount": "0.0000",
+            "currency": "EUR",
+            "balance": "800.1250",
+            "memo": "OPENING BALANCE",
+            "comment": null,
+            "recipient_id": 2,
+            "recipient_bank_account_id": null,
+            "category_id": null,
+            "is_active": true,
+            "created_at": "2026-11-25T07:45:45.852Z",
+            "updated_at": "2026-11-25T07:45:45.852Z",
+            "import_batch_id": null,
+            "matched_pattern_id": null,
+            "is_transfer": true,
+            "transfer_peer_id": null,
+            "transfer_source": "opening",
+            "account_id": 4,
+            "source_record_hash": null,
+            "dedup_fingerprint": null,
+            "dedup_fingerprint_version": null,
+            "bank_sequence": null
+          },
+          "warning": null,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/4/opening-balance",
+      "body": {
+        "balance": 850,
+        "date": "2024-01-01"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "transaction": {
+            "id": 15,
+            "date": "2024-01-01T00:00:00.000Z",
+            "amount": "0.0000",
+            "currency": "EUR",
+            "balance": "850.0000",
+            "memo": "OPENING BALANCE",
+            "comment": null,
+            "recipient_id": 2,
+            "recipient_bank_account_id": null,
+            "category_id": null,
+            "is_active": true,
+            "created_at": "2026-11-25T07:45:45.852Z",
+            "updated_at": "2026-11-25T07:45:45.867Z",
+            "import_batch_id": null,
+            "matched_pattern_id": null,
+            "is_transfer": true,
+            "transfer_peer_id": null,
+            "transfer_source": "opening",
+            "account_id": 4,
+            "source_record_hash": null,
+            "dedup_fingerprint": null,
+            "dedup_fingerprint_version": null,
+            "bank_sequence": null
+          },
+          "warning": null,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/6/opening-balance",
+      "body": {
+        "balance": 5,
+        "date": "2024-04-01",
+        "currency": "eur"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "transaction": {
+            "id": 16,
+            "date": "2024-04-01T00:00:00.000Z",
+            "amount": "0.0000",
+            "currency": "EUR",
+            "balance": "5.0000",
+            "memo": "OPENING BALANCE",
+            "comment": null,
+            "recipient_id": 2,
+            "recipient_bank_account_id": null,
+            "category_id": null,
+            "is_active": true,
+            "created_at": "2026-11-25T07:45:45.876Z",
+            "updated_at": "2026-11-25T07:45:45.876Z",
+            "import_batch_id": null,
+            "matched_pattern_id": null,
+            "is_transfer": true,
+            "transfer_peer_id": null,
+            "transfer_source": "opening",
+            "account_id": 6,
+            "source_record_hash": null,
+            "dedup_fingerprint": null,
+            "dedup_fingerprint_version": null,
+            "bank_sequence": null
+          },
+          "warning": "Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/1/opening-balance",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance is required and must be a number; date is required and must be an ISO date (YYYY-MM-DD)"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/1/opening-balance",
+      "body": {
+        "balance": "abc",
+        "date": "2024-13-01"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "balance is required and must be a number; date is not a valid date"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/1/opening-balance",
+      "body": {
+        "balance": 5,
+        "date": "2024-01-01",
+        "currency": "EURO"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "setAccountOpeningBalance",
+      "method": "POST",
+      "path": "/api/accounts/999/opening-balance",
+      "body": {
+        "balance": 5,
+        "date": "2024-01-01"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/1/merge",
+      "body": {
+        "source_ids": [
+          1
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "source_ids must not include the survivor account"
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/1/merge",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Provide at least one distinct source account to merge"
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/1/merge",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/1/merge",
+      "body": {
+        "source_ids": [
+          "abc"
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "source_ids must contain only integers, no accounts were merged: source_ids[0] (\"abc\")"
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/1/merge",
+      "body": {
+        "source_ids": [
+          3
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "into": 1,
+          "merged": [
+            3
+          ],
+          "reassigned": {
+            "transactions": 1,
+            "planned": 0,
+            "portfolio": 0,
+            "funding": 0
+          },
+          "stampsInterleaved": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/4/merge",
+      "body": {
+        "source_ids": [
+          1
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Merging these accounts would create a funding-account cycle"
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/4/merge",
+      "body": {
+        "source_ids": [
+          6
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "More than one of these accounts has an opening balance in EUR. Remove the opening balance from all but one of them, then merge (an account can hold only one opening balance per currency)."
+        }
+      }
+    },
+    {
+      "operationId": "createAccount",
+      "method": "POST",
+      "path": "/api/accounts",
+      "body": {
+        "name": "Depend",
+        "funding_account_id": 4
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 9,
+          "name": "Depend",
+          "display_name": null,
+          "institution": null,
+          "currency": "EUR",
+          "type": "checking",
+          "liquidity_class": "liquid",
+          "spendable": true,
+          "in_net_worth": true,
+          "tax_wrapper": "none",
+          "owner": "me",
+          "multi_currency_cash": false,
+          "has_cash_sleeve": true,
+          "funding_account_id": 4,
+          "is_active": true,
+          "closed_at": null,
+          "created_at": "2026-11-25T07:45:45.944Z",
+          "updated_at": "2026-11-25T07:45:45.944Z",
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "mergeAccounts",
+      "method": "POST",
+      "path": "/api/accounts/1/merge",
+      "body": {
+        "source_ids": [
+          4
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "into": 1,
+          "merged": [
+            4
+          ],
+          "reassigned": {
+            "transactions": 2,
+            "planned": 0,
+            "portfolio": 0,
+            "funding": 2
+          },
+          "stampsInterleaved": false,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/999/reconcile",
+      "body": {
+        "mode": "accept"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/2/reconcile",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "mode is required and must be 'accept' or 'adjustment'"
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/2/reconcile",
+      "body": {
+        "mode": "accept"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Account has no statement balance to reconcile against"
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/2/reconcile",
+      "body": {
+        "mode": "accept",
+        "currency": "CHF"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "mode": "accept",
+          "drift": 0,
+          "currency": "CHF",
+          "statement_balance": 12,
+          "computed_balance": 12,
+          "transaction": null,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/1/reconcile",
+      "body": {
+        "mode": "bogus",
+        "currency": "EURO"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "mode is required and must be 'accept' or 'adjustment'"
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/1/reconcile",
+      "body": {
+        "mode": "adjustment"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "mode": "adjustment",
+          "drift": 0,
+          "currency": "EUR",
+          "statement_balance": 1200.25,
+          "computed_balance": 1200.25,
+          "transaction": {
+            "id": 17,
+            "amount": 200.27,
+            "transfer_source": "adjustment"
+          },
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/1/reconcile",
+      "body": {
+        "mode": "accept"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "mode": "accept",
+          "drift": 0,
+          "currency": "EUR",
+          "statement_balance": 1200.26,
+          "computed_balance": 1200.26,
+          "transaction": null,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "reconcileAccount",
+      "method": "POST",
+      "path": "/api/accounts/6/reconcile",
+      "body": {
+        "mode": "adjustment",
+        "currency": "usd"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "mode": "adjustment",
+          "drift": 0,
+          "currency": "USD",
+          "statement_balance": -10,
+          "computed_balance": -10,
+          "transaction": {
+            "id": 18,
+            "amount": -10,
+            "transfer_source": "adjustment"
+          },
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "closeAccount",
+      "method": "POST",
+      "path": "/api/accounts/2/close",
+      "body": {
+        "balance_handling": "adjustment"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "balance_handling": "adjustment",
+          "already_closed": false,
+          "adjustments": [
+            {
+              "id": 19,
+              "amount": -12,
+              "currency": "CHF",
+              "transfer_source": "adjustment"
+            },
+            {
+              "id": 20,
+              "amount": -40,
+              "currency": "EUR",
+              "transfer_source": "adjustment"
+            },
+            {
+              "id": 21,
+              "amount": -77.78,
+              "currency": "GBP",
+              "transfer_source": "adjustment"
+            },
+            {
+              "id": 22,
+              "amount": -8,
+              "currency": "JPY",
+              "transfer_source": "adjustment"
+            },
+            {
+              "id": 23,
+              "amount": -250.5,
+              "currency": "USD",
+              "transfer_source": "adjustment"
+            }
+          ],
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "closeAccount",
+      "method": "POST",
+      "path": "/api/accounts/2/close",
+      "body": {
+        "balance_handling": "adjustment"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "account_id": 2,
+          "balance_handling": "adjustment",
+          "already_closed": true,
+          "adjustments": [],
+          "links": []
+        }
+      }
+    },
+    {
       "operationId": "getAccounts",
       "method": "GET",
       "path": "/api/accounts?active=all",
@@ -2237,34 +3040,29 @@
         "data": {
           "items": [
             {
-              "id": 4,
-              "name": "Broker",
+              "id": 9,
+              "name": "Depend",
               "display_name": null,
-              "institution": "Bolero",
+              "institution": null,
               "currency": "EUR",
-              "type": "brokerage",
+              "type": "checking",
               "liquidity_class": "liquid",
               "spendable": true,
               "in_net_worth": true,
-              "tax_wrapper": "tax_advantaged",
+              "tax_wrapper": "none",
               "owner": "me",
               "multi_currency_cash": false,
               "has_cash_sleeve": true,
               "funding_account_id": 1,
               "is_active": true,
               "closed_at": null,
-              "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
-              "post_anchor_count": 1,
-              "has_transactions": true,
+              "created_at": "2026-11-25T07:45:45.944Z",
+              "updated_at": "2026-11-25T07:45:45.953Z",
+              "post_anchor_count": 0,
+              "has_transactions": false,
               "statement_balances": [],
               "computed_balance": 0,
-              "balance_parts": [
-                {
-                  "currency": "USD",
-                  "balance": 0.004
-                }
-              ],
+              "balance_parts": [],
               "balance_incomplete": false,
               "unconverted_currencies": [],
               "reconcilable_balance": 0,
@@ -2285,11 +3083,11 @@
               "owner": "me",
               "multi_currency_cash": false,
               "has_cash_sleeve": true,
-              "funding_account_id": 4,
+              "funding_account_id": 1,
               "is_active": true,
               "closed_at": null,
-              "created_at": "2026-11-12T10:52:47.333Z",
-              "updated_at": "2026-11-12T10:52:47.333Z",
+              "created_at": "2026-11-25T07:45:45.507Z",
+              "updated_at": "2026-11-25T07:45:45.953Z",
               "post_anchor_count": 0,
               "has_transactions": false,
               "statement_balances": [],
@@ -2319,7 +3117,8 @@
               "is_active": true,
               "closed_at": null,
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2026-11-12T10:52:47.487Z",
+              "updated_at": "2026-11-25T07:45:45.624Z",
+              "anchor_date": "2024-04-01",
               "post_anchor_count": 1,
               "has_transactions": true,
               "statement_balances": [
@@ -2329,17 +3128,21 @@
                   "balance_date": "2024-04-30"
                 }
               ],
-              "computed_balance": -1304.35,
+              "computed_balance": -3.48,
               "balance_parts": [
                 {
                   "currency": "EUR",
-                  "balance": -1500
+                  "balance": 5
+                },
+                {
+                  "currency": "USD",
+                  "balance": -10
                 }
               ],
               "balance_incomplete": false,
               "unconverted_currencies": [],
-              "reconcilable_balance": -1500,
-              "reconcilable_currency": "EUR",
+              "reconcilable_balance": 0,
+              "reconcilable_currency": "GBP",
               "drift": null
             },
             {
@@ -2362,13 +3165,13 @@
               "created_at": "2025-03-01T09:00:00.000Z",
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-01-10",
-              "post_anchor_count": 1,
+              "post_anchor_count": 4,
               "has_transactions": true,
               "statement_balances": [
                 {
                   "currency": "EUR",
-                  "balance": 1200.25,
-                  "balance_date": "2024-04-30"
+                  "balance": 1200.26,
+                  "balance_date": "{{today}}"
                 },
                 {
                   "currency": "GBP",
@@ -2381,53 +3184,22 @@
                   "balance_date": "2024-02-29"
                 }
               ],
-              "computed_balance": 999.98,
+              "computed_balance": 1200.26,
               "balance_parts": [
                 {
                   "currency": "EUR",
-                  "balance": 999.985
+                  "balance": 1200.255
+                },
+                {
+                  "currency": "USD",
+                  "balance": 0.004
                 }
               ],
               "balance_incomplete": false,
               "unconverted_currencies": [],
-              "reconcilable_balance": 999.98,
+              "reconcilable_balance": 1200.26,
               "reconcilable_currency": "EUR",
-              "drift": 200.27
-            },
-            {
-              "id": 3,
-              "name": "Old",
-              "display_name": null,
-              "institution": null,
-              "currency": "EUR",
-              "type": "checking",
-              "liquidity_class": "liquid",
-              "spendable": true,
-              "in_net_worth": false,
-              "tax_wrapper": "none",
-              "owner": "partner",
-              "multi_currency_cash": false,
-              "has_cash_sleeve": true,
-              "funding_account_id": null,
-              "is_active": false,
-              "closed_at": "2025-02-01T08:00:00.000Z",
-              "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2025-03-01T09:00:00.000Z",
-              "post_anchor_count": 1,
-              "has_transactions": true,
-              "statement_balances": [],
-              "computed_balance": 0,
-              "balance_parts": [
-                {
-                  "currency": "EUR",
-                  "balance": 0
-                }
-              ],
-              "balance_incomplete": false,
-              "unconverted_currencies": [],
-              "reconcilable_balance": 0,
-              "reconcilable_currency": "EUR",
-              "drift": null
+              "drift": 0
             },
             {
               "id": 7,
@@ -2446,8 +3218,8 @@
               "funding_account_id": null,
               "is_active": true,
               "closed_at": null,
-              "created_at": "2026-11-12T10:52:47.243Z",
-              "updated_at": "2026-11-12T10:52:47.243Z",
+              "created_at": "2026-11-25T07:45:45.434Z",
+              "updated_at": "2026-11-25T07:45:45.434Z",
               "post_anchor_count": 0,
               "has_transactions": false,
               "statement_balances": [],
@@ -2468,24 +3240,24 @@
               "type": "savings",
               "liquidity_class": "semi_liquid",
               "spendable": false,
-              "in_net_worth": true,
+              "in_net_worth": false,
               "tax_wrapper": "none",
               "owner": "joint",
               "multi_currency_cash": true,
               "has_cash_sleeve": true,
               "funding_account_id": null,
-              "is_active": true,
-              "closed_at": null,
+              "is_active": false,
+              "closed_at": "2026-11-25T07:45:46.020Z",
               "created_at": "2025-03-01T09:00:00.000Z",
-              "updated_at": "2026-11-12T10:52:47.405Z",
+              "updated_at": "2026-11-25T07:45:46.020Z",
               "anchor_date": "2024-03-04",
-              "post_anchor_count": 1,
+              "post_anchor_count": 6,
               "has_transactions": true,
               "statement_balances": [
                 {
                   "currency": "CHF",
-                  "balance": 123456.7891,
-                  "balance_date": "2024-05-01"
+                  "balance": 12,
+                  "balance_date": "{{today}}"
                 },
                 {
                   "currency": "JPY",
@@ -2493,27 +3265,27 @@
                   "balance_date": "2024-05-01"
                 }
               ],
-              "computed_balance": 394.33,
+              "computed_balance": 0,
               "balance_parts": [
                 {
                   "currency": "CHF",
-                  "balance": 12
+                  "balance": 0
                 },
                 {
                   "currency": "EUR",
-                  "balance": 40
+                  "balance": 0
                 },
                 {
                   "currency": "GBP",
-                  "balance": 77.7777
+                  "balance": -0.0023
                 },
                 {
                   "currency": "JPY",
-                  "balance": 8
+                  "balance": 0
                 },
                 {
                   "currency": "USD",
-                  "balance": 250.5
+                  "balance": 0
                 }
               ],
               "balance_incomplete": true,
@@ -2521,12 +3293,12 @@
                 "CHF",
                 "JPY"
               ],
-              "reconcilable_balance": 250.5,
+              "reconcilable_balance": 0,
               "reconcilable_currency": "USD",
               "drift": null
             }
           ],
-          "total": 7,
+          "total": 6,
           "links": []
         }
       }

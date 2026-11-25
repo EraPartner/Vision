@@ -117,6 +117,51 @@ enum AccountsArea {
                 try AccountsArea.remove(session, id: id)
             }
         }
+        backend.serve(OpenAPIOperations.PreviewAccountPortfolioLots.self) { request in
+            let id = AccountID(rawValue: try RequestID.pathParameter(request))
+            return try await database.run { session in
+                try AccountsArea.portfolioLotPreview(session, id: id)
+            }
+        }
+        backend.serve(OpenAPIOperations.CloseAccount.self) { request in
+            let id = AccountID(rawValue: try RequestID.pathParameter(request))
+            let body = try RequestBody.parseJavaScript(request.body)
+            return try await database.run { session in
+                try AccountsArea.close(session, id: id, body: body)
+            }
+        }
+        backend.serve(OpenAPIOperations.PreviewAccountMerge.self) { request in
+            let source = AccountID(rawValue: try RequestID.pathParameter(request))
+            let into = try AccountsArea.mergePreviewTarget(request.query("into"))
+            return try await database.run { session in
+                try AccountsArea.mergePreview(session, source: source, target: into)
+            }
+        }
+        backend.serve(OpenAPIOperations.MergeAccounts.self) { request in
+            let target = AccountID(rawValue: try RequestID.pathParameter(request))
+            let body = try RequestBody.parseJavaScript(request.body)
+            let sourceIds = try AccountsArea.mergeBodySourceIds(body)
+            if sourceIds.contains(target.rawValue) {
+                throw BackendHTTPError.validation("source_ids must not include the survivor account")
+            }
+            return try await database.run { session in
+                try AccountsArea.merge(session, target: target, sources: sourceIds)
+            }
+        }
+        backend.serve(OpenAPIOperations.SetAccountOpeningBalance.self) { request in
+            let id = AccountID(rawValue: try RequestID.pathParameter(request))
+            let body = try RequestBody.parseJavaScript(request.body)
+            return try await database.run { session in
+                try AccountsArea.openingBalance(session, id: id, body: body)
+            }
+        }
+        backend.serve(OpenAPIOperations.ReconcileAccount.self) { request in
+            let id = AccountID(rawValue: try RequestID.pathParameter(request))
+            let body = try RequestBody.parseJavaScript(request.body)
+            return try await database.run { session in
+                try AccountsArea.reconcile(session, id: id, body: body)
+            }
+        }
     }
 
     // MARK: - GET /api/accounts
@@ -682,5 +727,642 @@ enum AccountsArea {
                 "balance": number(stored.toNumber), "balance_date": .string(try row.text("balance_date")),
                 "links": .array([]),
             ]))
+    }
+
+    // MARK: - P14 (account operations)
+
+    /// `recipientRepository.getOrCreateSystemId`: the shared SYSTEM recipient, inserted inactive.
+    static func systemRecipientId(_ session: BackendSession) throws -> Int {
+        let name = RecipientsArea.systemName
+        let normalized = RecipientText.normalizeForMatching(name)
+        if let row = try session.row("SELECT id FROM recipients WHERE normalized_name = ?", [.text(normalized)]) {
+            return try row.integerId("id")
+        }
+        guard
+            let row = try session.row(
+                """
+                INSERT INTO recipients (name, normalized_name, is_active)
+                VALUES (?, ?, 0)
+                ON CONFLICT (normalized_name) DO UPDATE SET normalized_name = excluded.normalized_name
+                RETURNING id
+                """,
+                [.text(name), .text(normalized)])
+        else {
+            throw SQLRowDecodingError(column: "recipients", problem: "the system recipient upsert returned no row")
+        }
+        return try row.integerId("id")
+    }
+
+    /// The account's `balance_parts` for `asOf`, or an empty array without rows.
+    static func currentBalanceParts(_ session: BackendSession, id: AccountID) throws -> [Partition] {
+        let parts = try session.row(
+            """
+            SELECT bp.balance_parts
+              FROM accounts a
+              \(AccountBalanceSQL.balancePartsJoin(asOfDate: "?1"))
+             WHERE a.id = ?2
+            """,
+            [.text(session.today()), .integer(Int64(id.rawValue))])
+        return try balanceParts(try parts?.optionalText("balance_parts"))
+    }
+
+    /// `previewAccountPortfolioLots`: the account-wide lot event selection.
+    static func portfolioLotPreview(_ session: BackendSession, id: AccountID) throws -> HandlerResult {
+        guard try getById(session, id) != nil else {
+            throw BackendHTTPError.notFound("Account \(id.rawValue) not found")
+        }
+        let types = JSValue.array([.string("buy"), .string("gift"), .string("sell")]).jsonText
+        let rows = try session.rows(
+            """
+            SELECT id, COUNT(*) OVER () AS eligible
+              FROM portfolio_transactions
+             WHERE account_id = ? AND type IN (SELECT value FROM json_each(?))
+             ORDER BY id ASC
+             LIMIT 501
+            """,
+            [.integer(Int64(id.rawValue)), .text(types)])
+        let eligible = rows.first.map { Int(try $0.int64("eligible")) } ?? 0
+        let transactionIds = eligible <= 500 ? try rows.map { try $0.integerId("id") } : []
+        return HandlerResult(
+            data: .object([
+                "account_id": .int(id.rawValue), "eligible_count": .int(eligible),
+                "transaction_ids": .array(transactionIds.map(JSONValue.int)), "limit": .int(500),
+                "links": .array([]),
+            ]))
+    }
+
+    /// `closeAccount`: an idempotent close, with one zero-out adjustment per non-zero partition.
+    static func close(_ session: BackendSession, id: AccountID, body: JSValue?) throws -> HandlerResult {
+        var rawHandling: JSValue = .string("")
+        if let value = body?.objectValue?["balance_handling"], value != .null { rawHandling = value }
+        let balanceHandling = looseText(rawHandling)
+        let handling: String
+        if balanceHandling == "preserve" { handling = "preserve" }  // lint:allow string-literal-compare the two balance_handling labels of accountCloseService
+        else if balanceHandling == "adjustment" { handling = "adjustment" }  // lint:allow string-literal-compare the two balance_handling labels of accountCloseService
+        else {
+            throw BackendHTTPError.validation(
+                "balance_handling is required and must be 'preserve' or 'adjustment'")
+        }
+        let outcome = try session.transaction { () -> (alreadyClosed: Bool, adjustments: [[String: JSONValue]]) in
+            guard let account = try session.row(
+                "SELECT id, is_active FROM accounts WHERE id = ?", [.integer(Int64(id.rawValue))])
+            else { throw BackendHTTPError.notFound("Account \(id.rawValue) not found") }
+            if !try account.bool("is_active") { return (true, []) }
+            var inserted: [[String: JSONValue]] = []
+            if handling == "adjustment" {  // lint:allow string-literal-compare the two balance_handling labels of accountCloseService
+                let partitions = try currentBalanceParts(session, id: id)
+                var stamped: [(amount: Double, currency: String)] = []
+                for part in partitions {
+                    let amount = Money.roundToCents(part.balance).negated().toNumber
+                    if abs(amount) >= 0.005 {
+                        stamped.append((amount, part.currency.uppercased()))
+                    }
+                }
+                if !stamped.isEmpty {
+                let recipient = try systemRecipientId(session)
+                let parts = JSValue.array(
+                    stamped.map { .object(["amount": .string(SQLArguments.javaScriptText($0.amount)), "currency": .string($0.currency)]) }
+                ).jsonText
+                let rows = try session.rows(
+                    """
+                    INSERT INTO transactions
+                      (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
+                    SELECT ?, vision_numeric(p.value ->> '$.amount', 18, 4), p.value ->> '$.currency',
+                           'ACCOUNT CLOSE ADJUSTMENT', ?, ?, 1, 'adjustment', 1
+                      FROM (SELECT value FROM json_each(?) ORDER BY key) p
+                    RETURNING id, amount, currency, transfer_source
+                    """,
+                    [
+                        .text(session.today()), .integer(Int64(id.rawValue)), .integer(Int64(recipient)),
+                        .text(parts),
+                    ])
+                let insertedRows = try rows.map { try (try $0.integerId("id"), $0) }.sorted { $0.0 < $1.0 }.map { $0.1 }
+                inserted = try insertedRows.map { row in
+                    [
+                        "id": .int(try row.integerId("id")),
+                        "amount": number(try DecimalJS.from(try row.text("amount")).toNumber),
+                        "currency": .string(try row.text("currency")),
+                        "transfer_source": .string(try row.text("transfer_source")),
+                    ]
+                }
+                }
+            }
+            _ = try session.rows(
+                """
+                UPDATE accounts
+                   SET is_active = 0, in_net_worth = 0, closed_at = COALESCE(closed_at, now()), updated_at = now()
+                 WHERE id = ?
+                """,
+                [.integer(Int64(id.rawValue))])
+            return (false, inserted)
+        }
+        return HandlerResult(
+            data: .object([
+                "account_id": .int(id.rawValue), "balance_handling": .string(handling),
+                "already_closed": .bool(outcome.alreadyClosed),
+                "adjustments": .array(outcome.adjustments.map(JSONValue.object)), "links": .array([]),
+            ]))
+    }
+
+    /// `mergePreviewQuery`: `?into=` as a strict positive integer, `1e3` refused.
+    static func mergePreviewTarget(_ raw: String?) throws -> AccountID {
+        if let value = TransactionsArea.validId(.string(raw ?? "")) {
+            return AccountID(rawValue: value)
+        }
+        throw BackendHTTPError.validation("into must be a positive integer account id")
+    }
+
+    struct StampRange {
+        let minDate: String
+        let maxDate: String
+    }
+
+    /// `getStampedDateRangesByAccount`: the active stamped rows' date range per account.
+    static func stampRanges(_ session: BackendSession, ids: [Int]) throws -> [StampRange] {
+        let json = JSValue.array(ids.map(JSValue.int)).jsonText
+        return try session.rows(
+            """
+            SELECT account_id, to_char(MIN(date), 'YYYY-MM-DD') AS min_date, to_char(MAX(date), 'YYYY-MM-DD') AS max_date
+              FROM transactions
+             WHERE account_id IN (SELECT value FROM json_each(?)) AND is_active = 1 AND balance IS NOT NULL
+             GROUP BY account_id
+            """,
+            [.text(json)]).map {
+                StampRange(minDate: try $0.text("min_date"), maxDate: try $0.text("max_date"))
+            }
+    }
+
+    /// `stampRangesOverlap`: closed ranges, pairwise — lexicographic day text compares as dates.
+    static func stampRangesOverlap(_ ranges: [StampRange]) -> Bool {
+        for index in ranges.indices {
+            for other in ranges[(index + 1)...] where
+                ranges[index].minDate <= other.maxDate && other.minDate <= ranges[index].maxDate
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// `getOpeningAnchorsByAccount` then `collidingAnchorCurrencies`.
+    static func collidingAnchorCurrencies(_ session: BackendSession, ids: [Int]) throws -> [String] {
+        let json = JSValue.array(ids.map(JSValue.int)).jsonText
+        let anchors = try session.rows(
+            "SELECT account_id, currency FROM transactions
+              WHERE account_id IN (SELECT value FROM json_each(?)) AND transfer_source = 'opening'",
+            [.text(json)])
+        var accountsByCurrency: [String: Set<Int>] = [:]
+        for anchor in anchors {
+            let code = storedCurrencyCode(try anchor.optionalText("currency"))
+            accountsByCurrency[code, default: []].insert(try anchor.integerId("account_id"))
+        }
+        return accountsByCurrency.filter { $0.value.count > 1 }.map(\.key).sorted()
+    }
+
+    /// `previewMergeprojectedBalanceParts` — the anchor+delta partitions of survivor + source as
+    /// one account: the union relabelled as the survivor over a CTE that shadows `transactions`.
+    static func projectedBalanceParts(_ session: BackendSession, target: AccountID, union: [Int]) throws -> [Partition] {
+        let unionJson = JSValue.array(union.map(JSValue.int)).jsonText
+        let row = try session.row(
+            """
+            WITH transactions AS (
+              SELECT CAST(?2 AS INTEGER) AS account_id, src.date, src.amount, src.currency,
+                     src.is_active, src.balance, src.bank_sequence, src.id
+                FROM main.transactions src
+               WHERE src.account_id IN (SELECT value FROM json_each(?1))
+            )
+            SELECT bp.balance_parts
+              FROM accounts a
+              \(AccountBalanceSQL.balancePartsJoin(asOfDate: "?3"))
+             WHERE a.id = ?2
+            """,
+            [.text(unionJson), .integer(Int64(target.rawValue)), .text(session.today())])
+        return try balanceParts(try row?.optionalText("balance_parts"))
+    }
+
+    /// `countOf`: the rows of one table whose column references the source account.
+    static func referenceCount(_ session: BackendSession, table: String, column: String, id: AccountID) throws -> Int {
+        let row = try session.row(
+            "SELECT COUNT(*) AS n FROM \(table) WHERE \(column) = ?", [.integer(Int64(id.rawValue))])
+        return row.map { Int(try $0.int64("n")) } ?? 0
+    }
+
+    static func mergePreview(
+        _ session: BackendSession, source: AccountID, target: AccountID
+    ) throws -> HandlerResult {
+        if target == source { throw BackendHTTPError.validation("An account cannot be merged into itself") }
+        guard let targetRow = try session.row("SELECT id, currency FROM accounts WHERE id = ?", [.integer(Int64(target.rawValue))])
+        else { throw BackendHTTPError.notFound("Account \(target.rawValue) not found") }
+        guard try session.row("SELECT id FROM accounts WHERE id = ?", [.integer(Int64(source.rawValue))]) != nil
+        else { throw BackendHTTPError.notFound("Account \(source.rawValue) not found") }
+        let targetCurrency = storedCurrencyCode(try targetRow.optionalText("currency"))
+        let union = [target.rawValue, source.rawValue]
+        let partitions = try projectedBalanceParts(session, target: target, union: union)
+        let rates = try latestRatesToEur(session)
+        var total = DecimalJS.zero
+        var unconverted: [String] = []
+        for part in partitions {
+            if let converted = try convert(part.balance, from: part.currency, to: targetCurrency, rates: rates) {
+                total = total.plus(converted)
+            } else {
+                unconverted.append(part.currency)
+            }
+        }
+        return HandlerResult(
+            data: .object([
+                "into": .int(target.rawValue), "source": .int(source.rawValue),
+                "reassigned": .object([
+                    "transactions": .int(try referenceCount(session, table: "transactions", column: "account_id", id: source)),
+                    "planned": .int(
+                        try referenceCount(session, table: "planned_transactions", column: "account_id", id: source)),
+                    "portfolio": .int(
+                        try referenceCount(session, table: "portfolio_transactions", column: "account_id", id: source)),
+                    "funding": .int(try referenceCount(session, table: "accounts", column: "funding_account_id", id: source)),
+                ]),
+                "projectedBalance": number(try Money.roundToCents(total).toNumber),
+                "projectedBalanceCurrency": .string(targetCurrency),
+                "balanceParts": .array(
+                    partitions.map { .object(["currency": .string($0.currency), "balance": number($0.balance.toNumber)]) }),
+                "projectedBalanceIncomplete": .bool(!unconverted.isEmpty),
+                "unconvertedCurrencies": .array(unconverted.map(JSONValue.string)),
+                "stampsInterleaved": .bool(
+                    try stampRangesOverlap(stampRanges(session, ids: union))),
+                "openingAnchorCollision": .bool(
+                    try !collidingAnchorCurrencies(session, ids: union).isEmpty),
+                "links": .array([]),
+            ]))
+    }
+
+    /// `mergeBody`: every entry validated as sent, so a malformed entry rejects the whole request.
+    static let maxMergeSources = 500
+
+    static func mergeBodySourceIds(_ body: JSValue?) throws -> [Int] {
+        var ids: [Int] = []
+        guard let object = body?.objectValue else {
+            if body == nil || body == .null { return ids }
+            throw BackendHTTPError.validation("Invalid input: expected object, received \(body?.zodTypeName ?? "array")")
+        }
+        guard case .array(let rawIds)? = object["source_ids"] else { return ids }
+        if rawIds.count > maxMergeSources {
+            throw BackendHTTPError.validation("source_ids must contain at most \(maxMergeSources) accounts")
+        }
+        var rejected: [String] = []
+        for (index, raw) in rawIds.enumerated() {
+            if let id = TransactionsArea.validId(raw) {
+                ids.append(id)
+            } else {
+                rejected.append("source_ids[\(index)] (\(raw.jsonText))")
+            }
+        }
+        if !rejected.isEmpty {
+            throw BackendHTTPError.validation(
+                "source_ids must contain only integers, no accounts were merged: \(rejected.joined(separator: "; \"))")
+        }
+        return ids
+    }
+
+    /// `assertMergeFundingCycleSafe`: a repointed funding edge may not close a cycle.
+    static func assertMergeFundingCycleSafe(_ session: BackendSession, target: AccountID, sources: [Int]) throws {
+        let sourceSet = Set(sources)
+        var visited: Set<AccountID> = []
+        var current = target
+        var traversedRepointedEdge = false
+        while !visited.contains(current) {
+            visited.insert(current)
+            guard
+                let account = try getById(session, current),
+                let rawParent = account.fundingAccountId
+            else { return }
+            let parent = sourceSet.contains(rawParent.rawValue) ? target : rawParent
+            if parent != rawParent { traversedRepointedEdge = true }
+            current = parent
+        }
+        if traversedRepointedEdge {
+            throw BackendHTTPError.validation("Merging these accounts would create a funding-account cycle")
+        }
+    }
+
+    /// `mergeAccounts`: repoint every reference, then delete the sources — atomically.
+    static func merge(_ session: BackendSession, target: AccountID, sources: [Int]) throws -> HandlerResult {
+        var seen: Set<Int> = []
+        let ids = sources.filter { seen.insert($0).inserted }
+        if ids.isEmpty {
+            throw BackendHTTPError.validation("Provide at least one distinct source account to merge")
+        }
+        return try session.transaction {
+            guard try getById(session, target) != nil else {
+                throw BackendHTTPError.notFound("Account \(target.rawValue) not found")
+            }
+            let sourceJson = JSValue.array(ids.map(JSValue.int)).jsonText
+            let found = try session.rows(
+                "SELECT id FROM accounts WHERE id IN (SELECT value FROM json_each(?))", [.text(sourceJson)])
+            let foundIds = Set(try found.map { try $0.integerId("id") })
+            let missing = ids.filter { !foundIds.contains($0) }
+            if !missing.isEmpty {
+                throw BackendHTTPError.notFound("Account(s) not found: \(missing.map(String.init).joined(separator: ", "))")
+            }
+            try assertMergeFundingCycleSafe(session, target: target, sources: ids)
+            let union = [target.rawValue] + ids
+            let stampsInterleaved = try stampRangesOverlap(stampRanges(session, ids: union))
+            let collisions = try collidingAnchorCurrencies(session, ids: union)
+            if !collisions.isEmpty {
+                throw BackendHTTPError.validation(
+                    "More than one of these accounts has an opening balance in \(collisions.joined(separator: ", ")). "
+                        + "Remove the opening balance from all but one of them, then merge "
+                        + "(an account can hold only one opening balance per currency).")
+            }
+            let unionJson = JSValue.array(union.map(JSValue.int)).jsonText
+            let arguments: [SQLValue] = [.integer(Int64(target.rawValue)), .text(sourceJson)]
+            func repointed(_ sql: String) throws -> Int {
+                try session.rows(sql, arguments).count
+            }
+            let transactions = try repointed(
+                "UPDATE transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+            let planned = try repointed(
+                "UPDATE planned_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+            let portfolio = try repointed(
+                "UPDATE portfolio_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+            _ = try repointed(
+                "UPDATE portfolio_import_batches SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+            let funding = try repointed(
+                "UPDATE accounts SET funding_account_id = ?1 WHERE funding_account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+            if stampsInterleaved {
+                _ = try session.rows(
+                    "DELETE FROM account_statement_balances WHERE account_id = ?", [.integer(Int64(target.rawValue))])
+            }
+            _ = try session.rows(
+                "DELETE FROM accounts WHERE id IN (SELECT value FROM json_each(?)) AND id <> ?",
+                [.text(sourceJson), .integer(Int64(target.rawValue))])
+            return HandlerResult(
+                data: .object([
+                    "into": .int(target.rawValue),
+                    "merged": .array(ids.map(JSONValue.int)),
+                    "reassigned": .object([
+                        "transactions": .int(transactions), "planned": .int(planned),
+                        "portfolio": .int(portfolio), "funding": .int(funding),
+                    ]),
+                    "stampsInterleaved": .bool(stampsInterleaved), "links": .array([]),
+                ]))
+        }
+    }
+
+    /// `validateDateString`: `new Date` accepts any `YYYY-MM-DD` with a real month, rolling days.
+    static func openingBalanceDate(_ text: String) -> String? {
+        let bytes = Array(text.utf8)
+        guard bytes.count == 10, bytes[4] == 45, bytes[7] == 45 else { return nil }
+        func value(_ range: Range<Int>) -> Int { range.reduce(0) { $0 * 10 + Int(bytes[$1] - 48) } }
+        guard [0, 1, 2, 3, 5, 6, 8, 9].allSatisfy({ (48...57).contains(bytes[$0]) }) else { return nil }
+        let month = value(5..<7)
+        let day = value(8..<10)
+        guard (1...12).contains(month), (1...31).contains(day) else { return nil }
+        return text
+    }
+
+    /// The transaction row as `transactionRowSchema` wires it: amounts as decimal text, the
+    /// date as its UTC-midnight instant.
+    static func rawTransactionJSON(_ row: SQLRow) throws -> JSONValue {
+        func nullableId(_ column: String) throws -> JSONValue {
+            try row.optionalInt64(column).map { JSONValue.int(Int($0)) } ?? .null
+        }
+        func nullableText(_ column: String) throws -> JSONValue {
+            try row.optionalText(column).map(JSONValue.string) ?? .null
+        }
+        return .object([
+            "id": .int(try row.integerId("id")),
+            "date": .string(try row.text("row_date")),
+            "amount": .string(try row.text("amount")),
+            "currency": .string(try row.text("currency")),
+            "balance": try nullableText("balance"),
+            "memo": try nullableText("memo"),
+            "comment": try nullableText("comment"),
+            "recipient_id": .int(try row.integerId("recipient_id")),
+            "recipient_bank_account_id": try nullableId("recipient_bank_account_id"),
+            "category_id": try nullableId("category_id"),
+            "is_active": .bool(try row.bool("is_active")),
+            "created_at": .string(try row.instant("created_at").text),
+            "updated_at": .string(try row.instant("updated_at").text),
+            "import_batch_id": try nullableId("import_batch_id"),
+            "matched_pattern_id": try nullableId("matched_pattern_id"),
+            "is_transfer": .bool(try row.bool("is_transfer")),
+            "transfer_peer_id": try nullableId("transfer_peer_id"),
+            "transfer_source": try nullableText("transfer_source"),
+            "account_id": try nullableId("account_id"),
+            "source_record_hash": try nullableText("source_record_hash"),
+            "dedup_fingerprint": try nullableText("dedup_fingerprint"),
+            "dedup_fingerprint_version": try nullableId("dedup_fingerprint_version"),
+            "bank_sequence": try nullableText("bank_sequence"),
+        ])
+    }
+
+    /// The `RETURNING` columns of the opening-balance anchor upsert.
+    static let anchorColumns = """
+        id, to_char(date, 'YYYY-MM-DD') || 'T00:00:00.000Z' AS row_date, amount, currency, balance, memo, comment,
+        recipient_id, recipient_bank_account_id, category_id, is_active, created_at, updated_at, import_batch_id,
+        matched_pattern_id, is_transfer, transfer_peer_id, transfer_source, account_id, source_record_hash,
+        dedup_fingerprint, dedup_fingerprint_version, bank_sequence
+        """
+
+    /// `setOpeningBalance`: stamp or refresh the single opening-balance anchor of an account+currency.
+    static func openingBalance(_ session: BackendSession, id: AccountID, body: JSValue?) throws -> HandlerResult {
+        guard let account = try getById(session, id) else {
+            throw BackendHTTPError.notFound("Account \(id.rawValue) not found")
+        }
+        let object = body?.objectValue
+        var issues: [String] = []
+        let rawBalance = object?["balance"]
+        var balance = 0.0
+        if let value = rawBalance, value != .null, value != .string(""), value.javaScriptNumber.isFinite {
+            balance = value.javaScriptNumber
+        } else {
+            issues.append("balance is required and must be a number")
+        }
+        let rawDate = object?["date"]
+        let dateText = (rawDate == nil || rawDate == .null) ? "" : looseText(rawDate)
+        var day = ""
+        if dateText.isEmpty {
+            issues.append("date is required and must be an ISO date (YYYY-MM-DD)")
+        } else if openingBalanceDate(dateText) == nil {
+            issues.append("date is not a valid date")
+        } else {
+            day = dateText
+        }
+        let rawCurrency = object?["currency"]
+        var currency: String?
+        if let rawCurrency, rawCurrency != .null, rawCurrency != .string("") {
+            let code = JavaScriptWhitespace.trim(rawCurrency.javaScriptString.uppercased())
+            if isCurrencyCode(code) {
+                currency = code
+            } else {
+                issues.append("currency must be a 3-letter ISO code")
+            }
+        }
+        if !issues.isEmpty { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+        let anchorCurrency = currency ?? storedCurrencyCode(account.currency)
+        return try session.transaction {
+            let earliest = try session.row(
+                """
+                SELECT to_char(MIN(date), 'YYYY-MM-DD') AS earliest
+                  FROM transactions
+                 WHERE account_id = ? AND is_active = 1 AND currency = ? AND transfer_source IS NOT 'opening'
+                """,
+                [.integer(Int64(id.rawValue)), .text(anchorCurrency)])
+            let warning: JSONValue
+            if let earliest, let first = try earliest.optionalText("earliest"), first <= day {
+                warning = .string(
+                    "Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.")
+            } else {
+                warning = .null
+            }
+            let recipient = try systemRecipientId(session)
+            let existing = try session.row(
+                "SELECT id FROM transactions WHERE account_id = ? AND transfer_source = 'opening' AND currency = ? LIMIT 1",
+                [.integer(Int64(id.rawValue)), .text(anchorCurrency)])
+            let balanceText = SQLArguments.javaScriptText(balance)
+            let anchor: SQLRow
+            if let existing {
+                guard
+                    let row = try session.row(
+                        """
+                        UPDATE transactions
+                           SET balance = vision_numeric(?, 18, 4), date = ?, memo = 'OPENING BALANCE',
+                               amount = vision_numeric(0, 18, 4), is_active = 1, updated_at = now()
+                         WHERE id = ?
+                        RETURNING \(AccountsArea.anchorColumns)
+                        """,
+                        [.text(balanceText), .text(day), .integer(Int64(try existing.integerId("id")))])
+                else {
+                    throw SQLRowDecodingError(column: "transactions", problem: "the anchor UPDATE returned no row")
+                }
+                anchor = row
+            } else {
+                guard
+                    let row = try session.row(
+                        """
+                        INSERT INTO transactions
+                          (date, amount, balance, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
+                        VALUES (?, vision_numeric(0, 18, 4), vision_numeric(?, 18, 4), ?, 'OPENING BALANCE', ?, ?, 1, 'opening', 1)
+                        RETURNING \(AccountsArea.anchorColumns)
+                        """,
+                        [
+                            .text(day), .text(balanceText), .text(anchorCurrency),
+                            .integer(Int64(id.rawValue)), .integer(Int64(recipient)),
+                        ])
+                else {
+                    throw SQLRowDecodingError(column: "transactions", problem: "the anchor INSERT returned no row")
+                }
+                anchor = row
+            }
+            return HandlerResult(
+                data: .object([
+                    "transaction": try rawTransactionJSON(anchor), "warning": warning, "links": .array([]),
+                ]))
+        }
+    }
+
+    /// `reconcileAccount`: resolve the account's drift by accepting the ledger or stamping a delta.
+    static func reconcile(_ session: BackendSession, id: AccountID, body: JSValue?) throws -> HandlerResult {
+        let object = body?.objectValue
+        let mode = looseText(object?["mode"] ?? .string(""))
+        guard mode == "accept" || mode == "adjustment" else {  // lint:allow string-literal-compare the two reconcile modes of reconcileService
+            throw BackendHTTPError.validation("mode is required and must be 'accept' or 'adjustment'")
+        }
+        var requestedCode: String?
+        if let rawCurrency = object?["currency"], rawCurrency != .null, rawCurrency != .string("") {
+            let code = JavaScriptWhitespace.trim(rawCurrency.javaScriptString.uppercased())
+            guard isCurrencyCode(code) else {
+                throw BackendHTTPError.validation("currency must be a 3-letter ISO code")
+            }
+            requestedCode = code
+        }
+        return try session.transaction {
+            guard let account = try getById(session, id) else {
+                throw BackendHTTPError.notFound("Account \(id.rawValue) not found")
+            }
+            let currencyValue: SQLValue = requestedCode.map(SQLValue.text) ?? .null
+            let row = try session.row(
+                """
+                SELECT a.currency AS account_currency, COALESCE(?2, a.currency) AS reconcile_currency,
+                       s.balance AS statement_balance, bp.balance_parts
+                  FROM accounts a
+                  \(AccountBalanceSQL.balancePartsJoin(asOfDate: "?1"))
+                  LEFT JOIN account_statement_balances s
+                    ON s.account_id = a.id AND s.currency = COALESCE(?2, a.currency)
+                 WHERE a.id = ?3
+                """,
+                [.text(session.today()), currencyValue, .integer(Int64(id.rawValue))])
+            guard let row else { throw BackendHTTPError.notFound("Account \(id.rawValue) not found") }
+            guard let statementText = try row.optionalText("statement_balance") else {
+                throw BackendHTTPError.validation("Account has no statement balance to reconcile against")
+            }
+            let parts = try balanceParts(try row.optionalText("balance_parts"))
+            let fallbackBase = statementPartition(parts, of: account)
+            let reconcileCurrency = (requestedCode ?? fallbackBase.currency).uppercased()
+            let exactPart = parts.first { $0.currency.uppercased() == reconcileCurrency }
+            let base: Partition
+            if let requestedCode {
+                base = Partition(currency: reconcileCurrency, balance: exactPart?.balance ?? .zero)
+            } else {
+                base = fallbackBase
+            }
+            let statement = try DecimalJS.from(statementText).toNumber
+            let computed = try Money.roundToCents(base.balance).toNumber
+            let drift = try DecimalJS.from(SQLArguments.javaScriptText(statement))
+                .minus(DecimalJS.from(SQLArguments.javaScriptText(computed))).toNumber
+            if abs(drift) < 0.005 {
+                throw BackendHTTPError.validation("Account is already reconciled (no drift to resolve)")
+            }
+            if mode == "accept" {  // lint:allow string-literal-compare the two reconcile modes of reconcileService
+                guard
+                    let upserted = try session.row(
+                        """
+                        INSERT INTO account_statement_balances (account_id, currency, balance, balance_date)
+                        VALUES (?, ?, vision_numeric(?, 18, 4), ?)
+                        ON CONFLICT (account_id, currency) DO UPDATE SET balance = excluded.balance,
+                          balance_date = excluded.balance_date
+                        RETURNING balance
+                        """,
+                        [
+                            .integer(Int64(id.rawValue)), .text(reconcileCurrency),
+                            .text(SQLArguments.javaScriptText(computed)), .text(session.today()),
+                        ])
+                else {
+                    throw SQLRowDecodingError(
+                        column: "account_statement_balances", problem: "the upsert returned no row")
+                }
+                return HandlerResult(
+                    data: .object([
+                        "mode": .string(mode), "drift": .int(0), "currency": .string(reconcileCurrency),
+                        "statement_balance": number(try DecimalJS.from(try upserted.text("balance")).toNumber),
+                        "computed_balance": number(computed), "transaction": .null, "links": .array([]),
+                    ]))
+            }
+            let recipient = try systemRecipientId(session)
+            guard
+                let inserted = try session.row(
+                    """
+                    INSERT INTO transactions
+                      (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
+                    VALUES (?, vision_numeric(?, 18, 4), ?, 'BALANCE ADJUSTMENT', ?, ?, 1, 'adjustment', 1)
+                    RETURNING id, amount, transfer_source
+                    """,
+                    [
+                        .text(session.today()), .text(SQLArguments.javaScriptText(drift)), .text(base.currency),
+                        .integer(Int64(id.rawValue)), .integer(Int64(recipient)),
+                    ])
+            else {
+                throw SQLRowDecodingError(column: "transactions", problem: "the adjustment INSERT returned no row")
+            }
+            return HandlerResult(
+                data: .object([
+                    "mode": .string(mode), "drift": .int(0), "currency": .string(reconcileCurrency),
+                    "statement_balance": number(statement), "computed_balance": number(statement),
+                    "transaction": .object([
+                        "id": .int(try inserted.integerId("id")),
+                        "amount": number(try DecimalJS.from(try inserted.text("amount")).toNumber),
+                        "transfer_source": .string(try inserted.text("transfer_source")),
+                    ]),
+                    "links": .array([]),
+                ]))
+        }
     }
 }
