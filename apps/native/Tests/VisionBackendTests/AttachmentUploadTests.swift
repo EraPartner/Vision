@@ -76,7 +76,7 @@ import VisionNativeCore
                 == nil)
         #expect(
             MultipartParts.parse(
-                headers: ["Content-Type": "multipart/form-data; boundary=""], body: Data("--\r\n\r\n\r\n--".utf8)) == nil)
+                headers: ["Content-Type": "multipart/form-data; boundary="""], body: Data("--\r\n\r\n\r\n--".utf8)) == nil)
     }
 
     // MARK: - The content checks
@@ -114,7 +114,7 @@ import VisionNativeCore
 
     // MARK: - The route, on the size limit and the unexpected field
 
-    @Test func rejectsOversizeAndUnexpectedFields() throws {
+    @Test func rejectsOversizeAndUnexpectedFields() async throws {
         let database = try Self.uploadDatabase()
         let oversize = Data(repeating: 0x89, count: AttachmentsArea.maxUploadBytes + 1)
         let contentType = "multipart/form-data; boundary=VisionBoundary"
@@ -122,7 +122,7 @@ import VisionNativeCore
             ("file", "big.png", "image/png", oversize),
         ])
         do {
-            _ = try database.run { session in
+            _ = try await database.run { session in
                 try AttachmentsArea.upload(
                     session,
                     request: Self.request(path: "1", contentType: contentType, body: oversizeBody), root: nil)
@@ -137,7 +137,7 @@ import VisionNativeCore
             ("other", "a.png", "image/png", Self.png),
         ])
         do {
-            _ = try database.run { session in
+            _ = try await database.run { session in
                 try AttachmentsArea.upload(
                     session,
                     request: Self.request(path: "1", contentType: contentType, body: unexpectedField), root: nil)

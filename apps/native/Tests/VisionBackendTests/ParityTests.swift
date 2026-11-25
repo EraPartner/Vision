@@ -51,11 +51,10 @@ import VisionNativeCore
                     body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
                 }
                 for file in files {
-                    body.append(
-                        Data(
-                            "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(file.name)\"; "
-                                + "filename=\"\(file.filename)\"\r\nContent-Type: \(file.contentType ?? "application/octet-stream")\r\n\r\n"
-                                .utf8))
+                    let disposition =
+                        "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(file.name)\"; "
+                        + "filename=\"\(file.filename)\"\r\nContent-Type: \(file.contentType ?? "application/octet-stream")\r\n\r\n"
+                    body.append(Data(disposition.utf8))
                     body.append(Data(base64Encoded: file.base64) ?? Data())
                     body.append(Data("\r\n".utf8))
                 }
@@ -305,7 +304,7 @@ import VisionNativeCore
             // today token applied.
             // A binary answer (an attachment download) is recorded as the base64 of its
             // bytes; the response body is compared with them exactly.
-            if case .object(let expected)? = step.response, expected.count == 1,
+            if case .object(let expected) = step.response, expected.count == 1,
                 case .string(let base64)? = expected["buffer"]
             {
                 #expect(response.body == Data(base64Encoded: base64), "\(label)")
@@ -320,11 +319,11 @@ import VisionNativeCore
                 #expect(found == nil, "\(label): \(found ?? "")")
                 continue
             }
-            let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
+            let parsedBody = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let found = difference(
-                step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
+                step.response, withoutRequestId(parsedBody), at: "response", seedTimes: seedTimes, today: today)
             #expect(found == nil, "\(label): \(found ?? "")")
-            if case .object(let fields) = body, case .object(let meta)? = fields["meta"] {
+            if case .object(let fields) = parsedBody, case .object(let meta)? = fields["meta"] {
                 #expect(meta["requestId"] != nil, "\(label)")
                 #expect(response.headers["x-request-id"] != nil, "\(label)")
             }
