@@ -138,7 +138,7 @@
       }
     },
     {
-      "operationId": "importCsv",
+      "operationId": "importCsvCustom",
       "method": "POST",
       "path": "/api/import/csv/custom",
       "multipart": {
@@ -195,7 +195,7 @@
       "response": ":                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":0}\n\nevent: progress\ndata: {\"phase\":\"staging\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":40}\n\nevent: progress\ndata: {\"phase\":\"validating\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":0,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":55}\n\nevent: progress\ndata: {\"phase\":\"matching\",\"current\":1,\"total\":1,\"imported\":0,\"duplicates\":0,\"errors\":0,\"percent\":70}\n\nevent: review_required\ndata: {\"batch_id\":4,\"match_source_counts\":{\"pattern\":0,\"exact\":0,\"fuzzy\":0,\"new\":1},\"percent\":70}\n\n"
     },
     {
-      "operationId": "importCsv",
+      "operationId": "importRecipients",
       "method": "POST",
       "path": "/api/import/recipients",
       "multipart": {
@@ -222,7 +222,7 @@
       }
     },
     {
-      "operationId": "importCsv",
+      "operationId": "importCategories",
       "method": "POST",
       "path": "/api/import/categories",
       "multipart": {
@@ -248,7 +248,7 @@
       }
     },
     {
-      "operationId": "importCsv",
+      "operationId": "importRecipients",
       "method": "POST",
       "path": "/api/import/recipients",
       "multipart": {

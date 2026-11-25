@@ -29,6 +29,7 @@ public enum PortedOperations {
         "getImportBatches", "deleteImportBatch",
         "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch",
         "uploadAttachment", "getSupportedAdapters", "getInfoBanks", "getRecurringPatterns",
+        "importCsv", "importCsvCustom", "importCsvStream", "importRecipients", "importCategories",
     ]
 }
 
@@ -156,6 +157,7 @@ public struct InProcessBackend: Sendable {
         ImportBatchesArea.register(&backend, database: database)
         ImportReviewArea.register(&backend, database: database)
         ImportCommitArea.register(&backend, database: database)
+        ImportUploadsArea.register(&backend, database: database)
         InfoArea.register(&backend, database: database)
         return backend
     }
@@ -228,8 +230,17 @@ public struct RoutingAPITransport: APITransport, APIStreamTransport {
                 queryItems: items, headers: request.headers, body: request.body))
     }
 
-    /// No event-stream operation is ported yet, so every stream goes to Bun.
+    /// A ported event-stream operation answers its whole event text at once; the client's
+    /// reader gets it fed in one chunk. Everything else streams from Bun.
     public func stream(_ request: APIRequest, receive: (Data) async throws -> Void) async throws -> APIResponse {
-        try await streamFallback.stream(request, receive: receive)
+        guard let matched = backend.match(request), await backend.isActive() else {
+            return try await streamFallback.stream(request, receive: receive)
+        }
+        _ = matched
+        let response = try await send(request)
+        if !response.body.isEmpty {
+            try await receive(response.body)
+        }
+        return response
     }
 }

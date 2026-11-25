@@ -401,11 +401,15 @@ import VisionNativeCore
         try await Self.replay("info")
     }
 
+    @Test func importUploads() async throws {
+        try await Self.replay("importUploads")
+    }
+
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
         "recipients-mutations", "transactions-mutations", "planned-mutations", "importParsers-mutations",
-        "importReview-mutations",
+        "importReview-mutations", "importUploads-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
