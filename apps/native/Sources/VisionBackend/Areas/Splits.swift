@@ -253,9 +253,9 @@ enum SplitsArea {
         var projected: [(recipientId: RecipientID, fields: [[String: JSONValue]], remaining: Double)] = []
         for (offset, id) in order.enumerated() {
             let entry = recipients[offset]
-            let totalOwed = Money.roundToCents(entry.owed.reduce(DecimalJS.zero, plus)).toNumber
-            let totalPaid = Money.roundToCents(entry.paid.reduce(DecimalJS.zero, plus)).toNumber
-            let remaining = Money.roundToCents(
+            let totalOwed = DecimalMoney.roundToCents(entry.owed.reduce(DecimalJS.zero) { $0.plus($1) }).toNumber
+            let totalPaid = DecimalMoney.roundToCents(entry.paid.reduce(DecimalJS.zero) { $0.plus($1) }).toNumber
+            let remaining = DecimalMoney.roundToCents(
                 DecimalJS.from(SQLArguments.javaScriptText(max(0, totalOwed - totalPaid)))).toNumber
             guard remaining > 0 else { continue }
             projected.append((
@@ -302,9 +302,9 @@ enum SplitsArea {
                 "unconverted_currencies": .array(entry.unconvertedCurrencies.sorted().map(JSONValue.string)),
             ]) { _, new in new }
         }
-        let remaining = Money.roundToCents(
+        let remaining = DecimalMoney.roundToCents(
             sorted.map { DecimalJS.from(SQLArguments.javaScriptText($0.element.remaining)) }
-                .reduce(DecimalJS.zero, plus))
+                .reduce(DecimalJS.zero) { $0.plus($1) })
         let summary = JSONValue.object([
             "currency": .string(target), "remaining": AccountsArea.number(remaining.toNumber),
             "unconverted_count": .int(allUnconvertedCount),
@@ -342,7 +342,7 @@ enum SplitsArea {
                 unconvertedCurrencies.insert(from)
             }
         }
-        let remaining = Money.roundToCents(amounts.reduce(DecimalJS.zero, plus))
+        let remaining = DecimalMoney.roundToCents(amounts.reduce(DecimalJS.zero) { $0.plus($1) })
         return .object([
             "currency": .string(target), "remaining": AccountsArea.number(remaining.toNumber),
             "unconverted_count": .int(unconvertedCount),
@@ -392,7 +392,7 @@ enum SplitsArea {
             fields["transaction_recipient_name"] =
                 try row.optionalText("transaction_recipient_name").map(JSONValue.string) ?? .null
             fields["remaining"] = AccountsArea.number(
-                Money.roundToCents(remaining.lt(.zero) ? DecimalJS.zero : remaining).toNumber)
+                DecimalMoney.roundToCents(remaining.lt(.zero) ? DecimalJS.zero : remaining).toNumber)
             return fields
         }
     }
@@ -405,7 +405,7 @@ enum SplitsArea {
              WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = 0
             """,
             [.integer(Int64(recipient.rawValue))])
-        return row.map { try Int($0.int64("n")) } ?? 0
+        return (try row.map { try Int($0.int64("n")) }) ?? 0
     }
 
     // MARK: - Read handlers
@@ -429,7 +429,7 @@ enum SplitsArea {
         let target = try owedCurrency(request)
         let page = page(request)
         let splits = try owedByRecipient(session, recipient: recipient, page: page)
-        let total = page.map { _ in try countOwed(session, recipient: recipient) } ?? splits.count
+        let total = (try page.map { _ in try countOwed(session, recipient: recipient) }) ?? splits.count
         var body: [String: JSONValue] = ["items": .array(splits.map(JSONValue.object)), "total": .int(total)]
         if let page {
             body["limit"] = page.limit.json
@@ -695,7 +695,7 @@ enum SplitsArea {
                 VALUES \(marks.joined(separator: ", ")) RETURNING id
                 """,
                 arguments)
-            let ids = JSValue.array(keys.map { .int(try $0.integerId("id")) }).jsonText
+            let ids = JSValue.array(try keys.map { .int(try $0.integerId("id")) }).jsonText
             let rows = try session.rows(
                 """
                 SELECT \(splitColumns), '0' AS amount_paid, r.name AS recipient_name
@@ -787,7 +787,7 @@ enum SplitsArea {
                     continue
                 }
                 // `computeBulkSplitAmount`: half or the whole absolute total, on cents.
-                let share = Money.roundToCents(
+                let share = DecimalMoney.roundToCents(
                     mode == "full" ? totals.total.abs  // lint:allow string-literal-compare the two bulk preset labels of lib/calculations/splits.ts : try totals.total.abs.dividedBy(DecimalJS.from("2")))
                 if share.isZero || !share.isFinite {
                     skippedZero += 1
