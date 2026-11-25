@@ -43,7 +43,7 @@ enum InfoArea {
                 + " (select \"t\".\"account_id\" from \"transactions\" as \"t\" where \"t\".\"is_active\" = ?"
                 + " and \"t\".\"account_id\" is not null) order by \"a\".\"name\"",
             [.integer(1)])
-        let items = rows.map { JSONValue.string(try $0.text("bank_account")) }
+        let items = try rows.map { JSONValue.string(try $0.text("bank_account")) }
         return HandlerResult(data: .object(["items": .array(items), "total": .int(items.count)]))
     }
 
@@ -171,7 +171,7 @@ enum InfoArea {
                 where COALESCE(r.primary_recipient_id, pt.recipient_id) IN (SELECT value FROM json_each(?))
                   and "pt"."is_active" = ?
                 """,
-                [.text(JSONValue.array(uniqueIds.map { .int($0) }).jsonText), .integer(1)])
+                [.text(JSValue.array(uniqueIds.map { .int($0.rawValue) }).jsonText), .integer(1)])
             for row in plannedRows {
                 plannedIds.insert(RecipientID(rawValue: Int(try row.int64("recipient_id"))))
             }
@@ -186,7 +186,7 @@ enum InfoArea {
             // The intervals between consecutive transactions, in days, positive only.
             var intervals: [Double] = []
             for pair in zip(txns, txns.dropFirst()) {
-                let distance = (try? CalendarDays.difference(from: pair.0.date, to: pair.1.date)) ?? 0
+                let distance = (try? CalendarDays.difference(from: pair.0.date ?? "", to: pair.1.date ?? "")) ?? 0
                 if distance > 0 { intervals.append(Double(distance)) }
             }
             guard intervals.count >= 2 else { continue }
@@ -218,10 +218,10 @@ enum InfoArea {
                 "averageAmount": number(average),
                 "latestAmount": number(latestAmount),
                 "currency": .string(currency),
-                "categoryId": latest.effectiveCategoryId.map { JSONValue.int($0) } ?? .null,
+                "categoryId": latest.effectiveCategoryId.map { JSONValue.int($0.rawValue) } ?? .null,
                 "categoryName": latest.categoryName.map { JSONValue.string($0) } ?? .null,
                 "bankAccount": latest.bankAccount.map { JSONValue.string($0) } ?? .null,
-                "accountId": latest.accountId.map { JSONValue.int($0) } ?? .null,
+                "accountId": latest.accountId.map { JSONValue.int($0.rawValue) } ?? .null,
                 "firstSeen": first.date.map { JSONValue.string($0) } ?? .null,
                 "lastSeen": .string(lastSeen),
                 "predictedNext": .string(next),
@@ -290,12 +290,12 @@ enum InfoArea {
         // The sort of the route: by date (both rows fail only on dates the corpus cannot
         // seed, which arrive as unparseable text and sort after everything else), then by id.
         let sorted = transactions.sorted { a, b in
-            let aFirst = (try? CalendarDays.epochDay(a.date)) != nil
-            let bFirst = (try? CalendarDays.epochDay(b.date)) != nil
+            let aFirst = (try? CalendarDays.epochDay(a.date ?? "")) != nil
+            let bFirst = (try? CalendarDays.epochDay(b.date ?? "")) != nil
             if !aFirst && !bFirst { return a.id < b.id }
             if !aFirst { return false }
             if !bFirst { return true }
-            let distance = (try? CalendarDays.difference(from: a.date, b.date)) ?? 0
+            let distance = (try? CalendarDays.difference(from: a.date ?? "", to: b.date ?? "")) ?? 0
             return distance == 0 ? a.id < b.id : distance > 0
         }
         let pairs = Array(zip(sorted, sorted.dropFirst())).suffix(3)
