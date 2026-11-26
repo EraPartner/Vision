@@ -90,7 +90,7 @@ struct YahooClient: Sendable {
             }
             if let first = quote.first?.objectValue, !first.isEmpty {
                 throw YahooError(
-                    "No timestamp with unexpected quote, please report with your query\(first.jsonText)")
+                    "No timestamp with unexpected quote, please report with your query\(JSValue.object(first).jsonText)")
             }
             return .object(JSObject([("meta", chart["meta"] ?? .null), ("quotes", .array([]))]))
         }
