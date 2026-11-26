@@ -4,8 +4,8 @@ import Observation
 @MainActor
 @Observable
 public final class StatisticsModel {
-    public private(set) var filtered: StatisticsSnapshot? { didSet { pivotPresentationCache = nil } }
-    public private(set) var unfiltered: StatisticsSnapshot? { didSet { pivotPresentationCache = nil } }
+    public private(set) var filtered: StatisticsSnapshot? { didSet { snapshotRevision &+= 1 } }
+    public private(set) var unfiltered: StatisticsSnapshot? { didSet { snapshotRevision &+= 1 } }
     public private(set) var error: String?
     public private(set) var isFetching = false
     public private(set) var exclusions = InsightExclusions()
@@ -52,10 +52,16 @@ public final class StatisticsModel {
     @ObservationIgnored var releaseDelay = StatisticsModel.releaseAfter
     @ObservationIgnored private var releaseTask: Task<Void, Never>?
     @ObservationIgnored private var onPage = false
-    @ObservationIgnored private var pivotPresentationCache: (
-        metric: StatisticsMetric, year: Int?, excluded: Bool,
-        groups: [StatisticsCategoryGroup], totals: [String: Decimal], total: Decimal
-    )?
+    /// Bumped whenever a snapshot changes, so a pivot built from an older one is never shown.
+    @ObservationIgnored private var snapshotRevision = 0
+    /// The pivot built on the main actor: the first one of a page and every one of a print model.
+    @ObservationIgnored private var pivotCache: StatisticsPivotEntry?
+    /// The pivot an off-main build published; observed, so its readers re-render when it lands.
+    private var pivotPublished: StatisticsPivotEntry?
+    /// The key of the off-main build in flight.
+    @ObservationIgnored private var pivotPending: StatisticsPivotKey?
+    /// A print model lays its pages out in one pass, so it never waits for an off-main build.
+    @ObservationIgnored private var buildsPivotOnMain = false
 
     public init(
         service: any StatisticsService, calendar: Calendar = .current,
@@ -91,6 +97,7 @@ public final class StatisticsModel {
         collapsedGroups = value.collapsedGroups
         pivotPage = value.pivotPage
         flowYear = value.flowYear
+        buildsPivotOnMain = true
         flow = value.flow
         flowError = value.flowError
     }
@@ -265,31 +272,52 @@ public final class StatisticsModel {
         let end = max(0, periods.count - pivotPage * 12)
         return Array(periods[max(0, end - 12)..<end])
     }
-    public var pivotGroups: [StatisticsCategoryGroup] {
-        pivotPresentation.groups
-    }
+    public var pivotGroups: [StatisticsCategoryGroup] { pivotPresentation.groups }
     public var pivotColumnTotals: [String: Decimal] { pivotPresentation.totals }
     public var pivotGrandTotal: Decimal { pivotPresentation.total }
-    private var pivotPresentation: (groups: [StatisticsCategoryGroup], totals: [String: Decimal], total: Decimal) {
-        let snapshot = data(for: "pivotTable")
+    private var pivotKey: StatisticsPivotKey {
+        StatisticsPivotKey(
+            metric: categoryMetric, year: pivotYear, excluded: graphExclusions["pivotTable"] != false,
+            revision: snapshotRevision)
+    }
+    /// The pivot for the current metric, year, exclusion and snapshot. The first build (and every
+    /// build of a print model) runs here; later ones run off the main actor while the previous
+    /// pivot stays on screen, and publish only if the inputs have not moved on since.
+    private var pivotPresentation: StatisticsPivotPresentation {
+        let key = pivotKey
+        let published = pivotPublished
+        if let published, published.key == key { return published.value }
+        if let cached = pivotCache, cached.key == key { return cached.value }
+        guard let snapshot = data(for: "pivotTable") else { return .empty }
         let metric = categoryMetric
-        let year = pivotYear
-        let excluded = graphExclusions["pivotTable"] != false
-        if let cached = pivotPresentationCache,
-            cached.metric == metric, cached.year == year, cached.excluded == excluded {
-            return (cached.groups, cached.totals, cached.total)
+        let periods = Set(pivotAllPeriods)
+        let shown = [published, pivotCache].compactMap { $0 }.max { $0.key.revision < $1.key.revision }
+        guard let shown, !buildsPivotOnMain else {
+            let interval = NativePerformance.begin("Statistics.presentation")
+            defer { NativePerformance.end("Statistics.presentation", interval) }
+            let value = StatisticsPivotPresentation(snapshot, metric: metric, periods: periods)
+            pivotCache = StatisticsPivotEntry(key: key, value: value)
+            return value
         }
-        let interval = NativePerformance.begin("Statistics.presentation")
-        defer { NativePerformance.end("Statistics.presentation", interval) }
-        let groups = snapshot?.categoryGroups(metric: metric, periods: Set(pivotAllPeriods)) ?? []
-        var totals: [String: Decimal] = [:]
-        var total: Decimal = 0
-        for group in groups {
-            total += group.total
-            for (period, value) in group.values { totals[period, default: 0] += value }
+        if pivotPending != key {
+            pivotPending = key
+            Task { [weak self] in
+                let value = await Task.detached(priority: .userInitiated) {
+                    StatisticsPivotPresentation(snapshot, metric: metric, periods: periods)
+                }.value
+                guard let self, self.pivotPending == key else { return }
+                self.pivotPending = nil
+                // The version check: a build for inputs that have since changed is dropped.
+                guard self.pivotKey == key else { return }
+                self.pivotPublished = StatisticsPivotEntry(key: key, value: value)
+            }
         }
-        pivotPresentationCache = (metric, year, excluded, groups, totals, total)
-        return (groups, totals, total)
+        return shown.value
+    }
+    /// Waits for an off-main pivot build in flight, for tests.
+    func pivotSettled() async {
+        _ = pivotPresentation
+        while pivotPending != nil { await Task.yield() }
     }
     public var pivotExpandableGroupIds: [String] { pivotGroups.filter(\.isExpandable).map(\.id) }
     /// `computeMasterToggleState(...).allCollapsed`: false when nothing can expand.
@@ -367,4 +395,44 @@ public final class StatisticsModel {
         widgetRevision = UUID()
         widgetSavePending = false
     }
+}
+
+/// What the Statistics pivot is built from: the metric, year, exclusion and snapshot revision.
+struct StatisticsPivotKey: Equatable, Sendable {
+    let metric: StatisticsMetric
+    let year: Int?
+    let excluded: Bool
+    let revision: Int
+}
+
+/// The Statistics pivot's category groups and its column and grand totals.
+struct StatisticsPivotPresentation: Sendable {
+    let groups: [StatisticsCategoryGroup]
+    let totals: [String: Decimal]
+    let total: Decimal
+
+    static let empty = StatisticsPivotPresentation(groups: [], totals: [:], total: 0)
+
+    private init(groups: [StatisticsCategoryGroup], totals: [String: Decimal], total: Decimal) {
+        self.groups = groups
+        self.totals = totals
+        self.total = total
+    }
+
+    /// Pure: safe to run off the main actor.
+    init(_ snapshot: StatisticsSnapshot, metric: StatisticsMetric, periods: Set<String>) {
+        let groups = snapshot.categoryGroups(metric: metric, periods: periods)
+        var totals: [String: Decimal] = [:]
+        var total: Decimal = 0
+        for group in groups {
+            total += group.total
+            for (period, value) in group.values { totals[period, default: 0] += value }
+        }
+        self.init(groups: groups, totals: totals, total: total)
+    }
+}
+
+struct StatisticsPivotEntry: Sendable {
+    let key: StatisticsPivotKey
+    let value: StatisticsPivotPresentation
 }

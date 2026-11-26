@@ -800,16 +800,34 @@ struct StatisticsModelTests {
         #expect(model.pivotGroups.first?.total == 400)
         #expect(model.pivotColumnTotals["2026-09"] == 400)
         #expect(model.pivotGrandTotal == 400)
+        // Later builds run off the main actor; the previous pivot shows until one lands.
         model.categoryMetric = .income
+        #expect(model.pivotGrandTotal == 400)
+        await model.pivotSettled()
         #expect(model.pivotColumnTotals["2026-09"] == 500)
         #expect(model.pivotGrandTotal == 500)
         // The loaded window holds no 2025 period, so a 2025 pivot is empty; the cache must not
         // keep serving the 2026 totals.
         model.pivotYear = 2025
         model.categoryMetric = .expense
+        await model.pivotSettled()
         #expect(model.pivotColumnTotals.isEmpty)
         #expect(model.pivotGrandTotal == 0)
         model.pivotYear = nil
+        await model.pivotSettled()
+        #expect(model.pivotGrandTotal == 400)
+    }
+    @Test func anOffMainPivotForInputsThatMovedOnIsDropped() async {
+        let model = StatisticsModel(service: HomeFixtureService(), now: { PlannedFixture.today })
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
+        model.pivotYear = 2026
+        model.categoryMetric = .expense
+        #expect(model.pivotGrandTotal == 400)
+        // Ask for income, then go back to expense before the income build lands.
+        model.categoryMetric = .income
+        _ = model.pivotGrandTotal
+        model.categoryMetric = .expense
+        await model.pivotSettled()
         #expect(model.pivotGrandTotal == 400)
     }
     @Test func invalidationDuringAnOlderWindowRequestCannotReplaceTheNewSnapshot() async {
