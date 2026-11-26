@@ -30,7 +30,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)                                  |
 | `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)                            |
 | `Sources/VisionNativeCore/Screens/`    | Screen models: Rates, Admin, Planned, Import, Transactions, Accounts, Insights |
-| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`                             |
+| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, generated `Resources/Strings/<language>.json`      |
 | `openapi-operations.txt`               | operationIds the Swift client is generated for                                 |
 | `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog                              |
 | `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron                              |

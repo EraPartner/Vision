@@ -314,11 +314,8 @@ public struct APIClient: Sendable {
                     lastError = .network("Server returned \(response.status)")
                     continue
                 }
-                outcome = Self.decode(response, as: Operation.Response.self, label: label).map { data in
-                    let body = preservingMeta ? try? JSONValue.parse(response.body) : nil
-                    let meta = body?["ok"] == .bool(true) ? body?["meta"] : nil
-                    return APIDataSnapshot(data: data, meta: meta)
-                }
+                outcome = Self.decodeSnapshot(
+                    response, as: Operation.Response.self, label: label, preservingMeta: preservingMeta)
             } catch let error as APIError {
                 outcome = .failure(error)
             } catch is CancellationError {
@@ -445,28 +442,40 @@ public struct APIClient: Sendable {
     static func decode<Value: Decodable>(_ response: APIResponse, as type: Value.Type, label: String)
         -> Result<Value, APIError>
     {
+        decodeSnapshot(response, as: type, label: label, preservingMeta: false).map(\.data)
+    }
+
+    /// `decode`, plus the envelope's `meta` when `preservingMeta`. An envelope body is parsed
+    /// once: `ok`, `data` and `meta` come out of the same pass (a probe pass, a data pass and a
+    /// third `JSONValue` pass for the meta each re-read the whole body before).
+    static func decodeSnapshot<Value: Decodable>(
+        _ response: APIResponse, as type: Value.Type, label: String, preservingMeta: Bool
+    ) -> Result<APIDataSnapshot<Value>, APIError> {
         guard (200..<300).contains(response.status) else {
             return .failure(.client(envelopeError(status: response.status, body: response.body)))
         }
         if response.status == 204 || response.body.isEmpty && Value.self == APIEmpty.self {
-            return decodeNull(as: type, label: label)
+            return decodeNull(as: type, label: label).map { APIDataSnapshot(data: $0) }
         }
         let decoder = JSONDecoder()
+        decoder.userInfo[EnvelopeData<Value>.keepsMeta] = preservingMeta
         let endpoint = label.split(separator: "?").first.map(String.init) ?? label
         // `unwrapEnvelope`: `{ ok: true, data }` yields `data`; any other body is used as is.
-        if let probe = try? decoder.decode(EnvelopeProbe.self, from: response.body), probe.ok == .bool(true) {
-            do {
-                let envelope = try decoder.decode(EnvelopeData<Value>.self, from: response.body)
-                if let data = envelope.data { return .success(data) }
-                return decodeNull(as: type, label: label)
-            } catch let error as DecodingError {
-                return .failure(.contract(APIContractError(endpoint: endpoint, issues: issues(error, dropping: 1))))
-            } catch {
-                return .failure(.contract(APIContractError(endpoint: endpoint, issues: ["(root): Invalid value"])))
+        do {
+            let envelope = try decoder.decode(EnvelopeData<Value>.self, from: response.body)
+            if envelope.isEnvelope {
+                guard let data = envelope.data else {
+                    return decodeNull(as: type, label: label).map { APIDataSnapshot(data: $0, meta: envelope.meta) }
+                }
+                return .success(APIDataSnapshot(data: data, meta: envelope.meta))
             }
+        } catch let error as DecodingError where EnvelopeData<Value>.failedInData(error) {
+            return .failure(.contract(APIContractError(endpoint: endpoint, issues: issues(error, dropping: 1))))
+        } catch {
+            // Not an object (an array or a scalar body): decoded as is below.
         }
         do {
-            return .success(try decoder.decode(Value.self, from: response.body))
+            return .success(APIDataSnapshot(data: try decoder.decode(Value.self, from: response.body)))
         } catch let error as DecodingError {
             // Only a body that failed to decode is checked for being JSON at all: parsing every
             // answer into Foundation objects first built a transient copy of each large page.
@@ -540,20 +549,48 @@ public struct APIClient: Sendable {
     }
 }
 
-/// Reads only `ok`, to tell an envelope from a bare body.
-private struct EnvelopeProbe: Decodable {
-    let ok: JSONValue?
-}
-
+/// One pass over a response object: `ok` first, then `data` (and `meta` when asked) only when
+/// `ok` is `true`, so a bare object body is not decoded as an envelope.
 private struct EnvelopeData<Value: Decodable>: Decodable {
+    static var keepsMeta: CodingUserInfoKey {
+        // lint:allow force-unwrap a non-empty literal key always makes a CodingUserInfoKey
+        CodingUserInfoKey(rawValue: "vision.envelope.keepsMeta")!
+    }
+
+    let isEnvelope: Bool
     let data: Value?
+    let meta: JSONValue?
 
     enum CodingKeys: String, CodingKey {
-        case data
+        case ok, data, meta
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnvelope = (try? container.decodeIfPresent(JSONValue.self, forKey: .ok)) == .bool(true)
+        guard isEnvelope else {
+            data = nil
+            meta = nil
+            return
+        }
         data = try container.decodeIfPresent(Value.self, forKey: .data)
+        // `decode`, not `decodeIfPresent`: an explicit `"meta": null` stays `.null`.
+        meta =
+            decoder.userInfo[Self.keepsMeta] as? Bool == true && container.contains(.meta)
+            ? try? container.decode(JSONValue.self, forKey: .meta) : nil
+    }
+
+    /// The error came from inside `data` of an `ok: true` envelope (a contract failure), not
+    /// from a body that is not an object.
+    static func failedInData(_ error: DecodingError) -> Bool {
+        let path: [any CodingKey]
+        switch error {
+        case .keyNotFound(_, let context), .valueNotFound(_, let context), .typeMismatch(_, let context),
+            .dataCorrupted(let context):
+            path = context.codingPath
+        @unknown default:
+            return false
+        }
+        return path.first?.stringValue == CodingKeys.data.stringValue
     }
 }

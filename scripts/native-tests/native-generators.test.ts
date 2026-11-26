@@ -34,7 +34,7 @@ import {
   uncoveredDesignTokens,
   type ThemeTokens,
 } from "../native-design-tokens.ts";
-import { generateCatalog } from "../native-strings.ts";
+import { generateStringTables } from "../native-strings.ts";
 import {
   generateNavigation,
   type NavigationSource,
@@ -884,27 +884,17 @@ void test("generation fails on an unresolved var(--x)", () => {
   );
 });
 
-void test("the String Catalog carries both languages for every listed key", () => {
-  const catalog = JSON.parse(
-    generateCatalog(["b.key", "a.key"], {
-      en: { "a.key": "A {count}", "b.key": "B" },
-      nl: { "a.key": "A-nl {count}", "b.key": "B-nl" },
-    }),
-  ) as {
-    sourceLanguage: string;
-    strings: Record<
-      string,
-      { localizations: Record<string, { stringUnit: { value: string } }> }
-    >;
-  };
-  assert.equal(catalog.sourceLanguage, "en");
-  assert.deepEqual(Object.keys(catalog.strings), ["a.key", "b.key"]);
-  assert.equal(
-    catalog.strings["a.key"]?.localizations.nl?.stringUnit.value,
-    "A-nl {count}",
-  );
+void test("the string tables carry both languages for every listed key", () => {
+  const tables = generateStringTables(["b.key", "a.key"], {
+    en: { "a.key": "A {count}", "b.key": "B" },
+    nl: { "a.key": "A-nl {count}", "b.key": "B-nl" },
+  });
+  const nl = JSON.parse(tables.nl) as Record<string, string>;
+  assert.deepEqual(Object.keys(nl), ["a.key", "b.key"]);
+  assert.equal(nl["a.key"], "A-nl {count}");
+  assert.equal((JSON.parse(tables.en) as Record<string, string>)["b.key"], "B");
   assert.throws(
-    () => generateCatalog(["a.key"], { en: { "a.key": "A" }, nl: {} }),
+    () => generateStringTables(["a.key"], { en: { "a.key": "A" }, nl: {} }),
     /a\.key has no nl text/,
   );
 });
@@ -1218,8 +1208,8 @@ void test("generation is deterministic", () => {
   assert.deepEqual(first, second);
 });
 
-void test("every web string key the Swift code names is in the String Catalog list", () => {
-  // A key missing from i18n-keys.txt has no catalog entry, so the app shows the raw key.
+void test("every web string key the Swift code names is in the string table list", () => {
+  // A key missing from i18n-keys.txt has no table entry, so the app shows the raw key.
   const listed = new Set(
     parseListFile(fs.readFileSync(repoPath("apps", "native", "i18n-keys.txt"), "utf8"), "i18n-keys.txt"),
   );
