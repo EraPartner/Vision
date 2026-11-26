@@ -505,7 +505,7 @@ extension PortfolioTransactionsArea {
         var incomeRecognitionRole: String
 
         init(_ row: SQLRow) throws {
-            id = Double(try row.int64("id"))
+            id = Double(try row.int64("eventId"))
             type = try row.text("type")
             date = try row.text("date")
             units = try row.text("units")
@@ -582,13 +582,13 @@ extension PortfolioTransactionsArea {
     static func unitEvents(_ session: BackendSession, _ investmentId: Int) throws -> [UnitEvent] {  // lint:allow raw-id business table ids of the TypeScript route and repository reads
         try session.rows(
             """
-            SELECT id AS "id::bigint", type, to_char(date, 'YYYY-MM-DD') AS date,
+            SELECT id AS eventId, type, to_char(date, 'YYYY-MM-DD') AS date,
                    COALESCE(units, '0') AS units, account_id, amount, fees, taxes,
                    CASE WHEN COALESCE(currency,'EUR')='EUR' THEN '1' ELSE COALESCE(fx_rate_to_eur,
-                     (SELECT er.rate_to_eur FROM exchange_rates er WHERE er.currency_code=portfolio_transactions.currency AND er.rate_date<=portfolio_transactions.date ORDER BY er.rate_date DESC LIMIT 1)) END AS "fxMultiplier", NULL AS source_account_id,
-                   NULL AS destination_account_id, '0' AS fee_units, NULL AS "transfer_id::bigint", currency,
+                     (SELECT er.rate_to_eur FROM exchange_rates er WHERE er.currency_code=portfolio_transactions.currency AND er.rate_date<=portfolio_transactions.date ORDER BY er.rate_date DESC LIMIT 1)) END AS fxMultiplier, NULL AS source_account_id,
+                   NULL AS destination_account_id, '0' AS fee_units, NULL AS transfer_id, currency,
                    source_record_hash, NULL AS adjustment_kind, NULL AS basis_policy,
-                   NULL AS "eligible_source_record_hashes::json", NULL AS "adjustment_id::bigint", income_recognition_role
+                   NULL AS eligible_source_record_hashes, NULL AS adjustment_id, income_recognition_role
             FROM portfolio_transactions WHERE investment_id = ?
             UNION ALL
             SELECT id, 'asset_transfer', to_char(date,'YYYY-MM-DD'), units, NULL,
@@ -600,7 +600,7 @@ extension PortfolioTransactionsArea {
                    '0','0','0',NULL,NULL,NULL,'0',NULL,NULL,
                    source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id,'standard'
             FROM portfolio_asset_adjustments WHERE investment_id=?
-            ORDER BY date ASC, "id::bigint" ASC
+            ORDER BY date ASC, eventId ASC
             """,
             [.integer(Int64(investmentId)), .integer(Int64(investmentId)), .integer(Int64(investmentId))]
         ).map { try UnitEvent($0) }
@@ -1284,7 +1284,7 @@ extension PortfolioTransactionsArea {
         /// A transaction row of `getUnitEventsForInvestments`: the transaction rows carry
         /// none of the custody projections, and the engine reads them as absent.
         init(_ row: SQLRow) throws {
-            id = Double(try row.int64("id"))
+            id = Double(try row.int64("eventId"))
             investmentId = try row.integerId("investment_id")
             type = try row.text("type")
             date = try row.text("date")
