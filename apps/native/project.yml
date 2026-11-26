@@ -118,7 +118,7 @@ targets:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleExecutable: $(EXECUTABLE_NAME)
         CFBundleIconName: $(ASSETCATALOG_COMPILER_APPICON_NAME)
-        # The languages of the String Catalog and the shell locales.
+        # The languages of the string tables and the shell locales.
         CFBundleLocalizations: [en, nl]
         CFBundlePackageType: APPL
         CFBundleShortVersionString: $(MARKETING_VERSION)
