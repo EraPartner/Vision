@@ -17,14 +17,14 @@ enum PortfolioTransactionsArea {
     static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
         backend.serve(OpenAPIOperations.CreateInvestmentTransaction.self) { request in
             let id = try InvestmentsArea.pathId(request)
-            let body = RequestBody.parseJavaScript(request.body)
+            let body = try RequestBody.parseJavaScript(request.body)
             return try await database.run { session in
                 try Self.create(session, Int(id.rawValue), body)
             }
         }
         backend.serve(OpenAPIOperations.UpdatePortfolioTransaction.self) { request in
             let txnId = try Self.txnPathId(request)
-            let body = RequestBody.parseJavaScript(request.body)
+            let body = try RequestBody.parseJavaScript(request.body)
             return try await database.run { session in
                 try Self.update(session, txnId, body)
             }
