@@ -765,10 +765,13 @@ enum ImportUploadsArea {
                     recipientAccount: try row.optionalText("recipient_account"),
                     sourceId: try row.optionalText("source_id"),
                     adapterName: try row.text("adapter_name"))
-                if let number = try row.optionalDouble("amount") {
-                    staged.amountNumber = number
-                } else if let text = try row.optionalText("amount") {
-                    staged.amountText = text
+                // `amount` is stored as canonical decimal text; the TS driver could also
+                // hand some rows a REAL, so read whichever kind the column holds.
+                switch try row.value("amount") {
+                case .real(let number): staged.amountNumber = number
+                case .integer(let number): staged.amountNumber = Double(number)
+                case .text(let text): staged.amountText = text
+                default: break
                 }
                 return staged
             }
