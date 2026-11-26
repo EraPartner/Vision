@@ -277,7 +277,10 @@ enum PortfolioSummaryService {
         }
         return Summary(
             currency: targetCurrency,
-            computedAt: try SQLTimestamps.formatInstant(session.currentInstant()),
+            // `new Date().toISOString()`: the canonical instant cut to milliseconds.
+            computedAt: SQLRow.isoMilliseconds(
+                fromCanonical: try SQLTimestamps.formatInstant(session.currentInstant()))
+                ?? try SQLTimestamps.formatInstant(session.currentInstant()),
             holdings: holdings,
             totalPortfolioValue: JavaScriptNumber.fromString(
                 total.toDecimalPlaces(2, .halfEven).javaScriptString))
