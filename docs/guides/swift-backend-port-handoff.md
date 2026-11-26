@@ -409,7 +409,7 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
 - [x] Portfolio transactions: `getInvestmentTransactions`, `createInvestmentTransaction`,
       `updatePortfolioTransaction`, `deletePortfolioTransaction`, `getBulkPortfolioTransactions`,
       `bulkRetagPortfolioTransactions`
-- [ ] Prices: `refreshInvestmentPrices`, `listInvestmentProviders`, `getInvestmentPriceHistory`
+- [x] Prices: `refreshInvestmentPrices`, `listInvestmentProviders`, `getInvestmentPriceHistory`
       (Yahoo client, price cache, provider registry, backfill; the pure `Prices` core is on main).
       Provider answers are stubbed with the corpus `fetch` map.
 - [ ] Exposure: `getPortfolioExposure`, `upsertPortfolioExposureSources`,
