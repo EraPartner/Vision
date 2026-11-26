@@ -46,6 +46,7 @@ import { backfillTransfersOnce } from "../services/transferReconciliationService
 import { refreshCashflowForecastMc } from "../jobs/refreshCashflowForecastMc.ts";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.ts";
 import { isInternetReachable } from "../lib/network.ts";
+import { getNetworkPolicy } from "../lib/networkPolicy.ts";
 import { createDailyJob } from "./dailyJobs.ts";
 import investmentRepository from "../repositories/investmentRepository.ts";
 import type { InvestmentRow } from "../types/rows.ts";
@@ -327,6 +328,11 @@ async function refreshInvestmentPricesOnStartup() {
  *  4. Start the quote backfill and live-price refresh after
  *     STARTUP_PRICE_REFRESH_DELAY_MS.
  *  5. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
+ *
+ * Settings › Privacy (ADR-271) is read at startup and again on every tick:
+ * offline mode skips everything outbound, a switched-off source skips its
+ * own refresh, and `priceRefresh` picks hourly, daily or no automatic price
+ * fetching (the user's own refresh still works).
  */
 export async function runWarmupTasks({
   warmupStatus,
@@ -404,6 +410,10 @@ export async function runWarmupTasks({
   void pruneOldImportBatches();
 
   const online = await isInternetReachable();
+  const policy = await getNetworkPolicy();
+  const fxOnline = online && policy.sources.exchangeRates;
+  const pricesOnline =
+    online && policy.sources.marketData && policy.priceRefresh !== "manual";
   if (!online) {
     logger.warn(
       "No internet connectivity detected — skipping external data refresh on startup; using cached/DB data only",
@@ -411,7 +421,7 @@ export async function runWarmupTasks({
   }
 
   const exchangeRateWarmPromise = (
-    online ? warmExchangeRateCache() : Promise.resolve()
+    fxOnline ? warmExchangeRateCache() : Promise.resolve()
   )
     .then(() => {
       warmupStatus.exchangeRates = "ready";
@@ -423,7 +433,7 @@ export async function runWarmupTasks({
       });
     });
 
-  warmInflationCache({ allowExternal: online })
+  warmInflationCache({ allowExternal: online && policy.sources.inflation })
     .then(() => {
       warmupStatus.inflation = "ready";
     })
@@ -435,7 +445,7 @@ export async function runWarmupTasks({
     });
 
   const fxBackfillPromise = (
-    online ? backfillPortfolioHistoricalRates() : Promise.resolve()
+    fxOnline ? backfillPortfolioHistoricalRates() : Promise.resolve()
   ).catch((err: unknown) => {
     logger.error(
       "Failed to backfill portfolio historical exchange rates on startup",
@@ -477,55 +487,100 @@ export async function runWarmupTasks({
       );
     });
 
-  let startupPriceRefreshTimer: NodeJS.Timeout | null = null;
-  if (online) {
-    startupPriceRefreshTimer = setTimeout(() => {
-      startupPriceRefreshTimer = null;
+  // The launch-time price work: historical backfill plus a live refresh.
+  const runStartupPriceWork = async () => {
+    const results = await Promise.allSettled([
       backfillHistoricalAssetQuotes().catch((err: unknown) => {
         logger.error("Failed to backfill historical asset quotes on startup", {
           error: errorMessage(err),
         });
-      });
+        throw err;
+      }),
       refreshInvestmentPricesOnStartup().catch((err: unknown) => {
         logger.error("Failed to refresh investment prices on startup", {
           error: errorMessage(err),
         });
-      });
+        throw err;
+      }),
+    ]);
+    return results.every((result) => result.status === "fulfilled");
+  };
+  // `priceRefresh: "daily"`: the launch work plus the holdings' quotes, at
+  // most once a day across restarts; the hourly tick only checks it is due.
+  const refreshDailyPrices = createDailyJob("price_refresh", async () => {
+    const current = await getNetworkPolicy();
+    if (current.priceRefresh !== "daily" || !current.sources.marketData)
+      return false;
+    if (!(await isInternetReachable())) return false;
+    const launchOk = await runStartupPriceWork();
+    let quotesOk = true;
+    await refreshActiveHoldingQuotes().catch((err: unknown) => {
+      quotesOk = false;
+      logger.error("Daily quote refresh failed", { error: errorMessage(err) });
+    });
+    return launchOk && quotesOk;
+  });
+
+  let startupPriceRefreshTimer: NodeJS.Timeout | null = null;
+  if (pricesOnline) {
+    startupPriceRefreshTimer = setTimeout(() => {
+      startupPriceRefreshTimer = null;
+      if (policy.priceRefresh === "daily") void refreshDailyPrices();
+      else void runStartupPriceWork();
     }, STARTUP_PRICE_REFRESH_DELAY_MS);
   } else {
     logger.info(
-      "Skipping startup quote backfill and investment price refresh — offline",
+      "Skipping startup quote backfill and investment price refresh",
+      {
+        reason: !online
+          ? "offline"
+          : !policy.sources.marketData
+            ? "market data switched off"
+            : "automatic price refresh off",
+      },
     );
   }
 
   const exchangeRateRefreshInterval = setInterval(
     withInFlightGuard("exchange rate refresh", async () => {
-      if (!(await isInternetReachable({ force: true }))) {
+      if (!(await isInternetReachable())) {
         logger.debug("Skipping scheduled exchange rate refresh — offline");
         return;
       }
-      logger.info("Running scheduled exchange rate refresh...");
-      clearExchangeRateCache();
-      await warmExchangeRateCache().catch((err: unknown) => {
-        logger.error("Scheduled exchange rate refresh failed", {
-          error: errorMessage(err),
+      const current = await getNetworkPolicy();
+      if (current.sources.exchangeRates) {
+        logger.info("Running scheduled exchange rate refresh...");
+        clearExchangeRateCache();
+        await warmExchangeRateCache().catch((err: unknown) => {
+          logger.error("Scheduled exchange rate refresh failed", {
+            error: errorMessage(err),
+          });
         });
-      });
+      }
 
-      clearInflationMemoryCache();
-      await warmInflationCache().catch((err: unknown) => {
-        logger.error("Scheduled Belgian inflation refresh failed", {
-          error: errorMessage(err),
+      if (current.sources.inflation) {
+        clearInflationMemoryCache();
+        await warmInflationCache().catch((err: unknown) => {
+          logger.error("Scheduled Belgian inflation refresh failed", {
+            error: errorMessage(err),
+          });
         });
-      });
+      }
     }),
     TWELVE_HOURS_MS,
   );
 
   const quotesRefreshInterval = setInterval(
     withInFlightGuard("quote refresh", async () => {
-      if (!(await isInternetReachable({ force: true }))) {
+      const current = await getNetworkPolicy();
+      if (!current.sources.marketData || current.priceRefresh === "manual")
+        return;
+      if (!(await isInternetReachable())) {
         logger.debug("Skipping periodic quote refresh — offline");
+        return;
+      }
+      if (current.priceRefresh === "daily") {
+        await refreshDailyPrices();
         return;
       }
       await refreshActiveHoldingQuotes().catch((err: unknown) => {
@@ -548,7 +603,11 @@ export async function runWarmupTasks({
   const backfillDailyGaps = createDailyJob("holding_gaps", async () => {
     await portfolioWarmPromise;
     await materializedViewsReady;
-    if (!(await isInternetReachable({ force: true }))) return false;
+    const current = await getNetworkPolicy();
+    // Not done (retried hourly) while automatic price fetching is off.
+    if (!current.sources.marketData || current.priceRefresh === "manual")
+      return false;
+    if (!(await isInternetReachable())) return false;
     const result = await backfillHoldingGaps();
     // Always recompute: an earlier attempt may have persisted quotes before
     // failing to persist snapshots, including across a process restart.

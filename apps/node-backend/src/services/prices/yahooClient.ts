@@ -18,6 +18,7 @@
 
 import { z } from 'zod';
 import { looseArray, looseString } from '../research/adapters/schemas.ts';
+import { policyFetch } from '../../lib/networkPolicy.ts';
 
 /** The yahoo-finance2 client instance (type-only import; the module still loads lazily). */
 export type YahooClient = InstanceType<typeof import('yahoo-finance2').default>;
@@ -30,7 +31,8 @@ export const YAHOO_FETCH_TIMEOUT_MS = 15_000;
 /**
  * `fetch` with a per-request timeout. yahoo-finance2 sets no timeout of its own,
  * so a stalled Yahoo connection used to hold startup price refreshes open
- * indefinitely.
+ * indefinitely. Every Yahoo request (prices, market lookup, research) is
+ * market data under Settings › Privacy.
  */
 export function timedFetch(
   input: Parameters<typeof fetch>[0],
@@ -38,7 +40,7 @@ export function timedFetch(
 ): Promise<Response> {
   const timeout = AbortSignal.timeout(YAHOO_FETCH_TIMEOUT_MS);
   const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-  return fetch(input, { ...init, signal });
+  return policyFetch('marketData', input, { ...init, signal });
 }
 
 /**

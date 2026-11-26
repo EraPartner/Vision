@@ -1,86 +1,44 @@
 /**
- * Network reachability probe.
+ * Network reachability check.
  *
- * Used at startup to skip outbound data fetches when the host has no
- * internet connection. Without this, warmups (ECB rates, Yahoo quotes,
- * historical backfills) burn 10–15s on per-call timeouts before falling
- * back to cached/DB data — adding noise and delaying readiness.
+ * Used at startup and before scheduled refreshes to skip outbound data
+ * fetches when the Mac has no network, so warmups (ECB rates, Yahoo quotes,
+ * historical backfills) do not burn their per-call timeouts before falling
+ * back to cached/DB data.
+ *
+ * It sends nothing (ADR-271): offline mode reads as unreachable, and
+ * otherwise the Mac counts as online when a network interface has a routable
+ * address. Link-local addresses do not count (macOS keeps fe80:: on utun and
+ * awdl interfaces with Wi-Fi off). A network that is up but has no internet
+ * fails at the real request, within that request's own timeout.
  */
 
-import net from "node:net";
-import { logger } from "../config/logger.ts";
+import os from "node:os";
+import { isNetworkAllowed } from "./networkPolicy.ts";
 
-const DEFAULT_PROBE_HOST = "1.1.1.1";
-const DEFAULT_PROBE_PORT = 443;
-const DEFAULT_TIMEOUT_MS = 1500;
-const CACHE_TTL_MS = 30_000;
+type InterfaceMap = ReturnType<typeof os.networkInterfaces>;
 
-let cachedResult: boolean | null = null;
-let cachedAt = 0;
-let inflight: Promise<boolean> | null = null;
-
-function probe({
-  host,
-  port,
-  timeoutMs,
-}: {
-  host: string;
-  port: number;
-  timeoutMs: number;
-}): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ host, port });
-    let settled = false;
-    const finish = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        socket.destroy();
-      } catch {
-        /* ignore */
-      }
-      resolve(ok);
-    };
-    // node net's socket.setTimeout fires only AFTER connect — useless for
-    // gating a hung SYN. Use an explicit timer to bound the connect attempt.
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
-}
-
-/**
- * Returns true if a TCP connection to a public host succeeds within the timeout.
- * Result is cached for 30s so multiple startup callers share one probe.
- */
-export async function isInternetReachable(
-  opts: { force?: boolean; host?: string; port?: number; timeoutMs?: number } = {},
-): Promise<boolean> {
-  if (process.env.VISION_SYNTHETIC_SMOKE_OFFLINE === "1") return false;
-  const {
-    force = false,
-    host = DEFAULT_PROBE_HOST,
-    port = DEFAULT_PROBE_PORT,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
-  } = opts;
-
-  const now = Date.now();
-  if (!force && cachedResult !== null && now - cachedAt < CACHE_TTL_MS) {
-    return cachedResult;
+/** True when some non-internal interface has a non-link-local address. */
+function hasRoutableNetworkInterface(
+  interfaces: InterfaceMap = os.networkInterfaces(),
+): boolean {
+  for (const addresses of Object.values(interfaces)) {
+    for (const address of addresses ?? []) {
+      if (address.internal) continue;
+      if (address.family === "IPv4" && !address.address.startsWith("169.254."))
+        return true;
+      if (address.family === "IPv6" && !/^fe[89ab]/i.test(address.address))
+        return true;
+    }
   }
-  if (!force && inflight) return inflight;
-
-  inflight = probe({ host, port, timeoutMs })
-    .then((ok) => {
-      cachedResult = ok;
-      cachedAt = Date.now();
-      logger.debug("Internet reachability probe", { ok, host, port });
-      return ok;
-    })
-    .finally(() => {
-      inflight = null;
-    });
-
-  return inflight;
+  return false;
 }
+
+/** True when offline mode is off and the Mac has a routable network address. */
+export async function isInternetReachable(): Promise<boolean> {
+  if (process.env.VISION_SYNTHETIC_SMOKE_OFFLINE === "1") return false;
+  if (!(await isNetworkAllowed())) return false;
+  return hasRoutableNetworkInterface();
+}
+
+export { hasRoutableNetworkInterface as __hasRoutableNetworkInterface };
