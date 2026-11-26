@@ -1050,8 +1050,8 @@ extension ExposureArea {
         let classified = rowOrder.reduce(DecimalJS.zero) { total, key in total.plus(rows[key]!.amount) }  // lint:allow force-unwrap rowOrder holds inserted keys
         let sorted = rowOrder.map { rows[$0]! }.sorted { left, right in  // lint:allow force-unwrap rowOrder holds inserted keys
             // JS `sort` of emitted amounts, descending, stable in first-seen order.
-            let comparison = right.amount.toDecimalPlaces(2, .halfEven)
-                .compared(to: left.amount.toDecimalPlaces(2, .halfEven))
+            let comparison = left.amount.toDecimalPlaces(2, .halfEven)
+                .compared(to: right.amount.toDecimalPlaces(2, .halfEven))
             return comparison > 0
         }
         return [
