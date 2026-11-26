@@ -230,7 +230,7 @@ enum PortfolioTransactionsArea {
         out.hasIncomeRecognitionRole = object.has("income_recognition_role")
         out.present = Set(object.keys)
         if let type = object["type"] {
-            guard case .string(let text) = type, txnTypes.contains(text) else {
+            if case .string(let text) = type, !txnTypes.contains(text) {
                 issues.append(enumIssue("type", txnTypes))
             }
             if case .string(let text) = type { out.type = text }
@@ -242,7 +242,9 @@ enum PortfolioTransactionsArea {
         out.fees = numberField(object["fees"], "fees", 99_999_999_999_999, &issues)
         out.taxes = numberField(object["taxes"], "taxes", 99_999_999_999_999, &issues)
         if let convention = object["dividend_amount_convention"] {
-            guard case .string(let text) = convention, ["gross", "net", "unknown"].contains(text) else {
+            if case .string(let text) = convention,
+                !["gross", "net", "unknown"].contains(text)
+            {
                 issues.append(enumIssue("dividend_amount_convention", ["gross", "net", "unknown"]))
             }
             if case .string(let text) = convention { out.dividendAmountConvention = text }
@@ -250,14 +252,15 @@ enum PortfolioTransactionsArea {
         out.currency = currencyField(object["currency"], &issues)
         out.fxRateToEur = numberField(object["fx_rate_to_eur"], "fx_rate_to_eur", 9_999_999_999, &issues)
         if let note = object["note"], note != .null {
-            guard case .string = note else {
+            if case .string = note {} else {
                 issues.append("note: Invalid input: expected string, received \(received(note))")
             }
             if case .string(let text) = note { out.note = text }
         }
         if let recurring = object["is_recurring"], recurring != .null {
-            guard case .bool(let flag) = recurring else {
-                issues.append("is_recurring: Invalid input: expected boolean, received \(received(recurring))")
+            if case .bool(let flag) = recurring {} else {
+                issues.append(
+                    "is_recurring: Invalid input: expected boolean, received \(received(recurring))")
             }
             if case .bool(let flag) = recurring { out.isRecurring = flag }
         }
