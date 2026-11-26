@@ -138,7 +138,7 @@ enum PortfolioSummaryService {
     /// `resolveCostBasisMethod`: the stored setting, `weighted_avg` when missing or malformed.
     static func costBasisMethod(_ session: BackendSession) -> String {
         guard let stored = try? SettingsArea.get(session, key: "cost_basis_method"),
-            case .string(let value)? = stored,
+            case .string(let value) = stored,
             PortfolioCore.isCostBasisMethod(value)
         else { return "weighted_avg" }
         return value
