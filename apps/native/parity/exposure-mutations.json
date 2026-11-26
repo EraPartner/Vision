@@ -4,7 +4,8 @@
     "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n           closed_at, created_at, updated_at, import_identity) VALUES\n          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000bb01')",
     "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n          ('USD', vision_numeric('0.9163', 20, 10), '2026-11-01', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('USD', vision_numeric('0.9150', 20, 10), '2024-01-09', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('USD', vision_numeric('0.9180', 20, 10), '2024-05-19', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
     "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n           is_active, price_provider, notes, created_at, updated_at) VALUES\n          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,\n           1, 'manual', 'usd stock', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 'Euro Fund', 'EFUND', 'etf', 'EUR', vision_numeric('12', 18, 6), NULL,\n           1, 'manual', 'etf with a holdings document', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 'Steady Works', NULL, 'stock', 'EUR', vision_numeric('104', 18, 6), NULL,\n           1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,\n           1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
-    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n           fees, taxes, currency, fx_rate_to_eur, note, account_id, created_at, updated_at) VALUES\n          (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.915', 20, 10), 'initial buy', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,\n           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD', NULL, NULL, 1,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 1, 'sell', '2024-05-20', vision_numeric('600', 18, 4), vision_numeric('4', 18, 8),\n           vision_numeric('150', 18, 6), vision_numeric('2', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.918', 20, 10), 'partial exit', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 1, 'gift', '2024-06-15', vision_numeric('0', 18, 4), vision_numeric('2', 18, 8),\n           vision_numeric('0', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           NULL, 'inherited shares', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (5, 2, 'buy', '2024-02-01', vision_numeric('1200', 18, 4), vision_numeric('100', 18, 8),\n           vision_numeric('12', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'etf position', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (6, 3, 'buy', '2024-04-02', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'steady works', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (7, 4, 'buy', '2023-11-05', vision_numeric('250000', 18, 4), vision_numeric('1', 18, 8),\n           vision_numeric('250000', 18, 6), vision_numeric('500', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'the loft', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n           fees, taxes, currency, fx_rate_to_eur, note, account_id, created_at, updated_at) VALUES\n          (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.915', 20, 10), 'initial buy', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,\n           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD', NULL, NULL, 1,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 1, 'sell', '2024-05-20', vision_numeric('600', 18, 4), vision_numeric('4', 18, 8),\n           vision_numeric('150', 18, 6), vision_numeric('2', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.918', 20, 10), 'partial exit', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 1, 'gift', '2024-06-15', vision_numeric('0', 18, 4), vision_numeric('2', 18, 8),\n           vision_numeric('0', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           NULL, 'inherited shares', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (5, 2, 'buy', '2024-02-01', vision_numeric('1200', 18, 4), vision_numeric('100', 18, 8),\n           vision_numeric('12', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'etf position', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (6, 3, 'buy', '2024-04-02', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'steady works', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (7, 4, 'buy', '2023-11-05', vision_numeric('250000', 18, 4), vision_numeric('1', 18, 8),\n           vision_numeric('250000', 18, 6), vision_numeric('500', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'the loft', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_exposure_classifications (id, investment_id, identifier_type, identifier_value,\n           identifier_exchange, issuer_id, issuer_name, sector, issuer_country_code, source_label, origin,\n           created_at, updated_at) VALUES\n          ('11111111-1111-4111-8111-111111111111', 1, NULL, NULL, NULL,\n           'seed-issuer-acme', 'Seeded ACME Direct', 'Seed Industrials', 'US', 'seed import', 'import',\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('22222222-2222-4222-8222-222222222222', NULL, 'ticker', 'acme', NULL,\n           'seed-issuer-acme-map', 'Seeded ACME Fund Map', NULL, NULL, 'seed import', 'import',\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('33333333-3333-4333-8333-333333333333', 3, NULL, NULL, NULL,\n           'seed-issuer-steady', 'Seeded Steady Works', NULL, NULL, 'seed import', 'import',\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
   ],
   "now": "2026-11-27T12:00:00.000Z",
   "steps": [
@@ -25,25 +26,96 @@
           "coveredCashWeightPercent": 0,
           "fundSources": [],
           "issuer": {
-            "rows": [],
-            "classifiedValue": 0,
-            "classifiedWeightPercent": 0,
-            "unclassifiedValue": 251623.23,
-            "unclassifiedWeightPercent": 99.53
+            "rows": [
+              {
+                "id": "seed-issuer-acme",
+                "label": "Seeded ACME Direct",
+                "amount": 1103.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 520,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 520,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
+              }
+            ],
+            "classifiedValue": 1623.23,
+            "classifiedWeightPercent": 0.64,
+            "unclassifiedValue": 250000,
+            "unclassifiedWeightPercent": 98.88
           },
           "sector": {
-            "rows": [],
-            "classifiedValue": 0,
-            "classifiedWeightPercent": 0,
-            "unclassifiedValue": 251623.23,
-            "unclassifiedWeightPercent": 99.53
+            "rows": [
+              {
+                "id": "Seed Industrials",
+                "label": "Seed Industrials",
+                "amount": 1103.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1103.23,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
           },
           "issuerCountry": {
-            "rows": [],
-            "classifiedValue": 0,
-            "classifiedWeightPercent": 0,
-            "unclassifiedValue": 251623.23,
-            "unclassifiedWeightPercent": 99.53
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 1103.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1103.23,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
           },
           "warnings": [],
           "scopeNotes": [
@@ -70,25 +142,96 @@
           "coveredCashWeightPercent": 0,
           "fundSources": [],
           "issuer": {
-            "rows": [],
-            "classifiedValue": 0,
-            "classifiedWeightPercent": 0,
-            "unclassifiedValue": 274607.91,
-            "unclassifiedWeightPercent": 99.53
+            "rows": [
+              {
+                "id": "seed-issuer-acme",
+                "label": "Seeded ACME Direct",
+                "amount": 1204,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 567.5,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 567.5,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
+              }
+            ],
+            "classifiedValue": 1771.5,
+            "classifiedWeightPercent": 0.64,
+            "unclassifiedValue": 272836.41,
+            "unclassifiedWeightPercent": 98.88
           },
           "sector": {
-            "rows": [],
-            "classifiedValue": 0,
-            "classifiedWeightPercent": 0,
-            "unclassifiedValue": 274607.91,
-            "unclassifiedWeightPercent": 99.53
+            "rows": [
+              {
+                "id": "Seed Industrials",
+                "label": "Seed Industrials",
+                "amount": 1204,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1204,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 273403.91,
+            "unclassifiedWeightPercent": 99.09
           },
           "issuerCountry": {
-            "rows": [],
-            "classifiedValue": 0,
-            "classifiedWeightPercent": 0,
-            "unclassifiedValue": 274607.91,
-            "unclassifiedWeightPercent": 99.53
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 1204,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1204,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 273403.91,
+            "unclassifiedWeightPercent": 99.09
           },
           "warnings": [],
           "scopeNotes": [
@@ -139,7 +282,15 @@
               "symbol": "ACME",
               "assetClass": "stock",
               "hasFundDocument": false,
-              "classification": null
+              "classification": {
+                "issuerId": "seed-issuer-acme",
+                "issuerName": "Seeded ACME Direct",
+                "sector": "Seed Industrials",
+                "issuerCountryCode": "US",
+                "origin": "import",
+                "sourceLabel": "seed import",
+                "updatedAt": "2025-03-01T09:00:00.000Z"
+              }
             },
             {
               "investmentId": 4,
@@ -163,11 +314,32 @@
               "symbol": null,
               "assetClass": "stock",
               "hasFundDocument": false,
-              "classification": null
+              "classification": {
+                "issuerId": "seed-issuer-steady",
+                "issuerName": "Seeded Steady Works",
+                "sector": null,
+                "issuerCountryCode": null,
+                "origin": "import",
+                "sourceLabel": "seed import",
+                "updatedAt": "2025-03-01T09:00:00.000Z"
+              }
             }
           ],
-          "issuers": [],
-          "sectors": []
+          "issuers": [
+            {
+              "issuerId": "seed-issuer-acme",
+              "issuerName": "Seeded ACME Direct"
+            },
+            {
+              "issuerId": "seed-issuer-acme-map",
+              "issuerName": "Seeded ACME Fund Map"
+            },
+            {
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works"
+            }
+          ],
+          "sectors": ["Seed Industrials"]
         }
       }
     },
@@ -332,7 +504,7 @@
               "issuerCountryCode": "US",
               "sourceLabel": "manual entry 2026",
               "origin": "import",
-              "createdAt": "2026-11-27T12:00:00.000Z",
+              "createdAt": "2025-03-01T09:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
             },
             {
@@ -347,7 +519,7 @@
               "issuerCountryCode": "US",
               "sourceLabel": "fund look-through map",
               "origin": "import",
-              "createdAt": "2026-11-27T12:00:00.000Z",
+              "createdAt": "2025-03-01T09:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
             },
             {
@@ -364,6 +536,21 @@
               "origin": "import",
               "createdAt": "2026-11-27T12:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": 3,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "seed import",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2025-03-01T09:00:00.000Z"
             }
           ],
           "documents": [
@@ -643,7 +830,7 @@
               "issuerCountryCode": "US",
               "sourceLabel": "manual entry 2026",
               "origin": "import",
-              "createdAt": "2026-11-27T12:00:00.000Z",
+              "createdAt": "2025-03-01T09:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
             },
             {
@@ -658,7 +845,7 @@
               "issuerCountryCode": "US",
               "sourceLabel": "fund look-through map",
               "origin": "import",
-              "createdAt": "2026-11-27T12:00:00.000Z",
+              "createdAt": "2025-03-01T09:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
             },
             {
@@ -675,6 +862,21 @@
               "origin": "import",
               "createdAt": "2026-11-27T12:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": 3,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "seed import",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2025-03-01T09:00:00.000Z"
             }
           ],
           "documents": [
@@ -847,12 +1049,29 @@
                   }
                 ],
                 "weightPercent": 0.82
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 520,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 520,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
               }
             ],
-            "classifiedValue": 2063.23,
-            "classifiedWeightPercent": 0.82,
-            "unclassifiedValue": 250520,
-            "unclassifiedWeightPercent": 99.09
+            "classifiedValue": 2583.23,
+            "classifiedWeightPercent": 1.02,
+            "unclassifiedValue": 250000,
+            "unclassifiedWeightPercent": 98.88
           },
           "sector": {
             "rows": [
@@ -984,12 +1203,29 @@
                   }
                 ],
                 "weightPercent": 0.82
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 567.5,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 567.5,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
               }
             ],
-            "classifiedValue": 2251.69,
-            "classifiedWeightPercent": 0.82,
-            "unclassifiedValue": 273403.91,
-            "unclassifiedWeightPercent": 99.09
+            "classifiedValue": 2819.19,
+            "classifiedWeightPercent": 1.02,
+            "unclassifiedValue": 272836.41,
+            "unclassifiedWeightPercent": 98.88
           },
           "sector": {
             "rows": [
@@ -1114,7 +1350,15 @@
               "symbol": null,
               "assetClass": "stock",
               "hasFundDocument": false,
-              "classification": null
+              "classification": {
+                "issuerId": "seed-issuer-steady",
+                "issuerName": "Seeded Steady Works",
+                "sector": null,
+                "issuerCountryCode": null,
+                "origin": "import",
+                "sourceLabel": "seed import",
+                "updatedAt": "2025-03-01T09:00:00.000Z"
+              }
             }
           ],
           "issuers": [
@@ -1125,11 +1369,13 @@
             {
               "issuerId": "issuer-nobody",
               "issuerName": "Nobody AG"
+            },
+            {
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works"
             }
           ],
-          "sectors": [
-            "Industrials"
-          ]
+          "sectors": ["Industrials"]
         }
       }
     },
@@ -1211,9 +1457,7 @@
               "issuerName": "Nobody AG"
             }
           ],
-          "sectors": [
-            "Industrials"
-          ]
+          "sectors": ["Industrials"]
         }
       }
     },
@@ -1249,22 +1493,7 @@
               "issuerCountryCode": "US",
               "sourceLabel": "manual entry 2026",
               "origin": "import",
-              "createdAt": "2026-11-27T12:00:00.000Z",
-              "updatedAt": "2026-11-27T12:00:00.000Z"
-            },
-            {
-              "id": "{{uuid}}",
-              "investmentId": 3,
-              "identifierType": null,
-              "identifierValue": null,
-              "identifierExchange": null,
-              "issuerId": "issuer-acme",
-              "issuerName": "ACME Inc",
-              "sector": "Industrials",
-              "issuerCountryCode": null,
-              "sourceLabel": "Set in Vision",
-              "origin": "manual",
-              "createdAt": "2026-11-27T12:00:00.000Z",
+              "createdAt": "2025-03-01T09:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
             },
             {
@@ -1279,7 +1508,22 @@
               "issuerCountryCode": "US",
               "sourceLabel": "fund look-through map",
               "origin": "import",
-              "createdAt": "2026-11-27T12:00:00.000Z",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": 3,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": null,
+              "sourceLabel": "Set in Vision",
+              "origin": "manual",
+              "createdAt": "2025-03-01T09:00:00.000Z",
               "updatedAt": "2026-11-27T12:00:00.000Z"
             },
             {
@@ -1410,9 +1654,7 @@
               "updatedAt": "2026-11-27T12:00:00.000Z"
             }
           ],
-          "keptManualInvestmentIds": [
-            3
-          ]
+          "keptManualInvestmentIds": [3]
         }
       }
     },
@@ -1639,9 +1881,7 @@
               "issuerName": "Nobody AG"
             }
           ],
-          "sectors": [
-            "Industrials"
-          ]
+          "sectors": ["Industrials"]
         }
       }
     },
@@ -1726,10 +1966,7 @@
             "issues": [
               {
                 "code": "custom",
-                "path": [
-                  "classifications",
-                  0
-                ],
+                "path": ["classifications", 0],
                 "message": "Classification must target exactly one investment or typed identifier"
               }
             ]
@@ -2065,12 +2302,7 @@
             "issues": [
               {
                 "code": "custom",
-                "path": [
-                  "classifications",
-                  0,
-                  "identifier",
-                  "value"
-                ],
+                "path": ["classifications", 0, "identifier", "value"],
                 "message": "ISIN must use its 12-character canonical form"
               }
             ]
@@ -2097,9 +2329,7 @@
             "issues": [
               {
                 "code": "unrecognized_keys",
-                "keys": [
-                  "unknownKey"
-                ],
+                "keys": ["unknownKey"],
                 "path": [],
                 "message": "Unrecognized key: \"unknownKey\""
               }
@@ -2114,10 +2344,7 @@
       "path": "/api/investments/exposure/classifications",
       "body": {
         "set": [],
-        "clear": [
-          1,
-          3
-        ],
+        "clear": [1, 3],
         "unknown": 1
       },
       "status": 400,
@@ -2130,9 +2357,7 @@
             "issues": [
               {
                 "code": "unrecognized_keys",
-                "keys": [
-                  "unknown"
-                ],
+                "keys": ["unknown"],
                 "path": [],
                 "message": "Unrecognized key: \"unknown\""
               }
@@ -2147,10 +2372,7 @@
       "path": "/api/investments/exposure/classifications",
       "body": {
         "set": [],
-        "clear": [
-          1,
-          3
-        ]
+        "clear": [1, 3]
       },
       "status": 200,
       "response": {
@@ -2200,9 +2422,7 @@
               "issuerName": "Nobody AG"
             }
           ],
-          "sectors": [
-            "Industrials"
-          ]
+          "sectors": ["Industrials"]
         }
       }
     },
@@ -2258,9 +2478,7 @@
               "issuerName": "Nobody AG"
             }
           ],
-          "sectors": [
-            "Industrials"
-          ]
+          "sectors": ["Industrials"]
         }
       }
     },

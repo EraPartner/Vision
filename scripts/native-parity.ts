@@ -6025,6 +6025,22 @@ function mutationAreas(): Record<string, ParityArea> {
           (7, 4, 'buy', '2023-11-05', vision_numeric('250000', 18, 4), vision_numeric('1', 18, 8),
            vision_numeric('250000', 18, 6), vision_numeric('500', 18, 4), vision_numeric('0', 18, 4), 'EUR',
            NULL, 'the loft', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+        // `listExposureSources` orders by (issuer_name, id), and the steps below store
+        // classifications that share a name (the byName reuse of `issuerIdFor`). Their ids
+        // must not come from `gen_random_uuid()`, or the row order — and with it the corpus
+        // replay — would re-roll on every run (ADR-270 rule: make ties deterministic).
+        `INSERT INTO portfolio_exposure_classifications (id, investment_id, identifier_type, identifier_value,
+           identifier_exchange, issuer_id, issuer_name, sector, issuer_country_code, source_label, origin,
+           created_at, updated_at) VALUES
+          ('11111111-1111-4111-8111-111111111111', 1, NULL, NULL, NULL,
+           'seed-issuer-acme', 'Seeded ACME Direct', 'Seed Industrials', 'US', 'seed import', 'import',
+           '${SEED_TIME}', '${SEED_TIME}'),
+          ('22222222-2222-4222-8222-222222222222', NULL, 'ticker', 'acme', NULL,
+           'seed-issuer-acme-map', 'Seeded ACME Fund Map', NULL, NULL, 'seed import', 'import',
+           '${SEED_TIME}', '${SEED_TIME}'),
+          ('33333333-3333-4333-8333-333333333333', 3, NULL, NULL, NULL,
+           'seed-issuer-steady', 'Seeded Steady Works', NULL, NULL, 'seed import', 'import',
+           '${SEED_TIME}', '${SEED_TIME}')`,
       ],
       steps: [
         {
