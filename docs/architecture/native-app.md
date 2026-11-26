@@ -2137,7 +2137,17 @@ move or per composited frame.
   Transparency) drops the shadow cut-out mask of `VisionCardLayerView`. `VisionButtonChrome` casts
   `shadow-sm` from the fill shape and only on the variants that have one.
 - **Topbar.** On the reduced tier and under Reduce Transparency the veil lies over an opaque
-  `--card` instead of a blurred backdrop (`:root.fx-reduced .app-topbar`).
+  `--card` instead of a blurred backdrop (`:root.fx-reduced .app-topbar`). On the Standard tier
+  with Full effects off it lies over a `--background` tint at 0.6, so scrolling under it samples
+  no backdrop; Full effects and the enhanced tier keep the material.
+- **Card chrome.** `VisionCardLayerView` draws a large card's shadows, lift and edge highlight from
+  nine-slice images shared through `VisionCardChrome` (cached per card style and scale) instead
+  of per-card shadow paths; cards smaller than the slices keep the layer shadows.
+- **Aurora wash and grain.** The wash is a radial `CAGradientLayer` at the bottom of the blob layer
+  host and the grain one 160 px tile repeated by replicator layers, not SwiftUI fills sized to or
+  beyond the window.
+- **Chart hover.** The Portfolio and Insight charts draw the hover rule in the chart overlay, not
+  as a mark in the `Chart`, so a pointer move does not rebuild the marks.
 
 Chromium-only items have no Swift counterpart: squircle clips, React memoisation, virtualizer
 estimates, chart entrance layers, `material-host` pseudo-elements and `backdrop-filter`
