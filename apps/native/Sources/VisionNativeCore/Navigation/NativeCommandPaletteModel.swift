@@ -31,6 +31,8 @@ import Observation
     }
     @ObservationIgnored private var recipientCache: [String: Cached<[OpenAPI.Recipient]>] = [:]
     @ObservationIgnored private var quoteCache: [String: Cached<ResearchQuote?>] = [:]
+    /// Each typed query adds a cache entry; past this many, the oldest go first.
+    static let cacheLimit = 64
 
     public init(
         service: any NativeCommandPaletteService, answers: any NativeCommandPaletteAnswers,
@@ -319,6 +321,13 @@ import Observation
     private func current(_ context: UUID, _ opened: UUID) -> Bool {
         isOpen && revision == context && visit == opened && !Task.isCancelled
     }
+    /// Keeps a cache under `cacheLimit` by dropping its oldest entries, so a long session of
+    /// palette searches does not keep every answer it ever saw.
+    private static func trim<Value>(_ cache: inout [String: Cached<Value>]) {
+        guard cache.count >= cacheLimit else { return }
+        let oldest = cache.sorted { $0.value.at < $1.value.at }.prefix(cache.count - cacheLimit + 1).map(\.key)
+        for key in oldest { cache[key] = nil }
+    }
     private func loadRecipients(_ text: String, context: UUID, opened: UUID) async {
         guard current(context, opened) else { return }
         guard text.utf16.count >= 2 else {
@@ -329,7 +338,10 @@ import Observation
         recipients = cached?.value ?? []
         if let cached, now().timeIntervalSince(cached.at) < 30 { return }
         let value = try? await service.paletteRecipients(query: text)
-        if let value { recipientCache[text] = .init(value: value, at: now()) }
+        if let value {
+            Self.trim(&recipientCache)
+            recipientCache[text] = .init(value: value, at: now())
+        }
         guard current(context, opened) else { return }
         recipients = value ?? cached?.value ?? []
     }
@@ -349,6 +361,7 @@ import Observation
         tickerLoading = true
         do {
             let value = try await service.paletteQuote(symbol: symbol)
+            Self.trim(&quoteCache)
             quoteCache[symbol] = .init(value: value, at: now())
             guard current(context, opened) else { return }
             quote = value

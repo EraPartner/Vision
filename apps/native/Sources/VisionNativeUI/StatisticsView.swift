@@ -162,9 +162,10 @@ public struct StatisticsView: View {
         case .overview: overview
         case .categories: categories
         case .recipients:
-            if model.isVisible("topRecipients") { recipients }
-        case .yearly: yearly
-        case .flow: flow
+            // Sections that read no page `@State` read the model in their own scope.
+            if model.isVisible("topRecipients") { ObservationScope { recipients } }
+        case .yearly: ObservationScope { yearly }
+        case .flow: ObservationScope { flow }
         case .custom:
             if let snapshot = model.filtered {
                 SavedChartsView(
@@ -207,43 +208,51 @@ public struct StatisticsView: View {
         }
     }
     @ViewBuilder private var overviewCards: some View {
-        if includes(.rhythm), model.isVisible("summaryCards"), let snapshot = model.filtered { rhythm(snapshot) }
+        if includes(.rhythm), model.isVisible("summaryCards"), let snapshot = model.filtered {
+            ObservationScope { rhythm(snapshot) }
+        }
         if includes(.digest) {
             StatisticsDigestView(
                 model: screens.digest, settings: settings, strings: strings, isPrinting: isPrinting)
         }
         if includes(.monthly), model.isVisible("monthly") {
-            cardWithControls(
-                "statsPage.chart.monthlyTitle", subtitle: strings.t("statsPage.chart.monthlyDesc"),
-                graph: "monthly"
-            ) {
-                if !isPrinting {
-                    // MonthlyChart's `<Toggle size="sm">`, at the right of the header.
-                    InsightsLabelToggle(
-                        title: strings.t("statsPage.toggleRollingAvg", ["n": "3"]),
-                        isOn: Binding(
-                            get: { model.printLocalState.rollingAverage },
-                            set: { model.printLocalState.rollingAverage = $0 }))
-                }
-            } content: {
-                chart(
-                    monthlySeries(model.data(for: "monthly"), average: model.printLocalState.rollingAverage),
-                    key: "monthly", bars: true)
-            }
+            ObservationScope { monthlyCard }
         }
         if includes(.netTrend), model.isVisible("netTrend") {
-            card(
-                "statsPage.chart.netTitle", subtitle: strings.t("statsPage.chart.netDesc"), graph: "netTrend"
-            ) {
-                chart(
-                    [
-                        InsightChartSeries(
-                            id: "net", label: strings.t("statsPage.net"),
-                            points: (model.data(for: "netTrend")?.monthly.orderedMonths ?? []).map {
-                                InsightChartPoint(key: $0.id, value: $0.total_income - abs($0.total_spending))
-                            })
-                    ], key: "netTrend", areas: true)
+            ObservationScope { netTrendCard }
+        }
+    }
+    private var monthlyCard: some View {
+        cardWithControls(
+            "statsPage.chart.monthlyTitle", subtitle: strings.t("statsPage.chart.monthlyDesc"),
+            graph: "monthly"
+        ) {
+            if !isPrinting {
+                // MonthlyChart's `<Toggle size="sm">`, at the right of the header.
+                InsightsLabelToggle(
+                    title: strings.t("statsPage.toggleRollingAvg", ["n": "3"]),
+                    isOn: Binding(
+                        get: { model.printLocalState.rollingAverage },
+                        set: { model.printLocalState.rollingAverage = $0 }))
             }
+        } content: {
+            chart(
+                monthlySeries(model.data(for: "monthly"), average: model.printLocalState.rollingAverage),
+                key: "monthly", bars: true)
+        }
+    }
+    private var netTrendCard: some View {
+        card(
+            "statsPage.chart.netTitle", subtitle: strings.t("statsPage.chart.netDesc"), graph: "netTrend"
+        ) {
+            chart(
+                [
+                    InsightChartSeries(
+                        id: "net", label: strings.t("statsPage.net"),
+                        points: (model.data(for: "netTrend")?.monthly.orderedMonths ?? []).map {
+                            InsightChartPoint(key: $0.id, value: $0.total_income - abs($0.total_spending))
+                        })
+                ], key: "netTrend", areas: true)
         }
     }
     private func rhythm(_ snapshot: StatisticsSnapshot) -> some View {

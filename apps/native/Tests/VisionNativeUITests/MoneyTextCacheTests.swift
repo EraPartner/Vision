@@ -32,4 +32,18 @@ import VisionNativeCore
         #expect(dutch == VisionFormat.currency(amount, code: euro, locale: nl, fractionDigits: 2))
         #expect(whole == VisionFormat.currency(amount, code: euro, locale: us, fractionDigits: 0))
     }
+
+    @Test func aFullCacheKeepsTheLatestAmountsInsteadOfStartingOver() {
+        let cache = MoneyTextCache()
+        let locale = Locale(identifier: "en_US")
+        let recent = Decimal(MoneyTextCache.capacity - 1)
+        for value in 0..<MoneyTextCache.capacity {
+            _ = cache.text(Decimal(value), currency: euro, locale: locale, fractionDigits: 2, signed: false)
+        }
+        // The next new amount starts a generation; the last one formatted is still kept.
+        _ = cache.text(Decimal(-1), currency: euro, locale: locale, fractionDigits: 2, signed: false)
+        let before = cache.misses
+        _ = cache.text(recent, currency: euro, locale: locale, fractionDigits: 2, signed: false)
+        #expect(cache.misses == before)
+    }
 }

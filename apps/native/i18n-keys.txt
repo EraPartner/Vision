@@ -1,6 +1,6 @@
 # The i18n/source keys Vision Native's own screens use (ADR-204 phase 2).
 # `bun run native:generate-strings` copies their en and nl text into
-# Sources/VisionNativeUI/Resources/Localizable.xcstrings. Add a key here when native code uses it.
+# Sources/VisionNativeUI/Resources/Strings/<language>.json. Add a key here when native code uses it.
 
 # Shared
 common.error

@@ -69,7 +69,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens, `GlassMaterialSpec` and `ThemeSelection` (variant and appearance)                                                                                                             |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                                                     |
 | `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools, Analysis/Monitors, Research) |
-| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                                      |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Resources/Strings/<language>.json` (phase 2)                                                                                                              |
 | `apps/native/Sources/VisionBackend/`               | In-process Swift backend (ADR-270): SQLite connection, SQL functions, ledger check, routing, envelope, ported areas                                                                                    |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                                                     |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                                                  |
@@ -548,7 +548,7 @@ and fails when `apps/native/` changes. The outputs are committed.
 | `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Sources/VisionNativeCore/API/Generated/` (models, operations)                          |
 | `scripts/native-fixtures.ts`      | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Tests/VisionNativeCoreTests/Fixtures/api/`, `Contract/GeneratedModelDecodeTests.swift` |
 | `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/index.css`, `styles/skin-v2.css`, `styles/themes.ts`, `tailwind.config.ts`, `lib/motion.ts`, UI components | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift`                          |
-| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`                                |
+| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Strings/{en,nl}.json`                                 |
 | `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                                                                                                   | `Sources/VisionNativeCore/Navigation/Generated/`                                        |
 
 The fixture generator writes a minimal and a maximal JSON sample for every emitted model; the generated
@@ -2104,7 +2104,8 @@ counterpart:
   (precompiled only with `VISION_PRECOMPILE_METAL=1`); its drawables are released after a minute
   out of sight.
 - **Memory.** The transactions ledger lets its loaded rows go 2 minutes after the page is left
-  (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state.
+  (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state. Statistics lets its
+  snapshots and flow go 10 minutes after the page is left (`StatisticsModel.releaseAfter`).
 - **Halos.** Under Full effects the wide dark-mode halo stays on headings, and the page subtitle
   keeps the single 8 pt halo.
 
@@ -2123,7 +2124,9 @@ move or per composited frame.
   is over the control; `VisionTooltipPresenter` reads it when the tooltip opens.
 - **Cached presentations.** The Statistics pivot keeps its groups and column totals per metric,
   year and exclusion until the data changes. The Analysis pivot indexes each level's cells once
-  per result, configuration and expansion. The Sankey caches stroked link paths and bounds per
+  per result, configuration and expansion. After the first build, both rebuild off the main actor
+  (`StatisticsPivotPresentation`, `AnalysisPivotMatrixInputs`) while the previous pivot stays on
+  screen, and a build lands only if its inputs are still current. The Sankey caches stroked link paths and bounds per
   layout and rejects by bounding box before a stroke hit test. Import review is one lazy list of
   headers, controls and rows with stable ids.
 - **Bounded memory.** AI chat keeps at most 8 loaded conversations (8 MB encoded), with the
@@ -2137,7 +2140,17 @@ move or per composited frame.
   Transparency) drops the shadow cut-out mask of `VisionCardLayerView`. `VisionButtonChrome` casts
   `shadow-sm` from the fill shape and only on the variants that have one.
 - **Topbar.** On the reduced tier and under Reduce Transparency the veil lies over an opaque
-  `--card` instead of a blurred backdrop (`:root.fx-reduced .app-topbar`).
+  `--card` instead of a blurred backdrop (`:root.fx-reduced .app-topbar`). On the Standard tier
+  with Full effects off it lies over a `--background` tint at 0.6, so scrolling under it samples
+  no backdrop; Full effects and the enhanced tier keep the material.
+- **Card chrome.** `VisionCardLayerView` draws a large card's shadows, lift and edge highlight from
+  nine-slice images shared through `VisionCardChrome` (cached per card style and scale) instead
+  of per-card shadow paths; cards smaller than the slices keep the layer shadows.
+- **Aurora wash and grain.** The wash is a radial `CAGradientLayer` at the bottom of the blob layer
+  host and the grain one 160 px tile repeated by replicator layers, not SwiftUI fills sized to or
+  beyond the window.
+- **Chart hover.** The Portfolio and Insight charts draw the hover rule in the chart overlay, not
+  as a mark in the `Chart`, so a pointer move does not rebuild the marks.
 
 Chromium-only items have no Swift counterpart: squircle clips, React memoisation, virtualizer
 estimates, chart entrance layers, `material-host` pseudo-elements and `backdrop-filter`

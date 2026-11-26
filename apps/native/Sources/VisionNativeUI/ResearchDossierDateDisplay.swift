@@ -21,12 +21,14 @@ enum ResearchDossierDateDisplay {
         formatter(timeZone).string(from: date)
     }
     private static func formatter(_ timeZone: TimeZone) -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = timeZone
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
-        formatter.isLenient = false
-        return formatter
+        SharedFormatters.shared("dossier.local|\(timeZone.identifier)") { () -> DateFormatter in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.timeZone = timeZone
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            formatter.isLenient = false
+            return formatter
+        }
     }
 }

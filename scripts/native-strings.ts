@@ -8,9 +8,11 @@ import {
 } from "./lib/nativeCodegen.ts";
 
 /**
- * Generates Vision Native's String Catalog (ADR-204 decision 8: one source for
+ * Generates Vision Native's string tables (ADR-204 decision 8: one source for
  * EN/NL copy) from i18n/source/{en,nl}.json, for the keys the native code uses,
- * listed in apps/native/i18n-keys.txt.
+ * listed in apps/native/i18n-keys.txt: one flat `{ key: text }` JSON file per
+ * language, so the app parses only its own language (a String Catalog holding
+ * both was about 2.3 MB of JSON to decode at launch).
  *
  *   bun run native:generate-strings
  *
@@ -19,8 +21,7 @@ import {
  */
 
 export const KEYS = "apps/native/i18n-keys.txt";
-export const OUTPUT =
-  "apps/native/Sources/VisionNativeUI/Resources/Localizable.xcstrings";
+export const OUTPUT_DIR = "apps/native/Sources/VisionNativeUI/Resources/Strings";
 export const LANGUAGES = ["en", "nl"] as const;
 
 type Table = Record<string, unknown>;
@@ -35,31 +36,30 @@ function readTable(language: string): Table {
   return parsed as Table;
 }
 
-/** The catalog JSON: keys sorted, every key translated in every language. */
-export function generateCatalog(
+/** One JSON object per language: keys sorted, every key translated in every language. */
+export function generateStringTables(
   keys: readonly string[],
   tables: Record<string, Table>,
-): string {
+): Record<(typeof LANGUAGES)[number], string> {
   const problems: string[] = [];
-  const strings: Record<string, unknown> = {};
+  const out = Object.fromEntries(LANGUAGES.map((language) => [language, {}])) as Record<
+    (typeof LANGUAGES)[number],
+    Record<string, string>
+  >;
   for (const key of [...keys].sort()) {
-    const localizations: Record<string, unknown> = {};
     for (const language of LANGUAGES) {
       const value = tables[language]?.[key];
       if (typeof value !== "string" || value.trim() === "") {
         problems.push(`${key} has no ${language} text`);
         continue;
       }
-      localizations[language] = { stringUnit: { state: "translated", value } };
+      out[language][key] = value;
     }
-    strings[key] = {
-      comment: "Generated from i18n/source by scripts/native-strings.ts.",
-      extractionState: "manual",
-      localizations,
-    };
   }
   if (problems.length > 0) throw new Error(problems.join("\n"));
-  return `${JSON.stringify({ sourceLanguage: "en", strings, version: "1.0" }, null, 2)}\n`;
+  return Object.fromEntries(
+    LANGUAGES.map((language) => [language, `${JSON.stringify(out[language], null, 1)}\n`]),
+  ) as Record<(typeof LANGUAGES)[number], string>;
 }
 
 function main(): void {
@@ -68,7 +68,10 @@ function main(): void {
     const tables = Object.fromEntries(
       LANGUAGES.map((language) => [language, readTable(language)]),
     );
-    writeGenerated(repoPath(OUTPUT), generateCatalog(keys, tables));
+    const generated = generateStringTables(keys, tables);
+    for (const language of LANGUAGES) {
+      writeGenerated(repoPath(OUTPUT_DIR, `${language}.json`), generated[language]);
+    }
   } catch (error) {
     console.error(
       `[native-strings] ${error instanceof Error ? error.message : String(error)}`,

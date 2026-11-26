@@ -78,7 +78,11 @@ final class VisionTooltipPresenter {
     private var pending: VisionTooltipRequest?
     private var owner: ObjectIdentifier?
     private var openTask: Task<Void, Never>?
+    /// The panel on screen, if any.
     private var panel: NSPanel?
+    /// One panel and hosting view, made on the first tooltip and reused by every later one:
+    /// building a window and a SwiftUI host per tooltip cost more than the bubble itself.
+    private var reusable: (panel: NSPanel, hosting: NSHostingView<AnyView>)?
     // lint:allow explicit-any opaque AppKit event monitor token
     private var monitor: Any?
     private var lastClosed: ContinuousClock.Instant?
@@ -124,24 +128,18 @@ final class VisionTooltipPresenter {
 
     private func presentPending() {
         guard let request = pending, let anchor = request.anchor.view, let window = anchor.window else { return }
-        let hosting = NSHostingView(
-            rootView: AnyView(
-                VisionTooltipBubble(text: request.text, edge: request.edge, theme: request.theme)
-                    .environment(\.locale, request.locale)))
+        let bubble = AnyView(
+            VisionTooltipBubble(text: request.text, edge: request.edge, theme: request.theme)
+                .environment(\.locale, request.locale))
+        let (panel, hosting) = reusablePanel()
+        hosting.rootView = bubble
         let size = hosting.fittingSize
         let anchorRect = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let screen = window.screen?.visibleFrame ?? anchorRect
         let frame = placement(size: size, anchor: anchorRect, screen: screen, edge: request.edge)
 
-        let panel = NSPanel(
-            contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.isReleasedWhenClosed = false
         panel.appearance = NSAppearance(named: request.theme.isDark ? .darkAqua : .aqua)
-        panel.contentView = hosting
+        panel.setFrame(frame, display: false)
         window.addChildWindow(panel, ordered: .above)
         self.panel = panel
         monitor = NSEvent.addLocalMonitorForEvents(
@@ -150,6 +148,21 @@ final class VisionTooltipPresenter {
             self?.leaveCurrent()
             return event
         }
+    }
+
+    private func reusablePanel() -> (NSPanel, NSHostingView<AnyView>) {
+        if let reusable { return reusable }
+        let hosting = NSHostingView(rootView: AnyView(EmptyView()))
+        let panel = NSPanel(
+            contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.isReleasedWhenClosed = false
+        panel.contentView = hosting
+        reusable = (panel, hosting)
+        return (panel, hosting)
     }
 
     private func dismissPanel() {

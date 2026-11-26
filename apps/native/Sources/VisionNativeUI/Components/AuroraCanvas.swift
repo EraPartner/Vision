@@ -71,16 +71,17 @@ struct AuroraCanvas: View {
             let rateDivisor: Float = UserPresence.shared.throttlesDecoration ? 2 : 1
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
-                    wash(proxy.size)
+                    // The wash is the blob host's bottom layer; it stays when the shader draws the blobs.
                     AuroraBlobs(
-                        size: proxy.size, first: wealth ? theme.accent : theme.primary,
+                        size: proxy.size, wash: theme.primary.opacity(alphas.wash),
+                        first: wealth ? theme.accent : theme.primary,
                         second: wealth ? theme.primary : theme.accent,
                         firstAlpha: alphas.primary, secondAlpha: alphas.accent,
+                        blobsHidden: shaderBlobs,
                         animated: drift && !shaderBlobs, running: live && !shaderBlobs,
                         frameRate: (fullEffects ? 30 : 10) / rateDivisor
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .opacity(shaderBlobs ? 0 : 1)
                     if enhanced {
                         AuroraShaderView(
                             primary: theme.palette.primary, accent: theme.palette.accent,
@@ -95,26 +96,14 @@ struct AuroraCanvas: View {
                         )
                         .onDisappear { shaderLive = false }
                     }
-                    AuroraGrain().opacity(alphas.grain)
+                    AuroraGrain(size: proxy.size, opacity: alphas.grain)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
                 }
             }
             .background { WindowLivenessProbe { windowLive = $0 } }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-    }
-
-    /// `radial-gradient(120rem 60rem at 70% -20%, primary / wash, transparent 60%)`: an ellipse of
-    /// 1920 by 960 pt radii that is clear from 60 % of them. `EllipticalGradient` counts its
-    /// radius fractions against the frame's width and height (0.5 reaches the edge), so the
-    /// 3840 by 1920 pt frame ends the fade at 0.3.
-    private func wash(_ size: CGSize) -> some View {
-        EllipticalGradient(
-            colors: [theme.primary.opacity(alphas.wash), theme.primary.opacity(0)], center: .center,
-            startRadiusFraction: 0, endRadiusFraction: 0.3
-        )
-        .frame(width: 1920 * 2, height: 960 * 2)
-        .position(x: size.width * 0.7, y: -size.height * 0.2)
     }
 }
 
@@ -128,10 +117,14 @@ struct AuroraCanvas: View {
 /// does no per-frame work for it.
 private struct AuroraBlobs: NSViewRepresentable {
     let size: CGSize
+    /// The wash colour at its token alpha.
+    let wash: Color
     let first: Color
     let second: Color
     let firstAlpha: Double
     let secondAlpha: Double
+    /// The shader draws the blobs; the wash stays.
+    let blobsHidden: Bool
     let animated: Bool
     /// The window is live; the drift holds its position while it is not.
     let running: Bool
@@ -145,20 +138,22 @@ private struct AuroraBlobs: NSViewRepresentable {
     func updateNSView(_ view: AuroraBlobLayerView, context: Context) {
         view.apply(
             AuroraBlobLayerView.State(
-                size: size, first: NSColor(first.opacity(firstAlpha)).cgColor,
-                second: NSColor(second.opacity(secondAlpha)).cgColor, animated: animated, running: running,
-                frameRate: frameRate))
+                size: size, wash: NSColor(wash).cgColor, first: NSColor(first.opacity(firstAlpha)).cgColor,
+                second: NSColor(second.opacity(secondAlpha)).cgColor, blobsHidden: blobsHidden, animated: animated,
+                running: running, frameRate: frameRate))
     }
 }
 
-/// Two radial gradient layers and their drift animations. The drift clock counts only the time
+/// The wash and two radial blob layers with their drift animations. The drift clock counts only the time
 /// the drift ran, so a pause holds the blobs where they are and a resume, or a new canvas size,
 /// continues from there (`animation-play-state: paused`).
 @MainActor final class AuroraBlobLayerView: NSView {
     struct State: Equatable {
         let size: CGSize
+        let wash: CGColor
         let first: CGColor
         let second: CGColor
+        let blobsHidden: Bool
         let animated: Bool
         let running: Bool
         let frameRate: Float
@@ -166,6 +161,7 @@ private struct AuroraBlobs: NSViewRepresentable {
 
     private static let driftKey = "aurora-drift"
     private let host = CALayer()
+    private let washLayer = CAGradientLayer()
     private let firstBlob = CAGradientLayer()
     private let secondBlob = CAGradientLayer()
     private var clock = AuroraDriftClock()
@@ -173,6 +169,17 @@ private struct AuroraBlobs: NSViewRepresentable {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        // `radial-gradient(120rem 60rem at 70% -20%, primary / wash, transparent 60%)`: an ellipse
+        // of 1920 by 960 pt radii, clear from 60 % of them. A radial `CAGradientLayer` reaches its
+        // bounds' edges at `endPoint` (1, 1), so the layer is the ellipse's 3840 by 1920 pt box.
+        // The render server fills it; no window-sized backing store is drawn for it.
+        washLayer.type = .radial
+        washLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+        washLayer.endPoint = CGPoint(x: 1, y: 1)
+        washLayer.locations = [0, 0.6]
+        washLayer.contentsScale = 1
+        washLayer.bounds = CGRect(x: 0, y: 0, width: 1920 * 2, height: 960 * 2)
+        host.addSublayer(washLayer)
         for blob in [firstBlob, secondBlob] {
             // `radial-gradient(closest-side, colour / alpha, transparent 72%)`; a soft gradient
             // gains nothing from a Retina backing store.
@@ -208,8 +215,13 @@ private struct AuroraBlobs: NSViewRepresentable {
         defer { CATransaction.commit() }
         // A gradient that ends in the same colour at alpha 0 matches the premultiplied CSS
         // interpolation towards `transparent`.
+        washLayer.colors = [next.wash, next.wash.copy(alpha: 0) ?? next.wash]
+        // Centred at 70 % across and 20 % above the top edge; the host layer runs bottom-up.
+        washLayer.position = CGPoint(x: next.size.width * 0.7, y: next.size.height * 1.2)
         firstBlob.colors = [next.first, next.first.copy(alpha: 0) ?? next.first]
         secondBlob.colors = [next.second, next.second.copy(alpha: 0) ?? next.second]
+        firstBlob.isHidden = next.blobsHidden
+        secondBlob.isHidden = next.blobsHidden
         if let previous, previous.size == next.size, previous.animated == next.animated,
             previous.running == next.running, previous.frameRate == next.frameRate
         {
@@ -274,8 +286,23 @@ private struct AuroraBlobs: NSViewRepresentable {
 /// cell is about one pixel, so the tile reads as fine per-pixel grain with every channel,
 /// alpha included, noisy around its middle value. Three octaves of white noise, weighted like
 /// the turbulence sum, give the same grain; the pixels are premultiplied.
-private struct AuroraGrain: View {
-    private static let tile: Image? = {
+///
+/// The tile is one 160 px image drawn over 160 pt; two replicator layers repeat it across the
+/// canvas, so the render server draws one shared texture instead of a window-sized paint.
+private struct AuroraGrain: NSViewRepresentable {
+    let size: CGSize
+    let opacity: Double
+
+    func makeNSView(context: Context) -> AuroraGrainLayerView { AuroraGrainLayerView() }
+
+    func updateNSView(_ view: AuroraGrainLayerView, context: Context) {
+        view.apply(size: size, opacity: Float(opacity))
+    }
+}
+
+@MainActor final class AuroraGrainLayerView: NSView {
+    static let side: CGFloat = 160
+    static let tile: CGImage? = {
         let side = 160
         var state: UInt64 = 0x9E37_79B9_7F4A_7C15
         func next() -> Double {
@@ -293,20 +320,54 @@ private struct AuroraGrain: View {
             for offset in 0..<3 { pixels[index * 4 + offset] = UInt8((channel() * alpha * 255).rounded()) }
             pixels[index * 4 + 3] = UInt8((alpha * 255).rounded())
         }
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
-            let image = CGImage(
-                width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
-        else { return nil }
-        return Image(decorative: image, scale: 1)
+        guard let provider = CGDataProvider(data: Data(pixels) as CFData) else { return nil }
+        return CGImage(
+            width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
     }()
 
-    var body: some View {
-        if let tile = Self.tile {
-            Rectangle().fill(ImagePaint(image: tile, scale: 1))
-        }
+    private let host = CALayer()
+    private let rows = CAReplicatorLayer()
+    private let columns = CAReplicatorLayer()
+    private let tileLayer = CALayer()
+    private var size: CGSize?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        let side = Self.side
+        tileLayer.contents = Self.tile
+        tileLayer.contentsGravity = .resize
+        tileLayer.contentsScale = 1
+        tileLayer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        tileLayer.anchorPoint = .zero
+        columns.addSublayer(tileLayer)
+        columns.instanceTransform = CATransform3DMakeTranslation(side, 0, 0)
+        rows.addSublayer(columns)
+        // Rows run down from the top edge, as the paint tiles from the top-left corner.
+        rows.instanceTransform = CATransform3DMakeTranslation(0, -side, 0)
+        host.addSublayer(rows)
+        // Layer-hosting: the host layer's sublayers use bottom-left coordinates.
+        layer = host
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func apply(size next: CGSize, opacity: Float) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        if host.opacity != opacity { host.opacity = opacity }
+        guard next != size else { return }
+        size = next
+        let side = Self.side
+        columns.instanceCount = max(1, Int((next.width / side).rounded(.up)))
+        rows.instanceCount = max(1, Int((next.height / side).rounded(.up)))
+        tileLayer.position = CGPoint(x: 0, y: next.height - side)
     }
 }
 
@@ -347,6 +408,9 @@ struct AuroraShaderView: NSViewRepresentable {
         view.colorPixelFormat = .bgra8Unorm
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         view.layer?.isOpaque = false
+        // Two drawables, not the default three: a 20 fps quarter-resolution loop never has more
+        // than one frame in flight, so the third only held memory.
+        (view.layer as? CAMetalLayer)?.maximumDrawableCount = 2
         view.autoResizeDrawable = false
         view.preferredFramesPerSecond = framesPerSecond
         let renderer = context.coordinator

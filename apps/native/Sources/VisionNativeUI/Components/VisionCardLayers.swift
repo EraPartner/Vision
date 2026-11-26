@@ -58,6 +58,17 @@ struct VisionCardLayerStyle: Equatable {
     private let edgeLayer = CAGradientLayer()
     private let edgeMask = CAShapeLayer()
     private let frameLayer = CALayer()
+    /// The pre-rendered chrome (`VisionCardChrome`): the outer shadows with the card cut out,
+    /// the hover lift, and the inset edge, each one stretchable image shared by every card of
+    /// the same style. They replace `shadowHost` (with its cut-out mask) and `edgeLayer` (with
+    /// its stroke mask) on any card big enough for the slices: no masked offscreen pass per card
+    /// per frame, and two image layers instead of one layer per shadow.
+    private let shadowImageLayer = CALayer()
+    private let liftImageLayer = CALayer()
+    private let edgeImageLayer = CALayer()
+    private var usesChrome = false
+    /// The images last set on the three chrome layers, so an unchanged style sets nothing.
+    private var chromeImages: [CGImage?] = [nil, nil, nil]
     private var style: VisionCardLayerStyle?
     private struct GeometryKey: Equatable {
         let bounds: CGRect
@@ -94,8 +105,15 @@ struct VisionCardLayerStyle: Equatable {
         edgeLayer.locations = [0, 0.12, 0.88, 1]
         frameLayer.cornerCurve = .continuous
         frameLayer.borderWidth = 1
+        for layer in [shadowImageLayer, liftImageLayer, edgeImageLayer] {
+            layer.isHidden = true
+            layer.contentsGravity = .resize
+        }
+        host.addSublayer(shadowImageLayer)
+        host.addSublayer(liftImageLayer)
         host.addSublayer(fillLayer)
         host.addSublayer(edgeLayer)
+        host.addSublayer(edgeImageLayer)
         host.addSublayer(frameLayer)
     }
 
@@ -113,6 +131,7 @@ struct VisionCardLayerStyle: Equatable {
         {
             layer.contentsScale = scale
         }
+        updateChrome()
     }
 
     func apply(_ style: VisionCardLayerStyle) {
@@ -162,6 +181,7 @@ struct VisionCardLayerStyle: Equatable {
         } else {
             liftLayer.shadowOpacity = 0
         }
+        updateChrome()
         CATransaction.commit()
         needsLayout = true
     }
@@ -208,7 +228,45 @@ struct VisionCardLayerStyle: Equatable {
         // a tall card's sides, which read as a glow around the card.
         let reach = bounds.height > 0 ? min(0.5, Double(radius / bounds.height)) : 0.12
         edgeLayer.locations = [0, NSNumber(value: reach), NSNumber(value: 1 - reach), 1]
+        updateChrome()
         CATransaction.commit()
+    }
+
+    /// Puts the pre-rendered chrome in place of the masked layers when the card is big enough
+    /// for its slices, and back otherwise. Runs inside the caller's transaction, so a hover
+    /// change cross-fades the images over the card's transition.
+    private func updateChrome() {
+        guard let style else { return }
+        let scale = window?.backingScaleFactor ?? 2
+        let slices = VisionCardChrome.slices(for: style, scale: scale)
+        let fits = bounds.width >= slices.minimumSide && bounds.height >= slices.minimumSide
+        if fits != usesChrome {
+            usesChrome = fits
+            let actions = CATransaction.disableActions()
+            CATransaction.setDisableActions(true)
+            shadowHost.isHidden = fits
+            edgeLayer.isHidden = fits
+            shadowImageLayer.isHidden = !fits
+            liftImageLayer.isHidden = !fits
+            edgeImageLayer.isHidden = !fits
+            CATransaction.setDisableActions(actions)
+        }
+        guard fits else { return }
+        for (index, (layer, slice)) in [
+            (shadowImageLayer, slices.shadows), (liftImageLayer, slices.lift), (edgeImageLayer, slices.edge),
+        ].enumerated() {
+            let actions = CATransaction.disableActions()
+            CATransaction.setDisableActions(true)
+            layer.frame = bounds.insetBy(dx: -slice.margin, dy: -slice.margin)
+            layer.contentsScale = scale
+            layer.contentsCenter = slice.center
+            CATransaction.setDisableActions(actions)
+            // Contents keep the caller's actions: a hover change cross-fades the images.
+            if chromeImages[index] !== slice.image {
+                chromeImages[index] = slice.image
+                layer.contents = slice.image
+            }
+        }
     }
 
     /// Sub-stops per gradient segment for `premultipliedStops`.
@@ -282,5 +340,155 @@ struct VisionCardLayerStyle: Equatable {
     /// The continuous rounded rectangle SwiftUI's `RoundedRectangle(style: .continuous)` draws.
     private static func path(_ rect: CGRect, radius: CGFloat) -> CGPath {
         RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect).cgPath
+    }
+}
+
+/// One stretchable image: a card of side `2 * core + 1` points centred in a square with `margin`
+/// points of room on every side. Stretching its centre point to any card at least
+/// `2 * core + 1` points wide and tall draws the same pixels Core Animation drew for that card:
+/// within `core` of a corner nothing is stretched, and beyond it every row and column is the same.
+struct VisionCardChromeSlice {
+    let image: CGImage?
+    let margin: CGFloat
+    let core: CGFloat
+
+    /// The one-point centre, in unit coordinates of the image.
+    var center: CGRect {
+        let total = 2 * (margin + core) + 1
+        return CGRect(x: (margin + core) / total, y: (margin + core) / total, width: 1 / total, height: 1 / total)
+    }
+}
+
+struct VisionCardChromeSlices {
+    let shadows: VisionCardChromeSlice
+    let lift: VisionCardChromeSlice
+    let edge: VisionCardChromeSlice
+    /// The smallest card side the slices fit; smaller cards keep the masked layers.
+    let minimumSide: CGFloat
+}
+
+/// Renders and caches card chrome slices per style and scale (a handful of styles in the app).
+@MainActor enum VisionCardChrome {
+    private static var cache: [String: VisionCardChromeSlices] = [:]
+    /// More distinct styles than the app has; past it the cache starts over.
+    private static let capacity = 64
+    /// `VisionCardLayerView.shadowReach`: shadows are not painted further out than this.
+    private static let reach: CGFloat = 96
+
+    static func slices(for style: VisionCardLayerStyle, scale: CGFloat) -> VisionCardChromeSlices {
+        let key = cacheKey(style, scale: scale)
+        if let cached = cache[key] { return cached }
+        let radius = style.cornerRadius
+        let shadows = slice(shadows: style.shadows, radius: radius, scale: scale)
+        let lift = slice(shadows: style.lift.map { [$0] } ?? [], radius: radius, scale: scale)
+        let edge = edgeSlice(style, scale: scale)
+        let made = VisionCardChromeSlices(
+            shadows: shadows, lift: lift, edge: edge,
+            minimumSide: 2 * max(shadows.core, lift.core, edge.core) + 1)
+        if cache.count >= capacity { cache.removeAll() }
+        cache[key] = made
+        return made
+    }
+
+    /// How far along each edge a continuous corner curves: about 1.53 times its radius, not the
+    /// radius itself, so the unstretched caps must cover that much.
+    private static func cornerSpan(_ radius: CGFloat) -> CGFloat { (1.6 * radius).rounded(.up) }
+
+    /// How far a shadow reaches past the card: its offset, spread and three blur radii.
+    private static func extent(_ shadow: VisionCardShadow) -> CGFloat {
+        (abs(shadow.x) + abs(shadow.y) + max(0, shadow.spread) + 3 * shadow.radius).rounded(.up)
+    }
+
+    private static func slice(shadows: [VisionCardShadow], radius: CGFloat, scale: CGFloat) -> VisionCardChromeSlice {
+        let visible = shadows.filter { $0.color.alpha > 0 }
+        let extent = visible.map(extent).max() ?? 0
+        let margin = min(reach, extent)
+        let core = cornerSpan(radius) + extent
+        guard !visible.isEmpty else { return VisionCardChromeSlice(image: nil, margin: margin, core: core) }
+        let side = 2 * (margin + core) + 1
+        guard let context = bitmap(side: side, scale: scale) else {
+            return VisionCardChromeSlice(image: nil, margin: margin, core: core)
+        }
+        let card = CGRect(x: margin, y: margin, width: 2 * core + 1, height: 2 * core + 1)
+        // Each shape is filled far off the image and casts its shadow back onto it, so only the
+        // shadow lands (a spread shape would otherwise paint a ring around the card).
+        let away = side + 64
+        for shadow in visible {
+            let shape = card.insetBy(dx: -shadow.spread, dy: -shadow.spread).offsetBy(dx: away, dy: 0)
+            context.saveGState()
+            // Shadow offset and blur are in device pixels, outside the scale transform. A layer's
+            // `shadowRadius` is half the blur Core Graphics takes; y is already upwards here.
+            context.setShadow(
+                offset: CGSize(width: (shadow.x - away) * scale, height: -shadow.y * scale),
+                blur: 2 * shadow.radius * scale, color: shadow.color)
+            context.addPath(path(shape, radius: max(0, radius + shadow.spread)))
+            context.setFillColor(CGColor(gray: 0, alpha: 1))
+            context.fillPath()
+            context.restoreGState()
+        }
+        // A CSS `box-shadow` is not painted under its box.
+        context.setBlendMode(.clear)
+        context.addPath(path(card, radius: radius))
+        context.fillPath()
+        return VisionCardChromeSlice(image: context.makeImage(), margin: margin, core: core)
+    }
+
+    /// The inset edge: a 1 pt line 1 pt inside the card, the top highlight fading out within one
+    /// corner radius of the top and the bottom hairline within one of the bottom.
+    private static func edgeSlice(_ style: VisionCardLayerStyle, scale: CGFloat) -> VisionCardChromeSlice {
+        let radius = style.cornerRadius
+        let core = cornerSpan(radius) + 2
+        guard style.edgeTop.alpha > 0 || style.edgeBottom.alpha > 0 else {
+            return VisionCardChromeSlice(image: nil, margin: 0, core: core)
+        }
+        let side = 2 * core + 1
+        guard let context = bitmap(side: side, scale: scale), let space = CGColorSpace(name: CGColorSpace.sRGB)
+        else { return VisionCardChromeSlice(image: nil, margin: 0, core: core) }
+        let card = CGRect(x: 0, y: 0, width: side, height: side)
+        let line = path(card.insetBy(dx: 1.5, dy: 1.5), radius: max(0, radius - 1.5))
+            .copy(strokingWithWidth: 1, lineCap: .butt, lineJoin: .miter, miterLimit: 10)
+        context.addPath(line)
+        context.clip()
+        let reach = min(0.5, radius / side)
+        let colors = [
+            style.edgeTop, style.edgeTop.copy(alpha: 0) ?? CGColor.clear,
+            style.edgeBottom.copy(alpha: 0) ?? CGColor.clear, style.edgeBottom,
+        ]
+        guard
+            let gradient = CGGradient(
+                colorsSpace: space, colors: colors as CFArray, locations: [0, reach, 1 - reach, 1])
+        else { return VisionCardChromeSlice(image: nil, margin: 0, core: core) }
+        context.drawLinearGradient(
+            gradient, start: CGPoint(x: 0, y: side), end: CGPoint(x: 0, y: 0), options: [])
+        return VisionCardChromeSlice(image: context.makeImage(), margin: 0, core: core)
+    }
+
+    private static func bitmap(side: CGFloat, scale: CGFloat) -> CGContext? {
+        let pixels = Int((side * scale).rounded(.up))
+        guard pixels > 0, let space = CGColorSpace(name: CGColorSpace.sRGB),
+            let context = CGContext(
+                data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        return context
+    }
+
+    private static func path(_ rect: CGRect, radius: CGFloat) -> CGPath {
+        RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect).cgPath
+    }
+
+    private static func cacheKey(_ style: VisionCardLayerStyle, scale: CGFloat) -> String {
+        func color(_ color: CGColor) -> String {
+            (color.components ?? []).map { String(format: "%.4f", $0) }.joined(separator: ",")
+                + "@" + ((color.colorSpace?.name as String?) ?? "")
+        }
+        func shadow(_ shadow: VisionCardShadow) -> String {
+            "\(color(shadow.color))/\(shadow.radius)/\(shadow.x)/\(shadow.y)/\(shadow.spread)"
+        }
+        return [
+            "\(scale)", "\(style.cornerRadius)", style.shadows.map(shadow).joined(separator: ";"),
+            style.lift.map(shadow) ?? "-", color(style.edgeTop), color(style.edgeBottom),
+        ].joined(separator: "|")
     }
 }

@@ -186,11 +186,14 @@ public enum AnalysisMonitorPresentation {
     }
     public static func dateTime(_ raw: String?) -> String {
         guard let raw, let date = VisionFormat.parseTimestamp(raw) else { return "—" }
-        let format = DateFormatter()
-        format.locale = .autoupdatingCurrent
-        format.timeZone = .autoupdatingCurrent
-        format.dateStyle = .short
-        format.timeStyle = .medium
+        let format = SharedFormatters.shared("monitors.dateTime") { () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = .autoupdatingCurrent
+            made.timeZone = .autoupdatingCurrent
+            made.dateStyle = .short
+            made.timeStyle = .medium
+            return made
+        }
         return format.string(from: date)
     }
 }

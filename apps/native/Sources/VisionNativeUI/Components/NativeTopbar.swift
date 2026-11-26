@@ -19,19 +19,29 @@ struct NativeTopbar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.visionVisualEffects) private var visualEffects
+    @Environment(\.visionFullEffects) private var fullEffects
     @Environment(\.visionTheme) private var theme
 
     /// What the veil's gradient lies over: the blurred page, or the opaque `--card` on the reduced
     /// tier and under Reduce Transparency (`:root.fx-reduced .app-topbar` and the
     /// `prefers-reduced-transparency` block of index.css set `backdrop-filter: none` and
     /// `background: hsl(var(--card))`), so those never blur the page scrolling under the bar.
+    /// The Standard tier with Full effects off (turned down to save GPU work, ADR-255) lays the
+    /// gradient over a `--background` tint instead of a material, so scrolling under the bar does
+    /// not re-sample and blur the page on every frame; the colour stays the page background.
     @ViewBuilder private var veilBackdrop: some View {
         if visualEffects == .reduced || reduceTransparency {
             Rectangle().fill(theme.card)
+        } else if visualEffects == .standard && !fullEffects {
+            Rectangle().fill(Color(token: theme.palette.background, opacity: Self.unblurredTint))
         } else {
             Rectangle().fill(.ultraThinMaterial)
         }
     }
+
+    /// The `--background` tint under the gradient without a blur: with the gradient on top the bar
+    /// is about 93 % (top) to 87 % (bottom) background, so text scrolling under it stays faint.
+    private static let unblurredTint = 0.6
 
     /// AppLayout's topbar `h-14`: the page content starts below it.
     static let barHeight: CGFloat = 56

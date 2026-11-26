@@ -294,16 +294,19 @@ struct TransactionsTableCard: View {
     }
 
     private var selectAllBox: some View {
-        let symbol = model.allSelected ? "checkmark.square.fill" : model.someSelected ? "minus.square.fill" : "square"
+        // Read once: each read scans the visible rows.
+        let all = model.allSelected
+        let some = !all && !model.selection.ids.isEmpty
+        let symbol = all ? "checkmark.square.fill" : some ? "minus.square.fill" : "square"
         return Button {
             model.toggleSelectAll()
         } label: {
             Image(systemName: symbol)
-                .foregroundStyle(model.allSelected || model.someSelected ? theme.primary : theme.tertiaryLabel)
+                .foregroundStyle(all || some ? theme.primary : theme.tertiaryLabel)
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(strings.t("aria.selectAll"))
-        .accessibilityValue(Text(verbatim: model.allSelected ? "1" : model.someSelected ? "mixed" : "0"))
+        .accessibilityValue(Text(verbatim: all ? "1" : some ? "mixed" : "0"))
     }
 
     @ViewBuilder
@@ -407,6 +410,11 @@ struct TransactionsTableCard: View {
             let columns = dataColumns
             let labels = model.labels
             let accountNames = model.accountNames
+            // The row states are read here, once per pass, and handed to the rows as values: a row
+            // that read them itself re-rendered whenever any row was selected, checked or edited.
+            let selectedId = model.selectedId
+            let editingId = model.rowEditor?.id
+            let selection = model.selection
             // `VirtualDataTable maxHeight={720}`: the header and search row stay put and the rows
             // scroll inside the card, drawn lazily; drawn rows near the end load the next page.
             ScrollView(.vertical) {
@@ -416,7 +424,9 @@ struct TransactionsTableCard: View {
                         VStack(alignment: .leading, spacing: 0) {
                             TransactionRowView(
                                 model: model, shell: shell, row: row, columns: columns, compact: isCompact,
-                                widths: fitted, labels: labels, accountNames: accountNames, focusedRow: $focusedRow
+                                widths: fitted, labels: labels, accountNames: accountNames,
+                                isSelected: selectedId == row.id, isEditing: editingId == row.id,
+                                checked: selection.contains(row.id), focusedRow: $focusedRow
                             )
                             .equatable()
                             Divider()
@@ -470,21 +480,25 @@ struct TransactionRowView: View, Equatable {
     /// The model's fallback labels and account names, shared by every row of a pass.
     let labels: TransactionLabels
     let accountNames: [AccountID: String]
+    /// The open row (`selectedId`), the row being edited and the checked state, from the table.
+    let isSelected: Bool
+    let isEditing: Bool
+    let checked: Bool
     var focusedRow: FocusState<TransactionID?>.Binding
     @Environment(\.visionTheme) private var theme
 
     /// What a row draws from its inputs. The model and shell are the same for every row of a
-    /// card, and what changes under them (selection, editor, settings) is observed by the body
-    /// itself, so a parent pass with equal inputs skips the row.
+    /// card. The open, edited and checked states come in as values, so a selection change
+    /// re-renders the rows it touches and no others; the editor's fields and the settings are
+    /// observed by the body itself.
     nonisolated static func == (lhs: TransactionRowView, rhs: TransactionRowView) -> Bool {
         lhs.row == rhs.row && lhs.columns == rhs.columns && lhs.compact == rhs.compact
             && lhs.widths == rhs.widths && lhs.labels == rhs.labels && lhs.accountNames == rhs.accountNames
+            && lhs.isSelected == rhs.isSelected && lhs.isEditing == rhs.isEditing && lhs.checked == rhs.checked
     }
 
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var isEditing: Bool { model.rowEditor?.id == row.id }
-    private var isSelected: Bool { model.selectedId == row.id }
 
     var body: some View {
         // The label formats the date and amount; it serves the row, its box and its Edit button.
@@ -581,8 +595,7 @@ struct TransactionRowView: View, Equatable {
     }
 
     private func checkbox(label: String) -> some View {
-        let checked = model.selection.contains(row.id)
-        return Button {
+        Button {
             model.toggleSelection(row.id)
         } label: {
             Image(systemName: checked ? "checkmark.square.fill" : "square")

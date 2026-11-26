@@ -35,8 +35,8 @@ targets:
     dependencies:
       - package: VisionNativeCore
         product: VisionNativeCore
-      # The SwiftUI screens and the generated String Catalog (Sources/VisionNativeUI/Resources/
-      # Localizable.xcstrings), which Xcode compiles into the package's resource bundle.
+      # The SwiftUI screens and the generated string tables (Sources/VisionNativeUI/Resources/
+      # Strings/<language>.json), copied into the package's resource bundle.
       - package: VisionNativeCore
         product: VisionNativeUI
       # The in-process Swift backend (ADR-270); RoutingAPITransport sends it the ported
@@ -118,7 +118,7 @@ targets:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleExecutable: $(EXECUTABLE_NAME)
         CFBundleIconName: $(ASSETCATALOG_COMPILER_APPICON_NAME)
-        # The languages of the String Catalog and the shell locales.
+        # The languages of the string tables and the shell locales.
         CFBundleLocalizations: [en, nl]
         CFBundlePackageType: APPL
         CFBundleShortVersionString: $(MARKETING_VERSION)

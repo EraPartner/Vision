@@ -17,7 +17,8 @@ struct PortfolioSeriesChart: View {
     var colors: [String: Color] = [:]
     /// The chart's main line (`primary`): it leads the range-compare readout and tints its band.
     var primary: String?
-    @State private var selected: String?
+    /// The hovered key, read only by the rule and the readout, so hover never rebuilds the marks.
+    @State private var hover = ChartHover<String>()
     /// Range compare (`scrubbable`): drag, or click, move, click.
     @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
@@ -80,9 +81,6 @@ struct PortfolioSeriesChart: View {
                         }
                     }
                 }
-                if scrub.range == nil, let selected, let x = index[selected] {
-                    RuleMark(x: .value(title, x)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
-                }
             }
             .chartXScale(domain: 0...max(keys.count - 1, 1))
             .chartLegend(.hidden)
@@ -100,24 +98,30 @@ struct PortfolioSeriesChart: View {
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     let series = plot.scrubSeries(primary: primary)
-                    ChartRangeCompareLayer(
-                        scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
-                        view: ChartScrubView(scrub, count: keys.count, series: series),
-                        indexAt: { position(at: $0, proxy: proxy) },
-                        xOf: { proxy.position(forX: Double($0)) },
-                        yOf: { _, value in proxy.position(forY: value) },
-                        colorOf: { key in series.firstIndex { $0.key == key }.map { lineColor(self.series[$0]) } ?? theme.primary },
-                        titleOf: { keys.indices.contains($0) ? dateLabel(keys[$0]) : "" },
-                        deltaOf: { row in
-                            ChartScrubDelta.text(
-                                start: row.start, end: row.end, formatValue: { format(Decimal($0)) },
-                                formatPercent: percent ? nil : { scrubPercent($0) })
-                        },
-                        onHover: { hovered in
-                            let key = hovered.flatMap { keys.indices.contains($0) ? keys[$0] : nil }
-                            if selected != key { selected = key }
-                        },
-                        onPress: { focused = true })
+                    let plotRect = proxy.plotFrame.map { geometry[$0] } ?? .zero
+                    ZStack(alignment: .topLeading) {
+                        ChartHoverRule(
+                            hover: hover, plot: plotRect,
+                            x: { key in index[key].flatMap { proxy.position(forX: Double($0)) } },
+                            color: theme.secondaryLabel.opacity(0.5), hidden: scrub.range != nil)
+                        ChartRangeCompareLayer(
+                            scrub: $scrub, plot: plotRect,
+                            view: ChartScrubView(scrub, count: keys.count, series: series),
+                            indexAt: { position(at: $0, proxy: proxy) },
+                            xOf: { proxy.position(forX: Double($0)) },
+                            yOf: { _, value in proxy.position(forY: value) },
+                            colorOf: { key in series.firstIndex { $0.key == key }.map { lineColor(self.series[$0]) } ?? theme.primary },
+                            titleOf: { keys.indices.contains($0) ? dateLabel(keys[$0]) : "" },
+                            deltaOf: { row in
+                                ChartScrubDelta.text(
+                                    start: row.start, end: row.end, formatValue: { format(Decimal($0)) },
+                                    formatPercent: percent ? nil : { scrubPercent($0) })
+                            },
+                            onHover: { hovered in
+                                hover.set(hovered.flatMap { keys.indices.contains($0) ? keys[$0] : nil })
+                            },
+                            onPress: { focused = true })
+                    }
                 }
             }
             .frame(height: height).focusable().focused($focused).focusEffectDisabled()
@@ -128,10 +132,10 @@ struct PortfolioSeriesChart: View {
                     shell.strings, kind: .area, categoryCount: keys.count, seriesLabels: series.map(\.label)))
             .onKeyPress(phases: .down, action: moveSelection)
             .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
-            .onChange(of: series) { _, _ in selected = nil }
+            .onChange(of: series) { _, _ in hover.key = nil }
             .onChange(of: focused) { _, focused in
                 if !focused {
-                    selected = nil
+                    hover.key = nil
                     scrub.clear()
                 }
             }
@@ -141,24 +145,9 @@ struct PortfolioSeriesChart: View {
                         id: line.id, label: line.label,
                         color: colors[line.id] ?? Color(token: palette[index % palette.count]), dashed: line.dashed)
                 })
-            if scrub.range == nil, let selected, keys.contains(selected) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(dateLabel(selected)).font(.caption.weight(.medium))
-                    ForEach(series) { line in
-                        if let value = line.points.first(where: { $0.key == selected })?.value {
-                            HStack {
-                                Text(line.label).foregroundStyle(theme.secondaryLabel)
-                                Spacer()
-                                Text(format(value)).monospacedDigit()
-                            }.font(.caption)
-                        }
-                    }
-                }.padding(10)
-                    .background(
-                        theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
-                    )
-                    .accessibilityElement(children: .combine)
-            }
+            PortfolioChartReadout(
+                hover: hover, hidden: scrub.range != nil, keys: keys, series: series,
+                dateLabel: { dateLabel($0) }, format: { format($0) })
         }
     }
     /// What the date and value strings of a point depend on besides the point.
@@ -229,18 +218,51 @@ struct PortfolioSeriesChart: View {
     private func moveSelection(_ press: KeyPress) -> KeyPress.Result {
         let keys = self.keys
         if press.key == .escape {
-            guard selected != nil || scrub.scrubbing else { return .ignored }
-            selected = nil
+            guard hover.key != nil || scrub.scrubbing else { return .ignored }
+            hover.key = nil
             scrub.clear()
             return .handled
         }
         guard let chartKey = press.chartKey,
             let next = scrub.key(
-                chartKey, shift: press.modifiers.contains(.shift), index: selected.flatMap(keys.firstIndex),
+                chartKey, shift: press.modifiers.contains(.shift), index: hover.key.flatMap(keys.firstIndex),
                 count: keys.count)
         else { return .ignored }
-        selected = keys[next]
+        hover.key = keys[next]
         return .handled
+    }
+}
+
+/// The hovered point's date and the value of each line, under the chart. Its own view, so it
+/// alone re-renders as the pointer moves.
+private struct PortfolioChartReadout: View {
+    let hover: ChartHover<String>
+    let hidden: Bool
+    let keys: [String]
+    let series: [InsightChartSeries]
+    let dateLabel: (String) -> String
+    let format: (Decimal) -> String
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        if !hidden, let selected = hover.key, keys.contains(selected) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(dateLabel(selected)).font(.caption.weight(.medium))
+                ForEach(series) { line in
+                    if let value = line.points.first(where: { $0.key == selected })?.value {
+                        HStack {
+                            Text(line.label).foregroundStyle(theme.secondaryLabel)
+                            Spacer()
+                            Text(format(value)).monospacedDigit()
+                        }.font(.caption)
+                    }
+                }
+            }.padding(10)
+                .background(
+                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                )
+                .accessibilityElement(children: .combine)
+        }
     }
 }
 

@@ -59,11 +59,11 @@ public struct HomeView: View {
                 } else {
                     // DashboardPage: the hero and the two-column grid share a `space-y-6` group.
                     VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
-                        if model.isVisible("hero") { hero }
+                        if model.isVisible("hero") { ObservationScope { hero } }
                         mainGrid
                     }
                     chartsGrid
-                    if model.isVisible("cashflowComparison") { forecast }
+                    if model.isVisible("cashflowComparison") { ObservationScope { forecast } }
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -259,17 +259,18 @@ public struct HomeView: View {
     }
     private var leftColumn: some View {
         VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
-            if model.isVisible("attention") { attention }
-            if model.isVisible("statCards") { summary }
-            if model.isVisible("bankBalances") { bankBalances }
-            if model.isVisible("recentTransactions") { recent }
+            // Each widget reads its own data in its own scope (`ObservationScope`).
+            if model.isVisible("attention") { ObservationScope { attention } }
+            if model.isVisible("statCards") { ObservationScope { summary } }
+            if model.isVisible("bankBalances") { ObservationScope { bankBalances } }
+            if model.isVisible("recentTransactions") { ObservationScope { recent } }
         }
     }
     private var rightColumn: some View {
         VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
-            if model.isVisible("netWorth") { netWorth }
-            if model.isVisible("upcoming") { upcoming }
-            if model.isVisible("accounts") { accounts }
+            if model.isVisible("netWorth") { ObservationScope { netWorth } }
+            if model.isVisible("upcoming") { ObservationScope { upcoming } }
+            if model.isVisible("accounts") { ObservationScope { accounts } }
         }
     }
     /// The chart bento: the trends chart over three fifths, the category donut over two; a lone
@@ -282,8 +283,8 @@ public struct HomeView: View {
         }
     }
     @ViewBuilder private var chartCards: some View {
-        if model.isVisible("monthlyTrends") { monthlyTrends }
-        if model.isVisible("categoryPie") { categoryPie }
+        if model.isVisible("monthlyTrends") { ObservationScope { monthlyTrends } }
+        if model.isVisible("categoryPie") { ObservationScope { categoryPie } }
     }
     private var categoryPie: some View {
         card(

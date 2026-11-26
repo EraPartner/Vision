@@ -13,6 +13,7 @@ struct AnalysisResultPivot: View {
     @State private var errorDetails = false
     @State private var hasRun = false
     @State private var matrixCache = MatrixCache()
+    @State private var matrixRevision = 0
     @FocusState private var addFocus: String?
     @FocusState private var searchFocused: Bool
     @Environment(\.visionTheme) private var theme
@@ -200,118 +201,45 @@ struct AnalysisResultPivot: View {
         let label = (dataset.fields + dataset.measures).first { $0.id == id }?.label ?? id
         return AnalysisPresentation.catalogLabel(label, strings: strings)
     }
-    private func key(_ row: AnalysisRow, ids: [String], depth: Int) -> String {
-        let value = TaxValue.array([.number(Decimal(depth))] + ids.map { row[$0] ?? .null })
-        return (try? String(decoding: APIBody.encode(value), as: UTF8.self)) ?? ""
-    }
-    private func rowKey(_ row: AnalysisRow, _ depth: Int) -> String {
-        key(row, ids: unique((result?.partitions ?? []) + Array(config.rows.prefix(depth))), depth: depth)
-    }
-    private func columnKey(_ row: AnalysisRow, _ depth: Int) -> String {
-        key(row, ids: Array(config.columns.prefix(depth)), depth: depth)
-    }
-    private func sorted(_ values: [AnalysisRow], ids: [String]) -> [AnalysisRow] {
-        values.sorted { a, b in
-            for id in ids {
-                let first = a[id] == nil || a[id] == .null ? "" : AnalysisPresentation.rawText(a[id])
-                let second = b[id] == nil || b[id] == .null ? "" : AnalysisPresentation.rawText(b[id])
-                let order = first.compare(second, options: [.numeric], locale: Locale.current)
-                if order != .orderedSame { return order == .orderedAscending }
-            }
-            return false
-        }
-    }
-    private struct Entry: Identifiable {
-        let row: AnalysisRow
-        let depth: Int
-        let id: String
-    }
-    private struct LevelKey: Hashable {
-        let row: Int
-        let column: Int
-    }
-    private struct CellKey: Hashable {
-        let row: String
-        let column: String
-    }
-    private struct IndexedLevel {
-        let source: AnalysisPivotResult.Level
-        let cells: [CellKey: AnalysisRow]
-    }
-    private struct MatrixPresentation {
-        var rows: [Entry] = []
-        var columns: [Entry] = []
-        var levels: [LevelKey: IndexedLevel] = [:]
+    private func columnKey(_ row: AnalysisRow, _ depth: Int) -> String { matrixInputs.columnKey(row, depth) }
+    private var matrixInputs: AnalysisPivotMatrixInputs {
+        AnalysisPivotMatrixInputs(
+            result: result, config: config, expandedRows: expandedRows, expandedColumns: expandedColumns)
     }
     @MainActor
     private final class MatrixCache {
-        var result: AnalysisPivotResult?
-        var config: AnalysisPivotConfig?
-        var rows: Set<String> = []
-        var columns: Set<String> = []
-        var value: MatrixPresentation?
+        /// The last matrix built, by either path, and the inputs it was built from.
+        var entry: (inputs: AnalysisPivotMatrixInputs, value: PivotMatrixPresentation)?
+        /// The inputs of the off-main build in flight.
+        var pending: AnalysisPivotMatrixInputs?
     }
-    private var presentation: MatrixPresentation {
-        if matrixCache.result == result, matrixCache.config == config,
-            matrixCache.rows == expandedRows, matrixCache.columns == expandedColumns,
-            let value = matrixCache.value { return value }
-        let interval = NativePerformance.begin("Analysis.pivot")
-        defer { NativePerformance.end("Analysis.pivot", interval) }
-        var next = MatrixPresentation(rows: visibleRows, columns: matrixColumns)
-        for source in result?.levels ?? [] {
-            var cells: [CellKey: AnalysisRow] = [:]
-            for row in source.rows {
-                let key = CellKey(row: rowKey(row, source.rowDepth), column: columnKey(row, source.columnDepth))
-                if cells[key] == nil { cells[key] = row }
-            }
-            let key = LevelKey(row: source.rowDepth, column: source.columnDepth)
-            if next.levels[key] == nil { next.levels[key] = IndexedLevel(source: source, cells: cells) }
+    /// The matrix for the current result, configuration and expansion. The first one is built here;
+    /// later ones are built off the main actor while the previous matrix stays on screen, and land
+    /// only if they are still for the inputs last asked for (the version check).
+    private var presentation: PivotMatrixPresentation {
+        // An off-main build bumps this when it lands, which re-renders the matrix.
+        _ = matrixRevision
+        let inputs = matrixInputs
+        if let entry = matrixCache.entry, entry.inputs == inputs { return entry.value }
+        guard let shown = matrixCache.entry else {
+            let interval = NativePerformance.begin("Analysis.pivot")
+            defer { NativePerformance.end("Analysis.pivot", interval) }
+            let value = inputs.build()
+            matrixCache.entry = (inputs, value)
+            return value
         }
-        matrixCache.result = result
-        matrixCache.config = config
-        matrixCache.rows = expandedRows
-        matrixCache.columns = expandedColumns
-        matrixCache.value = next
-        return next
-    }
-    private var visibleRows: [Entry] {
-        guard let result else { return [] }
-        var output: [Entry] = []
-        func collect(_ depth: Int, _ parent: AnalysisRow? = nil) {
-            let source = result.levels.first { $0.rowDepth == depth && $0.columnDepth == columnDepth }
-            let ids = unique(result.partitions + Array(config.rows.prefix(depth)))
-            let parentIDs = unique(result.partitions + Array(config.rows.prefix(max(0, depth - 1))))
-            let rows =
-                source?.rows.filter { row in parent == nil || parentIDs.allSatisfy { row[$0] == parent?[$0] } } ?? []
-            var seen: Set<String> = []
-            for row in sorted(rows, ids: ids) where seen.insert(rowKey(row, depth)).inserted {
-                let key = rowKey(row, depth)
-                output.append(.init(row: row, depth: depth, id: key))
-                if depth < config.rows.count && expandedRows.contains(key) { collect(depth + 1, row) }
+        if matrixCache.pending != inputs {
+            matrixCache.pending = inputs
+            let cache = matrixCache
+            Task { @MainActor in
+                let value = await Task.detached(priority: .userInitiated) { inputs.build() }.value
+                guard cache.pending == inputs else { return }
+                cache.pending = nil
+                cache.entry = (inputs, value)
+                matrixRevision &+= 1
             }
         }
-        collect(rowDepth)
-        if !config.rows.isEmpty { collect(0) }
-        return output
-    }
-    private var matrixColumns: [Entry] {
-        guard let result else { return [] }
-        var output: [Entry] = []
-        func collect(_ depth: Int, _ parent: AnalysisRow? = nil) {
-            let source = result.levels.first { $0.rowDepth == rowDepth && $0.columnDepth == depth }
-            let parentIDs = Array(config.columns.prefix(max(0, depth - 1)))
-            let rows =
-                source?.rows.filter { row in parent == nil || parentIDs.allSatisfy { row[$0] == parent?[$0] } } ?? []
-            var seen: Set<String> = []
-            for row in sorted(rows, ids: Array(config.columns.prefix(depth)))
-            where seen.insert(columnKey(row, depth)).inserted {
-                let key = columnKey(row, depth)
-                output.append(.init(row: row, depth: depth, id: key))
-                if depth < config.columns.count && expandedColumns.contains(key) { collect(depth + 1, row) }
-            }
-        }
-        collect(columnDepth)
-        return output
+        return shown.value
     }
     private var matrix: some View {
         let snapshot = presentation
@@ -360,8 +288,8 @@ struct AnalysisResultPivot: View {
                         }
                         ForEach(snapshot.columns) { column in
                             ForEach(config.values, id: \.self) { id in
-                                let level = snapshot.levels[LevelKey(row: entry.depth, column: column.depth)]
-                                let cell = level?.cells[CellKey(row: entry.id, column: column.id)]
+                                let level = snapshot.levels[PivotLevelKey(row: entry.depth, column: column.depth)]
+                                let cell = level?.cells[PivotCellKey(row: entry.id, column: column.id)]
                                 Button(displayCell(cell, id)) {
                                     guard let cell, let source = level?.source else { return }
                                     let values = Dictionary(
@@ -372,8 +300,8 @@ struct AnalysisResultPivot: View {
                         }
                         if !config.columns.isEmpty {
                             ForEach(config.values, id: \.self) { id in
-                                let total = snapshot.levels[LevelKey(row: entry.depth, column: 0)]?
-                                    .cells[CellKey(row: entry.id, column: columnKey([:], 0))]
+                                let total = snapshot.levels[PivotLevelKey(row: entry.depth, column: 0)]?
+                                    .cells[PivotCellKey(row: entry.id, column: columnKey([:], 0))]
                                 Text(verbatim: displayCell(total, id)).fontWeight(.medium)
                             }
                         }
@@ -411,4 +339,115 @@ struct AnalysisResultPivot: View {
             id: id, numberFormat: shell.settings.numberFormat.rawValue)
     }
     private func unique(_ ids: [String]) -> [String] { ids.reduce(into: []) { if !$0.contains($1) { $0.append($1) } } }
+}
+
+private struct PivotMatrixEntry: Identifiable, Sendable {
+    let row: AnalysisRow
+    let depth: Int
+    let id: String
+}
+private struct PivotLevelKey: Hashable, Sendable {
+    let row: Int
+    let column: Int
+}
+private struct PivotCellKey: Hashable, Sendable {
+    let row: String
+    let column: String
+}
+private struct PivotIndexedLevel: Sendable {
+    let source: AnalysisPivotResult.Level
+    let cells: [PivotCellKey: AnalysisRow]
+}
+private struct PivotMatrixPresentation: Sendable {
+    var rows: [PivotMatrixEntry] = []
+    var columns: [PivotMatrixEntry] = []
+    var levels: [PivotLevelKey: PivotIndexedLevel] = [:]
+}
+
+/// What the pivot matrix is built from, and the build itself. Pure, so it runs off the main actor.
+private struct AnalysisPivotMatrixInputs: Equatable, Sendable {
+    let result: AnalysisPivotResult?
+    let config: AnalysisPivotConfig
+    let expandedRows: Set<String>
+    let expandedColumns: Set<String>
+
+    private var rowDepth: Int { min(1, config.rows.count) }
+    private var columnDepth: Int { min(1, config.columns.count) }
+
+    func build() -> PivotMatrixPresentation {
+        var next = PivotMatrixPresentation(rows: visibleRows, columns: matrixColumns)
+        for source in result?.levels ?? [] {
+            var cells: [PivotCellKey: AnalysisRow] = [:]
+            for row in source.rows {
+                let key = PivotCellKey(row: rowKey(row, source.rowDepth), column: columnKey(row, source.columnDepth))
+                if cells[key] == nil { cells[key] = row }
+            }
+            let key = PivotLevelKey(row: source.rowDepth, column: source.columnDepth)
+            if next.levels[key] == nil { next.levels[key] = PivotIndexedLevel(source: source, cells: cells) }
+        }
+        return next
+    }
+    private func key(_ row: AnalysisRow, ids: [String], depth: Int) -> String {
+        let value = TaxValue.array([.number(Decimal(depth))] + ids.map { row[$0] ?? .null })
+        return (try? String(decoding: APIBody.encode(value), as: UTF8.self)) ?? ""
+    }
+    func rowKey(_ row: AnalysisRow, _ depth: Int) -> String {
+        key(row, ids: Self.unique((result?.partitions ?? []) + Array(config.rows.prefix(depth))), depth: depth)
+    }
+    func columnKey(_ row: AnalysisRow, _ depth: Int) -> String {
+        key(row, ids: Array(config.columns.prefix(depth)), depth: depth)
+    }
+    private func sorted(_ values: [AnalysisRow], ids: [String]) -> [AnalysisRow] {
+        values.sorted { a, b in
+            for id in ids {
+                let first = a[id] == nil || a[id] == .null ? "" : AnalysisPresentation.rawText(a[id])
+                let second = b[id] == nil || b[id] == .null ? "" : AnalysisPresentation.rawText(b[id])
+                let order = first.compare(second, options: [.numeric], locale: Locale.current)
+                if order != .orderedSame { return order == .orderedAscending }
+            }
+            return false
+        }
+    }
+    private var visibleRows: [PivotMatrixEntry] {
+        guard let result else { return [] }
+        var output: [PivotMatrixEntry] = []
+        func collect(_ depth: Int, _ parent: AnalysisRow? = nil) {
+            let source = result.levels.first { $0.rowDepth == depth && $0.columnDepth == columnDepth }
+            let ids = Self.unique(result.partitions + Array(config.rows.prefix(depth)))
+            let parentIDs = Self.unique(result.partitions + Array(config.rows.prefix(max(0, depth - 1))))
+            let rows =
+                source?.rows.filter { row in parent == nil || parentIDs.allSatisfy { row[$0] == parent?[$0] } } ?? []
+            var seen: Set<String> = []
+            for row in sorted(rows, ids: ids) where seen.insert(rowKey(row, depth)).inserted {
+                let key = rowKey(row, depth)
+                output.append(.init(row: row, depth: depth, id: key))
+                if depth < config.rows.count && expandedRows.contains(key) { collect(depth + 1, row) }
+            }
+        }
+        collect(rowDepth)
+        if !config.rows.isEmpty { collect(0) }
+        return output
+    }
+    private var matrixColumns: [PivotMatrixEntry] {
+        guard let result else { return [] }
+        var output: [PivotMatrixEntry] = []
+        func collect(_ depth: Int, _ parent: AnalysisRow? = nil) {
+            let source = result.levels.first { $0.rowDepth == rowDepth && $0.columnDepth == depth }
+            let parentIDs = Array(config.columns.prefix(max(0, depth - 1)))
+            let rows =
+                source?.rows.filter { row in parent == nil || parentIDs.allSatisfy { row[$0] == parent?[$0] } } ?? []
+            var seen: Set<String> = []
+            for row in sorted(rows, ids: Array(config.columns.prefix(depth)))
+            where seen.insert(columnKey(row, depth)).inserted {
+                let key = columnKey(row, depth)
+                output.append(.init(row: row, depth: depth, id: key))
+                if depth < config.columns.count && expandedColumns.contains(key) { collect(depth + 1, row) }
+            }
+        }
+        collect(columnDepth)
+        return output
+    }
+    static func unique(_ ids: [String]) -> [String] {
+        ids.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
 }

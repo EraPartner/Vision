@@ -271,3 +271,41 @@ struct ChartSelectionScope<Content: View>: View {
         content($selection, $rangeStart)
     }
 }
+
+// MARK: Hover
+
+/// A chart's hovered point, held outside the view that builds the marks. Hover writes this box,
+/// and only the views that read `key` (the rule and the readout) re-render: the marks are not
+/// rebuilt while the pointer crosses the plot.
+@Observable final class ChartHover<Key: Hashable> {
+    var key: Key?
+
+    /// Writes on change only: a parked pointer re-reports the same point every scroll frame.
+    func set(_ next: Key?) {
+        if key != next { key = next }
+    }
+}
+
+/// The hovered point's vertical rule, the `RuleMark(x:)` the chart drew inside `Chart`, drawn
+/// over the plot from `ChartHover` instead. Place it in a top-leading `ZStack` in the
+/// chart's overlay.
+struct ChartHoverRule<Key: Hashable>: View {
+    let hover: ChartHover<Key>
+    /// The plot rect inside the overlay's geometry.
+    let plot: CGRect
+    /// The plot x of a key; `nil` draws nothing.
+    let x: (Key) -> CGFloat?
+    let color: Color
+    /// A compared range replaces the rule.
+    var hidden = false
+
+    var body: some View {
+        if !hidden, let key = hover.key, let x = x(key) {
+            Rectangle().fill(color)
+                .frame(width: 1, height: max(plot.height, 0))
+                .offset(x: plot.minX + x - 0.5, y: plot.minY)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
