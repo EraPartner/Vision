@@ -866,6 +866,30 @@ const parserDelete = (id: string): ParityStep => ({
   method: "DELETE",
   path: `/api/import/parsers/${id}`,
 });
+// The portfolio import router serves the same saved-config CRUD under
+// /api/portfolio/import/parsers, with the portfolio config schema (P18).
+const portfolioParserList = (): ParityStep => ({
+  operationId: "getPortfolioParsers",
+  method: "GET",
+  path: "/api/portfolio/import/parsers",
+});
+const portfolioParserCreate = (body: unknown): ParityStep => ({
+  operationId: "createPortfolioParser",
+  method: "POST",
+  path: "/api/portfolio/import/parsers",
+  body,
+});
+const portfolioParserUpdate = (id: string, body: unknown): ParityStep => ({
+  operationId: "updatePortfolioParser",
+  method: "PATCH",
+  path: `/api/portfolio/import/parsers/${id}`,
+  body,
+});
+const portfolioParserDelete = (id: string): ParityStep => ({
+  operationId: "deletePortfolioParser",
+  method: "DELETE",
+  path: `/api/portfolio/import/parsers/${id}`,
+});
 const PARSER_CONFIG = {
   dateColumn: "Date",
   recipientColumn: "Name",
@@ -876,6 +900,20 @@ const PARSER_CONFIG = {
   encoding: "utf-8",
   number_format: "decimal_comma",
   skipRows: 2,
+};
+const PORTFOLIO_PARSER_CONFIG = {
+  dateColumn: "Date",
+  symbolColumn: "Symbol",
+  nameColumn: "Name",
+  typeColumn: "Type",
+  unitsColumn: "Units",
+  amountColumn: "Amount",
+  feesColumn: "Fees",
+  currencyColumn: "Currency",
+  defaultAssetClass: "stock",
+  number_format: "auto",
+  encoding: "utf-8",
+  skipRows: 1,
 };
 const transactions = (query = ""): ParityStep => ({
   operationId: "getTransactions",
@@ -6305,6 +6343,109 @@ function mutationAreas(): Record<string, ParityArea> {
           method: "GET",
           path: "/api/investments/abc",
         },
+      ],
+    },
+    "portfolio-parsers-mutations": {
+      router: {
+        module: "portfolioImportRoutes.ts",
+        mountPath: "/api/portfolio/import",
+      },
+      seed: [
+        `INSERT INTO custom_parser_configs (id, name, kind, config_json, created_at, updated_at) VALUES
+          (1, 'Bolero trades', 'portfolio', vision_jsonb('{"dateColumn":"Datum","symbolColumn":"Symbool","nameColumn":"Naam","typeColumn":"Type","unitsColumn":"Aantal","amountColumn":"Bedrag","feesColumn":"Kosten","currencyColumn":"Munt","defaultAssetClass":"stock","number_format":"decimal_comma","encoding":"latin1","skipRows":1}'), '${SEED_TIME}', '${SEED_TIME}'),
+          (2, 'Degiro positions', 'portfolio', vision_jsonb('{"dateColumn":"Date","nameColumn":"Product","defaultAssetClass":"etf","number_format":"auto","skipRows":0}'), '${SEED_TIME}', '${SEED_TIME}')`,
+      ],
+      steps: [
+        portfolioParserList(),
+        portfolioParserCreate({
+          name: "  Key trade  ",
+          config: PORTFOLIO_PARSER_CONFIG,
+        }),
+        portfolioParserCreate({
+          name: "Bolero trades",
+          config: PORTFOLIO_PARSER_CONFIG,
+        }),
+        portfolioParserCreate({
+          name: "No symbol or name",
+          config: {
+            ...PORTFOLIO_PARSER_CONFIG,
+            symbolColumn: "",
+            nameColumn: " ",
+          },
+        }),
+        portfolioParserCreate({
+          name: "Bad asset class",
+          config: { ...PORTFOLIO_PARSER_CONFIG, defaultAssetClass: "stamps" },
+        }),
+        portfolioParserCreate({
+          name: "Bad encoding",
+          config: { ...PORTFOLIO_PARSER_CONFIG, encoding: "bogus" },
+        }),
+        portfolioParserCreate({
+          name: "Bad number format",
+          config: { ...PORTFOLIO_PARSER_CONFIG, number_format: "dot" },
+        }),
+        portfolioParserCreate({
+          name: "Bad transfer account",
+          config: {
+            ...PORTFOLIO_PARSER_CONFIG,
+            transferDestinationAccountId: "1e3",
+          },
+        }),
+        portfolioParserCreate({
+          name: "Bad yield policy",
+          config: { ...PORTFOLIO_PARSER_CONFIG, yieldBasisPolicy: "fifo" },
+        }),
+        portfolioParserCreate({
+          name: "Missing date column",
+          config: { symbolColumn: "Symbol", defaultAssetClass: "stock" },
+        }),
+        portfolioParserCreate({ name: "No config" }),
+        portfolioParserCreate({ name: 7, config: PORTFOLIO_PARSER_CONFIG }),
+        portfolioParserCreate({ name: "", config: PORTFOLIO_PARSER_CONFIG }),
+        portfolioParserCreate({ config: PORTFOLIO_PARSER_CONFIG }),
+        portfolioParserCreate({ name: "   ", config: PORTFOLIO_PARSER_CONFIG }),
+        portfolioParserCreate({
+          name: "Extra keys kept",
+          config: { ...PORTFOLIO_PARSER_CONFIG, futureKey: "kept" },
+        }),
+        portfolioParserCreate([]),
+        portfolioParserList(),
+        portfolioParserUpdate("1", { name: "Bolero renamed" }),
+        portfolioParserUpdate("1", {
+          config: { ...PORTFOLIO_PARSER_CONFIG, encoding: "utf-8" },
+        }),
+        portfolioParserUpdate("1", {}),
+        portfolioParserUpdate("999", { name: "Ghost" }),
+        portfolioParserUpdate("abc", { name: "Bad id" }),
+        portfolioParserUpdate("1.5", { name: "Bad id" }),
+        portfolioParserUpdate("1e3", { name: "Bad id" }),
+        portfolioParserUpdate("-1", { name: "Bad id" }),
+        portfolioParserUpdate("0", { name: "Bad id" }),
+        portfolioParserUpdate("1", { name: "Degiro positions" }),
+        portfolioParserUpdate("1", { name: 5 }),
+        portfolioParserUpdate("1", { name: "  ", config: [] }),
+        portfolioParserUpdate("1", {
+          config: {
+            dateColumn: "D",
+            nameColumn: "N",
+            defaultAssetClass: "stock",
+          },
+        }),
+        portfolioParserUpdate("1", {
+          config: { ...PORTFOLIO_PARSER_CONFIG, skipRows: "abc" },
+        }),
+        portfolioParserUpdate("1", {
+          config: { ...PORTFOLIO_PARSER_CONFIG, defaultAssetClass: "stamps" },
+        }),
+        portfolioParserList(),
+        portfolioParserDelete("1"),
+        portfolioParserDelete("1"),
+        portfolioParserDelete("999"),
+        portfolioParserDelete("abc"),
+        portfolioParserDelete("2.5"),
+        portfolioParserDelete("bogus"),
+        portfolioParserList(),
       ],
     },
     "prices-mutations": {
