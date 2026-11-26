@@ -422,7 +422,7 @@ enum PortfolioCore {
     /// The shared lot engine of FIFO and LIFO; `fromEnd` consumes the tail.
     private static func calculateCostBasisLotBased(
         _ txns: [Txn], opts: BasisOptions, fromEnd: Bool
-    ) -> CostBasisResult {
+    ) throws -> CostBasisResult {
         let sorted = stableDateSort(txns)
         let ZERO = DecimalJS.zero
         let defaultFx = opts.defaultFxMultiplier.map(\.decimal) ?? .one
@@ -552,20 +552,20 @@ enum PortfolioCore {
             oversold: oversold)
     }
 
-    static func calculateCostBasisFIFO(_ txns: [Txn], opts: BasisOptions = BasisOptions()) -> CostBasisResult {
-        calculateCostBasisLotBased(txns, opts: opts, fromEnd: false)
+    static func calculateCostBasisFIFO(_ txns: [Txn], opts: BasisOptions = BasisOptions()) throws -> CostBasisResult {
+        try calculateCostBasisLotBased(txns, opts: opts, fromEnd: false)
     }
 
-    static func calculateCostBasisLIFO(_ txns: [Txn], opts: BasisOptions = BasisOptions()) -> CostBasisResult {
-        calculateCostBasisLotBased(txns, opts: opts, fromEnd: true)
+    static func calculateCostBasisLIFO(_ txns: [Txn], opts: BasisOptions = BasisOptions()) throws -> CostBasisResult {
+        try calculateCostBasisLotBased(txns, opts: opts, fromEnd: true)
     }
 
     static func calculateCostBasisByMethod(
         _ txns: [Txn], _ method: String?, opts: BasisOptions = BasisOptions()
-    ) -> CostBasisResult {
+    ) throws -> CostBasisResult {
         switch CostMethod(rawValue: method ?? "") {
-        case .fifo: return calculateCostBasisFIFO(txns, opts: opts)
-        case .lifo: return calculateCostBasisLIFO(txns, opts: opts)
+        case .fifo: return try calculateCostBasisFIFO(txns, opts: opts)
+        case .lifo: return try calculateCostBasisLIFO(txns, opts: opts)
         default: return calculateCostBasis(txns, opts: opts)
         }
     }
@@ -633,15 +633,15 @@ enum PortfolioCore {
             if at.utf16Compare(startDate) <= 0 { continue }
             if at.utf16Compare(segmentEnd) < 0 {
                 principalDays = principalDays.plus(
-                    DecimalJS.max(segmentPrincipal, ZERO).times(decimal(daysBetweenYmd(at, segmentEnd))))
+                    DecimalJS.max(segmentPrincipal, ZERO).times(toDecimal(daysBetweenYmd(at, segmentEnd))))
                 segmentEnd = at
             }
             let change = txn.amount.decimal.times(fxDecimal(txn.nativeFxMultiplier))
-            segmentPrincipal = segmentPrincipal.minus(change.times(Double(direction)))
+            segmentPrincipal = segmentPrincipal.minus(change.times(toDecimal(Double(direction))))
         }
         if startDate.utf16Compare(segmentEnd) < 0 {
             principalDays = principalDays.plus(
-                DecimalJS.max(segmentPrincipal, ZERO).times(decimal(daysBetweenYmd(startDate, segmentEnd))))
+                DecimalJS.max(segmentPrincipal, ZERO).times(toDecimal(daysBetweenYmd(startDate, segmentEnd))))
         }
         return jsNumber(principalDays.times(div(div(toDecimal(rate), toDecimal(100)), toDecimal(365))))
     }
@@ -833,7 +833,7 @@ enum PortfolioCore {
         var oversold = false
 
         if isUnitBased {
-            let cb = calculateCostBasisByMethod(txns, method, opts: BasisOptions(defaultFxMultiplier: .decimal(mNow)))
+            let cb = try calculateCostBasisByMethod(txns, method, opts: BasisOptions(defaultFxMultiplier: .decimal(mNow)))
             oversold = cb.oversold
             totalUnits = cb.unitsDecimal
             avgCostBasis = cb.avgCostBasisDecimal

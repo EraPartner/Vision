@@ -83,7 +83,7 @@ enum PortfolioCustody {
             let key = PortfolioCore.partitionKey(of: txn)
             let units = txn.units.decimal
 
-            switch txn.type {
+            switch txn.kind {
             case .buy, .gift:
                 partitions.push(key, txn)
                 setHeld(key, heldAt(key).plus(units))

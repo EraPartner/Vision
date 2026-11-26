@@ -263,7 +263,7 @@ import VisionNativeCore
                 txns(arg(1)), arg(2)?.javaScriptNumber ?? 0, numeric(arg(3)),
                 arg(4)?.stringValue ?? ""))
         case "costBasis":
-            return costBasisWire(PortfolioCore.calculateCostBasisByMethod(
+            return costBasisWire(try PortfolioCore.calculateCostBasisByMethod(
                 txns(arg(1)), arg(2)?.stringValue,
                 opts: basisOptions(arg(3))))
         case "summary":
