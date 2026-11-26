@@ -83,7 +83,7 @@ enum PortfolioCore {
         var decimal: DecimalJS {
             switch self {
             case .number(let value): return (try? DecimalJS(value)) ?? .zero
-            case .text(let text): return DecimalJS.from(text)
+            case .text(let text): return (try? DecimalJS.from(text)) ?? .zero
             case .decimal(let value): return value
             case .null: return .zero
             }
@@ -160,10 +160,10 @@ enum PortfolioCore {
             self.sourceRecordHash = sourceRecordHash
             self.currency = currency
         }
-    }
 
-    /// The dispatch kind of `type`; an unrecognized wire type replays as a no-op.
-    var kind: TxnKind { TxnKind(rawValue: type) ?? .other }
+        /// The dispatch kind of `type`; an unrecognized wire type replays as a no-op.
+        var kind: TxnKind { TxnKind(rawValue: type) ?? .other }
+    }
 
     /// A lot held by the lot engines or moved by a custody projection.
     struct CustodyLot: Sendable {
@@ -643,13 +643,13 @@ enum PortfolioCore {
             principalDays = principalDays.plus(
                 DecimalJS.max(segmentPrincipal, ZERO).times(decimal(daysBetweenYmd(startDate, segmentEnd))))
         }
-        return jsNumber(principalDays.times(div(toDecimal(rate), DecimalJS(100)).dividedBy(DecimalJS(365))))
+        return jsNumber(principalDays.times(div(div(toDecimal(rate), toDecimal(100)), toDecimal(365))))
     }
 
     /// `projectedAnnualInterest`.
     static func projectedAnnualInterest(_ principal: Double, _ ratePercent: Numeric) -> Double {
         guard case .number(let rate) = ratePercent, isNonZeroNumber(rate), principal > 0 else { return 0 }
-        return jsNumber(toDecimal(principal).times(toDecimal(rate).dividedBy(DecimalJS(100))))
+        return jsNumber(toDecimal(principal).times(div(toDecimal(rate), toDecimal(100))))
     }
 
     // MARK: - The summary core
@@ -833,7 +833,7 @@ enum PortfolioCore {
         var oversold = false
 
         if isUnitBased {
-            let cb = calculateCostBasisByMethod(txns, method, BasisOptions(defaultFxMultiplier: .decimal(mNow)))
+            let cb = calculateCostBasisByMethod(txns, method, opts: BasisOptions(defaultFxMultiplier: .decimal(mNow)))
             oversold = cb.oversold
             totalUnits = cb.unitsDecimal
             avgCostBasis = cb.avgCostBasisDecimal

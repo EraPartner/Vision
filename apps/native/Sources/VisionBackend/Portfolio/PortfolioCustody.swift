@@ -11,6 +11,11 @@ import Foundation
 enum PortfolioCustody {
     static let custodyEventTypes: Set<String> = ["asset_transfer", "asset_adjustment"]
 
+    /// The dispatch enums the shared core defines (see `PortfolioCore`).
+    typealias CostMethod = PortfolioCore.CostMethod
+    typealias AdjustmentKind = PortfolioCore.AdjustmentKind
+    typealias BasisPolicy = PortfolioCore.BasisPolicy
+
     /// A partition: (account id or null) → rows, in first-touch order.
     struct Streams {
         private(set) var keys: [Double?] = []
@@ -165,14 +170,29 @@ enum PortfolioCustody {
     ) throws -> Streams {
         let ZERO = DecimalJS.zero
         var partitions = Streams()
-        var custodyKeys: [Double] = []
+        // The custody map keys on `account_id ?? null`, so the null bucket lives
+        // beside the numbered ones (TS `Map<PartitionKey, CustodyLot[]>`).
+        var custodyKeys: [Double?] = []
         var custody: [Double: [PortfolioCore.CustodyLot]] = [:]
+        var custodyNull: [PortfolioCore.CustodyLot] = []
 
-        func lotsAt(_ key: Double) -> [PortfolioCore.CustodyLot] {
+        func register(_ key: Double?) {
+            if !custodyKeys.contains(where: { $0 == key }) { custodyKeys.append(key) }
+        }
+        func lotsAt(_ key: Double?) -> [PortfolioCore.CustodyLot] {
+            guard let key else {
+                register(nil)
+                return custodyNull
+            }
             if custody[key] == nil { custodyKeys.append(key) }
             return custody[key, default: []]
         }
-        func setLots(_ key: Double, _ lots: [PortfolioCore.CustodyLot]) {
+        func setLots(_ key: Double?, _ lots: [PortfolioCore.CustodyLot]) {
+            guard let key else {
+                register(nil)
+                custodyNull = lots
+                return
+            }
             if custody[key] == nil { custodyKeys.append(key) }
             custody[key] = lots
         }
@@ -186,7 +206,7 @@ enum PortfolioCustody {
         /// JS's lot object sharing: the filtered lots and `lots` are the same
         /// objects, so a part taken subtracts through its index.
         func consume(
-            _ key: Double, _ requested: DecimalJS,
+            _ key: Double?, _ requested: DecimalJS,
             _ predicate: (PortfolioCore.CustodyLot) -> Bool = { _ in true }
         ) -> [PortfolioCore.CustodyLot] {
             var lots = lotsAt(key)
@@ -352,11 +372,11 @@ enum PortfolioCustody {
                 lots.append(contentsOf: received)
                 setLots(destinationId, sortedByAcquisition(lots))
             case .split:
-                let total = custodyKeys.reduce(ZERO) { $0.plus(held(custody[$1] ?? [])) }
+                let total = custodyKeys.reduce(ZERO) { sum, key in sum.plus(held(lotsAt(key))) }
                 if total.gt(ZERO), units.gt(ZERO) {
                     let ratio = PortfolioCore.div(units, total)
                     for account in custodyKeys {
-                        var lots = custody[account] ?? []
+                        var lots = lotsAt(account)
                         let local = held(lots)
                         if local.lte(ZERO) { continue }
                         for index in lots.indices { lots[index].units = lots[index].units.times(ratio) }
@@ -374,11 +394,11 @@ enum PortfolioCustody {
                     partitions.push(key, residual)
                 }
             case .returnOfCapital:
-                let total = custodyKeys.reduce(ZERO) { $0.plus(held(custody[$1] ?? [])) }
+                let total = custodyKeys.reduce(ZERO) { sum, key in sum.plus(held(lotsAt(key))) }
                 let perUnit = total.gt(ZERO) ? PortfolioCore.div(row.amount.decimal, total) : ZERO
                 let perUnitNative = perUnit.times(PortfolioCore.fxDecimal(row.nativeFxMultiplier))
                 for account in custodyKeys {
-                    var lots = custody[account] ?? []
+                    var lots = lotsAt(account)
                     let local = held(lots)
                     if local.lte(ZERO) { continue }
                     let basis = lots.reduce(ZERO) { $0.plus($1.costBasis) }
