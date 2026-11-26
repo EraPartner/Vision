@@ -848,6 +848,25 @@ struct StatisticsModelTests {
         model.graphExclusions["monthly"] = false
         #expect(model.data(for: "monthly") == model.unfiltered)
     }
+    @Test func leftSnapshotsAreReleasedAfterTheDelayAndReloadOnReturn() async throws {
+        let service = HomeFixtureService()
+        let model = StatisticsModel(service: service, now: { PlannedFixture.today })
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
+        #expect(model.filtered != nil)
+        // Returning before the delay keeps them.
+        model.releaseDelay = .seconds(60)
+        model.didLeavePage()
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(model.filtered != nil)
+        model.releaseDelay = .milliseconds(10)
+        model.didLeavePage()
+        for _ in 0..<200 where model.filtered != nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(model.filtered == nil)
+        #expect(model.isLoading)
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
+        #expect(model.filtered != nil)
+    }
     @Test func failedRefreshKeepsPriorFilteredTotalsAndReportsTheFailure() async {
         let service = HomeFixtureService()
         let model = StatisticsModel(service: service, now: { PlannedFixture.today })

@@ -45,6 +45,13 @@ public final class StatisticsModel {
     @ObservationIgnored private var flowTask: Task<Void, Never>?
     @ObservationIgnored private var widgetBaseline: JSONValue = .null
     @ObservationIgnored private var widgetRevision = UUID()
+    /// After this long off the page the snapshots are let go (Tor, 2026-11-26: ten minutes, as the
+    /// web drops unused query data after its gc time), so a long session does not keep every visited
+    /// page's payload resident. Coming back shows the loading state and fetches again.
+    static let releaseAfter: Duration = .seconds(600)
+    @ObservationIgnored var releaseDelay = StatisticsModel.releaseAfter
+    @ObservationIgnored private var releaseTask: Task<Void, Never>?
+    @ObservationIgnored private var onPage = false
     @ObservationIgnored private var pivotPresentationCache: (
         metric: StatisticsMetric, year: Int?, excluded: Bool,
         groups: [StatisticsCategoryGroup], totals: [String: Decimal], total: Decimal
@@ -113,6 +120,9 @@ public final class StatisticsModel {
     }
 
     public func appear(settings: NativeAppSettings, route: NativeRoute, force: Bool = false) async {
+        onPage = true
+        releaseTask?.cancel()
+        releaseTask = nil
         let nextWindow = StatisticsWindow(routeValue: route.value("window"))
         tab = StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview
         let nextDay = StatisticsWindow.day(now(), calendar: calendar)
@@ -196,6 +206,30 @@ public final class StatisticsModel {
         isFetching = false
         if tab == .flow { await loadFlow() }
     }
+    /// The shell left the Statistics page: the snapshots go after `releaseDelay` unless it comes back.
+    public func didLeavePage() {
+        onPage = false
+        releaseTask?.cancel()
+        let delay = releaseDelay
+        releaseTask = Task { [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            self?.releaseSnapshots()
+        }
+    }
+
+    private func releaseSnapshots() {
+        releaseTask = nil
+        guard !onPage, task == nil, !isFlowLoading, !widgetSavePending, filtered != nil || flow != nil else { return }
+        revision = UUID()
+        flowRevision = UUID()
+        flowTask?.cancel()
+        filtered = nil
+        unfiltered = nil
+        flow = nil
+        error = nil
+        fetchedAt = nil
+    }
+
     public func invalidate() {
         fetchedAt = nil
         revision = UUID()

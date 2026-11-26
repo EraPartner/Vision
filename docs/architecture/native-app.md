@@ -2104,7 +2104,8 @@ counterpart:
   (precompiled only with `VISION_PRECOMPILE_METAL=1`); its drawables are released after a minute
   out of sight.
 - **Memory.** The transactions ledger lets its loaded rows go 2 minutes after the page is left
-  (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state.
+  (`QUERY_GC_TIME_MS.LARGE_LIST`); coming back later shows the loading state. Statistics lets its
+  snapshots and flow go 10 minutes after the page is left (`StatisticsModel.releaseAfter`).
 - **Halos.** Under Full effects the wide dark-mode halo stays on headings, and the page subtitle
   keeps the single 8 pt halo.
 

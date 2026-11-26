@@ -392,6 +392,7 @@ public final class NativeShellModel {
             reports?.didLeavePage()
             if route.path == TransactionsRoutes.path { transactions.didLeavePage() }
             let leaving = route.screen
+            if leaving == .statistics { statistics?.model.didLeavePage() }
             if leaving == .analysis { analysis?.didDisappear() }
             research?.didDisappear(route: route)
             if leaving == .researchForecast { researchForecast?.didDisappear() }
