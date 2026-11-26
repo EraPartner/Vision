@@ -776,6 +776,20 @@ The uploads' corpora are `importUploads` (10 steps) plus the seeded
 pages), which mixes mutated multipart fields, file names, content types and CSV contents
 with batch list and preview reads between.
 
+The first portfolio reads run in-process (`Areas/Investments.swift`): the investment list
+with its ticker-preference join and window count (`getInvestments`), the exact `dec_sum`
+breakdown per type and income-recognition role (`getInvestmentSummary`, where a missing
+investment is an empty breakdown, not a 404), the per-investment transactions and the
+`ROW_NUMBER()`-limited bulk read over `json_each`-bound ids (`getInvestmentTransactions`,
+`getBulkPortfolioTransactions`, with `validateIntArray`'s accept set on the ids and the
+opt-in outer `LIMIT`), and the static provider list (`listInvestmentProviders`).
+`getInvestment` is deliberately not registered yet: its `/:id` template would capture the
+unported `GET /api/investments/exposure` and answer a 400 the TS router never sends, because
+its fixed route wins there. The two 60 s Bun response caches over these reads are not
+ported; Swift reads fresh, so a write is visible immediately. The mutated read queries of
+`investments-mutations` (205 steps) replay the same way; the `investments` corpus itself
+waits for the exposure reads, which need the portfolio summary core.
+
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each
 body sent in the key order the recorder wrote, through

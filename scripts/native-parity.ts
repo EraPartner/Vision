@@ -4422,6 +4422,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const importBatchesArea = AREAS.importBatches;
   const importReviewArea = AREAS.importReview;
   const importUploadsArea = AREAS.importUploads;
+  const investmentsArea = AREAS.investments;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -4434,7 +4435,8 @@ function mutationAreas(): Record<string, ParityArea> {
     importParsersArea === undefined ||
     importBatchesArea === undefined ||
     importReviewArea === undefined ||
-    importUploadsArea === undefined
+    importUploadsArea === undefined ||
+    investmentsArea === undefined
   )
     throw new Error("missing base area");
 
@@ -4704,6 +4706,117 @@ function mutationAreas(): Record<string, ParityArea> {
     if (reviewRandom.chance(0.1)) reviewSteps.push(batchPreview("20"));
   }
   reviewSteps.push(batchPreview("20"));
+
+  // The investments area's mutations: only its read requests, with seeded-random
+  // query strings (repeated keys, garbage bounds, invalid id lists) over the five
+  // ported operations. The { id } reads use the ids the seed owns plus shapes that
+  // probe `validateId`'s accept set.
+  const investmentRandom = new Random(0x1a2b);
+  const investmentIds = [
+    "1",
+    "2",
+    "3",
+    "999",
+    "0",
+    "-1",
+    "abc",
+    "1.5",
+    "01",
+    "1e3",
+    "2147483648",
+    " 5",
+  ];
+  const investmentQueryValues = [
+    "",
+    "1",
+    "2",
+    "0",
+    "-3",
+    "1001",
+    "200000",
+    "5001",
+    "abc",
+    "1.5",
+    "1e2",
+    "true",
+    "false",
+    "all",
+    "stock",
+  ];
+  const investmentPick = () => investmentRandom.pick(investmentQueryValues);
+  const investmentPairs = (names: readonly string[]) => {
+    const count = investmentRandom.int(5);
+    const pairs: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const name = investmentRandom.chance(0.9)
+        ? investmentRandom.pick(names)
+        : "other";
+      pairs.push(
+        investmentRandom.chance(0.1) ? name : `${name}=${investmentPick()}`,
+      );
+    }
+    return pairs.length === 0 ? "" : `?${pairs.join("&")}`;
+  };
+  const investmentWithQuery = (path: string, query: string) =>
+    path + (query === "" ? "" : query);
+  const investmentJoin = (query: string, extra: string) => {
+    if (query === "" || extra === "") return query + extra;
+    return `${query}&${extra.slice(1)}`;
+  };
+  const investmentSteps: ParityStep[] = [];
+  for (let i = 0; i < 60; i++) {
+    investmentSteps.push({
+      operationId: "getInvestments",
+      method: "GET",
+      path: `/api/investments${investmentPairs(["asset_class", "active", "limit", "offset"])}`,
+    });
+    if (investmentRandom.chance(0.7))
+      investmentSteps.push({
+        operationId: "getInvestmentSummary",
+        method: "GET",
+        path: `/api/investments/${investmentRandom.pick(investmentIds)}/summary`,
+      });
+    if (investmentRandom.chance(0.7))
+      investmentSteps.push({
+        operationId: "getInvestmentTransactions",
+        method: "GET",
+        path: `/api/investments/${investmentRandom.pick(investmentIds)}/transactions${investmentPairs(["type", "limit", "offset"])}`,
+      });
+    if (investmentRandom.chance(0.8)) {
+      // `investment_ids` alone decides 400 vs 200, so probe the element accept set
+      // (digit runs, duplicates, repeated keys, garbage) as often as the real one.
+      const ids = Array.from({ length: 1 + investmentRandom.int(4) }, () =>
+        investmentRandom.pick(investmentIds),
+      );
+      let query = investmentRandom.chance(0.2)
+        ? ""
+        : `?investment_ids=${encodeURIComponent(ids.join(","))}`;
+      if (investmentRandom.chance(0.15) && query !== "")
+        query += `&investment_ids=${investmentRandom.pick(investmentIds)}`;
+      investmentSteps.push({
+        operationId: "getBulkPortfolioTransactions",
+        method: "GET",
+        path: investmentWithQuery(
+          "/api/investments/transactions",
+          investmentJoin(
+            query,
+            investmentPairs([
+              "type",
+              "per_investment_limit",
+              "limit",
+              "offset",
+            ]),
+          ),
+        ),
+      });
+    }
+    if (investmentRandom.chance(0.3))
+      investmentSteps.push({
+        operationId: "listInvestmentProviders",
+        method: "GET",
+        path: "/api/investments/providers",
+      });
+  }
 
   const settingRandom = new Random(0x5e77);
   const settingSteps: ParityStep[] = [];
@@ -5264,6 +5377,10 @@ function mutationAreas(): Record<string, ParityArea> {
     "importParsers-mutations": {
       ...importParsersArea,
       steps: asRecorded(parserStep),
+    },
+    "investments-mutations": {
+      ...investmentsArea,
+      steps: asRecorded(investmentSteps),
     },
     "importBatches-mutations": {
       ...importBatchesArea,

@@ -402,6 +402,10 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
 
 - [ ] Investments: `getInvestments`, `createInvestment`, `updateInvestment`, `deleteInvestment`,
       `getInvestment`, `getInvestmentSummary`
+      (the reads except `getInvestment` are ported in `Areas/Investments.swift` with the corpus
+      `investments-mutations`; `getInvestment` waits for the exposure reads — its `/:id` route
+      template would capture the unported `/api/investments/exposure` until the portfolio
+      summary core lands and those routes come with it)
 - [ ] Portfolio transactions: `getInvestmentTransactions`, `createInvestmentTransaction`,
       `updatePortfolioTransaction`, `deletePortfolioTransaction`, `getBulkPortfolioTransactions`,
       `bulkRetagPortfolioTransactions`
