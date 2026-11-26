@@ -14,7 +14,9 @@ enum ExchangeRatesArea {
     static let ecbLatest = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
     static let erApiLatest = "https://open.er-api.com/v6/latest/EUR"
 
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase, fetcher: any ProviderFetching) {
+    static func register(_ backend: inout InProcessBackend, database: BackendDatabase, fetcher ungated: any ProviderFetching) {
+        // Settings › Privacy (ADR-271): refused while offline mode is on or exchange rates are off.
+        let fetcher = NetworkPolicyFetcher(ungated, source: .exchangeRates, database: database)
         backend.serve(OpenAPIOperations.GetExchangeRates.self) { request in
             let raw = request.queryItems.filter { $0.name == "db_only" }.map { $0.value ?? "" }
             // `parseBooleanQueryParam` of a repeated parameter reads the comma-joined array.

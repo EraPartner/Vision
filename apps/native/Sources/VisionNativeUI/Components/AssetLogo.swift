@@ -60,6 +60,8 @@ final class AssetLogoStore {
     func image(for url: URL) async -> NSImage? {
         if let image = cached(url) { return image }
         if failed.contains(url) { return nil }
+        // Offline mode (Settings › Privacy): no request, and nothing marked as failed.
+        if NetworkAccess.shared.isOffline { return nil }
         let task =
             pending[url]
             ?? Task<Data?, Never> {

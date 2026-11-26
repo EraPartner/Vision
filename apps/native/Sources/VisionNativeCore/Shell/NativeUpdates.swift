@@ -189,6 +189,9 @@ public struct NativeUpdateChecker: Sendable {
     public static func live(currentVersion: String?, isDemo: Bool, appName: String) -> NativeUpdateChecker {
         let agent = "\(appName)-desktop/\(currentVersion ?? "0.0.0")"
         return NativeUpdateChecker(currentVersion: currentVersion, isDemo: isDemo) {
+            // Settings › Privacy (ADR-271): offline mode refuses the GitHub request, the explicit
+            // "Check for updates" included.
+            if NetworkAccess.shared.isOffline { throw NetworkBlockedError(.offline) }
             var request = URLRequest(url: latestReleaseAPI, timeoutInterval: fetchTimeout)
             request.setValue(agent, forHTTPHeaderField: "User-Agent")
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -238,8 +241,10 @@ public struct NativePreUpdateBackupResult: Equatable, Sendable {
 /// window is active and the user is present, read by the sidebar's Settings dot and the About
 /// section, which also checks on demand and applies the update.
 @MainActor @Observable public final class NativeUpdateModel {
-    /// `CHECK_INTERVAL_MS`: the poll interval and how long a status stays fresh.
-    public static let checkInterval: TimeInterval = 5 * 60
+    /// The poll interval and how long a status stays fresh: once a day (Settings › Privacy,
+    /// ADR-271), so the automatic check runs at launch and then daily while the app is open. The
+    /// shell runs the poll only while `NativeAppSettings.checksForUpdatesAutomatically`.
+    public static let checkInterval: TimeInterval = 24 * 60 * 60
 
     /// `ApplyPhase` of the About section.
     public enum ApplyPhase: Equatable, Sendable {
@@ -274,7 +279,7 @@ public struct NativePreUpdateBackupResult: Equatable, Sendable {
         self.now = now
     }
 
-    /// The poll: re-reads a stale status, then every five minutes. A failed read stops the
+    /// The poll: re-reads a stale status, then once a day. A failed read stops the
     /// interval (`refetchInterval` is false after an error) until the window is active again.
     public func run() async {
         while !Task.isCancelled {
@@ -316,6 +321,8 @@ public struct NativePreUpdateBackupResult: Equatable, Sendable {
             } else {
                 notice(.info, "settings.app.updateAvailable", suffix: result.latestVersion ?? "")
             }
+        } catch is NetworkBlockedError {
+            notice(.info, "settings.privacy.offlineBlocked")
         } catch {
             lastFailed = true
             notice(.error, "settings.app.updateFailed")

@@ -1,6 +1,7 @@
 import AppKit
 import ImageIO
 import SwiftUI
+import VisionNativeCore
 
 /// Disposable, decoded thumbnails (list item 2.5): ImageIO decodes at display size off the main
 /// actor, and an 8 MB LRU keeps the results. Source bytes stay owned by their data model; callers
@@ -54,6 +55,8 @@ final class PreparedImageStore {
     func image(url: URL, pixels: Int) async throws -> NSImage {
         let key = url.absoluteString
         if let image = cached(key: key, pixels: Self.clamp(pixels)) { return image }
+        // Offline mode (Settings › Privacy): news thumbnails stay unloaded.
+        if NetworkAccess.shared.isOffline { throw NetworkBlockedError(.offline) }
         let (data, _) = try await URLSession.shared.data(from: url)
         try Task.checkCancellation()
         guard let image = await image(key: key, data: data, pixels: pixels) else {
