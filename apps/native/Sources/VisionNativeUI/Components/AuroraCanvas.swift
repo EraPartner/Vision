@@ -347,6 +347,9 @@ struct AuroraShaderView: NSViewRepresentable {
         view.colorPixelFormat = .bgra8Unorm
         view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         view.layer?.isOpaque = false
+        // Two drawables, not the default three: a 20 fps quarter-resolution loop never has more
+        // than one frame in flight, so the third only held memory.
+        (view.layer as? CAMetalLayer)?.maximumDrawableCount = 2
         view.autoResizeDrawable = false
         view.preferredFramesPerSecond = framesPerSecond
         let renderer = context.coordinator

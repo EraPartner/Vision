@@ -17,10 +17,13 @@ final class MoneyTextCache {
         let signed: Bool
     }
 
-    /// Entries kept before the cache starts over (a few thousand short strings).
+    /// Entries per generation (a few thousand short strings).
     nonisolated static let capacity = 4096
 
+    /// Two generations: when `entries` fills, it becomes `previous` and a new one starts, so the
+    /// amounts on screen survive the turnover instead of all being formatted again at once.
     private var entries: [Key: String] = [:]
+    private var previous: [Key: String] = [:]
     private(set) var misses = 0
 
     init() {}
@@ -32,10 +35,19 @@ final class MoneyTextCache {
             amount: amount, currency: currency, localeIdentifier: locale.identifier,
             fractionDigits: fractionDigits, signed: signed)
         if let hit = entries[key] { return hit }
-        misses += 1
-        let text = VisionFormat.currency(
-            amount, code: currency, locale: locale, fractionDigits: fractionDigits, signed: signed)
-        if entries.count >= Self.capacity { entries.removeAll(keepingCapacity: true) }
+        let text: String
+        if let kept = previous[key] {
+            text = kept
+        } else {
+            misses += 1
+            text = VisionFormat.currency(
+                amount, code: currency, locale: locale, fractionDigits: fractionDigits, signed: signed)
+        }
+        if entries.count >= Self.capacity {
+            previous = entries
+            entries = [:]
+            entries.reserveCapacity(Self.capacity)
+        }
         entries[key] = text
         return text
     }

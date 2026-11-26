@@ -265,10 +265,6 @@ struct InsightTimelineChart: View {
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         .accessibilityHidden(true)
                 }
-                if scrub.range == nil, let selection, let x = index[selection] {
-                    RuleMark(x: .value(title, Double(x))).foregroundStyle(
-                        theme.secondaryLabel.opacity(0.5))
-                }
             }
             .chartForegroundStyleScale(
                 domain: series.map(\.label), range: series.indices.map { seriesColor(at: $0) }
@@ -291,6 +287,18 @@ struct InsightTimelineChart: View {
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     let scrubSeries = plot.scrubSeries(primary: primary)
+                    // The hover rule is drawn here, not as a `RuleMark` in `Chart`: reading the
+                    // selection in the marks rebuilt every mark on each pointer move.
+                    if scrub.range == nil, let selection, let position = index[selection],
+                        let frame = proxy.plotFrame.map({ geometry[$0] }),
+                        let x = proxy.position(forX: Double(position))
+                    {
+                        Rectangle().fill(theme.secondaryLabel.opacity(0.5))
+                            .frame(width: 1, height: max(frame.height, 0))
+                            .position(x: frame.minX + x, y: frame.midY)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                     ChartRangeCompareLayer(
                         scrub: $scrub, plot: proxy.plotFrame.map { geometry[$0] } ?? .zero,
                         view: rangeComparison ? ChartScrubView(scrub, count: keys.count, series: scrubSeries) : nil,
