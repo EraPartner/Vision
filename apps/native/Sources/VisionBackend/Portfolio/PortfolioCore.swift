@@ -275,8 +275,7 @@ enum PortfolioCore {
             return value
         }
         let year = number(pieces.count > 0 ? pieces[0] : nil)
-        var month = number(pieces.count > 1 ? pieces[1] : nil)
-        if !(month.isNaN || month.isInfinite) { month -= 1 }
+        let month = number(pieces.count > 1 ? pieces[1] : nil)
         let day = number(pieces.count > 2 ? pieces[2] : nil)
         var components = DateComponents()
         components.year = Int(exactly: year)
@@ -334,8 +333,20 @@ enum PortfolioCore {
         var realizedGainConvDecimal: DecimalJS { toDecimal(realizedGainConv) }
     }
 
+    /// `present` of `portfolio.ts`: a projected leg the replay was promised.
+    static func present(_ value: DecimalJS?, _ what: String) throws -> DecimalJS {
+        guard let value else { throw Failure(message: "Expected \(what) to be present") }
+        return value
+    }
+
+    /// `present` for the lot lists a projected leg carries.
+    static func present(_ value: [CustodyLot], _ what: String) throws -> [CustodyLot] {
+        guard value.count > 0 else { throw Failure(message: "Expected \(what) to be present") }
+        return value
+    }
+
     /// `calculateCostBasis`: the moving weighted-average engine.
-    static func calculateCostBasis(_ txns: [Txn], opts: BasisOptions = BasisOptions()) -> CostBasisResult {
+    static func calculateCostBasis(_ txns: [Txn], opts: BasisOptions = BasisOptions()) throws -> CostBasisResult {
         let sorted = stableDateIdSort(txns)
         let ZERO = DecimalJS.zero
         let defaultFx = opts.defaultFxMultiplier.map(\.decimal) ?? .one
@@ -368,12 +379,12 @@ enum PortfolioCore {
                 totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx))
             case .transferIn:
                 totalUnits = totalUnits.plus(units)
-                totalCost = totalCost.plus(txn.transferredBasis ?? ZERO)
-                totalCostConv = totalCostConv.plus(txn.transferredBasisConv ?? ZERO)
+                totalCost = totalCost.plus(try present(txn.transferredBasis, "transferredBasis"))
+                totalCostConv = totalCostConv.plus(try present(txn.transferredBasisConv, "transferredBasisConv"))
             case .transferOut, .assetFee, .unitReversal:
                 totalUnits = totalUnits.minus(units)
-                totalCost = totalCost.minus(txn.transferredBasis ?? ZERO)
-                totalCostConv = totalCostConv.minus(txn.transferredBasisConv ?? ZERO)
+                totalCost = totalCost.minus(try present(txn.transferredBasis, "transferredBasis"))
+                totalCostConv = totalCostConv.minus(try present(txn.transferredBasisConv, "transferredBasisConv"))
                 realizedGain = realizedGain.minus(txn.assetFeeBasis ?? ZERO)
                 realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv ?? ZERO)
             case .sell:
@@ -459,13 +470,13 @@ enum PortfolioCore {
             case .transferIn:
                 lots = head > 0 ? Array(lots[head...]) : lots
                 head = 0
-                lots.append(contentsOf: txn.transferredLots)
+                lots.append(contentsOf: try present(txn.transferredLots, "transferredLots"))
                 lots.sort(by: acquisitionCompare)
                 totalUnits = totalUnits.plus(units)
             case .unitReversal:
                 lots = head > 0 ? Array(lots[head...]) : lots
                 head = 0
-                for consumed in txn.consumedLots {
+                for consumed in try present(txn.consumedLots, "consumedLots") {
                     var remaining = consumed.units
                     for indexL in lots.indices {
                         if remaining.lte(ZERO) { break }
@@ -566,7 +577,7 @@ enum PortfolioCore {
         switch CostMethod(rawValue: method ?? "") {
         case .fifo: return try calculateCostBasisFIFO(txns, opts: opts)
         case .lifo: return try calculateCostBasisLIFO(txns, opts: opts)
-        default: return calculateCostBasis(txns, opts: opts)
+        default: return try calculateCostBasis(txns, opts: opts)
         }
     }
 
@@ -648,7 +659,8 @@ enum PortfolioCore {
 
     /// `projectedAnnualInterest`.
     static func projectedAnnualInterest(_ principal: Double, _ ratePercent: Numeric) -> Double {
-        guard case .number(let rate) = ratePercent, isNonZeroNumber(rate), principal > 0 else { return 0 }
+        guard case .number(let rate) = ratePercent, isNonZeroNumber(rate), !(principal <= 0) else { return 0 }
+        if !principal.isFinite { return principal }
         return jsNumber(toDecimal(principal).times(div(toDecimal(rate), toDecimal(100))))
     }
 

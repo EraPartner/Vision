@@ -225,20 +225,21 @@ import VisionNativeCore
     }
 
     private static func costBasisWire(_ result: PortfolioCore.CostBasisResult) -> JSValue {
-        .object(JSObject([
-            ("totalUnits", .number(result.totalUnits)),
-            ("totalCost", .number(result.totalCost)),
-            ("avgCostBasis", .number(result.avgCostBasis)),
-            ("realizedGain", .number(result.realizedGain)),
-            ("totalBuyCost", .number(result.totalBuyCost)),
-            ("totalSellProceeds", .number(result.totalSellProceeds)),
-            ("totalCostConv", .number(result.totalCostConv)),
-            ("avgCostBasisConv", .number(result.avgCostBasisConv)),
-            ("realizedGainConv", .number(result.realizedGainConv)),
-            ("totalBuyCostConv", .number(result.totalBuyCostConv)),
-            ("totalSellProceedsConv", .number(result.totalSellProceedsConv)),
-            ("_oversold", .bool(result.oversold)),
-        ]))
+        var pairs: [(String, JSValue)] = []
+        if result.oversold { pairs.append(("_oversold", .bool(true))) }
+        pairs.append(("totalUnits", .number(result.totalUnits)))
+        pairs.append(("totalCost", .number(result.totalCost)))
+        pairs.append(("avgCostBasis", .number(result.avgCostBasis)))
+        pairs.append(("realizedGain", .number(result.realizedGain)))
+        pairs.append(("totalBuyCost", .number(result.totalBuyCost)))
+        pairs.append(("totalSellProceeds", .number(result.totalSellProceeds)))
+        pairs.append(("totalCostConv", .number(result.totalCostConv)))
+        pairs.append(("avgCostBasisConv", .number(result.avgCostBasisConv)))
+        pairs.append(("realizedGainConv", .number(result.realizedGainConv)))
+        pairs.append(("totalBuyCostConv", .number(result.totalBuyCostConv)))
+        pairs.append(("totalSellProceedsConv", .number(result.totalSellProceedsConv)))
+        if !result.oversold { pairs.append(("_oversold", .bool(false))) }
+        return .object(JSObject(pairs))
     }
 
     /// `JSON.stringify` keeps NaN and the infinities as `null`.

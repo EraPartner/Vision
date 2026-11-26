@@ -184,8 +184,8 @@ enum PortfolioCustody {
                 register(nil)
                 return custodyNull
             }
-            if custody[key] == nil { custodyKeys.append(key) }
-            return custody[key, default: []]
+            register(key)
+            return custody[key] ?? []
         }
         func setLots(_ key: Double?, _ lots: [PortfolioCore.CustodyLot]) {
             guard let key else {
@@ -193,7 +193,7 @@ enum PortfolioCustody {
                 custodyNull = lots
                 return
             }
-            if custody[key] == nil { custodyKeys.append(key) }
+            register(key)
             custody[key] = lots
         }
         func held(_ lots: [PortfolioCore.CustodyLot]) -> DecimalJS {
