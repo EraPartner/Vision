@@ -127,8 +127,10 @@ enum PortfolioSummaryService {
             """).map(mathRow)
     }
 
-    /// The investments of `getPortfolioSummary`'s first query — its `COALESCE` overrides
-    /// applied — ordered by name.
+    /// The investments of `getPortfolioSummary`'s first query, its `COALESCE` overrides
+    /// applied, ordered by name. The select re-projects three of `i.*`'s columns; a duplicate
+    /// name reads the FIRST column here (node's rule) where bun's row objects keep the LAST
+    /// (the override), so the reader applies the same defaults the aliases carry.
     static func investments(_ session: BackendSession, activeOnly: Bool = true) throws -> [SQLRow] {
         try session.rows(
             """
@@ -222,7 +224,7 @@ enum PortfolioSummaryService {
         var currencies: [String] = []
         for row in investmentRows {
             let id = try row.integerId("id")
-            let code = AccountsArea.storedCurrencyCode(try row.text("currency"))
+            let code = AccountsArea.storedCurrencyCode(try row.optionalText("currency") ?? "EUR")
             investmentCurrency[id] = code
             if !currencies.contains(code) { currencies.append(code) }
         }
@@ -253,12 +255,12 @@ enum PortfolioSummaryService {
         var total = DecimalJS.zero
         for row in investmentRows {
             let id = try row.integerId("id")
-            let currency = AccountsArea.storedCurrencyCode(try row.text("currency"))
+            let currency = AccountsArea.storedCurrencyCode(try row.optionalText("currency") ?? "EUR")
             let multiplier = multipliers[currency] ?? 1
             let investment = PortfolioCore.Investment(
                 assetClass: try row.text("asset_class"),
-                currentPrice: .text(try row.text("current_price")),
-                interestRate: .text(try row.text("interest_rate")))
+                currentPrice: .text(try row.optionalText("current_price") ?? "0"),
+                interestRate: .text(try row.optionalText("interest_rate") ?? "0"))
             let options = PortfolioCore.Options(
                 costBasisMethod: method, todayYmd: today, fxMultiplierNow: .number(multiplier))
             let core = try PortfolioCore.buildInvestmentSummaryCorePartitioned(

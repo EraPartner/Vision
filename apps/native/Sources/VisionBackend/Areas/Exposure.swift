@@ -334,6 +334,7 @@ extension ExposureArea {
         if !unknown.isEmpty {
             issues.append(Issue(code: "unrecognized_keys", path: path, message: "Unrecognized key: \"\(unknown.first ?? "")\"", keys: unknown))
         }
+        let issuesBeforeFields = issues.count
         let investmentId = positiveInt(fields["investmentId"], at: path + [.key("investmentId")], issues: &issues, optional: true)
         let identifier = identifier(fields["identifier"], at: path + [.key("identifier")], issues: &issues)
         guard let issuerId = trimmedNoDefault(fields["issuerId"], at: path + [.key("issuerId")], issues: &issues, limit: 128),
@@ -353,6 +354,9 @@ extension ExposureArea {
             }
             country = code
         }
+        // zod runs the element's `.refine` only when the strict object itself parsed clean,
+        // so a field issue must not also answer the exactly-one-target check.
+        guard issues.count == issuesBeforeFields else { return nil }
         let hasId = investmentId != nil
         let hasIdentifier = identifier != nil
         if hasId == hasIdentifier {
