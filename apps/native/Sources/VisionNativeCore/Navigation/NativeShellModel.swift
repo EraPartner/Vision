@@ -924,13 +924,24 @@ public final class NativeShellModel {
         settingsTask = Task { [weak self] in
             do {
                 let loaded = try await load()
-                guard !Task.isCancelled, self?.settingsRevision == revision else { return }
-                self?.apply(settings: loaded)
+                guard !Task.isCancelled, let self, self.settingsRevision == revision else { return }
+                let first = !self.settingsLoaded
+                self.apply(settings: loaded)
+                if first { self.prefetchHome() }
             } catch {
                 guard !Task.isCancelled, let self, self.settingsRevision == revision else { return }
                 self.initialSettingsLoadFailed = !self.settingsLoaded
             }
         }
+    }
+
+    /// The first settings answer starts Home's fetch at once instead of when the page's first layout
+    /// runs its `.task`; the page's own call then joins the request in flight.
+    private func prefetchHome() {
+        guard route.screen == .home, let home else { return }
+        let settings = settings
+        let route = route
+        Task { await home.appear(settings: settings, route: route) }
     }
 
     /// Server-owned projections read persisted Settings. Retire only their actual
