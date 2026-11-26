@@ -439,7 +439,7 @@ public struct APIClient: Sendable {
     }
 
     /// A finished response: the unwrapped `data` of a 2xx, else the failure envelope.
-    static func decode<Value: Decodable>(_ response: APIResponse, as type: Value.Type, label: String)
+    static func decode<Value: Decodable & Sendable>(_ response: APIResponse, as type: Value.Type, label: String)
         -> Result<Value, APIError>
     {
         decodeSnapshot(response, as: type, label: label, preservingMeta: false).map(\.data)
@@ -448,7 +448,7 @@ public struct APIClient: Sendable {
     /// `decode`, plus the envelope's `meta` when `preservingMeta`. An envelope body is parsed
     /// once: `ok`, `data` and `meta` come out of the same pass (a probe pass, a data pass and a
     /// third `JSONValue` pass for the meta each re-read the whole body before).
-    static func decodeSnapshot<Value: Decodable>(
+    static func decodeSnapshot<Value: Decodable & Sendable>(
         _ response: APIResponse, as type: Value.Type, label: String, preservingMeta: Bool
     ) -> Result<APIDataSnapshot<Value>, APIError> {
         guard (200..<300).contains(response.status) else {
