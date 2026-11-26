@@ -2448,6 +2448,11 @@ export const AREAS: Record<string, ParityArea> = {
 
   attachments: {
     router: { module: "attachments.ts", mountPath: "/api/attachments" },
+    // The whole area records on the fixed clock: the list after the last upload is
+    // `ORDER BY created_at DESC` with no tiebreak, and the replay's one frozen
+    // `now()` must meet the ordering the TypeScript recorder saw, not the sub-second
+    // progression of a wall-clock run.
+    now: "2026-06-15T09:00:00.000Z",
     // The upload steps answer 201 with `created_at`/`stored_path` the run wrote, and
     // write the file bytes under the throwaway ATTACHMENTS_DIR; the later list and
     // download steps read both back.

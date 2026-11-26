@@ -29,9 +29,21 @@ import VisionNativeCore
             timeout: 30)
     }
 
+    /// The multipart and SSE uploads have no generated struct (`native-openapi.ts` writes JSON
+    /// bodies only); their hand-written operations in VisionNativeCore carry the id too.
+    static let handWrittenUploadIds: Set<String> = [
+        AttachmentUploadRequest.operationId,
+        NativeOnboardingImportRequest.operationId,
+        ImportCsvCustomRequest.operationId,
+        ImportCsvStreamRequest.operationId,
+        ImportRecipientsRequest.operationId,
+        ImportCategoriesRequest.operationId,
+    ]
+
     @Test func liveHandlersAreExactlyThePortedList() {
         #expect(InProcessBackend.live(database: BackendDatabase()).operationIds == PortedOperations.ids)
-        #expect(PortedOperations.ids.isSubset(of: Set(OpenAPIOperations.operationIds)))
+        #expect(
+            PortedOperations.ids.isSubset(of: Set(OpenAPIOperations.operationIds).union(Self.handWrittenUploadIds)))
     }
 
     @Test func unportedOperationsGoToBun() async throws {

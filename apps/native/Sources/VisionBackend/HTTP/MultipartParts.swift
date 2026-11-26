@@ -21,7 +21,7 @@ enum MultipartParts {
     static func parse(headers: [String: String], body: Data?) -> [Part]? {
         guard
             let header = headers.first(where: { $0.key.lowercased() == "content-type" })?.value,  // lint:allow string-literal-compare the header name, read case-insensitively as in HTTP
-            let boundary = boundary(of: header),
+            let boundary = boundary(of: header), !boundary.isEmpty,
             let body
         else { return nil }
         let bytes = [UInt8](body)
@@ -85,7 +85,10 @@ enum MultipartParts {
             while lineEnd + 2 <= bytes.count, !(bytes[lineEnd] == 0x0D && bytes[lineEnd + 1] == 0x0A) {
                 lineEnd += 1
             }
-            let line = String(decoding: bytes[lineStart..<lineEnd], as: UTF8.self)
+            // busboy decodes the header block with Node's 'latin1': a multi-byte UTF-8
+            // filename stays as its raw bytes, each one a character (the recorded TS
+            // answers store them that way), never re-joined as UTF-8.
+            let line = String(decoding: bytes[lineStart..<lineEnd], as: Unicode.ISO8859_1.self)
             let lower = line.lowercased()
             if lower.hasPrefix("content-disposition:") {
                 name = Self.parameter(named: "name", of: line)

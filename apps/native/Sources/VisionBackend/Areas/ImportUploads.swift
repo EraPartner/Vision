@@ -619,7 +619,12 @@ enum ImportUploadsArea {
                 message += " \(joined)."
             }
             message += " Correct the invalid dates, amounts or CSV structure and import the file again."
-            throw BackendHTTPError.validation(message)
+            throw BackendHTTPError(
+                status: 400, code: "VALIDATION_ERROR", message: message,
+                details: .object([
+                    "rejected_rows": .int(rejected),
+                    "parsed_rows": .int(parsed.rows.count),
+                ]))
         }
         let total = parsed.rows.count
         _ = try session.row(
@@ -655,7 +660,14 @@ enum ImportUploadsArea {
         for (index, row) in rows.enumerated() {
             if !first { sql += ", " }
             first = false
-            sql += "(" + Array(repeating: "?", count: columns).joined(separator: ", ") + ")"
+            // `amount` and `balance` are the two DECIMAL_TEXT(20, 4) columns the write
+            // plugin rounded with `canonicalDecimal` (`canonicalDecimal`: a number is its
+            // `String(n)` text, then the scale rounding of `vision_numeric(?)` — the CHECK
+            // refuses a raw REAL).
+            var placeholders: [String] = Array(repeating: "?", count: columns)
+            placeholders[7] = "vision_numeric(?, 20, 4)"
+            placeholders[9] = "vision_numeric(?, 20, 4)"
+            sql += "(" + placeholders.joined(separator: ", ") + ")"
             arguments.append(.integer(Int64(batchId)))
             arguments.append(.integer(Int64(startIndex + index)))
             arguments.append(.text("pending"))
@@ -664,9 +676,9 @@ enum ImportUploadsArea {
             arguments.append(row.bankAccount.isEmpty ? .null : .text(row.bankAccount))
             arguments.append(row.recipient.isEmpty ? .null : .text(row.recipient))
             arguments.append(row.memo.isEmpty ? .null : .text(row.memo))
-            arguments.append(.real(row.amount))
+            arguments.append(.text(SQLArguments.javaScriptText(row.amount)))
             arguments.append(row.currency.map { SQLValue.text($0) } ?? .null)
-            arguments.append(row.balance.map { SQLValue.real($0) } ?? .null)
+            arguments.append(row.balance.map { SQLValue.text(SQLArguments.javaScriptText($0)) } ?? .null)
             arguments.append(row.recipientAccount.map { SQLValue.text($0) } ?? .null)
             arguments.append(row.recipientAddress.map { SQLValue.text($0) } ?? .null)
             arguments.append(row.recipientBankName.map { SQLValue.text($0) } ?? .null)
@@ -1233,13 +1245,17 @@ enum ImportUploadsArea {
         return results
     }
 
-    /// `parseCategoryPair`: the uppercase pair `categories` is keyed on.
+    /// `parseCategoryPair` (`parseCategoryName` + `toUpperCase`): without a colon the
+    /// whole text is the general half and `detail` is empty.
     static func parseCategoryPair(_ text: String) -> CategoryPair {
-        let colon = text.firstIndex(of: ":") ?? text.endIndex
-        let general = JavaScriptWhitespace.trim(String(text[..<colon]))
-        let detail = JavaScriptWhitespace.trim(String(text[text.index(after: colon)...]))
+        if let colon = text.firstIndex(of: ":") {
+            let general = JavaScriptWhitespace.trim(String(text[..<colon]))
+            let detail = JavaScriptWhitespace.trim(String(text[text.index(after: colon)...]))
+            return CategoryPair(
+                general: JavaScriptCase.uppercased(general), detail: JavaScriptCase.uppercased(detail))
+        }
         return CategoryPair(
-            general: JavaScriptCase.uppercased(general), detail: JavaScriptCase.uppercased(detail))
+            general: JavaScriptCase.uppercased(JavaScriptWhitespace.trim(text)), detail: "")
     }
 
     /// `resolveCategories` (`selectCategories` + the upsert): the alias-merging select, the
@@ -1438,7 +1454,7 @@ enum ImportUploadsArea {
                 """
                 UPDATE recipients SET notes = u.notes
                    FROM (SELECT j.value ->> 0 AS id, j.value ->> 1 AS notes
-                           FROM json_each(?)) AS u
+                           FROM json_each(?) AS j) AS u
                  WHERE recipients.id = u.id
                 """,
                 [.text(updates)])
@@ -1459,9 +1475,9 @@ enum ImportUploadsArea {
                 """
                 UPDATE recipients SET default_category_id = u.category_id
                    FROM (SELECT j.value ->> 0 AS id, j.value ->> 1 AS category_id
-                           FROM json_each(?)) AS u
+                           FROM json_each(?) AS j) AS u
                  WHERE recipients.id = u.id AND recipients.default_category_id IS NULL
-                """,
+                """
                 [.text(updates)])
         }
         for outcome in outcomes {
