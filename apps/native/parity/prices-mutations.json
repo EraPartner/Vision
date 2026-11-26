@@ -1,0 +1,251 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n           closed_at, created_at, updated_at, import_identity) VALUES\n          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000bb01')",
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n          ('USD', vision_numeric('0.9163', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n           is_active, price_provider, price_provider_id, price_provider_latest_url, price_provider_latest_path,\n           notes, created_at, updated_at) VALUES\n          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,\n           1, 'yahoo', NULL, NULL, NULL, 'yahoo quote stub', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 'Custom Fund', NULL, 'stock', 'EUR', vision_numeric('40', 18, 6), NULL,\n           1, 'custom', NULL, 'http://example.com/prices/latest.json', 'data.price',\n           'custom json stub', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,\n           1, 'manual', NULL, NULL, NULL, NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 'Quiet Holdings', 'QUIET', 'stock', 'USD', NULL, NULL,\n           1, 'yahoo', NULL, NULL, NULL, 'falls back to stored history', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO asset_price_history (investment_id, price_date, close_price, source, fetched_at, updated_at) VALUES\n          (4, '2026-11-20', vision_numeric('77.25', 18, 6), 'provider',\n           '2026-11-20T22:00:00.000000Z', '2026-11-20T22:00:00.000000Z'),\n          (4, '2026-11-23', vision_numeric('78.5', 18, 6), 'provider',\n           '2026-11-23T22:00:00.000000Z', '2026-11-23T22:00:00.000000Z')"
+  ],
+  "fetch": {
+    "http://example.com/prices/latest.json": {
+      "status": 200,
+      "body": "{\"data\":{\"price\":42.5},\"asof\":\"2026-11-26\"}"
+    },
+    "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1795262400&period2=1795694400": {
+      "status": 200,
+      "body": "{\"chart\":{\"result\":[{\"meta\":{\"currency\":\"USD\",\"symbol\":\"ACME\",\"exchangeName\":\"NMS\",\"instrumentType\":\"EQUITY\",\"firstTradeDate\":1637971200,\"regularMarketTime\":1795435200,\"gmtoffset\":3600,\"timezone\":\"CET\",\"exchangeTimezoneName\":\"Europe/Brussels\",\"regularMarketPrice\":151.4,\"priceHint\":2,\"currentTradingPeriod\":{\"pre\":{\"timezone\":\"CET\",\"start\":1795262400,\"end\":1795298400,\"gmtoffset\":3600},\"regular\":{\"timezone\":\"CET\",\"start\":1795348800,\"end\":1795384800,\"gmtoffset\":3600},\"post\":{\"timezone\":\"CET\",\"start\":1795435200,\"end\":1795471200,\"gmtoffset\":3600}},\"dataGranularity\":\"1d\",\"range\":\"5d\",\"validRanges\":[\"1d\",\"5d\",\"1mo\",\"3mo\",\"6mo\",\"1y\",\"2y\",\"5y\",\"10y\",\"ytd\",\"max\"]},\"timestamp\":[1795262400,1795348800,1795435200],\"indicators\":{\"quote\":[{\"high\":[151.25,151.6,151.9],\"low\":[150.25,150.6,150.9],\"open\":[150.5,150.85,151.15],\"close\":[150.75,151.1,151.4],\"volume\":[1000,1100,900]}]}}],\"error\":null}}"
+    },
+    "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1637971200&period2=1795737600": {
+      "status": 200,
+      "body": "{\"chart\":{\"result\":[{\"meta\":{\"currency\":\"USD\",\"symbol\":\"ACME\",\"exchangeName\":\"NMS\",\"instrumentType\":\"EQUITY\",\"firstTradeDate\":1637971200,\"regularMarketTime\":1638662400,\"gmtoffset\":3600,\"timezone\":\"CET\",\"exchangeTimezoneName\":\"Europe/Brussels\",\"regularMarketPrice\":121.25,\"priceHint\":2,\"currentTradingPeriod\":{\"pre\":{\"timezone\":\"CET\",\"start\":1637971200,\"end\":1638007200,\"gmtoffset\":3600},\"regular\":{\"timezone\":\"CET\",\"start\":1638316800,\"end\":1638352800,\"gmtoffset\":3600},\"post\":{\"timezone\":\"CET\",\"start\":1638662400,\"end\":1638698400,\"gmtoffset\":3600}},\"dataGranularity\":\"1d\",\"range\":\"5d\",\"validRanges\":[\"1d\",\"5d\",\"1mo\",\"3mo\",\"6mo\",\"1y\",\"2y\",\"5y\",\"10y\",\"ytd\",\"max\"]},\"timestamp\":[1637971200,1638316800,1638662400],\"indicators\":{\"quote\":[{\"high\":[121,122.5,121.75],\"low\":[120,121.5,120.75],\"open\":[120.25,121.75,121],\"close\":[120.5,122,121.25],\"volume\":[1000,1100,900]}]}}],\"error\":null}}"
+    }
+  },
+  "now": "2026-11-26T12:00:00.000Z",
+  "steps": [
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "refreshInvestmentPrices",
+      "method": "POST",
+      "path": "/api/investments/refresh-prices",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 2,
+          "total": 3,
+          "prices": {
+            "1": 151.4,
+            "2": 42.5,
+            "4": 78.5
+          },
+          "priceSources": {
+            "1": "close",
+            "2": "live",
+            "4": "historical_fallback"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "refreshInvestmentPrices",
+      "method": "POST",
+      "path": "/api/investments/refresh-prices",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "updated": 2,
+          "total": 3,
+          "prices": {
+            "1": 151.4,
+            "2": 42.5,
+            "4": 78.5
+          },
+          "priceSources": {
+            "1": "close",
+            "2": "live",
+            "4": "historical_fallback"
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/1/price-history",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "provider": "yahoo",
+          "points": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/1/price-history?db_only=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "provider": "yahoo",
+          "points": [
+            {
+              "timestampMs": 1638014400000,
+              "price": 120.5
+            },
+            {
+              "timestampMs": 1638360000000,
+              "price": 122
+            },
+            {
+              "timestampMs": 1638705600000,
+              "price": 121.25
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/1/price-history",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "provider": "yahoo",
+          "points": [
+            {
+              "timestampMs": 1638014400000,
+              "price": 120.5
+            },
+            {
+              "timestampMs": 1638360000000,
+              "price": 122
+            },
+            {
+              "timestampMs": 1638705600000,
+              "price": 121.25
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/4/price-history?db_only=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 4,
+          "provider": "yahoo",
+          "points": [
+            {
+              "timestampMs": 1795176000000,
+              "price": 77.25
+            },
+            {
+              "timestampMs": 1795435200000,
+              "price": 78.5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/4/price-history?db_only=false&from_ms=1794787200000",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 4,
+          "provider": "yahoo",
+          "points": [
+            {
+              "timestampMs": 1795176000000,
+              "price": 77.25
+            },
+            {
+              "timestampMs": 1795435200000,
+              "price": 78.5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/2/price-history?db_only=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 2,
+          "provider": "custom",
+          "points": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentPriceHistory",
+      "method": "GET",
+      "path": "/api/investments/999/price-history",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Investment not found"
+        }
+      }
+    }
+  ]
+}
