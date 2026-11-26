@@ -142,8 +142,267 @@ const UUID_RE =
 // The yahoo chart payloads of the prices corpus: schema-valid for yahoo-finance2's
 // runtime validation (chart.schema), so the per-symbol close fallback and the
 // price-history backfill succeed against the stubbed endpoints.
-const CHART_ACME_RECENT = {"chart":{"result":[{"meta":{"currency":"USD","symbol":"ACME","exchangeName":"NMS","instrumentType":"EQUITY","firstTradeDate":1637971200,"regularMarketTime":1795435200,"gmtoffset":3600,"timezone":"CET","exchangeTimezoneName":"Europe/Brussels","regularMarketPrice":151.4,"priceHint":2,"currentTradingPeriod":{"pre":{"timezone":"CET","start":1795262400,"end":1795298400,"gmtoffset":3600},"regular":{"timezone":"CET","start":1795348800,"end":1795384800,"gmtoffset":3600},"post":{"timezone":"CET","start":1795435200,"end":1795471200,"gmtoffset":3600}},"dataGranularity":"1d","range":"5d","validRanges":["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]},"timestamp":[1795262400,1795348800,1795435200],"indicators":{"quote":[{"high":[151.25,151.6,151.9],"low":[150.25,150.6,150.9],"open":[150.5,150.85,151.15],"close":[150.75,151.1,151.4],"volume":[1000,1100,900]}]}}],"error":null}};
-const CHART_ACME_WINDOW = {"chart":{"result":[{"meta":{"currency":"USD","symbol":"ACME","exchangeName":"NMS","instrumentType":"EQUITY","firstTradeDate":1637971200,"regularMarketTime":1638662400,"gmtoffset":3600,"timezone":"CET","exchangeTimezoneName":"Europe/Brussels","regularMarketPrice":121.25,"priceHint":2,"currentTradingPeriod":{"pre":{"timezone":"CET","start":1637971200,"end":1638007200,"gmtoffset":3600},"regular":{"timezone":"CET","start":1638316800,"end":1638352800,"gmtoffset":3600},"post":{"timezone":"CET","start":1638662400,"end":1638698400,"gmtoffset":3600}},"dataGranularity":"1d","range":"5d","validRanges":["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]},"timestamp":[1637971200,1638316800,1638662400],"indicators":{"quote":[{"high":[121.0,122.5,121.75],"low":[120.0,121.5,120.75],"open":[120.25,121.75,121.0],"close":[120.5,122,121.25],"volume":[1000,1100,900]}]}}],"error":null}};
+const CHART_ACME_RECENT = {
+  chart: {
+    result: [
+      {
+        meta: {
+          currency: "USD",
+          symbol: "ACME",
+          exchangeName: "NMS",
+          instrumentType: "EQUITY",
+          firstTradeDate: 1637971200,
+          regularMarketTime: 1795435200,
+          gmtoffset: 3600,
+          timezone: "CET",
+          exchangeTimezoneName: "Europe/Brussels",
+          regularMarketPrice: 151.4,
+          priceHint: 2,
+          currentTradingPeriod: {
+            pre: {
+              timezone: "CET",
+              start: 1795262400,
+              end: 1795298400,
+              gmtoffset: 3600,
+            },
+            regular: {
+              timezone: "CET",
+              start: 1795348800,
+              end: 1795384800,
+              gmtoffset: 3600,
+            },
+            post: {
+              timezone: "CET",
+              start: 1795435200,
+              end: 1795471200,
+              gmtoffset: 3600,
+            },
+          },
+          dataGranularity: "1d",
+          range: "5d",
+          validRanges: [
+            "1d",
+            "5d",
+            "1mo",
+            "3mo",
+            "6mo",
+            "1y",
+            "2y",
+            "5y",
+            "10y",
+            "ytd",
+            "max",
+          ],
+        },
+        timestamp: [1795262400, 1795348800, 1795435200],
+        indicators: {
+          quote: [
+            {
+              high: [151.25, 151.6, 151.9],
+              low: [150.25, 150.6, 150.9],
+              open: [150.5, 150.85, 151.15],
+              close: [150.75, 151.1, 151.4],
+              volume: [1000, 1100, 900],
+            },
+          ],
+        },
+      },
+    ],
+    error: null,
+  },
+};
+const CHART_ACME_WINDOW = {
+  chart: {
+    result: [
+      {
+        meta: {
+          currency: "USD",
+          symbol: "ACME",
+          exchangeName: "NMS",
+          instrumentType: "EQUITY",
+          firstTradeDate: 1637971200,
+          regularMarketTime: 1638662400,
+          gmtoffset: 3600,
+          timezone: "CET",
+          exchangeTimezoneName: "Europe/Brussels",
+          regularMarketPrice: 121.25,
+          priceHint: 2,
+          currentTradingPeriod: {
+            pre: {
+              timezone: "CET",
+              start: 1637971200,
+              end: 1638007200,
+              gmtoffset: 3600,
+            },
+            regular: {
+              timezone: "CET",
+              start: 1638316800,
+              end: 1638352800,
+              gmtoffset: 3600,
+            },
+            post: {
+              timezone: "CET",
+              start: 1638662400,
+              end: 1638698400,
+              gmtoffset: 3600,
+            },
+          },
+          dataGranularity: "1d",
+          range: "5d",
+          validRanges: [
+            "1d",
+            "5d",
+            "1mo",
+            "3mo",
+            "6mo",
+            "1y",
+            "2y",
+            "5y",
+            "10y",
+            "ytd",
+            "max",
+          ],
+        },
+        timestamp: [1637971200, 1638316800, 1638662400],
+        indicators: {
+          quote: [
+            {
+              high: [121.0, 122.5, 121.75],
+              low: [120.0, 121.5, 120.75],
+              open: [120.25, 121.75, 121.0],
+              close: [120.5, 122, 121.25],
+              volume: [1000, 1100, 900],
+            },
+          ],
+        },
+      },
+    ],
+    error: null,
+  },
+};
+
+/**
+ * A `fundHoldingsDocumentSchema`-valid document (ADR-267): a partial coverage fund whose
+ * equity constituent maps to the bundle's ticker classification, plus cash, an unsupported
+ * derivative row and 5% missing weight. The bundle upsert and the look-through reads of the
+ * exposure corpus record against it.
+ */
+const EXPOSURE_FUND_DOCUMENT = {
+  contractVersion: 1,
+  fund: {
+    name: "Euro Fund",
+    identifiers: [
+      { type: "isin", value: "IE00B4Y7J823" },
+      { type: "ticker", value: "EFUND", exchange: "XBRU" },
+    ],
+  },
+  shareClass: {
+    name: "Euro Fund Class A",
+    identifiers: [{ type: "ticker", value: "EFUND", exchange: "XBRU" }],
+    currency: "EUR",
+  },
+  source: {
+    kind: "user-supplied-file",
+    fileName: "euro-fund.csv",
+    asOfDate: "2026-11-10",
+    retrievedAt: "2026-11-11T09:00:00.000Z",
+    license: { status: "permission-confirmed", redistribution: "allowed" },
+  },
+  holdings: [
+    {
+      provenance: { rowNumber: 1 },
+      name: "ACME Inc",
+      identifiers: [{ type: "ticker", value: "acme" }],
+      instrumentType: "equity",
+      exposureKind: "direct",
+      exposureStatus: "supported",
+      weightPercent: "80",
+    },
+    {
+      provenance: { rowNumber: 2 },
+      name: "Cash",
+      identifiers: [],
+      instrumentType: "cash",
+      exposureKind: "cash",
+      exposureStatus: "supported",
+      weightPercent: "10",
+    },
+    {
+      provenance: { rowNumber: 3 },
+      name: "Mystery Derivative",
+      identifiers: [{ type: "proprietary", value: "X123" }],
+      instrumentType: "derivative",
+      exposureKind: "derivative",
+      exposureStatus: "unsupported",
+      unsupportedReason: "derivatives carry no equity exposure",
+      weightPercent: "5",
+    },
+  ],
+  coverage: {
+    status: "partial",
+    reportedWeightPercent: "95",
+    supportedWeightPercent: "90",
+    unsupportedWeightPercent: "5",
+    missingWeightPercent: "5",
+  },
+  staleness: {
+    evaluatedAt: "2026-11-10",
+    maximumAgeDays: 365,
+    ageDays: 0,
+    status: "current",
+  },
+};
+
+const EXPOSURE_BUNDLE_A = {
+  classifications: [
+    {
+      investmentId: 1,
+      issuerId: "issuer-acme",
+      issuerName: "ACME Inc",
+      sector: "Industrials",
+      issuerCountryCode: "US",
+      sourceLabel: "manual entry 2026",
+    },
+    {
+      identifier: { type: "ticker", value: "acme" },
+      issuerId: "issuer-acme",
+      issuerName: "ACME Inc",
+      sector: "Industrials",
+      issuerCountryCode: "US",
+      sourceLabel: "fund look-through map",
+    },
+    {
+      identifier: { type: "ticker", value: "NOBODY", exchange: "XBRU" },
+      issuerId: "issuer-nobody",
+      issuerName: "Nobody AG",
+      sourceLabel: "never matched fund constituent",
+    },
+  ],
+  fundDocuments: [
+    {
+      investmentId: 2,
+      shareClassIdentifier: {
+        type: "ticker",
+        value: "EFUND",
+        exchange: "XBRU",
+      },
+      document: EXPOSURE_FUND_DOCUMENT,
+    },
+  ],
+};
+
+/** Bundle B imports investment 3 the hard way: its manual classification wins (ADR-267). */
+const EXPOSURE_BUNDLE_B = {
+  classifications: [
+    {
+      investmentId: 3,
+      issuerId: "issuer-other",
+      issuerName: "Other Works NV",
+      sourceLabel: "second import",
+    },
+  ],
+  fundDocuments: [],
+};
 
 const SEED_TIME = "2025-03-01T09:00:00.000000Z";
 
@@ -5429,36 +5688,130 @@ function mutationAreas(): Record<string, ParityArea> {
       ],
       now: "2026-11-26T12:00:00.000Z",
       steps: [
-        { operationId: "getInvestmentTransactions", method: "GET", path: "/api/investments/1/transactions" },
         {
-          operationId: "createInvestmentTransaction",
-          method: "POST",
+          operationId: "getInvestmentTransactions",
+          method: "GET",
           path: "/api/investments/1/transactions",
-          body: { type: "buy", date: "2024-07-01", amount: "750", units: "5", price_per_unit: "150", fees: 2.5, currency: "usd", note: "july top-up", account_id: 2 },
         },
         {
           operationId: "createInvestmentTransaction",
           method: "POST",
           path: "/api/investments/1/transactions",
-          body: { type: "dividend", date: "2024-07-02", amount: 3.75, dividend_amount_convention: "gross" },
+          body: {
+            type: "buy",
+            date: "2024-07-01",
+            amount: "750",
+            units: "5",
+            price_per_unit: "150",
+            fees: 2.5,
+            currency: "usd",
+            note: "july top-up",
+            account_id: 2,
+          },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: {
+            type: "dividend",
+            date: "2024-07-02",
+            amount: 3.75,
+            dividend_amount_convention: "gross",
+          },
         },
         {
           operationId: "createInvestmentTransaction",
           method: "POST",
           path: "/api/investments/2/transactions",
-          body: { type: "rent_income", date: "2024-03-01", amount: "1000", is_recurring: true, recurrence_interval: "monthly", recurrence_end_date: "2024-12-31" },
+          body: {
+            type: "rent_income",
+            date: "2024-03-01",
+            amount: "1000",
+            is_recurring: true,
+            recurrence_interval: "monthly",
+            recurrence_end_date: "2024-12-31",
+          },
         },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "buy" } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: {} },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "buy", date: "2024-07-03", amount: "abc" } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "buy", date: "2024-07-03", amount: "10", currency: "euro" } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "buy", date: "2024-07-03", amount: "10", account_id: "0x10" } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "buy", date: "2024-07-03", amount: "10", account_id: 999 } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "bonus", date: "2024-07-03", amount: "10" } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/1/transactions", body: { type: "buy", date: "2024-13-45", amount: "10" } },
-        { operationId: "createInvestmentTransaction", method: "POST", path: "/api/investments/999/transactions", body: { type: "buy", date: "2024-07-03", amount: "10" } },
-        { operationId: "getInvestments", method: "GET", path: "/api/investments?asset_class=stock" },
-        { operationId: "getBulkPortfolioTransactions", method: "GET", path: "/api/investments/transactions?investment_ids=1,2&limit=50" },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: { type: "buy" },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: {},
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: { type: "buy", date: "2024-07-03", amount: "abc" },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: {
+            type: "buy",
+            date: "2024-07-03",
+            amount: "10",
+            currency: "euro",
+          },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: {
+            type: "buy",
+            date: "2024-07-03",
+            amount: "10",
+            account_id: "0x10",
+          },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: {
+            type: "buy",
+            date: "2024-07-03",
+            amount: "10",
+            account_id: 999,
+          },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: { type: "bonus", date: "2024-07-03", amount: "10" },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/1/transactions",
+          body: { type: "buy", date: "2024-13-45", amount: "10" },
+        },
+        {
+          operationId: "createInvestmentTransaction",
+          method: "POST",
+          path: "/api/investments/999/transactions",
+          body: { type: "buy", date: "2024-07-03", amount: "10" },
+        },
+        {
+          operationId: "getInvestments",
+          method: "GET",
+          path: "/api/investments?asset_class=stock",
+        },
+        {
+          operationId: "getBulkPortfolioTransactions",
+          method: "GET",
+          path: "/api/investments/transactions?investment_ids=1,2&limit=50",
+        },
         {
           operationId: "updatePortfolioTransaction",
           method: "PATCH",
@@ -5495,62 +5848,447 @@ function mutationAreas(): Record<string, ParityArea> {
           path: "/api/investments/transactions/3",
           body: { account_id: 3 },
         },
-        { operationId: "updatePortfolioTransaction", method: "PATCH", path: "/api/investments/transactions/999", body: { note: "nothing" } },
-        { operationId: "updatePortfolioTransaction", method: "PATCH", path: "/api/investments/transactions/abc", body: { note: "nothing" } },
-        { operationId: "deletePortfolioTransaction", method: "DELETE", path: "/api/investments/transactions/12abc" },
-        { operationId: "deletePortfolioTransaction", method: "DELETE", path: "/api/investments/transactions/4" },
-        { operationId: "deletePortfolioTransaction", method: "DELETE", path: "/api/investments/transactions/4" },
-        { operationId: "getInvestmentTransactions", method: "GET", path: "/api/investments/1/transactions?limit=2&offset=1" },
         {
-          operationId: "bulkRetagPortfolioTransactions",
-          method: "PUT",
-          path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [1, 2], from_account_id: 1, to_account_id: 2, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeeff" },
+          operationId: "updatePortfolioTransaction",
+          method: "PATCH",
+          path: "/api/investments/transactions/999",
+          body: { note: "nothing" },
+        },
+        {
+          operationId: "updatePortfolioTransaction",
+          method: "PATCH",
+          path: "/api/investments/transactions/abc",
+          body: { note: "nothing" },
+        },
+        {
+          operationId: "deletePortfolioTransaction",
+          method: "DELETE",
+          path: "/api/investments/transactions/12abc",
+        },
+        {
+          operationId: "deletePortfolioTransaction",
+          method: "DELETE",
+          path: "/api/investments/transactions/4",
+        },
+        {
+          operationId: "deletePortfolioTransaction",
+          method: "DELETE",
+          path: "/api/investments/transactions/4",
+        },
+        {
+          operationId: "getInvestmentTransactions",
+          method: "GET",
+          path: "/api/investments/1/transactions?limit=2&offset=1",
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [1, 2], from_account_id: 1, to_account_id: 2, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef1" },
+          body: {
+            transaction_ids: [1, 2],
+            from_account_id: 1,
+            to_account_id: 2,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeeff",
+          },
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [1, 2], from_account_id: 2, to_account_id: 1, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef2" },
+          body: {
+            transaction_ids: [1, 2],
+            from_account_id: 1,
+            to_account_id: 2,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef1",
+          },
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [1, 1], from_account_id: 2, to_account_id: 1, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef3" },
+          body: {
+            transaction_ids: [1, 2],
+            from_account_id: 2,
+            to_account_id: 1,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef2",
+          },
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [], from_account_id: null, to_account_id: 1, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef4" },
+          body: {
+            transaction_ids: [1, 1],
+            from_account_id: 2,
+            to_account_id: 1,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef3",
+          },
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [1], from_account_id: null, to_account_id: 1 },
+          body: {
+            transaction_ids: [],
+            from_account_id: null,
+            to_account_id: 1,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef4",
+          },
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [999], from_account_id: 1, to_account_id: 2, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef5" },
+          body: {
+            transaction_ids: [1],
+            from_account_id: null,
+            to_account_id: 1,
+          },
         },
         {
           operationId: "bulkRetagPortfolioTransactions",
           method: "PUT",
           path: "/api/investments/transactions/broker",
-          body: { transaction_ids: [1], from_account_id: 1, to_account_id: 999, idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef6" },
+          body: {
+            transaction_ids: [999],
+            from_account_id: 1,
+            to_account_id: 2,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef5",
+          },
         },
-        { operationId: "getInvestmentTransactions", method: "GET", path: "/api/investments/1/transactions?type=dividend" },
-        { operationId: "getInvestmentTransactions", method: "GET", path: "/api/investments/2/transactions?limit=5" },
+        {
+          operationId: "bulkRetagPortfolioTransactions",
+          method: "PUT",
+          path: "/api/investments/transactions/broker",
+          body: {
+            transaction_ids: [1],
+            from_account_id: 1,
+            to_account_id: 999,
+            idempotency_key: "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef6",
+          },
+        },
+        {
+          operationId: "getInvestmentTransactions",
+          method: "GET",
+          path: "/api/investments/1/transactions?type=dividend",
+        },
+        {
+          operationId: "getInvestmentTransactions",
+          method: "GET",
+          path: "/api/investments/2/transactions?limit=5",
+        },
+      ],
+    },
+    "exposure-mutations": {
+      router: { module: "investments.ts", mountPath: "/api/investments" },
+      now: "2026-11-27T12:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+           closed_at, created_at, updated_at, import_identity) VALUES
+          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+           '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bb01')`,
+        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+          ${RATE_ROW("USD", "0.9163", "2026-11-01", 1)},
+          ${RATE_ROW("USD", "0.9150", "2024-01-09", 0)},
+          ${RATE_ROW("USD", "0.9180", "2024-05-19", 0)}`,
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+           is_active, price_provider, notes, created_at, updated_at) VALUES
+          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,
+           1, 'manual', 'usd stock', '${SEED_TIME}', '${SEED_TIME}'),
+          (2, 'Euro Fund', 'EFUND', 'etf', 'EUR', vision_numeric('12', 18, 6), NULL,
+           1, 'manual', 'etf with a holdings document', '${SEED_TIME}', '${SEED_TIME}'),
+          (3, 'Steady Works', NULL, 'stock', 'EUR', vision_numeric('104', 18, 6), NULL,
+           1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+          (4, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,
+           1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+        `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+           fees, taxes, currency, fx_rate_to_eur, note, account_id, created_at, updated_at) VALUES
+          (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),
+           vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'USD',
+           vision_numeric('0.915', 20, 10), 'initial buy', 1, '${SEED_TIME}', '${SEED_TIME}'),
+          (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,
+           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD', NULL, NULL, 1,
+           '${SEED_TIME}', '${SEED_TIME}'),
+          (3, 1, 'sell', '2024-05-20', vision_numeric('600', 18, 4), vision_numeric('4', 18, 8),
+           vision_numeric('150', 18, 6), vision_numeric('2', 18, 4), vision_numeric('0', 18, 4), 'USD',
+           vision_numeric('0.918', 20, 10), 'partial exit', 1, '${SEED_TIME}', '${SEED_TIME}'),
+          (4, 1, 'gift', '2024-06-15', vision_numeric('0', 18, 4), vision_numeric('2', 18, 8),
+           vision_numeric('0', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',
+           NULL, 'inherited shares', 1, '${SEED_TIME}', '${SEED_TIME}'),
+          (5, 2, 'buy', '2024-02-01', vision_numeric('1200', 18, 4), vision_numeric('100', 18, 8),
+           vision_numeric('12', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           NULL, 'etf position', 1, '${SEED_TIME}', '${SEED_TIME}'),
+          (6, 3, 'buy', '2024-04-02', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),
+           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           NULL, 'steady works', 1, '${SEED_TIME}', '${SEED_TIME}'),
+          (7, 4, 'buy', '2023-11-05', vision_numeric('250000', 18, 4), vision_numeric('1', 18, 8),
+           vision_numeric('250000', 18, 6), vision_numeric('500', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           NULL, 'the loft', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+      ],
+      steps: [
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure",
+        },
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure?currency=usd",
+        },
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure?currency=12",
+        },
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure?currency=usd&currency=EUR",
+        },
+        {
+          operationId: "getPortfolioExposureClassifications",
+          method: "GET",
+          path: "/api/investments/exposure/classifications",
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: EXPOSURE_BUNDLE_A,
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: EXPOSURE_BUNDLE_A,
+        },
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure",
+        },
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure?currency=usd",
+        },
+        {
+          operationId: "getPortfolioExposureClassifications",
+          method: "GET",
+          path: "/api/investments/exposure/classifications",
+        },
+        {
+          operationId: "savePortfolioExposureClassifications",
+          method: "PUT",
+          path: "/api/investments/exposure/classifications",
+          body: {
+            set: [
+              {
+                investmentId: 3,
+                issuerName: "  ACME   Inc ",
+                sector: "Industrials",
+              },
+            ],
+            clear: [],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: EXPOSURE_BUNDLE_B,
+        },
+        {
+          operationId: "getPortfolioExposure",
+          method: "GET",
+          path: "/api/investments/exposure",
+        },
+        {
+          operationId: "getPortfolioExposureClassifications",
+          method: "GET",
+          path: "/api/investments/exposure/classifications",
+        },
+        {
+          operationId: "savePortfolioExposureClassifications",
+          method: "PUT",
+          path: "/api/investments/exposure/classifications",
+          body: {
+            set: [
+              { investmentId: 4, issuerName: "Loft BV" },
+              { investmentId: 4, issuerName: "Again" },
+            ],
+            clear: [],
+          },
+        },
+        {
+          operationId: "savePortfolioExposureClassifications",
+          method: "PUT",
+          path: "/api/investments/exposure/classifications",
+          body: { set: [{ investmentId: 999, issuerName: "Ghost" }] },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: {
+            classifications: [
+              { issuerId: "x", issuerName: "X", sourceLabel: "s" },
+            ],
+            fundDocuments: [],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: {
+            classifications: [
+              {
+                investmentId: 1,
+                issuerId: "one",
+                issuerName: "One",
+                sourceLabel: "s",
+              },
+              {
+                investmentId: 1,
+                issuerId: "two",
+                issuerName: "Two",
+                sourceLabel: "s",
+              },
+            ],
+            fundDocuments: [],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: {
+            classifications: [],
+            fundDocuments: [
+              {
+                investmentId: 4,
+                shareClassIdentifier: {
+                  type: "ticker",
+                  value: "CITY",
+                  exchange: "XBRU",
+                },
+                document: {
+                  ...EXPOSURE_FUND_DOCUMENT,
+                  fund: {
+                    name: "City",
+                    identifiers: [
+                      { type: "ticker", value: "CITY", exchange: "XBRU" },
+                    ],
+                  },
+                  shareClass: {
+                    ...EXPOSURE_FUND_DOCUMENT.shareClass,
+                    name: "City",
+                    identifiers: [
+                      { type: "ticker", value: "CITY", exchange: "XBRU" },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: {
+            classifications: [],
+            fundDocuments: [
+              {
+                investmentId: 2,
+                shareClassIdentifier: {
+                  type: "ticker",
+                  value: "OTHER",
+                  exchange: "XBRU",
+                },
+                document: EXPOSURE_FUND_DOCUMENT,
+              },
+            ],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: {
+            classifications: [
+              {
+                investmentId: 999,
+                issuerId: "x",
+                issuerName: "X",
+                sourceLabel: "s",
+              },
+            ],
+            fundDocuments: [],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: {
+            classifications: [
+              {
+                identifier: { type: "isin", value: "US123" },
+                issuerId: "x",
+                issuerName: "X",
+                sourceLabel: "s",
+              },
+            ],
+            fundDocuments: [],
+          },
+        },
+        {
+          operationId: "upsertPortfolioExposureSources",
+          method: "PUT",
+          path: "/api/investments/exposure/sources",
+          body: { classifications: [], fundDocuments: [], unknownKey: true },
+        },
+        {
+          operationId: "savePortfolioExposureClassifications",
+          method: "PUT",
+          path: "/api/investments/exposure/classifications",
+          body: { set: [], clear: [1, 3], unknown: 1 },
+        },
+        {
+          operationId: "savePortfolioExposureClassifications",
+          method: "PUT",
+          path: "/api/investments/exposure/classifications",
+          body: { set: [], clear: [1, 3] },
+        },
+        {
+          operationId: "getPortfolioExposureClassifications",
+          method: "GET",
+          path: "/api/investments/exposure/classifications",
+        },
+        {
+          operationId: "getInvestment",
+          method: "GET",
+          path: "/api/investments/1",
+        },
+        {
+          operationId: "getInvestment",
+          method: "GET",
+          path: "/api/investments/99",
+        },
+        {
+          operationId: "getInvestment",
+          method: "GET",
+          path: "/api/investments/0",
+        },
+        {
+          operationId: "getInvestment",
+          method: "GET",
+          path: "/api/investments/abc",
+        },
       ],
     },
     "prices-mutations": {
@@ -5589,26 +6327,68 @@ function mutationAreas(): Record<string, ParityArea> {
         },
         // The yahoo batch quote fails deterministically (its spec fetch is not
         // stubbed), so the per-symbol chart fallback supplies the live quote.
-        "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1795262400&period2=1795694400": {
-          status: 200,
-          body: JSON.stringify(CHART_ACME_RECENT),
-        },
-        "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1637971200&period2=1795737600": {
-          status: 200,
-          body: JSON.stringify(CHART_ACME_WINDOW),
-        },
+        "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1795262400&period2=1795694400":
+          {
+            status: 200,
+            body: JSON.stringify(CHART_ACME_RECENT),
+          },
+        "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1637971200&period2=1795737600":
+          {
+            status: 200,
+            body: JSON.stringify(CHART_ACME_WINDOW),
+          },
       },
       steps: [
-        { operationId: "listInvestmentProviders", method: "GET", path: "/api/investments/providers" },
-        { operationId: "refreshInvestmentPrices", method: "POST", path: "/api/investments/refresh-prices" },
-        { operationId: "refreshInvestmentPrices", method: "POST", path: "/api/investments/refresh-prices" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/1/price-history" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/1/price-history?db_only=false" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/1/price-history" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/4/price-history?db_only=true" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/4/price-history?db_only=false&from_ms=1794787200000" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/2/price-history?db_only=false" },
-        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/999/price-history" },
+        {
+          operationId: "listInvestmentProviders",
+          method: "GET",
+          path: "/api/investments/providers",
+        },
+        {
+          operationId: "refreshInvestmentPrices",
+          method: "POST",
+          path: "/api/investments/refresh-prices",
+        },
+        {
+          operationId: "refreshInvestmentPrices",
+          method: "POST",
+          path: "/api/investments/refresh-prices",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/1/price-history",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/1/price-history?db_only=false",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/1/price-history",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/4/price-history?db_only=true",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/4/price-history?db_only=false&from_ms=1794787200000",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/2/price-history?db_only=false",
+        },
+        {
+          operationId: "getInvestmentPriceHistory",
+          method: "GET",
+          path: "/api/investments/999/price-history",
+        },
       ],
     },
     "importBatches-mutations": {
