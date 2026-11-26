@@ -275,12 +275,12 @@ enum PortfolioSummaryService {
                     currentValue: rounded))
             total = total.plus((try? DecimalJS(rounded)) ?? .zero)
         }
+        // `new Date().toISOString()`: the canonical instant cut to milliseconds.
+        let canonicalNow = try SQLTimestamps.formatInstant(session.currentInstant())
+        let computedAt = SQLRow.isoMilliseconds(fromCanonical: canonicalNow) ?? canonicalNow
         return Summary(
             currency: targetCurrency,
-            // `new Date().toISOString()`: the canonical instant cut to milliseconds.
-            computedAt: SQLRow.isoMilliseconds(
-                fromCanonical: try SQLTimestamps.formatInstant(session.currentInstant()))
-                ?? try SQLTimestamps.formatInstant(session.currentInstant()),
+            computedAt: computedAt,
             holdings: holdings,
             totalPortfolioValue: JavaScriptNumber.fromString(
                 total.toDecimalPlaces(2, .halfEven).javaScriptString))
