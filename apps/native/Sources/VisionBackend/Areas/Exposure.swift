@@ -502,7 +502,7 @@ struct ExposureClassification: Sendable {
 
     init(_ row: SQLRow) throws {
         id = try row.text("id")
-        investmentId = try row.optionalText("investmentId").flatMap { $0.isEmpty ? nil : $0 }.flatMap { Int($0) }
+        investmentId = try row.optionalInt64("investmentId").flatMap { Int(exactly: $0) }
         identifierType = try row.optionalText("identifierType").flatMap { $0.isEmpty ? nil : $0 }
         identifierValue = try row.optionalText("identifierValue").flatMap { $0.isEmpty ? nil : $0 }
         identifierExchange = try row.optionalText("identifierExchange").flatMap { $0.isEmpty ? nil : $0 }
@@ -667,7 +667,7 @@ extension ExposureArea {
                     (investment_id, identifier_type, identifier_value, identifier_exchange, \
                     issuer_id, issuer_name, sector, issuer_country_code, source_label) \
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
-                    ON CONFLICT\\(item.investmentId != nil ? " (investment_id) WHERE investment_id IS NOT NULL" : " (identifier_type, identifier_value, COALESCE(identifier_exchange, '')) WHERE investment_id IS NULL") \
+                    ON CONFLICT\(item.investmentId != nil ? " (investment_id) WHERE investment_id IS NOT NULL" : " (identifier_type, identifier_value, COALESCE(identifier_exchange, '')) WHERE investment_id IS NULL") \
                     DO UPDATE SET issuer_id = excluded.issuer_id, issuer_name = excluded.issuer_name, \
                     sector = excluded.sector, issuer_country_code = excluded.issuer_country_code, \
                     source_label = excluded.source_label, updated_at = now() \

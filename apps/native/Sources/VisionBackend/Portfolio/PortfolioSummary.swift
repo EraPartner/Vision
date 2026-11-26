@@ -53,9 +53,12 @@ enum PortfolioSummaryService {
         var fellBack = false
     }
 
-    /// A number the driver returns: `BigInt` ids and NUMERIC columns as strings, quoted-literal-free.
+    /// A number the driver returns: `BigInt` ids (INTEGER columns) and NUMERIC text as
+    /// strings, quoted-literal-free; NULL reads as the 0 the driver's coercion leaves.
     private static func numberText(_ row: SQLRow, _ column: String) -> String {
-        (try? row.text(column)) ?? ((try? row.optionalText(column)) ?? "0")
+        if let number = try? row.optionalInt64(column) { return String(number) }
+        if let text = try? row.text(column) { return text }
+        return "0"
     }
 
     /// The row mapping of `portfolioMathTxRowSchema` (the driver's conversions).
@@ -105,7 +108,7 @@ enum PortfolioSummaryService {
                    NULL AS destination_account_id, '0' AS fee_units,
                    pt.source_record_hash, NULL AS adjustment_kind, NULL AS basis_policy,
                    NULL AS "eligible_source_record_hashes::json", pt.income_recognition_role
-            FROM portfolio_transactions pt JOIN investments i ON i.id = pt.investment_id\\(whereClause)
+            FROM portfolio_transactions pt JOIN investments i ON i.id = pt.investment_id\(whereClause)
             UNION ALL
             SELECT at.id, at.investment_id, 'asset_transfer' AS type, '0' AS amount,
                    at.units, '0' AS fees, '0' AS taxes, to_char(at.date, 'YYYY-MM-DD') AS date,
@@ -113,13 +116,13 @@ enum PortfolioSummaryService {
                    NULL AS fx_rate_to_eur, NULL AS account_id,
                    at.source_account_id, at.destination_account_id, at.fee_units,
                    at.source_record_hash, NULL, NULL, NULL, 'standard'
-            FROM portfolio_asset_transfers at JOIN investments i ON i.id = at.investment_id\\(whereClause)
+            FROM portfolio_asset_transfers at JOIN investments i ON i.id = at.investment_id\(whereClause)
             UNION ALL
             SELECT aa.id, aa.investment_id, 'asset_adjustment', '0', aa.units, '0', '0',
                    to_char(aa.date, 'YYYY-MM-DD'), to_char(aa.date, 'YYYY-MM-DD'), COALESCE(i.currency, 'EUR'),
                    NULL, aa.account_id, NULL, NULL, '0', aa.source_record_hash,
                    aa.adjustment_kind, aa.basis_policy, aa.eligible_source_record_hashes, 'standard'
-            FROM portfolio_asset_adjustments aa JOIN investments i ON i.id = aa.investment_id\\(whereClause)
+            FROM portfolio_asset_adjustments aa JOIN investments i ON i.id = aa.investment_id\(whereClause)
             ) events ORDER BY events.date, events."id::bigint"
             """).map(mathRow)
     }
@@ -131,7 +134,7 @@ enum PortfolioSummaryService {
             """
             SELECT i.*, COALESCE(i.currency, 'EUR') AS currency, \
             COALESCE(i.current_price, '0') AS current_price, COALESCE(i.interest_rate, '0') AS interest_rate \
-            FROM investments i\\(activeOnly ? " WHERE i.is_active = 1" : "") ORDER BY i.name
+            FROM investments i\(activeOnly ? " WHERE i.is_active = 1" : "") ORDER BY i.name
             """)
     }
 
