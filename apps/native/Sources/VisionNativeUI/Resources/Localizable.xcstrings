@@ -64538,13 +64538,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline mode is on. Turn it off in Settings › Privacy to go online."
+            "value": "Offline mode is on. Turn it off in Settings <> Privacy to go online."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offlinemodus staat aan. Zet hem uit in Instellingen › Privacy om online te gaan."
+            "value": "Offlinemodus staat aan. Zet hem uit in Instellingen <> Privacy om online te gaan."
           }
         }
       }
