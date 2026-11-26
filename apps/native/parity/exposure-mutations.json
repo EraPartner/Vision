@@ -1,0 +1,2563 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n           closed_at, created_at, updated_at, import_identity) VALUES\n          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000bb01')",
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n          ('USD', vision_numeric('0.9163', 20, 10), '2026-11-01', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('USD', vision_numeric('0.9150', 20, 10), '2024-01-09', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('USD', vision_numeric('0.9180', 20, 10), '2024-05-19', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n           is_active, price_provider, notes, created_at, updated_at) VALUES\n          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,\n           1, 'manual', 'usd stock', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 'Euro Fund', 'EFUND', 'etf', 'EUR', vision_numeric('12', 18, 6), NULL,\n           1, 'manual', 'etf with a holdings document', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 'Steady Works', NULL, 'stock', 'EUR', vision_numeric('104', 18, 6), NULL,\n           1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,\n           1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n           fees, taxes, currency, fx_rate_to_eur, note, account_id, created_at, updated_at) VALUES\n          (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.915', 20, 10), 'initial buy', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,\n           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD', NULL, NULL, 1,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 1, 'sell', '2024-05-20', vision_numeric('600', 18, 4), vision_numeric('4', 18, 8),\n           vision_numeric('150', 18, 6), vision_numeric('2', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.918', 20, 10), 'partial exit', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 1, 'gift', '2024-06-15', vision_numeric('0', 18, 4), vision_numeric('2', 18, 8),\n           vision_numeric('0', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           NULL, 'inherited shares', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (5, 2, 'buy', '2024-02-01', vision_numeric('1200', 18, 4), vision_numeric('100', 18, 8),\n           vision_numeric('12', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'etf position', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (6, 3, 'buy', '2024-04-02', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'steady works', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (7, 4, 'buy', '2023-11-05', vision_numeric('250000', 18, 4), vision_numeric('1', 18, 8),\n           vision_numeric('250000', 18, 6), vision_numeric('500', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           NULL, 'the loft', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_exposure_classifications (id, investment_id, identifier_type, identifier_value,\n           identifier_exchange, issuer_id, issuer_name, sector, issuer_country_code, source_label, origin,\n           created_at, updated_at) VALUES\n          ('11111111-1111-4111-8111-111111111111', 1, NULL, NULL, NULL,\n           'seed-issuer-acme', 'Seeded ACME Direct', 'Seed Industrials', 'US', 'seed import', 'import',\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('22222222-2222-4222-8222-222222222222', NULL, 'ticker', 'acme', NULL,\n           'seed-issuer-acme-map', 'Seeded ACME Fund Map', NULL, NULL, 'seed import', 'import',\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('33333333-3333-4333-8333-333333333333', 3, NULL, NULL, NULL,\n           'seed-issuer-steady', 'Seeded Steady Works', NULL, NULL, 'seed import', 'import',\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "now": "2026-11-27T12:00:00.000Z",
+  "steps": [
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "computedAt": "2026-11-27T12:00:00.000Z",
+          "totalValue": 252823.23,
+          "uncoveredValue": 1200,
+          "uncoveredWeightPercent": 0.47,
+          "coveredCashValue": 0,
+          "coveredCashWeightPercent": 0,
+          "fundSources": [],
+          "issuer": {
+            "rows": [
+              {
+                "id": "seed-issuer-acme",
+                "label": "Seeded ACME Direct",
+                "amount": 1103.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 520,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 520,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
+              }
+            ],
+            "classifiedValue": 1623.23,
+            "classifiedWeightPercent": 0.64,
+            "unclassifiedValue": 250000,
+            "unclassifiedWeightPercent": 98.88
+          },
+          "sector": {
+            "rows": [
+              {
+                "id": "Seed Industrials",
+                "label": "Seed Industrials",
+                "amount": 1103.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1103.23,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "issuerCountry": {
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 1103.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1103.23,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "warnings": [],
+          "scopeNotes": [
+            "Issuer country is explicit source metadata, not listing or revenue geography.",
+            "No economic foreign-exchange exposure is inferred."
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure?currency=usd",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "USD",
+          "computedAt": "2026-11-27T12:00:00.000Z",
+          "totalValue": 275917.52,
+          "uncoveredValue": 1309.61,
+          "uncoveredWeightPercent": 0.47,
+          "coveredCashValue": 0,
+          "coveredCashWeightPercent": 0,
+          "fundSources": [],
+          "issuer": {
+            "rows": [
+              {
+                "id": "seed-issuer-acme",
+                "label": "Seeded ACME Direct",
+                "amount": 1204,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 567.5,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 567.5,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
+              }
+            ],
+            "classifiedValue": 1771.5,
+            "classifiedWeightPercent": 0.64,
+            "unclassifiedValue": 272836.41,
+            "unclassifiedWeightPercent": 98.88
+          },
+          "sector": {
+            "rows": [
+              {
+                "id": "Seed Industrials",
+                "label": "Seed Industrials",
+                "amount": 1204,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1204,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 273403.91,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "issuerCountry": {
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 1204,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.44
+              }
+            ],
+            "classifiedValue": 1204,
+            "classifiedWeightPercent": 0.44,
+            "unclassifiedValue": 273403.91,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "warnings": [],
+          "scopeNotes": [
+            "Issuer country is explicit source metadata, not listing or revenue geography.",
+            "No economic foreign-exchange exposure is inferred."
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure?currency=12",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: must be an ISO 4217 code"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure?currency=usd&currency=EUR",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: must be an ISO 4217 code"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposureClassifications",
+      "method": "GET",
+      "path": "/api/investments/exposure/classifications",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "seed-issuer-acme",
+                "issuerName": "Seeded ACME Direct",
+                "sector": "Seed Industrials",
+                "issuerCountryCode": "US",
+                "origin": "import",
+                "sourceLabel": "seed import",
+                "updatedAt": "2025-03-01T09:00:00.000Z"
+              }
+            },
+            {
+              "investmentId": 4,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "Euro Fund",
+              "symbol": "EFUND",
+              "assetClass": "etf",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 3,
+              "name": "Steady Works",
+              "symbol": null,
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "seed-issuer-steady",
+                "issuerName": "Seeded Steady Works",
+                "sector": null,
+                "issuerCountryCode": null,
+                "origin": "import",
+                "sourceLabel": "seed import",
+                "updatedAt": "2025-03-01T09:00:00.000Z"
+              }
+            }
+          ],
+          "issuers": [
+            {
+              "issuerId": "seed-issuer-acme",
+              "issuerName": "Seeded ACME Direct"
+            },
+            {
+              "issuerId": "seed-issuer-acme-map",
+              "issuerName": "Seeded ACME Fund Map"
+            },
+            {
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works"
+            }
+          ],
+          "sectors": ["Seed Industrials"]
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "investmentId": 1,
+            "issuerId": "issuer-acme",
+            "issuerName": "ACME Inc",
+            "sector": "Industrials",
+            "issuerCountryCode": "US",
+            "sourceLabel": "manual entry 2026"
+          },
+          {
+            "identifier": {
+              "type": "ticker",
+              "value": "acme"
+            },
+            "issuerId": "issuer-acme",
+            "issuerName": "ACME Inc",
+            "sector": "Industrials",
+            "issuerCountryCode": "US",
+            "sourceLabel": "fund look-through map"
+          },
+          {
+            "identifier": {
+              "type": "ticker",
+              "value": "NOBODY",
+              "exchange": "XBRU"
+            },
+            "issuerId": "issuer-nobody",
+            "issuerName": "Nobody AG",
+            "sourceLabel": "never matched fund constituent"
+          }
+        ],
+        "fundDocuments": [
+          {
+            "investmentId": 2,
+            "shareClassIdentifier": {
+              "type": "ticker",
+              "value": "EFUND",
+              "exchange": "XBRU"
+            },
+            "document": {
+              "contractVersion": 1,
+              "fund": {
+                "name": "Euro Fund",
+                "identifiers": [
+                  {
+                    "type": "isin",
+                    "value": "IE00B4Y7J823"
+                  },
+                  {
+                    "type": "ticker",
+                    "value": "EFUND",
+                    "exchange": "XBRU"
+                  }
+                ]
+              },
+              "shareClass": {
+                "name": "Euro Fund Class A",
+                "identifiers": [
+                  {
+                    "type": "ticker",
+                    "value": "EFUND",
+                    "exchange": "XBRU"
+                  }
+                ],
+                "currency": "EUR"
+              },
+              "source": {
+                "kind": "user-supplied-file",
+                "fileName": "euro-fund.csv",
+                "asOfDate": "2026-11-10",
+                "retrievedAt": "2026-11-11T09:00:00.000Z",
+                "license": {
+                  "status": "permission-confirmed",
+                  "redistribution": "allowed"
+                }
+              },
+              "holdings": [
+                {
+                  "provenance": {
+                    "rowNumber": 1
+                  },
+                  "name": "ACME Inc",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "acme"
+                    }
+                  ],
+                  "instrumentType": "equity",
+                  "exposureKind": "direct",
+                  "exposureStatus": "supported",
+                  "weightPercent": "80"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 2
+                  },
+                  "name": "Cash",
+                  "identifiers": [],
+                  "instrumentType": "cash",
+                  "exposureKind": "cash",
+                  "exposureStatus": "supported",
+                  "weightPercent": "10"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 3
+                  },
+                  "name": "Mystery Derivative",
+                  "identifiers": [
+                    {
+                      "type": "proprietary",
+                      "value": "X123"
+                    }
+                  ],
+                  "instrumentType": "derivative",
+                  "exposureKind": "derivative",
+                  "exposureStatus": "unsupported",
+                  "unsupportedReason": "derivatives carry no equity exposure",
+                  "weightPercent": "5"
+                }
+              ],
+              "coverage": {
+                "status": "partial",
+                "reportedWeightPercent": "95",
+                "supportedWeightPercent": "90",
+                "unsupportedWeightPercent": "5",
+                "missingWeightPercent": "5"
+              },
+              "staleness": {
+                "evaluatedAt": "2026-11-10",
+                "maximumAgeDays": 365,
+                "ageDays": 0,
+                "status": "current"
+              }
+            }
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "classifications": [
+            {
+              "id": "{{uuid}}",
+              "investmentId": 1,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": "US",
+              "sourceLabel": "manual entry 2026",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": null,
+              "identifierType": "ticker",
+              "identifierValue": "acme",
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": "US",
+              "sourceLabel": "fund look-through map",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": null,
+              "identifierType": "ticker",
+              "identifierValue": "NOBODY",
+              "identifierExchange": "XBRU",
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "never matched fund constituent",
+              "origin": "import",
+              "createdAt": "2026-11-27T12:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": 3,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "seed import",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "documents": [
+            {
+              "id": "{{uuid}}",
+              "investmentId": 2,
+              "shareClassIdentifier": {
+                "type": "ticker",
+                "value": "EFUND",
+                "exchange": "XBRU"
+              },
+              "document": {
+                "fund": {
+                  "name": "Euro Fund",
+                  "identifiers": [
+                    {
+                      "type": "isin",
+                      "value": "IE00B4Y7J823"
+                    },
+                    {
+                      "type": "ticker",
+                      "value": "EFUND",
+                      "exchange": "XBRU"
+                    }
+                  ]
+                },
+                "source": {
+                  "kind": "user-supplied-file",
+                  "license": {
+                    "status": "permission-confirmed",
+                    "redistribution": "allowed"
+                  },
+                  "asOfDate": "2026-11-10",
+                  "fileName": "euro-fund.csv",
+                  "retrievedAt": "2026-11-11T09:00:00.000Z"
+                },
+                "coverage": {
+                  "status": "partial",
+                  "missingWeightPercent": "5",
+                  "reportedWeightPercent": "95",
+                  "supportedWeightPercent": "90",
+                  "unsupportedWeightPercent": "5"
+                },
+                "holdings": [
+                  {
+                    "name": "ACME Inc",
+                    "provenance": {
+                      "rowNumber": 1
+                    },
+                    "identifiers": [
+                      {
+                        "type": "ticker",
+                        "value": "acme"
+                      }
+                    ],
+                    "exposureKind": "direct",
+                    "weightPercent": "80",
+                    "exposureStatus": "supported",
+                    "instrumentType": "equity"
+                  },
+                  {
+                    "name": "Cash",
+                    "provenance": {
+                      "rowNumber": 2
+                    },
+                    "identifiers": [],
+                    "exposureKind": "cash",
+                    "weightPercent": "10",
+                    "exposureStatus": "supported",
+                    "instrumentType": "cash"
+                  },
+                  {
+                    "name": "Mystery Derivative",
+                    "provenance": {
+                      "rowNumber": 3
+                    },
+                    "identifiers": [
+                      {
+                        "type": "proprietary",
+                        "value": "X123"
+                      }
+                    ],
+                    "exposureKind": "derivative",
+                    "weightPercent": "5",
+                    "exposureStatus": "unsupported",
+                    "instrumentType": "derivative",
+                    "unsupportedReason": "derivatives carry no equity exposure"
+                  }
+                ],
+                "staleness": {
+                  "status": "current",
+                  "ageDays": 0,
+                  "evaluatedAt": "2026-11-10",
+                  "maximumAgeDays": 365
+                },
+                "shareClass": {
+                  "name": "Euro Fund Class A",
+                  "currency": "EUR",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "EFUND",
+                      "exchange": "XBRU"
+                    }
+                  ]
+                },
+                "contractVersion": 1
+              },
+              "sourceAsOfDate": "2026-11-10T00:00:00.000Z",
+              "sourceSha256": "900552ba44d892311590f3c4102bfed79f7ca5d4e5153160e8acaec7138b9e97",
+              "createdAt": "2026-11-27T12:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            }
+          ],
+          "keptManualInvestmentIds": []
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "investmentId": 1,
+            "issuerId": "issuer-acme",
+            "issuerName": "ACME Inc",
+            "sector": "Industrials",
+            "issuerCountryCode": "US",
+            "sourceLabel": "manual entry 2026"
+          },
+          {
+            "identifier": {
+              "type": "ticker",
+              "value": "acme"
+            },
+            "issuerId": "issuer-acme",
+            "issuerName": "ACME Inc",
+            "sector": "Industrials",
+            "issuerCountryCode": "US",
+            "sourceLabel": "fund look-through map"
+          },
+          {
+            "identifier": {
+              "type": "ticker",
+              "value": "NOBODY",
+              "exchange": "XBRU"
+            },
+            "issuerId": "issuer-nobody",
+            "issuerName": "Nobody AG",
+            "sourceLabel": "never matched fund constituent"
+          }
+        ],
+        "fundDocuments": [
+          {
+            "investmentId": 2,
+            "shareClassIdentifier": {
+              "type": "ticker",
+              "value": "EFUND",
+              "exchange": "XBRU"
+            },
+            "document": {
+              "contractVersion": 1,
+              "fund": {
+                "name": "Euro Fund",
+                "identifiers": [
+                  {
+                    "type": "isin",
+                    "value": "IE00B4Y7J823"
+                  },
+                  {
+                    "type": "ticker",
+                    "value": "EFUND",
+                    "exchange": "XBRU"
+                  }
+                ]
+              },
+              "shareClass": {
+                "name": "Euro Fund Class A",
+                "identifiers": [
+                  {
+                    "type": "ticker",
+                    "value": "EFUND",
+                    "exchange": "XBRU"
+                  }
+                ],
+                "currency": "EUR"
+              },
+              "source": {
+                "kind": "user-supplied-file",
+                "fileName": "euro-fund.csv",
+                "asOfDate": "2026-11-10",
+                "retrievedAt": "2026-11-11T09:00:00.000Z",
+                "license": {
+                  "status": "permission-confirmed",
+                  "redistribution": "allowed"
+                }
+              },
+              "holdings": [
+                {
+                  "provenance": {
+                    "rowNumber": 1
+                  },
+                  "name": "ACME Inc",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "acme"
+                    }
+                  ],
+                  "instrumentType": "equity",
+                  "exposureKind": "direct",
+                  "exposureStatus": "supported",
+                  "weightPercent": "80"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 2
+                  },
+                  "name": "Cash",
+                  "identifiers": [],
+                  "instrumentType": "cash",
+                  "exposureKind": "cash",
+                  "exposureStatus": "supported",
+                  "weightPercent": "10"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 3
+                  },
+                  "name": "Mystery Derivative",
+                  "identifiers": [
+                    {
+                      "type": "proprietary",
+                      "value": "X123"
+                    }
+                  ],
+                  "instrumentType": "derivative",
+                  "exposureKind": "derivative",
+                  "exposureStatus": "unsupported",
+                  "unsupportedReason": "derivatives carry no equity exposure",
+                  "weightPercent": "5"
+                }
+              ],
+              "coverage": {
+                "status": "partial",
+                "reportedWeightPercent": "95",
+                "supportedWeightPercent": "90",
+                "unsupportedWeightPercent": "5",
+                "missingWeightPercent": "5"
+              },
+              "staleness": {
+                "evaluatedAt": "2026-11-10",
+                "maximumAgeDays": 365,
+                "ageDays": 0,
+                "status": "current"
+              }
+            }
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "classifications": [
+            {
+              "id": "{{uuid}}",
+              "investmentId": 1,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": "US",
+              "sourceLabel": "manual entry 2026",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": null,
+              "identifierType": "ticker",
+              "identifierValue": "acme",
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": "US",
+              "sourceLabel": "fund look-through map",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": null,
+              "identifierType": "ticker",
+              "identifierValue": "NOBODY",
+              "identifierExchange": "XBRU",
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "never matched fund constituent",
+              "origin": "import",
+              "createdAt": "2026-11-27T12:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": 3,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "seed import",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "documents": [
+            {
+              "id": "{{uuid}}",
+              "investmentId": 2,
+              "shareClassIdentifier": {
+                "type": "ticker",
+                "value": "EFUND",
+                "exchange": "XBRU"
+              },
+              "document": {
+                "fund": {
+                  "name": "Euro Fund",
+                  "identifiers": [
+                    {
+                      "type": "isin",
+                      "value": "IE00B4Y7J823"
+                    },
+                    {
+                      "type": "ticker",
+                      "value": "EFUND",
+                      "exchange": "XBRU"
+                    }
+                  ]
+                },
+                "source": {
+                  "kind": "user-supplied-file",
+                  "license": {
+                    "status": "permission-confirmed",
+                    "redistribution": "allowed"
+                  },
+                  "asOfDate": "2026-11-10",
+                  "fileName": "euro-fund.csv",
+                  "retrievedAt": "2026-11-11T09:00:00.000Z"
+                },
+                "coverage": {
+                  "status": "partial",
+                  "missingWeightPercent": "5",
+                  "reportedWeightPercent": "95",
+                  "supportedWeightPercent": "90",
+                  "unsupportedWeightPercent": "5"
+                },
+                "holdings": [
+                  {
+                    "name": "ACME Inc",
+                    "provenance": {
+                      "rowNumber": 1
+                    },
+                    "identifiers": [
+                      {
+                        "type": "ticker",
+                        "value": "acme"
+                      }
+                    ],
+                    "exposureKind": "direct",
+                    "weightPercent": "80",
+                    "exposureStatus": "supported",
+                    "instrumentType": "equity"
+                  },
+                  {
+                    "name": "Cash",
+                    "provenance": {
+                      "rowNumber": 2
+                    },
+                    "identifiers": [],
+                    "exposureKind": "cash",
+                    "weightPercent": "10",
+                    "exposureStatus": "supported",
+                    "instrumentType": "cash"
+                  },
+                  {
+                    "name": "Mystery Derivative",
+                    "provenance": {
+                      "rowNumber": 3
+                    },
+                    "identifiers": [
+                      {
+                        "type": "proprietary",
+                        "value": "X123"
+                      }
+                    ],
+                    "exposureKind": "derivative",
+                    "weightPercent": "5",
+                    "exposureStatus": "unsupported",
+                    "instrumentType": "derivative",
+                    "unsupportedReason": "derivatives carry no equity exposure"
+                  }
+                ],
+                "staleness": {
+                  "status": "current",
+                  "ageDays": 0,
+                  "evaluatedAt": "2026-11-10",
+                  "maximumAgeDays": 365
+                },
+                "shareClass": {
+                  "name": "Euro Fund Class A",
+                  "currency": "EUR",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "EFUND",
+                      "exchange": "XBRU"
+                    }
+                  ]
+                },
+                "contractVersion": 1
+              },
+              "sourceAsOfDate": "2026-11-10T00:00:00.000Z",
+              "sourceSha256": "900552ba44d892311590f3c4102bfed79f7ca5d4e5153160e8acaec7138b9e97",
+              "createdAt": "2026-11-27T12:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            }
+          ],
+          "keptManualInvestmentIds": []
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "computedAt": "2026-11-27T12:00:00.000Z",
+          "totalValue": 252823.23,
+          "uncoveredValue": 120,
+          "uncoveredWeightPercent": 0.05,
+          "coveredCashValue": 120,
+          "coveredCashWeightPercent": 0.05,
+          "fundSources": [
+            {
+              "investmentId": 2,
+              "investmentName": "Euro Fund",
+              "asOfDate": "2026-11-10",
+              "evaluatedAt": "{{today}}",
+              "ageDays": 17,
+              "maximumAgeDays": 365,
+              "stale": false,
+              "coverageStatus": "partial"
+            }
+          ],
+          "issuer": {
+            "rows": [
+              {
+                "id": "issuer-acme",
+                "label": "ACME Inc",
+                "amount": 2063.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 960,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 520,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 520,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
+              }
+            ],
+            "classifiedValue": 2583.23,
+            "classifiedWeightPercent": 1.02,
+            "unclassifiedValue": 250000,
+            "unclassifiedWeightPercent": 98.88
+          },
+          "sector": {
+            "rows": [
+              {
+                "id": "Industrials",
+                "label": "Industrials",
+                "amount": 2063.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 960,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              }
+            ],
+            "classifiedValue": 2063.23,
+            "classifiedWeightPercent": 0.82,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "issuerCountry": {
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 2063.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 960,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              }
+            ],
+            "classifiedValue": 2063.23,
+            "classifiedWeightPercent": 0.82,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "warnings": [],
+          "scopeNotes": [
+            "Issuer country is explicit source metadata, not listing or revenue geography.",
+            "No economic foreign-exchange exposure is inferred."
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure?currency=usd",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "USD",
+          "computedAt": "2026-11-27T12:00:00.000Z",
+          "totalValue": 275917.52,
+          "uncoveredValue": 130.96,
+          "uncoveredWeightPercent": 0.05,
+          "coveredCashValue": 130.96,
+          "coveredCashWeightPercent": 0.05,
+          "fundSources": [
+            {
+              "investmentId": 2,
+              "investmentName": "Euro Fund",
+              "asOfDate": "2026-11-10",
+              "evaluatedAt": "{{today}}",
+              "ageDays": 17,
+              "maximumAgeDays": 365,
+              "stale": false,
+              "coverageStatus": "partial"
+            }
+          ],
+          "issuer": {
+            "rows": [
+              {
+                "id": "issuer-acme",
+                "label": "ACME Inc",
+                "amount": 2251.69,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 1047.69,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              },
+              {
+                "id": "seed-issuer-steady",
+                "label": "Seeded Steady Works",
+                "amount": 567.5,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 567.5,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.21
+              }
+            ],
+            "classifiedValue": 2819.19,
+            "classifiedWeightPercent": 1.02,
+            "unclassifiedValue": 272836.41,
+            "unclassifiedWeightPercent": 98.88
+          },
+          "sector": {
+            "rows": [
+              {
+                "id": "Industrials",
+                "label": "Industrials",
+                "amount": 2251.69,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 1047.69,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              }
+            ],
+            "classifiedValue": 2251.69,
+            "classifiedWeightPercent": 0.82,
+            "unclassifiedValue": 273403.91,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "issuerCountry": {
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 2251.69,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1204,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 1047.69,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              }
+            ],
+            "classifiedValue": 2251.69,
+            "classifiedWeightPercent": 0.82,
+            "unclassifiedValue": 273403.91,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "warnings": [],
+          "scopeNotes": [
+            "Issuer country is explicit source metadata, not listing or revenue geography.",
+            "No economic foreign-exchange exposure is inferred."
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposureClassifications",
+      "method": "GET",
+      "path": "/api/investments/exposure/classifications",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "issuer-acme",
+                "issuerName": "ACME Inc",
+                "sector": "Industrials",
+                "issuerCountryCode": "US",
+                "origin": "import",
+                "sourceLabel": "manual entry 2026",
+                "updatedAt": "2026-11-27T12:00:00.000Z"
+              }
+            },
+            {
+              "investmentId": 4,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "Euro Fund",
+              "symbol": "EFUND",
+              "assetClass": "etf",
+              "hasFundDocument": true,
+              "classification": null
+            },
+            {
+              "investmentId": 3,
+              "name": "Steady Works",
+              "symbol": null,
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "seed-issuer-steady",
+                "issuerName": "Seeded Steady Works",
+                "sector": null,
+                "issuerCountryCode": null,
+                "origin": "import",
+                "sourceLabel": "seed import",
+                "updatedAt": "2025-03-01T09:00:00.000Z"
+              }
+            }
+          ],
+          "issuers": [
+            {
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc"
+            },
+            {
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG"
+            },
+            {
+              "issuerId": "seed-issuer-steady",
+              "issuerName": "Seeded Steady Works"
+            }
+          ],
+          "sectors": ["Industrials"]
+        }
+      }
+    },
+    {
+      "operationId": "savePortfolioExposureClassifications",
+      "method": "PUT",
+      "path": "/api/investments/exposure/classifications",
+      "body": {
+        "set": [
+          {
+            "investmentId": 3,
+            "issuerName": "  ACME   Inc ",
+            "sector": "Industrials"
+          }
+        ],
+        "clear": []
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "issuer-acme",
+                "issuerName": "ACME Inc",
+                "sector": "Industrials",
+                "issuerCountryCode": "US",
+                "origin": "import",
+                "sourceLabel": "manual entry 2026",
+                "updatedAt": "2026-11-27T12:00:00.000Z"
+              }
+            },
+            {
+              "investmentId": 4,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "Euro Fund",
+              "symbol": "EFUND",
+              "assetClass": "etf",
+              "hasFundDocument": true,
+              "classification": null
+            },
+            {
+              "investmentId": 3,
+              "name": "Steady Works",
+              "symbol": null,
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "issuer-acme",
+                "issuerName": "ACME Inc",
+                "sector": "Industrials",
+                "issuerCountryCode": null,
+                "origin": "manual",
+                "sourceLabel": "Set in Vision",
+                "updatedAt": "2026-11-27T12:00:00.000Z"
+              }
+            }
+          ],
+          "issuers": [
+            {
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc"
+            },
+            {
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG"
+            }
+          ],
+          "sectors": ["Industrials"]
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "investmentId": 3,
+            "issuerId": "issuer-other",
+            "issuerName": "Other Works NV",
+            "sourceLabel": "second import"
+          }
+        ],
+        "fundDocuments": []
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "classifications": [
+            {
+              "id": "{{uuid}}",
+              "investmentId": 1,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": "US",
+              "sourceLabel": "manual entry 2026",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": null,
+              "identifierType": "ticker",
+              "identifierValue": "acme",
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": "US",
+              "sourceLabel": "fund look-through map",
+              "origin": "import",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": 3,
+              "identifierType": null,
+              "identifierValue": null,
+              "identifierExchange": null,
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc",
+              "sector": "Industrials",
+              "issuerCountryCode": null,
+              "sourceLabel": "Set in Vision",
+              "origin": "manual",
+              "createdAt": "2025-03-01T09:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            },
+            {
+              "id": "{{uuid}}",
+              "investmentId": null,
+              "identifierType": "ticker",
+              "identifierValue": "NOBODY",
+              "identifierExchange": "XBRU",
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG",
+              "sector": null,
+              "issuerCountryCode": null,
+              "sourceLabel": "never matched fund constituent",
+              "origin": "import",
+              "createdAt": "2026-11-27T12:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            }
+          ],
+          "documents": [
+            {
+              "id": "{{uuid}}",
+              "investmentId": 2,
+              "shareClassIdentifier": {
+                "type": "ticker",
+                "value": "EFUND",
+                "exchange": "XBRU"
+              },
+              "document": {
+                "fund": {
+                  "name": "Euro Fund",
+                  "identifiers": [
+                    {
+                      "type": "isin",
+                      "value": "IE00B4Y7J823"
+                    },
+                    {
+                      "type": "ticker",
+                      "value": "EFUND",
+                      "exchange": "XBRU"
+                    }
+                  ]
+                },
+                "source": {
+                  "kind": "user-supplied-file",
+                  "license": {
+                    "status": "permission-confirmed",
+                    "redistribution": "allowed"
+                  },
+                  "asOfDate": "2026-11-10",
+                  "fileName": "euro-fund.csv",
+                  "retrievedAt": "2026-11-11T09:00:00.000Z"
+                },
+                "coverage": {
+                  "status": "partial",
+                  "missingWeightPercent": "5",
+                  "reportedWeightPercent": "95",
+                  "supportedWeightPercent": "90",
+                  "unsupportedWeightPercent": "5"
+                },
+                "holdings": [
+                  {
+                    "name": "ACME Inc",
+                    "provenance": {
+                      "rowNumber": 1
+                    },
+                    "identifiers": [
+                      {
+                        "type": "ticker",
+                        "value": "acme"
+                      }
+                    ],
+                    "exposureKind": "direct",
+                    "weightPercent": "80",
+                    "exposureStatus": "supported",
+                    "instrumentType": "equity"
+                  },
+                  {
+                    "name": "Cash",
+                    "provenance": {
+                      "rowNumber": 2
+                    },
+                    "identifiers": [],
+                    "exposureKind": "cash",
+                    "weightPercent": "10",
+                    "exposureStatus": "supported",
+                    "instrumentType": "cash"
+                  },
+                  {
+                    "name": "Mystery Derivative",
+                    "provenance": {
+                      "rowNumber": 3
+                    },
+                    "identifiers": [
+                      {
+                        "type": "proprietary",
+                        "value": "X123"
+                      }
+                    ],
+                    "exposureKind": "derivative",
+                    "weightPercent": "5",
+                    "exposureStatus": "unsupported",
+                    "instrumentType": "derivative",
+                    "unsupportedReason": "derivatives carry no equity exposure"
+                  }
+                ],
+                "staleness": {
+                  "status": "current",
+                  "ageDays": 0,
+                  "evaluatedAt": "2026-11-10",
+                  "maximumAgeDays": 365
+                },
+                "shareClass": {
+                  "name": "Euro Fund Class A",
+                  "currency": "EUR",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "EFUND",
+                      "exchange": "XBRU"
+                    }
+                  ]
+                },
+                "contractVersion": 1
+              },
+              "sourceAsOfDate": "2026-11-10T00:00:00.000Z",
+              "sourceSha256": "900552ba44d892311590f3c4102bfed79f7ca5d4e5153160e8acaec7138b9e97",
+              "createdAt": "2026-11-27T12:00:00.000Z",
+              "updatedAt": "2026-11-27T12:00:00.000Z"
+            }
+          ],
+          "keptManualInvestmentIds": [3]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposure",
+      "method": "GET",
+      "path": "/api/investments/exposure",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "computedAt": "2026-11-27T12:00:00.000Z",
+          "totalValue": 252823.23,
+          "uncoveredValue": 120,
+          "uncoveredWeightPercent": 0.05,
+          "coveredCashValue": 120,
+          "coveredCashWeightPercent": 0.05,
+          "fundSources": [
+            {
+              "investmentId": 2,
+              "investmentName": "Euro Fund",
+              "asOfDate": "2026-11-10",
+              "evaluatedAt": "{{today}}",
+              "ageDays": 17,
+              "maximumAgeDays": 365,
+              "stale": false,
+              "coverageStatus": "partial"
+            }
+          ],
+          "issuer": {
+            "rows": [
+              {
+                "id": "issuer-acme",
+                "label": "ACME Inc",
+                "amount": 2583.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 960,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 520,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 1.02
+              }
+            ],
+            "classifiedValue": 2583.23,
+            "classifiedWeightPercent": 1.02,
+            "unclassifiedValue": 250000,
+            "unclassifiedWeightPercent": 98.88
+          },
+          "sector": {
+            "rows": [
+              {
+                "id": "Industrials",
+                "label": "Industrials",
+                "amount": 2583.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 960,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 3,
+                    "investmentName": "Steady Works",
+                    "sourceFundName": null,
+                    "amount": 520,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 1.02
+              }
+            ],
+            "classifiedValue": 2583.23,
+            "classifiedWeightPercent": 1.02,
+            "unclassifiedValue": 250000,
+            "unclassifiedWeightPercent": 98.88
+          },
+          "issuerCountry": {
+            "rows": [
+              {
+                "id": "US",
+                "label": "US",
+                "amount": 2063.23,
+                "contributions": [
+                  {
+                    "sourceType": "direct",
+                    "investmentId": 1,
+                    "investmentName": "ACME Corp",
+                    "sourceFundName": null,
+                    "amount": 1103.23,
+                    "sourceAsOfDate": null,
+                    "stale": false
+                  },
+                  {
+                    "sourceType": "fund",
+                    "investmentId": 2,
+                    "investmentName": "ACME Inc",
+                    "sourceFundName": "Euro Fund",
+                    "amount": 960,
+                    "sourceAsOfDate": "2026-11-10",
+                    "stale": false
+                  }
+                ],
+                "weightPercent": 0.82
+              }
+            ],
+            "classifiedValue": 2063.23,
+            "classifiedWeightPercent": 0.82,
+            "unclassifiedValue": 250520,
+            "unclassifiedWeightPercent": 99.09
+          },
+          "warnings": [],
+          "scopeNotes": [
+            "Issuer country is explicit source metadata, not listing or revenue geography.",
+            "No economic foreign-exchange exposure is inferred."
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposureClassifications",
+      "method": "GET",
+      "path": "/api/investments/exposure/classifications",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "issuer-acme",
+                "issuerName": "ACME Inc",
+                "sector": "Industrials",
+                "issuerCountryCode": "US",
+                "origin": "import",
+                "sourceLabel": "manual entry 2026",
+                "updatedAt": "2026-11-27T12:00:00.000Z"
+              }
+            },
+            {
+              "investmentId": 4,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "Euro Fund",
+              "symbol": "EFUND",
+              "assetClass": "etf",
+              "hasFundDocument": true,
+              "classification": null
+            },
+            {
+              "investmentId": 3,
+              "name": "Steady Works",
+              "symbol": null,
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": {
+                "issuerId": "issuer-acme",
+                "issuerName": "ACME Inc",
+                "sector": "Industrials",
+                "issuerCountryCode": null,
+                "origin": "manual",
+                "sourceLabel": "Set in Vision",
+                "updatedAt": "2026-11-27T12:00:00.000Z"
+              }
+            }
+          ],
+          "issuers": [
+            {
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc"
+            },
+            {
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG"
+            }
+          ],
+          "sectors": ["Industrials"]
+        }
+      }
+    },
+    {
+      "operationId": "savePortfolioExposureClassifications",
+      "method": "PUT",
+      "path": "/api/investments/exposure/classifications",
+      "body": {
+        "set": [
+          {
+            "investmentId": 4,
+            "issuerName": "Loft BV"
+          },
+          {
+            "investmentId": 4,
+            "issuerName": "Again"
+          }
+        ],
+        "clear": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The classification changes are invalid",
+          "details": {
+            "issues": [
+              {
+                "code": "custom",
+                "message": "Each investment may appear only once per request",
+                "path": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "savePortfolioExposureClassifications",
+      "method": "PUT",
+      "path": "/api/investments/exposure/classifications",
+      "body": {
+        "set": [
+          {
+            "investmentId": 999,
+            "issuerName": "Ghost"
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The classification changes are invalid",
+          "details": {}
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "issuerId": "x",
+            "issuerName": "X",
+            "sourceLabel": "s"
+          }
+        ],
+        "fundDocuments": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {
+            "issues": [
+              {
+                "code": "custom",
+                "path": ["classifications", 0],
+                "message": "Classification must target exactly one investment or typed identifier"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "investmentId": 1,
+            "issuerId": "one",
+            "issuerName": "One",
+            "sourceLabel": "s"
+          },
+          {
+            "investmentId": 1,
+            "issuerId": "two",
+            "issuerName": "Two",
+            "sourceLabel": "s"
+          }
+        ],
+        "fundDocuments": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {}
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [],
+        "fundDocuments": [
+          {
+            "investmentId": 4,
+            "shareClassIdentifier": {
+              "type": "ticker",
+              "value": "CITY",
+              "exchange": "XBRU"
+            },
+            "document": {
+              "contractVersion": 1,
+              "fund": {
+                "name": "City",
+                "identifiers": [
+                  {
+                    "type": "ticker",
+                    "value": "CITY",
+                    "exchange": "XBRU"
+                  }
+                ]
+              },
+              "shareClass": {
+                "name": "City",
+                "identifiers": [
+                  {
+                    "type": "ticker",
+                    "value": "CITY",
+                    "exchange": "XBRU"
+                  }
+                ],
+                "currency": "EUR"
+              },
+              "source": {
+                "kind": "user-supplied-file",
+                "fileName": "euro-fund.csv",
+                "asOfDate": "2026-11-10",
+                "retrievedAt": "2026-11-11T09:00:00.000Z",
+                "license": {
+                  "status": "permission-confirmed",
+                  "redistribution": "allowed"
+                }
+              },
+              "holdings": [
+                {
+                  "provenance": {
+                    "rowNumber": 1
+                  },
+                  "name": "ACME Inc",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "acme"
+                    }
+                  ],
+                  "instrumentType": "equity",
+                  "exposureKind": "direct",
+                  "exposureStatus": "supported",
+                  "weightPercent": "80"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 2
+                  },
+                  "name": "Cash",
+                  "identifiers": [],
+                  "instrumentType": "cash",
+                  "exposureKind": "cash",
+                  "exposureStatus": "supported",
+                  "weightPercent": "10"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 3
+                  },
+                  "name": "Mystery Derivative",
+                  "identifiers": [
+                    {
+                      "type": "proprietary",
+                      "value": "X123"
+                    }
+                  ],
+                  "instrumentType": "derivative",
+                  "exposureKind": "derivative",
+                  "exposureStatus": "unsupported",
+                  "unsupportedReason": "derivatives carry no equity exposure",
+                  "weightPercent": "5"
+                }
+              ],
+              "coverage": {
+                "status": "partial",
+                "reportedWeightPercent": "95",
+                "supportedWeightPercent": "90",
+                "unsupportedWeightPercent": "5",
+                "missingWeightPercent": "5"
+              },
+              "staleness": {
+                "evaluatedAt": "2026-11-10",
+                "maximumAgeDays": 365,
+                "ageDays": 0,
+                "status": "current"
+              }
+            }
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {}
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [],
+        "fundDocuments": [
+          {
+            "investmentId": 2,
+            "shareClassIdentifier": {
+              "type": "ticker",
+              "value": "OTHER",
+              "exchange": "XBRU"
+            },
+            "document": {
+              "contractVersion": 1,
+              "fund": {
+                "name": "Euro Fund",
+                "identifiers": [
+                  {
+                    "type": "isin",
+                    "value": "IE00B4Y7J823"
+                  },
+                  {
+                    "type": "ticker",
+                    "value": "EFUND",
+                    "exchange": "XBRU"
+                  }
+                ]
+              },
+              "shareClass": {
+                "name": "Euro Fund Class A",
+                "identifiers": [
+                  {
+                    "type": "ticker",
+                    "value": "EFUND",
+                    "exchange": "XBRU"
+                  }
+                ],
+                "currency": "EUR"
+              },
+              "source": {
+                "kind": "user-supplied-file",
+                "fileName": "euro-fund.csv",
+                "asOfDate": "2026-11-10",
+                "retrievedAt": "2026-11-11T09:00:00.000Z",
+                "license": {
+                  "status": "permission-confirmed",
+                  "redistribution": "allowed"
+                }
+              },
+              "holdings": [
+                {
+                  "provenance": {
+                    "rowNumber": 1
+                  },
+                  "name": "ACME Inc",
+                  "identifiers": [
+                    {
+                      "type": "ticker",
+                      "value": "acme"
+                    }
+                  ],
+                  "instrumentType": "equity",
+                  "exposureKind": "direct",
+                  "exposureStatus": "supported",
+                  "weightPercent": "80"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 2
+                  },
+                  "name": "Cash",
+                  "identifiers": [],
+                  "instrumentType": "cash",
+                  "exposureKind": "cash",
+                  "exposureStatus": "supported",
+                  "weightPercent": "10"
+                },
+                {
+                  "provenance": {
+                    "rowNumber": 3
+                  },
+                  "name": "Mystery Derivative",
+                  "identifiers": [
+                    {
+                      "type": "proprietary",
+                      "value": "X123"
+                    }
+                  ],
+                  "instrumentType": "derivative",
+                  "exposureKind": "derivative",
+                  "exposureStatus": "unsupported",
+                  "unsupportedReason": "derivatives carry no equity exposure",
+                  "weightPercent": "5"
+                }
+              ],
+              "coverage": {
+                "status": "partial",
+                "reportedWeightPercent": "95",
+                "supportedWeightPercent": "90",
+                "unsupportedWeightPercent": "5",
+                "missingWeightPercent": "5"
+              },
+              "staleness": {
+                "evaluatedAt": "2026-11-10",
+                "maximumAgeDays": 365,
+                "ageDays": 0,
+                "status": "current"
+              }
+            }
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {}
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "investmentId": 999,
+            "issuerId": "x",
+            "issuerName": "X",
+            "sourceLabel": "s"
+          }
+        ],
+        "fundDocuments": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {}
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [
+          {
+            "identifier": {
+              "type": "isin",
+              "value": "US123"
+            },
+            "issuerId": "x",
+            "issuerName": "X",
+            "sourceLabel": "s"
+          }
+        ],
+        "fundDocuments": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {
+            "issues": [
+              {
+                "code": "custom",
+                "path": ["classifications", 0, "identifier", "value"],
+                "message": "ISIN must use its 12-character canonical form"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "upsertPortfolioExposureSources",
+      "method": "PUT",
+      "path": "/api/investments/exposure/sources",
+      "body": {
+        "classifications": [],
+        "fundDocuments": [],
+        "unknownKey": true
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The exposure source bundle is invalid",
+          "details": {
+            "issues": [
+              {
+                "code": "unrecognized_keys",
+                "keys": ["unknownKey"],
+                "path": [],
+                "message": "Unrecognized key: \"unknownKey\""
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "savePortfolioExposureClassifications",
+      "method": "PUT",
+      "path": "/api/investments/exposure/classifications",
+      "body": {
+        "set": [],
+        "clear": [1, 3],
+        "unknown": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_PORTFOLIO_EXPOSURE_SOURCE",
+          "message": "The classification changes are invalid",
+          "details": {
+            "issues": [
+              {
+                "code": "unrecognized_keys",
+                "keys": ["unknown"],
+                "path": [],
+                "message": "Unrecognized key: \"unknown\""
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "savePortfolioExposureClassifications",
+      "method": "PUT",
+      "path": "/api/investments/exposure/classifications",
+      "body": {
+        "set": [],
+        "clear": [1, 3]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 4,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "Euro Fund",
+              "symbol": "EFUND",
+              "assetClass": "etf",
+              "hasFundDocument": true,
+              "classification": null
+            },
+            {
+              "investmentId": 3,
+              "name": "Steady Works",
+              "symbol": null,
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": null
+            }
+          ],
+          "issuers": [
+            {
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc"
+            },
+            {
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG"
+            }
+          ],
+          "sectors": ["Industrials"]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioExposureClassifications",
+      "method": "GET",
+      "path": "/api/investments/exposure/classifications",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "investmentId": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 4,
+              "name": "City Loft",
+              "symbol": null,
+              "assetClass": "real_estate",
+              "hasFundDocument": false,
+              "classification": null
+            },
+            {
+              "investmentId": 2,
+              "name": "Euro Fund",
+              "symbol": "EFUND",
+              "assetClass": "etf",
+              "hasFundDocument": true,
+              "classification": null
+            },
+            {
+              "investmentId": 3,
+              "name": "Steady Works",
+              "symbol": null,
+              "assetClass": "stock",
+              "hasFundDocument": false,
+              "classification": null
+            }
+          ],
+          "issuers": [
+            {
+              "issuerId": "issuer-acme",
+              "issuerName": "ACME Inc"
+            },
+            {
+              "issuerId": "issuer-nobody",
+              "issuerName": "Nobody AG"
+            }
+          ],
+          "sectors": ["Industrials"]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "ACME Corp",
+          "symbol": "ACME",
+          "asset_class": "stock",
+          "currency": "USD",
+          "current_price": 150.5,
+          "interest_rate": null,
+          "maturity_date": null,
+          "location": null,
+          "municipality": null,
+          "cadastral_income": null,
+          "municipality_tax_rate": null,
+          "notes": "usd stock",
+          "is_active": true,
+          "price_provider": "manual",
+          "price_provider_id": null,
+          "price_provider_url": null,
+          "price_provider_latest_url": null,
+          "price_provider_latest_path": null,
+          "price_provider_history_url": null,
+          "price_provider_history_path": null,
+          "price_provider_history_ts_path": null,
+          "price_provider_history_price_path": null,
+          "price_updated_at": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2025-03-01T09:00:00.000Z",
+          "show_in_ticker": true
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/99",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Investment not found"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestment",
+      "method": "GET",
+      "path": "/api/investments/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    }
+  ]
+}
