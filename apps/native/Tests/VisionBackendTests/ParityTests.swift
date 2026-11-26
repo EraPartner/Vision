@@ -51,10 +51,16 @@ import VisionNativeCore
                     body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
                 }
                 for file in files {
-                    let disposition =
+                    // A part without a recorded content type carries no Content-Type header at
+                    // all, as the recorder's `attach` without options leaves it to busboy.
+                    var head =
                         "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(file.name)\"; "
-                        + "filename=\"\(file.filename)\"\r\nContent-Type: \(file.contentType ?? "application/octet-stream")\r\n\r\n"
-                    body.append(Data(disposition.utf8))
+                        + "filename=\"\(file.filename)\"\r\n"
+                    if let contentType = file.contentType {
+                        head += "Content-Type: \(contentType)\r\n"
+                    }
+                    head += "\r\n"
+                    body.append(Data(head.utf8))
                     body.append(Data(base64Encoded: file.base64) ?? Data())
                     body.append(Data("\r\n".utf8))
                 }
