@@ -140,6 +140,7 @@ public struct NativeSettingsWindow: View {
         case .statistics: NativeSettingsInsightsView(model: model, shell: shell).disabled(!model.isLoaded)
         case .behavior: NativeSettingsBehaviorView(model: model, shell: shell).disabled(!model.isLoaded)
         case .ai: NativeSettingsAIView(model: ai, settings: model, shell: shell)
+        case .privacy: NativeSettingsPrivacyView(model: model, shell: shell).disabled(!model.isLoaded)
         case .backup: NativeSettingsBackupView(model: backup, shell: shell)
         case .about:
             NativeSettingsAboutView(

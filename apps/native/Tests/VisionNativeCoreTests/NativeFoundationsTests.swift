@@ -28,6 +28,29 @@ import Testing
         #expect(NativeAppSettings.migrate(.object(["assetLogos": .string("yes")])).assetLogos == false)
     }
 
+    @Test func privacyFieldsReadPerFieldAndOfflineModeStopsShellRequests() {
+        #expect(NativeAppSettings.defaults.network == .defaults)
+        #expect(NativeAppSettings.defaults.checksForUpdatesAutomatically)
+        let settings = NativeAppSettings.migrate(
+            .object([
+                "offlineMode": .bool(true), "networkMarketData": .bool(false), "priceRefresh": .string("daily"),
+                "updateCheck": .string("never"), "assetLogos": .bool(true),
+            ]))
+        #expect(settings.network.offlineMode && !settings.network.marketData && settings.network.exchangeRates)
+        #expect(settings.network.priceRefresh == .daily && settings.updateCheck == .daily)
+        #expect(!settings.showsAssetLogos && !settings.checksForUpdatesAutomatically)
+        #expect(NativeAppSettings.migrate(.object(["updateCheck": .string("manual")])).checksForUpdatesAutomatically == false)
+    }
+
+    @Test func resetPreferencesKeepsThePrivacyChoices() {
+        let current = TaxValue.object([
+            "offlineMode": .bool(true), "updateCheck": .string("manual"), "adminMode": .bool(true),
+        ])
+        let reset = NativeSettingsDefaults.resetApp(keepingPrivacyOf: current)
+        #expect(reset["offlineMode"] == .bool(true) && reset["updateCheck"] == .string("manual"))
+        #expect(reset["adminMode"] == .bool(false) && reset["networkMarketData"] == .bool(true))
+    }
+
     @Test func numberFormatsUseTheWebLocales() {
         #expect(NumberFormat.eu.locale.identifier == "de_DE")
         #expect(NumberFormat.us.locale.identifier == "en_US")

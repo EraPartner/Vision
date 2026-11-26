@@ -743,14 +743,14 @@ public final class NativeShellModel {
 
     public var settingsSection: String? {
         guard let section = route.value("settings"),
-            ["general", "appearance", "statistics", "behavior", "ai", "backup", "about"].contains(section)
+            NativeNavigationHistory.settingsSections.contains(section)
         else { return nil }
         return section
     }
     public var isPresentingNativeSettings: Bool { nativeSettings != nil && settingsSection != nil }
     public func selectSettingsSection(_ section: String) {
         guard isPresentingNativeSettings,
-            ["general", "appearance", "statistics", "behavior", "ai", "backup", "about"].contains(section)
+            NativeNavigationHistory.settingsSections.contains(section)
         else { return }
         openNativeSettings(section: section)
     }
@@ -895,6 +895,8 @@ public final class NativeShellModel {
             analysisMonitors?.invalidate()
         }
         settings = next
+        // The shell's own requests (update checks, logos, news thumbnails) read this switch.
+        NetworkAccess.shared.setOffline(next.network.offlineMode)
         settingsLoaded = true
         initialSettingsLoadFailed = false
         settingsRevision &+= 1

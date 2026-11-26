@@ -1,7 +1,7 @@
 import Foundation
 
 enum NativeSettingsWindowSection: String, CaseIterable {
-    case general, appearance, statistics, behavior, ai, backup, about
+    case general, appearance, statistics, behavior, ai, privacy, backup, about
     var titleKey: String {
         switch self {
         case .general: "settings.tab.general"
@@ -9,6 +9,7 @@ enum NativeSettingsWindowSection: String, CaseIterable {
         case .statistics: "settings.section.statistics"
         case .behavior: "settings.section.behavior"
         case .ai: "settings.section.ai"
+        case .privacy: "settings.section.privacy"
         case .backup: "settings.tab.backup"
         case .about: "settings.section.about"
         }
@@ -20,6 +21,7 @@ enum NativeSettingsWindowSection: String, CaseIterable {
         case .statistics: "chart.bar"
         case .behavior: "arrow.triangle.branch"
         case .ai: "sparkles"
+        case .privacy: "hand.raised"
         case .backup: "externaldrive"
         case .about: "info.circle"
         }

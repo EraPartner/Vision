@@ -53,8 +53,12 @@ enum PricesArea {
     static let kinesisDefaultFromDate = "2019-01-01T08:47:55.843Z"
 
     static func register(
-        _ backend: inout InProcessBackend, database: BackendDatabase, service: PricesService
+        _ backend: inout InProcessBackend, database: BackendDatabase, service ungated: PricesService
     ) {
+        // Settings › Privacy (ADR-271): every provider request of the area is market data, refused
+        // while offline mode is on or market data is off.
+        let service = PricesService(
+            fetcher: NetworkPolicyFetcher(ungated.fetcher, source: .marketData, database: database))
         backend.serve(OpenAPIOperations.RefreshInvestmentPrices.self) { _ in
             try await refresh(database: database, service: service)
         }
@@ -537,6 +541,7 @@ enum PricesArea {
     static func fetchJSON(_ url: String, service: PricesService) async throws -> JSValue {
         var current = url
         for hop in 0...3 {
+            try await service.fetcher.preflight()
             _ = try URLSafety.assertPublicHTTP(current, resolve: service.fetcher.resolve)
             guard let fetchURL = URL(string: current),
                 let response = try? await service.fetcher.get(fetchURL, timeout: timeouts.custom)

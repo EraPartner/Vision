@@ -33,6 +33,7 @@ import { stringifyCell } from '../cellText.ts';
 import { forEachConcurrent } from '../../lib/concurrency.ts';
 import type { InvestmentRow, PricePoint } from '../../types/rows.ts';
 import { storedCurrencyCode } from '../../lib/currencyCode.ts';
+import { networkGate, policyFetch } from '../../lib/networkPolicy.ts';
 
 export type { InvestmentRow, PricePoint };
 
@@ -243,8 +244,11 @@ function _assertResponseWithinCap(
 async function _fetchJson(url: string): Promise<unknown> {
   let current = url;
   for (let hop = 0; hop <= CUSTOM_FETCH_MAX_REDIRECTS; hop += 1) {
+    // Settings › Privacy: refuse before the DNS lookup, not only before the GET.
+    const gate = networkGate('marketData');
+    if (gate) await gate;
     await assertPublicHttpUrl(current); // throws BlockedUrlError on private/loopback/non-http
-    const res = await fetch(current, {
+    const res = await policyFetch('marketData', current, {
       headers: { Accept: 'application/json' },
       redirect: 'manual',
       signal: AbortSignal.timeout(10_000),
@@ -517,7 +521,7 @@ export const PROVIDERS = {
 
     const prices: Record<string, LivePriceQuote> = {};
     try {
-      const res = await fetch('https://data-api.binance.vision/api/v3/ticker/price', {
+      const res = await policyFetch('marketData', 'https://data-api.binance.vision/api/v3/ticker/price', {
         headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(8_000),
       });
@@ -674,7 +678,7 @@ export const PROVIDERS = {
 
       try {
         const url = `${KINESIS_BASE_URL}?symbolIds=${encodeURIComponent(symbol)}&timeFrame=${timeframe}&fromDate=${fromDate}`;
-        const res = await fetch(url, {
+        const res = await policyFetch('marketData', url, {
           headers: { Accept: 'application/json' },
           signal: AbortSignal.timeout(15_000),
         });

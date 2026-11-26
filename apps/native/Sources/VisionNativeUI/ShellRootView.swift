@@ -435,10 +435,15 @@ struct NativeSidebar: View {
             await model.sidebarBadges?.run()
         }
         .task(id: model.route.path) { await model.sidebarBadges?.refresh() }
-        // `useUpdateStatus`: polled every five minutes on the same activity gate
-        // (`refetchInterval` is off while the document is hidden; `refetchOnWindowFocus`).
-        .task(id: scenePhase == .active && !UserPresence.shared.isAway) {
-            guard scenePhase == .active, !UserPresence.shared.isAway else { return }
+        // The automatic update check: at launch and then daily, on the same activity gate, and
+        // only while Settings › Privacy leaves it on and offline mode is off (ADR-271).
+        .task(
+            id: scenePhase == .active && !UserPresence.shared.isAway
+                && model.settings.checksForUpdatesAutomatically
+        ) {
+            guard scenePhase == .active, !UserPresence.shared.isAway,
+                model.settings.checksForUpdatesAutomatically
+            else { return }
             await model.updates?.run()
         }
     }

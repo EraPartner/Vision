@@ -18,6 +18,7 @@ import { withAppleFoundation } from "./appleFoundation.ts";
 import type { ProviderToolCall } from "./prompts.ts";
 import { errorMessage, isAbortError } from "../../lib/errors.ts";
 import { looseArray, parseOr } from "../../lib/looseJson.ts";
+import { aiEndpointGate } from "../../lib/networkPolicy.ts";
 
 export interface OllamaErrorOptions {
   status?: number | null;
@@ -375,7 +376,13 @@ function createOllamaClient({
   if (injectedFetch == null) {
     throw new OllamaError("No fetch implementation available");
   }
-  const fetchImpl = injectedFetch;
+  const rawFetch = injectedFetch;
+  // Settings › Privacy (ADR-271): offline mode and "AI on this Mac only"
+  // refuse an endpoint that is not loopback before any byte is sent.
+  const fetchImpl = ((...args: Parameters<typeof rawFetch>) => {
+    const gate = aiEndpointGate(baseUrl);
+    return gate ? gate.then(() => rawFetch(...args)) : rawFetch(...args);
+  }) as typeof rawFetch;
 
   const url = (path: string) => `${baseUrl}${path}`;
 

@@ -9,7 +9,25 @@ public enum NativeSettingsDefaults {
         "visualEffects": .string("standard"), "autoAdaptDisplay": .bool(true), "fullEffects": .string(FullEffectsChoice.auto.rawValue),
         "startupSection": .string("budgeting"),
         "autoClearPlannedOnMatch": .bool(true), "colorblindGainLoss": .bool(false), "assetLogos": .bool(false),
+        // Settings › Privacy (ADR-271).
+        "offlineMode": .bool(false), "networkExchangeRates": .bool(true), "networkInflation": .bool(true),
+        "networkMarketData": .bool(true), "priceRefresh": .string(PriceRefresh.hourly.rawValue),
+        "updateCheck": .string(UpdateCheck.daily.rawValue), "aiLocalOnly": .bool(false),
     ])
+    /// The Privacy pane's fields. Reset Preferences keeps them: resetting the look of the app
+    /// must not switch offline mode off or turn data sources back on.
+    public static let privacyKeys = [
+        "offlineMode", "networkExchangeRates", "networkInflation", "networkMarketData", "priceRefresh",
+        "updateCheck", "aiLocalOnly",
+    ]
+    /// `app` with the privacy fields of `current` carried over.
+    public static func resetApp(keepingPrivacyOf current: TaxValue?) -> TaxValue {
+        var reset = app
+        for key in privacyKeys {
+            if let value = current?[key] { reset[key] = value }
+        }
+        return reset
+    }
     public static let dashboard: TaxValue = .object([
         "excludedCategoryIds": .array([]), "excludedRecipientIds": .array([]),
         "excludeHiddenCategories": .bool(true), "exclusionScope": .string("everywhere"),
@@ -57,6 +75,8 @@ public enum NativeSettingsDefaults {
             "visualEffects": VisualEffects.allCases.map(\.rawValue),
             "startupSection": StartupSection.allCases.map(\.rawValue),
             "aiAnswerDepth": AIAnswerDepth.allCases.map(\.rawValue),
+            "priceRefresh": PriceRefresh.allCases.map(\.rawValue),
+            "updateCheck": UpdateCheck.allCases.map(\.rawValue),
         ]
         if let allowed = choices[key] { return value.stringValue.map(allowed.contains) == true ? value : app[key] }
         switch key {
@@ -66,7 +86,8 @@ public enum NativeSettingsDefaults {
         case "showDecimalPlaces": return integer(value).map { (0...20).contains($0) } == true ? value : app[key]
         case "fullEffects":
             return FullEffectsChoice(stored: value).map { .string($0.rawValue) } ?? app[key]
-        case "adminMode", "autoAdaptDisplay", "autoClearPlannedOnMatch", "colorblindGainLoss", "assetLogos":
+        case "adminMode", "autoAdaptDisplay", "autoClearPlannedOnMatch", "colorblindGainLoss", "assetLogos",
+            "offlineMode", "networkExchangeRates", "networkInflation", "networkMarketData", "aiLocalOnly":
             return value.boolValue != nil ? value : app[key]
         case "analysisBenchmark":
             guard let raw = value.stringValue, let symbol = ResearchCompareURLState.normalizeSymbol(raw),

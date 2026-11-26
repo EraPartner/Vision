@@ -64387,6 +64387,420 @@
         }
       }
     },
+    "settings.privacy.aiLocalOnly": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use AI on this Mac only"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI alleen op deze Mac gebruiken"
+          }
+        }
+      }
+    },
+    "settings.privacy.aiLocalOnlyHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refuses an Ollama server on another computer, so questions about your finances never leave this Mac. Ollama runs on this Mac unless OLLAMA_URL points elsewhere."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weigert een Ollama-server op een andere computer, zodat vragen over je financiën deze Mac nooit verlaten. Ollama draait op deze Mac, tenzij OLLAMA_URL ergens anders naar wijst."
+          }
+        }
+      }
+    },
+    "settings.privacy.exchangeRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wisselkoersen"
+          }
+        }
+      }
+    },
+    "settings.privacy.exchangeRatesHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "European Central Bank and open.er-api.com. Nothing about you or your money is sent."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Europese Centrale Bank en open.er-api.com. Er wordt niets over jou of je geld verstuurd."
+          }
+        }
+      }
+    },
+    "settings.privacy.inflation": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belgian inflation"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belgische inflatie"
+          }
+        }
+      }
+    },
+    "settings.privacy.inflationHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statbel and Eurostat. Nothing about you or your money is sent."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statbel en Eurostat. Er wordt niets over jou of je geld verstuurd."
+          }
+        }
+      }
+    },
+    "settings.privacy.marketData": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prices and research"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koersen en onderzoek"
+          }
+        }
+      }
+    },
+    "settings.privacy.marketDataHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yahoo Finance, Binance, Kinesis, your custom price addresses and the research providers. These requests contain the tickers of your holdings."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yahoo Finance, Binance, Kinesis, je eigen koersadressen en de onderzoeksbronnen. Deze verzoeken bevatten de tickers van je posities."
+          }
+        }
+      }
+    },
+    "settings.privacy.offlineBlocked": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline mode is on. Turn it off in Settings <> Privacy to go online."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offlinemodus staat aan. Zet hem uit in Instellingen <> Privacy om online te gaan."
+          }
+        }
+      }
+    },
+    "settings.privacy.offlineMode": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline mode"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offlinemodus"
+          }
+        }
+      }
+    },
+    "settings.privacy.offlineModeHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision sends nothing over the internet: no prices, exchange rates, inflation figures, research, update checks, logos or news images. Everything on this Mac keeps working, with prices and rates as last fetched. AI keeps working when Ollama runs on this Mac."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision verstuurt niets via het internet: geen koersen, wisselkoersen, inflatiecijfers, onderzoek, updatecontroles, logo's of nieuwsafbeeldingen. Alles op deze Mac blijft werken, met koersen en wisselkoersen zoals laatst opgehaald. AI blijft werken als Ollama op deze Mac draait."
+          }
+        }
+      }
+    },
+    "settings.privacy.priceRefresh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh prices automatically"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koersen automatisch vernieuwen"
+          }
+        }
+      }
+    },
+    "settings.privacy.priceRefresh.daily": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once a day"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eén keer per dag"
+          }
+        }
+      }
+    },
+    "settings.privacy.priceRefresh.hourly": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every hour"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elk uur"
+          }
+        }
+      }
+    },
+    "settings.privacy.priceRefresh.manual": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only when I refresh"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen als ik vernieuw"
+          }
+        }
+      }
+    },
+    "settings.privacy.priceRefreshHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How often Vision fetches your holdings' prices on its own. Refreshing by hand always works."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoe vaak Vision uit zichzelf de koersen van je posities ophaalt. Handmatig vernieuwen werkt altijd."
+          }
+        }
+      }
+    },
+    "settings.privacy.sources": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data sources"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gegevensbronnen"
+          }
+        }
+      }
+    },
+    "settings.privacy.sourcesHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision contacts a source only while its switch is on. Offline mode turns them all off."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision neemt alleen contact op met een bron als de schakelaar ervan aan staat. Offlinemodus zet ze allemaal uit."
+          }
+        }
+      }
+    },
+    "settings.privacy.updateCheck": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op updates controleren"
+          }
+        }
+      }
+    },
+    "settings.privacy.updateCheck.daily": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagelijks"
+          }
+        }
+      }
+    },
+    "settings.privacy.updateCheck.manual": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manually"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handmatig"
+          }
+        }
+      }
+    },
+    "settings.privacy.updateCheckHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asks GitHub for the latest release at launch and once a day. With Manually, Vision asks only when you press Check for updates in About & maintenance."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vraagt GitHub bij het opstarten en één keer per dag naar de nieuwste versie. Bij Handmatig vraagt Vision dat alleen als je op Controleren op updates drukt in Over & onderhoud."
+          }
+        }
+      }
+    },
+    "settings.privacy.updates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        }
+      }
+    },
     "settings.research.clear": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -65121,6 +65535,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gedrag"
+          }
+        }
+      }
+    },
+    "settings.section.privacy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
           }
         }
       }

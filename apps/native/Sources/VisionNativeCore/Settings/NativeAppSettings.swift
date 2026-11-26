@@ -60,6 +60,16 @@ public struct NativeAppSettings: Equatable, Sendable {
     /// `assetLogos` (Swift app only): load company and coin logos for the asset pages by ticker
     /// (`AssetLogoSource`). Off by default, so no logo host is contacted until the user opts in.
     public var assetLogos = false
+    /// Settings › Privacy (ADR-271): offline mode, the data-source switches, the price refresh
+    /// interval and AI on this Mac only. The Bun and Swift backends read the same fields.
+    public var network = NetworkPolicy.defaults
+    /// `updateCheck`: look for a new release once a day, or only when asked.
+    public var updateCheck: UpdateCheck = .daily
+
+    /// Logos are fetched only when the user turned them on and offline mode is off.
+    public var showsAssetLogos: Bool { assetLogos && !network.offlineMode }
+    /// The automatic update check runs only when it is on and offline mode is off.
+    public var checksForUpdatesAutomatically: Bool { updateCheck == .daily && !network.offlineMode }
 
     public init(
         defaultCurrency: CurrencyCode = .eur, dateFormat: AppDateFormat = .dayMonthYearSlash,
@@ -117,6 +127,10 @@ public struct NativeAppSettings: Equatable, Sendable {
         if let value = fields["adminMode"]?.boolValue { settings.adminMode = value }
         if let value = fields["colorblindGainLoss"]?.boolValue { settings.colorblindGainLoss = value }
         if let value = fields["assetLogos"]?.boolValue { settings.assetLogos = value }
+        settings.network = NetworkPolicy.read(bool: { fields[$0]?.boolValue }, string: { fields[$0]?.stringValue })
+        if let value = knownCase(fields["updateCheck"]?.stringValue, as: UpdateCheck.self) {
+            settings.updateCheck = value
+        }
         if let value = fields["defaultPageSize"]?.intValue, value > 0 { settings.defaultPageSize = value }
         if let value = fields["analysisBenchmark"]?.stringValue {
             let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()

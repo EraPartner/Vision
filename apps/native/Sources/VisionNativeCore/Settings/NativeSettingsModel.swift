@@ -364,12 +364,13 @@ public final class NativeSettingsModel {
     }
     public func resetPreferences() async {
         guard !retired, !isSuspendedForRestore else { return }
-        appRaw = NativeSettingsDefaults.app
+        let app = NativeSettingsDefaults.resetApp(keepingPrivacyOf: appRaw)
+        appRaw = app
         dashboardRaw = NativeSettingsDefaults.dashboard
         sessionTierOverride = nil
-        changed(.appSettings, NativeSettingsDefaults.app)
+        changed(.appSettings, app)
         changed(.dashboardSettings, NativeSettingsDefaults.dashboard)
-        didChangeApp?(NativeSettingsDefaults.app)
+        didChangeApp?(app)
         didChangeDashboard?(NativeSettingsDefaults.dashboard)
         includeTransfers = false
         editRevision[.includeTransfers, default: 0] += 1

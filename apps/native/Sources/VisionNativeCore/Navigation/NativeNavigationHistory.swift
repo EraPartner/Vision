@@ -147,7 +147,7 @@ public struct NativeNavigationHistory: Sendable {
     }
 
     public static let settingsSections: Set<String> = [
-        "general", "appearance", "statistics", "behavior", "ai", "backup", "about",
+        "general", "appearance", "statistics", "behavior", "ai", "privacy", "backup", "about",
     ]
 
     private static func isSettingsOpen(_ location: NativeNavigationLocation) -> Bool {

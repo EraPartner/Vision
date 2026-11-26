@@ -25,6 +25,7 @@ import type {
   HistoricalRateIndex,
   RateTable,
 } from "../../types/rows.ts";
+import { policyFetch } from "../../lib/networkPolicy.ts";
 
 /** A parsed ECB history feed: 'YYYY-MM-DD' → that day's rate table. */
 export type RatesByDate = Map<string, RateTable>;
@@ -170,7 +171,7 @@ const erApiResponseSchema = z.looseObject({
  */
 export async function fetchFromEcb(): Promise<RateTable | null> {
   try {
-    const response = await fetch(ECB_LATEST_URL, {
+    const response = await policyFetch("exchangeRates", ECB_LATEST_URL, {
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) {
@@ -199,7 +200,7 @@ export async function fetchFromEcb(): Promise<RateTable | null> {
  */
 export async function fetchFromErApi(): Promise<RateTable | null> {
   try {
-    const response = await fetch(ERAR_LATEST_URL, {
+    const response = await policyFetch("exchangeRates", ERAR_LATEST_URL, {
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) {
@@ -250,7 +251,7 @@ async function fetchHistoricalFromEcb90d(): Promise<RatesByDate> {
     return historicalEcb90dCache.byDate;
   }
   try {
-    const response = await fetch(ECB_HISTORY_90D_URL, {
+    const response = await policyFetch("exchangeRates", ECB_HISTORY_90D_URL, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return new Map();
@@ -278,7 +279,7 @@ export async function fetchHistoricalFromEcbFull(): Promise<RatesByDate> {
     return historicalEcbFullCache.byDate;
   }
   try {
-    const response = await fetch(ECB_HISTORY_FULL_URL, {
+    const response = await policyFetch("exchangeRates", ECB_HISTORY_FULL_URL, {
       signal: AbortSignal.timeout(30000),
     });
     if (!response.ok) return new Map();

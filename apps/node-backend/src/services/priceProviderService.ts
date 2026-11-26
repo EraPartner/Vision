@@ -52,6 +52,7 @@ import {
 import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
 import { errorMessage } from "../lib/errors.ts";
+import { networkGate, policyFetch } from "../lib/networkPolicy.ts";
 
 export type { InvestmentRow, PricePoint };
 
@@ -353,7 +354,7 @@ async function _fetchBinanceKlines(
       "https://data-api.binance.vision/api/v3/klines" +
       `?symbol=${encodeURIComponent(binanceSymbol)}` +
       `&interval=1d&startTime=${cursor}&endTime=${end}&limit=${BINANCE_PAGE_LIMIT}`;
-    const res = await fetch(url, {
+    const res = await policyFetch("marketData", url, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(8_000),
     });
@@ -607,7 +608,7 @@ export async function fetchHistoricalPrices(
     if (!points) {
       try {
         const url = `${(await import("../config/kinesisConfig.ts")).KINESIS_BASE_URL}?symbolIds=${encodeURIComponent(symbol)}&timeFrame=${timeframe}&fromDate=${fromDate}`;
-        const res = await fetch(url, {
+        const res = await policyFetch("marketData", url, {
           headers: { Accept: "application/json" },
           signal: AbortSignal.timeout(15_000),
         });
@@ -707,8 +708,11 @@ export async function fetchHistoricalPrices(
       let url = config.historyUrl;
       let res: Response;
       for (let hop = 0; ; hop += 1) {
+        // Settings › Privacy: refuse before the DNS lookup, not only before the GET.
+        const gate = networkGate("marketData");
+        if (gate) await gate;
         await assertPublicHttpUrl(url);
-        res = await fetch(url, {
+        res = await policyFetch("marketData", url, {
           headers: { Accept: "application/json" },
           redirect: "manual",
           signal: AbortSignal.timeout(10_000),

@@ -2,7 +2,7 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-10-28
+date: 2026-11-26
 updated: 2026-10-28
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
@@ -441,7 +441,7 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 - **No stored rates at all**: Only EUR amounts convert; the FX status banner reports it
 
 **Startup Behavior When Offline (May 2026):**
-During server startup, a network reachability probe determines if the host has internet connectivity. When offline is detected:
+During server startup, `isInternetReachable()` decides if the host is online (offline mode or no routable interface address reads as offline; nothing is sent, [[docs/adr/271-privacy-settings-network-policy|ADR-271]]). The warmup and backfill are also skipped while Settings › Privacy turns exchange rates off. When offline:
 
 - **Exchange rate cache warmup skipped**: `warmExchangeRateCache()` is not called
 - **Portfolio historical FX backfill skipped**: `backfillPortfolioHistoricalRates()` is not called
@@ -449,7 +449,7 @@ During server startup, a network reachability probe determines if the host has i
 - **Cached/DB rates**: In-memory cache (24h TTL) + database; no built-in rates
 - **Faster readiness**: `/health/detailed` ready status reached ~15 seconds sooner
 
-Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
+Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReachable()` returns false or the exchange-rate source is off. ECB and open.er-api.com requests go through `policyFetch("exchangeRates", …)`.
 
 ---
 

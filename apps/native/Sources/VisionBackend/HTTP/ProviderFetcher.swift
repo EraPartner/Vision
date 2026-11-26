@@ -25,6 +25,13 @@ public struct ProviderResponse: Sendable, Equatable {
 /// `AbortSignal.timeout` does. Tests and the parity replay pass recorded answers.
 public protocol ProviderFetching: Sendable {
     func get(_ url: URL, timeout: TimeInterval) async throws -> ProviderResponse
+    /// Throws when a request may not be made at all (Settings › Privacy), before the caller
+    /// resolves a host name: `assertNetworkAllowed` ahead of `assertPublicHttpUrl`.
+    func preflight() async throws
+}
+
+extension ProviderFetching {
+    public func preflight() async throws {}
 }
 
 /// The fetcher the app uses: an ephemeral `URLSession` with no cookies or cache, like

@@ -6,7 +6,7 @@ struct NativeSettingsWindowNavigationTests {
     @Test func sectionKeysRetainSourceRoutesAndOrder() {
         #expect(
             NativeSettingsWindowSection.allCases.map(\.rawValue) == [
-                "general", "appearance", "statistics", "behavior", "ai", "backup", "about",
+                "general", "appearance", "statistics", "behavior", "ai", "privacy", "backup", "about",
             ])
         #expect(NativeSettingsWindowSection(rawValue: "insights") == nil)
         #expect(NativeSettingsWindowSection(rawValue: "statistics")?.titleKey == "settings.section.statistics")

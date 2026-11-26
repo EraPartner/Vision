@@ -2,7 +2,7 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-11-03
+date: 2026-11-26
 last_modified: 2026-11-03
 updated: 2026-11-03
 tags:
@@ -257,7 +257,7 @@ Each fallback source is tracked in the refresh response as `priceSources: Record
 This makes graceful offline degradation visible without blocking the user.
 
 **Startup Behavior When Offline (May 2026):**
-During server startup, before any price refresh attempts, a network reachability probe (TCP to 1.1.1.1:443, 1.5s timeout) determines if the host has internet connectivity. When the probe detects offline status:
+During server startup, before any price refresh attempts, `isInternetReachable()` decides if the host is online. Since [[docs/adr/271-privacy-settings-network-policy|ADR-271]] it sends nothing: offline mode or no routable interface address reads as offline. The startup refresh is also skipped when Settings › Privacy turns market data off or sets `priceRefresh` to `manual`. When offline:
 
 - **Startup refresh skipped**: `refreshInvestmentPricesOnStartup()` is not called
 - **Historical backfill skipped**: `backfillHistoricalAssetQuotes()` is not called
@@ -265,7 +265,7 @@ During server startup, before any price refresh attempts, a network reachability
 - **Cached/DB fallback**: Snapshots and info endpoints use existing stored `current_price` and `asset_price_history` rows
 - **Faster readiness**: `/health/detailed` ready status reached ~15 seconds sooner when offline
 
-Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
+Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves when `isInternetReachable()` returns false, when market data is off, or when `priceRefresh` is `manual`; with `daily` the hourly tick runs the `price_refresh` daily job instead. Every price-provider request goes through `policyFetch("marketData", …)` and is refused while market data is off or offline mode is on.
 
 **Startup Delay and Yahoo Timeout (Oct 2026):**
 

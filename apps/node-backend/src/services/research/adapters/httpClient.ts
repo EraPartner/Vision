@@ -7,6 +7,8 @@
  * price-provider fetch safety.
  */
 
+import { policyFetch } from '../../../lib/networkPolicy.ts';
+
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -17,7 +19,7 @@ export async function getJson(
   url: string,
   { timeoutMs = DEFAULT_TIMEOUT_MS }: { timeoutMs?: number } = {},
 ): Promise<unknown> {
-  const res = await fetch(url, {
+  const res = await policyFetch('marketData', url, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: { accept: 'application/json' },
   });

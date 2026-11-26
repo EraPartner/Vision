@@ -28,6 +28,7 @@ import { requestId } from "./middleware/requestId.ts";
 import { requestMetrics } from "./middleware/requestMetrics.ts";
 import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.ts";
 import { runWarmupTasks, type WarmupStatus } from "./startup/warmup.ts";
+import { installNetworkGuard } from "./lib/networkPolicy.ts";
 import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.ts";
 
 // Blocks cross-site requests of every method (browser CSRF, ADR-237), which the loopback
@@ -437,6 +438,9 @@ async function start() {
     const endMig = bootMark("run_migrations");
     await runMigrations(settings.database.path);
     endMig();
+    // Settings › Privacy (ADR-271): enforce offline mode on every outbound
+    // fetch from here on, reading the policy from app_settings.
+    installNetworkGuard();
     if (!(await checkConnection())) {
       throw new Error(`Failed to open the database at ${settings.database.path}`);
     }

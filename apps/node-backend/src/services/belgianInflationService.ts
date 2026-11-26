@@ -13,6 +13,7 @@ import { looseString } from "../lib/looseString.ts";
 import { parseOr } from "../lib/looseJson.ts";
 
 import type { BelgianInflationRate } from "../types/rows.ts";
+import { assertNetworkAllowed } from "../lib/networkPolicy.ts";
 
 export type { BelgianInflationRate };
 
@@ -604,6 +605,9 @@ async function fetchFromEurostat(): Promise<BelgianInflationRate[]> {
 }
 
 async function fetchExternalInflationRates() {
+  // Settings › Privacy: a blocked source is not a provider failure, so it is
+  // neither retried nor recorded against Statbel/Eurostat health.
+  await assertNetworkAllowed("inflation");
   try {
     const rates = await fetchFromStatbel();
     void recordProviderSuccess("statbel");
