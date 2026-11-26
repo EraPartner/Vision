@@ -25,26 +25,26 @@ enum MultipartParts {
             let body
         else { return nil }
         let bytes = [UInt8](body)
-        let delimiter: [UInt8] = Array("--\(boundary)".utf8)
+        let delimiterBytes: [UInt8] = Array("--\(boundary)".utf8)
 
-        func delimiter(at index: Int) -> Bool {
-            guard index + delimiter.count <= bytes.count else { return false }
-            for (offset, byte) in delimiter.enumerated() where bytes[index + offset] != byte { return false }
+        func isDelimiter(at index: Int) -> Bool {
+            guard index + delimiterBytes.count <= bytes.count else { return false }
+            for (offset, byte) in delimiterBytes.enumerated() where bytes[index + offset] != byte { return false }
             return true
         }
         var marks: [Int] = []
         var cursor = 0
         while cursor < bytes.count {
-            if delimiter(at: cursor) {
+            if isDelimiter(at: cursor) {
                 marks.append(cursor)
-                cursor += delimiter.count
+                cursor += delimiterBytes.count
             } else {
                 cursor += 1
             }
         }
         var parts: [Part] = []
         for (index, mark) in marks.enumerated() {
-            let start = mark + delimiter.count
+            let start = mark + delimiterBytes.count
             // The closing `--boundary--`: nothing follows it.
             guard index + 1 < marks.count else { break }
             var blockStart = start
