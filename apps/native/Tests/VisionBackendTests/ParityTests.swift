@@ -112,6 +112,10 @@ import VisionNativeCore
             guard let stub = stubs.withLock({ $0[url.absoluteString] }) else { throw Unreachable(url: url) }
             return ProviderResponse(status: stub.status, body: Data(stub.body.utf8))
         }
+
+        /// The SSRF guard's DNS lookup: the recorded host stood for a public address the day the
+        /// corpus recorded (`example.com`), so the replay pins the same fact without a network.
+        func resolve(_ host: String) throws -> [String] { ["93.184.216.34"] }
     }
 
     /// The recorder's `APP_TIMEZONE`; `{{today}}` in a response is that zone's today.
@@ -418,7 +422,7 @@ import VisionNativeCore
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
         "recipients-mutations", "transactions-mutations", "planned-mutations", "importParsers-mutations",
         "importReview-mutations", "importUploads-mutations", "investments-mutations",
-        "portfolio-transactions-mutations",
+        "portfolio-transactions-mutations", "prices-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
