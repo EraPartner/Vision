@@ -1477,7 +1477,7 @@ enum ImportUploadsArea {
                    FROM (SELECT j.value ->> 0 AS id, j.value ->> 1 AS category_id
                            FROM json_each(?) AS j) AS u
                  WHERE recipients.id = u.id AND recipients.default_category_id IS NULL
-                """
+                """,
                 [.text(updates)])
         }
         for outcome in outcomes {
