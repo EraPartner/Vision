@@ -19,7 +19,7 @@ enum PortfolioTransactionsArea {
             let id = try InvestmentsArea.pathId(request)
             let body = RequestBody.parseJavaScript(request.body)
             return try await database.run { session in
-                try Self.create(session, id, body)
+                try Self.create(session, Int(id.rawValue), body)
             }
         }
         backend.serve(OpenAPIOperations.UpdatePortfolioTransaction.self) { request in
@@ -203,7 +203,7 @@ enum PortfolioTransactionsArea {
         var dividendAmountConvention: String?
         var currency: JSValue?
         var fxRateToEur: JSValue?
-        var note: JSValue?
+        var note: String?
         var isRecurring: Bool?
         var recurrenceInterval: String?
         var recurrenceEndDate: String?
@@ -263,8 +263,9 @@ enum PortfolioTransactionsArea {
         }
         out.recurrenceInterval = recurrenceField(object["recurrence_interval"], &issues)
         if object["recurrence_end_date"] != nil {
-            hasRecurrenceEndDate = true
-            recurrenceEndDay = dateField(object["recurrence_end_date"], "recurrence_end_date", true, &issues)
+            out.hasRecurrenceEndDate = true
+            out.recurrenceEndDay = dateField(
+                object["recurrence_end_date"], "recurrence_end_date", true, &issues)
         }
         out.accountId = object["account_id"]
         if !issues.isEmpty { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
@@ -465,7 +466,7 @@ extension PortfolioTransactionsArea {
             case .transferOut, .assetFee, .unitReversal:
                 net = net.minus(units)
             case .sell:
-                net = PortfolioCore.max(DecimalJS.zero, net.minus(units))
+                net = DecimalJS.max(DecimalJS.zero, net.minus(units))
             case .split where units.gt(.zero) && net.gt(.zero):
                 net = units
             default:
@@ -567,7 +568,7 @@ extension PortfolioTransactionsArea {
                 incomeRecognitionRole: incomeRecognitionRole,
                 accountId: accountId, sourceAccountId: sourceAccountId,
                 destinationAccountId: destinationAccountId,
-                feeUnits: feeUnits.map { PortfolioCore.Numeric.text($0) },
+                feeUnits: feeUnits.map { PortfolioCore.Numeric.text($0) } ?? .null,
                 adjustmentKind: adjustmentKind, basisPolicy: basisPolicy,
                 eligibleSourceRecordHashes: eligibleSourceRecordHashes,
                 sourceRecordHash: sourceRecordHash, currency: currency)
@@ -659,7 +660,7 @@ extension PortfolioTransactionsArea {
         if mutation.investmentId == 0 || (!mutation.omitCandidate && mutation.date == nil) { return }
 
         let rows = try unitEvents(session, mutation.investmentId)
-        let excluded: Set<Double> = [mutation.excludeTransactionId.map(Double.init)].compactMap { $0 }
+        let excluded = Set([mutation.excludeTransactionId].compactMap { $0 }.map(Double.init))
         let custodyTypes: Set<String> = ["asset_transfer", "asset_adjustment"]
         let retained = rows.filter { custodyTypes.contains($0.type) || !excluded.contains($0.id) }
 
@@ -1050,9 +1051,9 @@ extension PortfolioTransactionsArea {
                 "For buy/sell transaction updates, provide at least two of amount, units, and price_per_unit")
         }
 
-        var normalizationInputAmount = mergedAmount
-        var normalizationInputUnits = mergedUnits
-        var normalizationInputPrice = mergedPrice
+        var normalizationInputAmount: JSValue? = mergedAmount
+        var normalizationInputUnits: JSValue? = mergedUnits
+        var normalizationInputPrice: JSValue? = mergedPrice
         // The 2-of-3 patch re-derives the missing unit-math field from scratch.
         if appliesUnitMath && patchCount == 2 {
             if txn.amount == nil { normalizationInputAmount = nil }
@@ -1355,7 +1356,7 @@ extension PortfolioTransactionsArea {
                 incomeRecognitionRole: incomeRecognitionRole,
                 accountId: accountId, sourceAccountId: sourceAccountId,
                 destinationAccountId: destinationAccountId,
-                feeUnits: feeUnits.map { PortfolioCore.Numeric.text($0) },
+                feeUnits: feeUnits.map { PortfolioCore.Numeric.text($0) } ?? .null,
                 adjustmentKind: adjustmentKind, basisPolicy: basisPolicy,
                 eligibleSourceRecordHashes: eligibleSourceRecordHashes,
                 sourceRecordHash: sourceRecordHash, currency: currency)
@@ -1445,7 +1446,7 @@ extension PortfolioTransactionsArea {
     /// `retagPortfolioTransactions`: the compare-and-set write with both history guards.
     static func retag(_ session: BackendSession, _ body: JSValue?) throws -> HandlerResult {
         let request = try parseRetagBody(body)
-        let receipt = try session.transaction { () throws -> [String: JSONValue] in
+        let receipt = try session.transaction { () throws -> JSONValue in
             let ids = request.transactionIds.sorted()
             // The destination must be an active portfolio account.
             if let to = request.toAccountId {
@@ -1486,8 +1487,8 @@ extension PortfolioTransactionsArea {
                     status: 409, code: "CONFLICT",
                     message: "selected portfolio transactions are missing or no longer have"
                         + " the expected broker assignment",
-                    details: .object(JSObject([("stale_transaction_ids",
-                        .array(staleIds.map { JSONValue.int($0) }))])))
+                    details: .object([
+                        "stale_transaction_ids": .array(staleIds.map { JSONValue.int($0) })]))
             }
 
             // The histories and rates the guards replay.
@@ -1502,7 +1503,7 @@ extension PortfolioTransactionsArea {
 
             var changedIds: [Int] = []
             if request.fromAccountId != request.toAccountId {
-                let idsJson = JSONValue.array(ids.map { JSONValue.int($0) })
+                let idsJson = "[" + ids.map(String.init).joined(separator: ",") + "]"
                 var selectSql = "UPDATE portfolio_transactions SET account_id = ?"
                 var arguments: [SQLValue] = [request.toAccountId.map { SQLValue.integer(Int64($0)) } ?? .null]
                 if ids.count == 1 {
@@ -1510,7 +1511,7 @@ extension PortfolioTransactionsArea {
                     arguments.append(.integer(Int64(ids[0])))
                 } else {
                     selectSql += " WHERE id IN (SELECT value FROM json_each(?))"
-                    arguments.append(.text(idsJson.jsonText))
+                    arguments.append(.text(idsJson))
                 }
                 if let from = request.fromAccountId {
                     selectSql += " AND account_id = ?"
@@ -1527,28 +1528,28 @@ extension PortfolioTransactionsArea {
             }
             return receiptJson(request, ids, request.fromAccountId, changedIds.count, false)
         }
-        return HandlerResult(data: .object(receipt))
+        return HandlerResult(data: receipt)
     }
 
     static func receiptJson(
         _ request: RetagRequest, _ ids: [Int], _ previousAccountId: Int?,  // lint:allow raw-id business table ids of the TypeScript route and repository reads
         _ changedCount: Int, _ replayed: Bool
-    ) -> [String: JSONValue] {
-        [
+    ) -> JSONValue {
+        .object([
             "idempotency_key": .string(request.idempotencyKey),
             "from_account_id": request.fromAccountId.map { JSONValue.int($0) } ?? .null,
             "to_account_id": request.toAccountId.map { JSONValue.int($0) } ?? .null,
             "transaction_ids": .array(ids.map { JSONValue.int($0) }),
             "previous_assignments": .array(ids.map { id in
                 .object([
-                    ("transaction_id", .int(id)),
-                    ("account_id", previousAccountId.map { JSONValue.int($0) } ?? .null),
+                    "transaction_id": .int(id),
+                    "account_id": previousAccountId.map { JSONValue.int($0) } ?? .null,
                 ])
             }),
             "selected_count": .int(ids.count),
             "changed_count": .int(changedCount),
             "replayed": .bool(replayed),
-        ]
+        ])
     }
 }
 
@@ -1691,9 +1692,9 @@ extension PortfolioTransactionsArea {
                 isSelectedRetagRow(row, selectedIds)
                     ? row.withAccountId(toAccountId.map(Double.init)) : row
             }
-            let before = try PortfolioCore.partitionOversellDeficits(beforeRows.map { $0.txn(nil) })
-            try validateRetagAssetTransferHistory(afterRows.map { $0.txn(nil) })
-            let after = try PortfolioCore.partitionOversellDeficits(afterRows.map { $0.txn(nil) })
+            let before = try PortfolioCore.partitionOversellDeficits(beforeRows.map { $0.txn(fxMultiplier: nil) })
+            try validateRetagAssetTransferHistory(afterRows.map { $0.txn(fxMultiplier: nil) })
+            let after = try PortfolioCore.partitionOversellDeficits(afterRows.map { $0.txn(fxMultiplier: nil) })
             for (accountId, deficit) in after {
                 if deficit - (before[accountId] ?? 0) > epsilon {
                     throw BackendHTTPError.validation(
@@ -1732,9 +1733,9 @@ extension PortfolioTransactionsArea {
                 interestRate: .text(beforeRows.first?.interestRate ?? "0"))
             let options = PortfolioCore.Options(costBasisMethod: method, todayYmd: todayYmd)
             let before = try PortfolioCore.buildInvestmentSummaryCorePartitioned(
-                investment, beforeRows.map { $0.txn(nil) }, opts: options).core
+                investment, beforeRows.map { $0.txn(fxMultiplier: nil) }, opts: options).core
             let after = try PortfolioCore.buildInvestmentSummaryCorePartitioned(
-                investment, afterRows.map { $0.txn(nil) }, opts: options).core
+                investment, afterRows.map { $0.txn(fxMultiplier: nil) }, opts: options).core
             func drifted(_ afterValue: DecimalJS, _ beforeValue: DecimalJS, _ field: String) throws {
                 if afterValue.minus(beforeValue).abs.gt(epsilonDecimal) {
                     throw BackendHTTPError.validation(
@@ -1772,7 +1773,7 @@ extension PortfolioTransactionsArea {
                                 "re-tag cannot verify \(target) cost basis for investment"
                                 + " \(investmentId)")
                         }
-                        return row.txn(SQLArguments.javaScriptText(fxMultiplier))
+                        return row.txn(fxMultiplier: SQLArguments.javaScriptText(fxMultiplier))
                     }
                 }
                 let beforeTarget = try PortfolioCore.buildInvestmentSummaryCorePartitioned(
