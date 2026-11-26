@@ -520,7 +520,7 @@ enum ImportUploadsArea {
             """
             INSERT INTO import_batches (adapter_name, source_filename, source_size_bytes, custom_config,
                                          status, started_at)
-            VALUES (?, ?, ?, ?, 'pending', NOW()) RETURNING id
+            VALUES (?, ?, ?, vision_jsonb(?), 'pending', NOW()) RETURNING id
             """,
             [
                 .text(adapterName),
