@@ -71,13 +71,14 @@ struct YahooClient: Sendable {
             .joined(separator: "&")
         let urlString = "https://\(Self.queryHost)/v8/finance/chart/\(symbol)?\(query)"
 
-        guard let url = URL(string: urlString), let response = try await fetcher.get(url, timeout: Self.fetchTimeout)
+        guard let url = URL(string: urlString),
+            let response = try? await fetcher.get(url, timeout: Self.fetchTimeout)
         else { throw YahooError("fetch failed: \(urlString)") }
-        guard let body = JSValue.parse(response.body)?.objectValue,
-            let chartBody = body["chart"]?.objectValue,
-            let chart = chartBody["result"]?.arrayValue?.first
-        else {
-            throw YahooError("Unexpected result: \(body["chart"].map { $0.jsonText } ?? "undefined")")
+        guard let body = JSValue.parse(response.body)?.objectValue, let chartBody = body["chart"]?.objectValue else {
+            throw YahooError("Unexpected result: undefined")
+        }
+        guard let chart = chartBody["result"]?.arrayValue?.first else {
+            throw YahooError("Unexpected result: \(body["chart"]?.jsonText ?? "undefined")")
         }
 
         // The module's result transform: no timestamp means exactly one empty quote object
@@ -123,17 +124,24 @@ struct YahooClient: Sendable {
         guard let crumbURL = URL(string: "https://finance.yahoo.com/quote/AAPL") else {
             throw YahooError("the crumb URL is not a URL")
         }
-        _ = try await fetcher.get(crumbURL, timeout: Self.fetchTimeout)
+        do {
+            _ = try await fetcher.get(crumbURL, timeout: Self.fetchTimeout)
+        } catch let error as YahooError {
+            throw error
+        } catch {
+            // The crumb chase's failure surfaces as the module's own fetch error would.
+            throw YahooError("Could not get crumb")
+        }
         guard let url = URL(
             string: "https://\(Self.queryHost)/v7/finance/quote?symbols=\(Self.formEncoded(symbols.joined(separator: ",")))"
-        ), let response = try await fetcher.get(url, timeout: Self.fetchTimeout)
+        ), let response = try? await fetcher.get(url, timeout: Self.fetchTimeout)
         else { throw YahooError("quote fetch failed") }
         guard let body = JSValue.parse(response.body)?.objectValue else {
             throw YahooError("Unexpected result: undefined")
         }
         guard let results = body["quoteResponse"]?.objectValue?["result"]?.arrayValue else {
-            throw YahooError("Unexpected result: \(body["quoteResponse"].map { $0.jsonText } ?? "undefined")")
+            throw YahooError("Unexpected result: \(body["quoteResponse"]?.jsonText ?? "undefined")")
         }
-        return .array(results.filter { $0.objectValue?["quoteType"] != .string("NONE") })
+        return .array(results.filter { $0.objectValue?["quoteType"] != JSValue.string("NONE") })
     }
 }

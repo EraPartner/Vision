@@ -50,11 +50,11 @@ enum URLSafety {
     static func isBlockedIPv6(_ ip: String) -> Bool {
         let addr = ip.lowercased().split(separator: "%").first.map(String.init) ?? ""
         if addr == "::1" || addr == "::" { return true }  // lint:allow string-literal-compare the blocked address literals, as TypeScript reads them
-        let tail = Array(addr.hasPrefix("::ffff:") ? addr.dropFirst(7).utf8 : [])
-        if !tail.isEmpty,
-            tail.allSatisfy({ (48...57).contains($0) || $0 == UInt8(ascii: ".") })
+        let mapped = addr.hasPrefix("::ffff:") ? addr.dropFirst(7) : ""
+        if !mapped.isEmpty,
+            mapped.allSatisfy({ (48...57).contains($0.utf8.first ?? 0) || $0 == "." })  // lint:allow string-literal-compare the dotted-quad characters, as TypeScript's regex reads them
         {
-            return isBlockedIPv4(String(decoding: tail, as: UTF8.self))
+            return isBlockedIPv4(String(mapped))
         }
         if addr.hasPrefix("fc") || addr.hasPrefix("fd") { return true }
         if addr.hasPrefix("fe8") || addr.hasPrefix("fe9") || addr.hasPrefix("fea") || addr.hasPrefix("feb") {

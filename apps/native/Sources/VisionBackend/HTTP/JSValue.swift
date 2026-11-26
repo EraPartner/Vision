@@ -90,6 +90,11 @@ extension JSValue {
         return nil
     }
 
+    var arrayValue: [JSValue]? {
+        if case .array(let items) = self { return items }
+        return nil
+    }
+
     var stringValue: String? {
         if case .string(let text) = self { return text }
         return nil

@@ -159,7 +159,7 @@ enum PricesArea {
         // One instant for the whole refresh, as the recorder's `setSystemTime` pinned it.
         let now = try await database.run { session -> (text: String, ms: Int64) in
             let instant = session.currentInstant()
-            return (SQLTimestamps.formatInstant(instant), instant.ms)
+            return (try SQLTimestamps.formatInstant(instant), instant.ms)
         }
         let nowMs = Double(now.ms)
         let detailed = await livePricesDetailed(
@@ -182,6 +182,7 @@ enum PricesArea {
         }
         var updated = 0
         if !rowsJSON.isEmpty {
+            let rows = "[\(rowsJSON)]"
             updated = try await database.run { session in
                 _ = try session.rows(
                     """
@@ -189,7 +190,7 @@ enum PricesArea {
                     price_updated_at = vision_ts(u.value ->> 'price_updated_at'), updated_at = now() \
                     FROM json_each(?) AS u WHERE investments.id = u.value ->> 'id'
                     """,
-                    [.text("[\(rowsJSON)]")])
+                    [.text(rows)])
                 return Int(try session.row("SELECT changes()")?.int64("changes()") ?? 0)
             }
         }
@@ -199,7 +200,7 @@ enum PricesArea {
             ("prices", .object(pricesJSON)),
             ("priceSources", .object(priceSourcesJSON)),
         ])
-        return HandlerResult(data: .object(body).envelopeValue)
+        return HandlerResult(data: JSValue.object(body).envelopeValue)
     }
 
     // MARK: - fetchLivePricesDetailed
@@ -280,7 +281,7 @@ enum PricesArea {
                         now: now)
                 }
             }
-            recordHealth(database, "binance", succeeded: true, message: "")
+            await recordHealth(database, "binance", succeeded: true, message: "")
         }
         if !staleYahoo.isEmpty {
             let quotes = await yahooQuotes(over: staleYahoo, now: now, service: service)
@@ -295,7 +296,7 @@ enum PricesArea {
                         now: now)
                 }
             }
-            recordHealth(database, "yahoo", succeeded: true, message: "")
+            await recordHealth(database, "yahoo", succeeded: true, message: "")
         }
         if !staleCustom.isEmpty {
             let quotes = await customQuotes(over: staleCustom, service: service)
@@ -318,7 +319,7 @@ enum PricesArea {
                         PricesService.Payload(price: quote.price, points: nil, source: "live"), now: now)
                 }
             }
-            recordHealth(database, "kinesis", succeeded: true, message: "")
+            await recordHealth(database, "kinesis", succeeded: true, message: "")
         }
 
         // The stored-price tier, then the offline fallback.
@@ -328,11 +329,9 @@ enum PricesArea {
                 results.set(investment.id, price: cachedPrice, source: "cached")
             }
         }
-        var fallbackIDs: [Int] = []  // lint:allow raw-id as above
-        for investment in investments
-        where results[investment.id] == nil && investment.providerOrManual != "manual" {
-            fallbackIDs.append(investment.id)
-        }
+        let fallbackIDs: [Int] = investments.filter {  // lint:allow raw-id as above
+            results[$0.id] == nil && $0.providerOrManual != "manual"
+        }.map { $0.id }
         if !fallbackIDs.isEmpty {
             let latest = try? await database.run { session in
                 try latestStoredPoints(session, fallbackIDs)
@@ -350,8 +349,8 @@ enum PricesArea {
     /// failed fetch, is only logged there.
     static func recordHealth(
         _ database: BackendDatabase, _ provider: String, succeeded: Bool, message: String
-    ) {
-        _ = try? database.run { session in
+    ) async {
+        _ = try? await database.run { session in
             try recordProviderHealth(session, provider, succeeded: succeeded, message: message)
         }
     }
@@ -540,7 +539,7 @@ enum PricesArea {
         for hop in 0...3 {
             _ = try URLSafety.assertPublicHTTP(current, resolve: service.fetcher.resolve)
             guard let fetchURL = URL(string: current),
-                let response = try await service.fetcher.get(fetchURL, timeout: timeouts.custom)
+                let response = try? await service.fetcher.get(fetchURL, timeout: timeouts.custom)
             else { throw UpstreamError(message: "fetch failed: \(current)") }
             if (300..<400).contains(response.status) {
                 guard let location = response.headers["location"] else {
@@ -586,7 +585,7 @@ enum PricesArea {
     ) async throws -> HandlerResult {
         let id = try InvestmentsArea.pathId(request)
         let investment = try await database.run { session in
-            try investment(session, id)
+            try PricesArea.investment(session, id)
         }
         guard let investment else { throw BackendHTTPError.notFound("Investment not found") }
 
@@ -792,7 +791,7 @@ enum PricesArea {
             let url = "\(binanceBase)/api/v3/klines?symbol=\(requestEncoded(symbol))&interval=1d"
                 + "&startTime=\(SQLArguments.javaScriptText(cursor))&endTime=\(SQLArguments.javaScriptText(end))&limit=1000"
             guard let fetchURL = URL(string: url),
-                let response = try await service.fetcher.get(fetchURL, timeout: timeouts.binance)
+                let response = try? await service.fetcher.get(fetchURL, timeout: timeouts.binance)
             else { throw UpstreamError(message: "fetch failed: \(url)") }
             guard response.ok else {
                 throw UpstreamError(message: "Binance API error: \(response.status)")

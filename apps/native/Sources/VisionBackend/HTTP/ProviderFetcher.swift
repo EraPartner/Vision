@@ -41,11 +41,14 @@ public struct URLSessionProviderFetcher: ProviderFetching {
             group.addTask {
                 let (data, response) = try await Self.session.data(for: URLRequest(url: url, timeoutInterval: timeout))
                 let http = response as? HTTPURLResponse
+                var headers: [String: String] = [:]
+                for (key, value) in http?.allHeaderFields ?? [:] {
+                    if let name = key as? String, let text = value as? String {
+                        headers[name.lowercased()] = text
+                    }
+                }
                 return ProviderResponse(
-                    status: http?.statusCode ?? 0, body: data,
-                    headers: http?.allHeaderFields.reduce(into: [String: String]()) { out, pair in
-                        out[String(pair.key).lowercased()] = String(pair.value)
-                    } ?? [:])
+                    status: http?.statusCode ?? 0, body: data, headers: headers)
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
