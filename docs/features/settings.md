@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-11-03
-updated: 2026-11-03
+date: 2026-11-26
+updated: 2026-11-26
 tags:
   [
     feature,
@@ -367,6 +367,25 @@ Copy follows [[docs/adr/182-ui-copy-plain-words|ADR-182]]: sentence case (the se
 | About & maintenance | `sections/AboutSection.tsx` | Identity card (Vision mark, canonical build version, AGPL-3.0-only license, source/documentation links), updates (the shared `useUpdateStatus` result as a row with a Release notes link, Check for updates, Install update), Setup assistant restart, Admin mode switch, Reset all settings |
 
 Admin and Monitors remain sidebar sections of their own (ADR-180) rather than Settings sections.
+
+### Privacy (Swift app only)
+
+The Swift app has a Privacy section between AI & research and Backup
+(`apps/native/Sources/VisionNativeUI/Screens/Settings/NativeSettingsPrivacyView.swift`,
+[[docs/adr/271-privacy-settings-network-policy|ADR-271]]). The React app has no Privacy pane, but
+its backend obeys the same fields and its settings store keeps them.
+
+| Field (`app_settings`)  | Default  | Effect                                                                                                         |
+| ----------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `offlineMode`           | `false`  | Nothing leaves the Mac except loopback: backends, update check, logos and news images                           |
+| `networkMarketData`     | `true`   | Prices, market lookup and research (Yahoo, Binance, Kinesis, custom price URLs, research providers)            |
+| `networkExchangeRates`  | `true`   | ECB and open.er-api.com                                                                                         |
+| `networkInflation`      | `true`   | Statbel and Eurostat                                                                                            |
+| `priceRefresh`          | `hourly` | `hourly`, `daily` or `manual` automatic price fetching; the user's own refresh always works                     |
+| `updateCheck`           | `daily`  | `daily` checks GitHub at launch and once a day; `manual` only from About                                       |
+| `aiLocalOnly`           | `false`  | Refuse an Ollama endpoint that is not on this Mac                                                               |
+
+Reset Preferences in the Swift app keeps these fields.
 
 ### Instant-Apply Model
 

@@ -3,7 +3,7 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-11-03
+date: 2026-11-26
 last_modified: 2026-11-03
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
@@ -89,11 +89,10 @@ Once the database is open, initialization respects dependency ordering to preven
    (`mv_monthly_summary`, `mv_category_totals`) if they are empty, make sure their unique indexes
    exist, and refresh them. Each phase has its own boot trace mark; failures degrade
    `/health/detailed` and reads fall back to live SQL.
-4. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.ts]]
-   - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
-   - Result cached for 30s; concurrent callers share in-flight promise
+4. **Network reachability check** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.ts]]
+   - Sends nothing ([[docs/adr/271-privacy-settings-network-policy|ADR-271]]): false in offline mode, otherwise true when a network interface has a routable (not link-local) address
    - If offline: skips all external data fetches; snapshots/info use DB/cache only
-   - If online: proceeds with external warmups as normal
+   - If online: proceeds with external warmups, each gated by its Settings › Privacy source switch and `priceRefresh`
 5. **Exchange rate cache warmup** — `warmExchangeRateCache()` (online only; captured as promise)
 6. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (online only; captured as promise). Cache backfill includes source-provenance records, but canonical rate stamping only updates rows without an import batch, source hash or duplicate fingerprint. Selection and locked update both check those guards to preserve immutable reconciliation after-images.
 7. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
@@ -108,11 +107,16 @@ Once the database is open, initialization respects dependency ordering to preven
 
 New module: [[apps/node-backend/src/lib/network.ts]] — detects internet connectivity at startup and during scheduled tasks.
 
-**Usage in main.ts:**
+> [!note] Changed by [[docs/adr/271-privacy-settings-network-policy|ADR-271]] (2026-11-26)
+> The TCP probe to 1.1.1.1 is gone. `isInternetReachable()` reads offline mode from
+> [[apps/node-backend/src/lib/networkPolicy.ts]] and checks for a routable interface address;
+> it takes no options. The block below describes the 2026-05-03 probe.
 
-- **Startup probe** (line ~522): Single async call `const online = await isInternetReachable()` gates all external fetches
-- **Scheduled 12h FX refresh** (line ~598): `if (!(await isInternetReachable({ force: true })))` — force-refreshes cache every 12h to detect connectivity changes; skips fetch if still offline
-- **Scheduled hourly quote refresh** (line ~616): `if (!(await isInternetReachable({ force: true })))` — force-refreshes cache hourly; skips fetch if still offline
+**Usage in startup/warmup.ts:**
+
+- **Startup check**: `const online = await isInternetReachable()` gates all external fetches
+- **Scheduled 12h FX refresh**: skips itself when offline; FX and inflation each also need their source switch
+- **Scheduled hourly quote refresh**: skips itself when offline, when market data is off, or when `priceRefresh` is `manual`; with `daily` it runs the `price_refresh` daily job
 
 **Implementation:**
 
