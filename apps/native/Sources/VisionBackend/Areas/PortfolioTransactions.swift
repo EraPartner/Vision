@@ -1284,7 +1284,7 @@ extension PortfolioTransactionsArea {
         /// A transaction row of `getUnitEventsForInvestments`: the transaction rows carry
         /// none of the custody projections, and the engine reads them as absent.
         init(_ row: SQLRow) throws {
-            id = Double(try row.int64("eventId"))
+            id = Double(try row.int64("id"))
             investmentId = try row.integerId("investment_id")
             type = try row.text("type")
             date = try row.text("date")
