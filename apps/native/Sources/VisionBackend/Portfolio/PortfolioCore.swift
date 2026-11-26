@@ -218,6 +218,16 @@ enum PortfolioCore {
         return numeric.decimal
     }
     static func isNonZeroNumber(_ value: Double) -> Bool { value.isFinite && value != 0 }
+
+    /// `Number(value)` of a free-typed investment column (a quoted rate parses).
+    static func jsToNumber(_ numeric: Numeric) -> Double {
+        switch numeric {
+        case .number(let value): return value
+        case .text(let text): return JavaScriptNumber.fromString(text)
+        case .decimal(let value): return value.toNumber
+        case .null: return 0
+        }
+    }
     static func toDecimal(_ value: Double) -> DecimalJS { (try? DecimalJS(value)) ?? .zero }
 
     /// The engine's fxMultiplier read: an absent value means the caller's
@@ -872,8 +882,7 @@ enum PortfolioCore {
             totalBuyCostC = totalBuyOrGiftAmountC
             totalSellProceedsC = totalSellAmountC
 
-            var parsedInterestRate = Double.nan
-            if case .number(let rate) = inv.interestRate { parsedInterestRate = rate }
+            let parsedInterestRate = jsToNumber(inv.interestRate)
             let interestRate = isNonZeroNumber(parsedInterestRate) ? parsedInterestRate : 0
             accruedInterest = toDecimal(calculateAccruedInterest(txns, jsNumber(totalInvested), .number(interestRate), todayYmd))
             projectedInterest = toDecimal(projectedAnnualInterest(jsNumber(totalInvested), .number(interestRate)))
