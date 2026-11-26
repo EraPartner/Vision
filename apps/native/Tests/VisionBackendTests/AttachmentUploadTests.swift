@@ -76,7 +76,7 @@ import VisionNativeCore
                 == nil)
         #expect(
             MultipartParts.parse(
-                headers: ["Content-Type": "multipart/form-data; boundary=\"\"\"], body: Data("--\r\n\r\n\r\n--".utf8)) == nil)
+                headers: ["Content-Type": "multipart/form-data; boundary=\"\""], body: Data("--\r\n\r\n\r\n--".utf8)) == nil)
     }
 
     // MARK: - The content checks
