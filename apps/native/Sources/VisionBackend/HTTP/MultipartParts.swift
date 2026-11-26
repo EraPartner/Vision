@@ -16,6 +16,13 @@ enum MultipartParts {
         let data: Data
     }
 
+    /// Node's `'latin1'` decode, which busboy reads the header block with: every byte
+    /// is one character, so a multi-byte UTF-8 filename stays as its raw bytes (the
+    /// recorded TS answers store them that way), never re-joined as UTF-8.
+    static func latin1(_ bytes: ArraySlice<UInt8>) -> String {
+        String(String.UnicodeScalarView(bytes.map { UnicodeScalar($0) }))
+    }
+
     /// The parts of `body`, or nil when the request is not multipart form data (multer then
     /// finds no buffer, and the route answers its "No file uploaded" validation error).
     static func parse(headers: [String: String], body: Data?) -> [Part]? {
@@ -85,10 +92,7 @@ enum MultipartParts {
             while lineEnd + 2 <= bytes.count, !(bytes[lineEnd] == 0x0D && bytes[lineEnd + 1] == 0x0A) {
                 lineEnd += 1
             }
-            // busboy decodes the header block with Node's 'latin1': a multi-byte UTF-8
-            // filename stays as its raw bytes, each one a character (the recorded TS
-            // answers store them that way), never re-joined as UTF-8.
-            let line = String(decoding: bytes[lineStart..<lineEnd], as: Unicode.ISO8859_1.self)
+            let line = Self.latin1(bytes[lineStart..<lineEnd])
             let lower = line.lowercased()
             if lower.hasPrefix("content-disposition:") {
                 name = Self.parameter(named: "name", of: line)
