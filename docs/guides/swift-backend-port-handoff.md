@@ -406,7 +406,7 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
       `investments-mutations`; `getInvestment` waits for the exposure reads — its `/:id` route
       template would capture the unported `/api/investments/exposure` until the portfolio
       summary core lands and those routes come with it)
-- [ ] Portfolio transactions: `getInvestmentTransactions`, `createInvestmentTransaction`,
+- [x] Portfolio transactions: `getInvestmentTransactions`, `createInvestmentTransaction`,
       `updatePortfolioTransaction`, `deletePortfolioTransaction`, `getBulkPortfolioTransactions`,
       `bulkRetagPortfolioTransactions`
 - [ ] Prices: `refreshInvestmentPrices`, `listInvestmentProviders`, `getInvestmentPriceHistory`
