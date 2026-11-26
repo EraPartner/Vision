@@ -28,6 +28,13 @@
  * bank-import.jsonl holds calls of the bank statement adapters (`importPipeline/adapters`)
  * over generated statements, of the format detection and of the helpers the adapters share.
  *
+ * portfolio-core.jsonl holds calls of the shared portfolio summary core
+ * (packages/shared-utils/src/portfolio.ts): day counts, the weighted-average, FIFO and LIFO
+ * cost-basis engines, fixed-income accrued and projected interest, the per-investment summary
+ * core with its converted FX track, ADR-108 account partitions, custody transfers and
+ * adjustments, the partitioned summary core and account-local oversell deficits — over
+ * generated transaction streams, with Decimal fields recorded as decimal text.
+ *
  * portfolio-import.jsonl holds calls of the portfolio statement adapters that read CSV: the
  * sample statements of the backend tests and generated ones.
  *
@@ -60,6 +67,27 @@ import {
 } from "../apps/node-backend/src/services/analysisFormulaEngine.ts";
 import type { EvaluateAnalysisFormulasInput } from "../apps/node-backend/src/services/analysisFormulaEngine.ts";
 import { normalizeIdentityText } from "../apps/node-backend/src/services/importIdentity.ts";
+import {
+  buildInvestmentSummaryCore,
+  buildInvestmentSummaryCorePartitioned,
+  calculateAccruedInterest,
+  calculateCostBasisByMethod,
+  daysBetweenYmd,
+  partitionOversellDeficits,
+  partitionTxnsByAccount,
+  projectedAnnualInterest,
+} from "../packages/shared-utils/src/portfolio.ts";
+import { projectAssetTransferPartitions } from "../packages/shared-utils/src/portfolioCustody.ts";
+import type {
+  CostBasisMethod,
+  CostBasisTxnLike,
+  CustodyLot,
+  InvestmentLike,
+  InvestmentSummaryCore,
+  InvestmentSummaryCoreOptions,
+  PartitionedInvestmentSummaryCore,
+  ProjectedCustodyTxn,
+} from "../packages/shared-utils/src/portfolio.ts";
 import {
   addAll,
   numericColumn,
@@ -284,6 +312,10 @@ const REPORTS = repoPath("apps/native/parity/plans/reports.jsonl");
 const WORKBOOK = repoPath("apps/native/parity/plans/workbook.jsonl");
 const PORTFOLIO_IMPORT = repoPath(
   "apps/native/parity/plans/portfolio-import.jsonl",
+);
+/** `{ op, r }` lines of the portfolio summary core: see `evaluatePortfolioCore`. */
+const PORTFOLIO_CORE = repoPath(
+  "apps/native/parity/plans/portfolio-core.jsonl",
 );
 
 /** The columns of an adoption image the corpus compares, `null` when missing. */
@@ -1614,6 +1646,240 @@ function evaluatePlanned(op: readonly unknown[]): unknown {
   }
 }
 
+/** A row of the portfolio corpus as Bun keeps it: JSON fields only. */
+type PortfolioRow = Record<string, unknown>;
+
+const portfolioOptions = (opts: PortfolioRow): InvestmentSummaryCoreOptions => ({
+  costBasisMethod: opts.costBasisMethod as never,
+  todayYmd: (opts.todayYmd ?? "") as string,
+  fxMultiplierNow: opts.fxMultiplierNow as never,
+});
+
+/** A Decimal field that travels as decimal text becomes a Decimal again. */
+const portfolioLegDecimal = (
+  value: unknown,
+): ReturnType<typeof toDecimal> | undefined =>
+  value === undefined ? undefined : toDecimal(value as string | number);
+
+/** The Decimal fields that travel as decimal text become Decimals again. */
+function portfolioLegs(rows: PortfolioRow[]): CostBasisTxnLike[] {
+  return rows.map(
+    (row): CostBasisTxnLike =>
+      ({
+        ...row,
+        transferredBasis: portfolioLegDecimal(row.transferredBasis),
+        transferredBasisConv: portfolioLegDecimal(row.transferredBasisConv),
+        assetFeeBasis: portfolioLegDecimal(row.assetFeeBasis),
+        assetFeeBasisConv: portfolioLegDecimal(row.assetFeeBasisConv),
+      }) as CostBasisTxnLike,
+  );
+}
+
+const portfolioDecimalText = (value: ReturnType<typeof toDecimal>): string =>
+  value.toFixed();
+
+/** A lot the custody projection moved, as the Swift test re-reads it. */
+function portfolioLotWire(lot: CustodyLot): Record<string, unknown> {
+  return {
+    units: portfolioDecimalText(lot.units),
+    costBasis: portfolioDecimalText(lot.costBasis),
+    costBasisConv: portfolioDecimalText(lot.costBasisConv),
+    acquiredDate: lot.acquiredDate,
+    acquisitionId: Number(lot.acquisitionId),
+    acquisitionType: lot.acquisitionType ?? null,
+    sourceRecordHash: lot.sourceRecordHash ?? null,
+    currency: lot.currency ?? null,
+    fxResolved: lot.fxResolved,
+  };
+}
+
+/** A projected partition row, as the Swift test re-reads it. */
+function portfolioLegWire(row: ProjectedCustodyTxn): Record<string, unknown> {
+  const lots
+    = row.transferredLots === undefined
+      ? null
+      : row.transferredLots.map(portfolioLotWire);
+  const consumedLots
+    = row.consumedLots === undefined
+      ? null
+      : row.consumedLots.map(portfolioLotWire);
+  return {
+    type: row.type,
+    date: row.date,
+    id: row.id ?? null,
+    accountId:
+      row.account_id === undefined || row.account_id === null
+        ? null
+        : Number(row.account_id),
+    units: portfolioDecimalText(toDecimal(row.units)),
+    amount: portfolioDecimalText(toDecimal(row.amount)),
+    fees: portfolioDecimalText(toDecimal(row.fees)),
+    taxes: portfolioDecimalText(toDecimal(row.taxes)),
+    transferredBasis:
+      row.transferredBasis === undefined
+        ? null
+        : portfolioDecimalText(row.transferredBasis),
+    transferredBasisConv:
+      row.transferredBasisConv === undefined
+        ? null
+        : portfolioDecimalText(row.transferredBasisConv),
+    assetFeeBasis:
+      row.assetFeeBasis === undefined
+        ? null
+        : portfolioDecimalText(row.assetFeeBasis),
+    assetFeeBasisConv:
+      row.assetFeeBasisConv === undefined
+        ? null
+        : portfolioDecimalText(row.assetFeeBasisConv),
+    transferredLots: lots,
+    consumedLots,
+  };
+}
+
+/** One summary core, as the Swift test re-reads it. */
+function portfolioCoreWire(core: InvestmentSummaryCore): Record<string, unknown> {
+  const d = (value: ReturnType<typeof toDecimal>) => portfolioDecimalText(value);
+  return {
+    totalUnits: d(core.totalUnits),
+    avgCostBasis: d(core.avgCostBasis),
+    totalInvested: d(core.totalInvested),
+    totalBuyCost: d(core.totalBuyCost),
+    totalSellProceeds: d(core.totalSellProceeds),
+    currentValue: d(core.currentValue),
+    realizedGain: d(core.realizedGain),
+    unrealizedGain: d(core.unrealizedGain),
+    totalGain: d(core.totalGain),
+    gainLoss: d(core.gainLoss),
+    gainLossPercent: d(core.gainLossPercent),
+    totalFees: d(core.totalFees),
+    totalTaxes: d(core.totalTaxes),
+    feeTxnAmount: d(core.feeTxnAmount),
+    taxTxnAmount: d(core.taxTxnAmount),
+    totalDividends: d(core.totalDividends),
+    totalInKindIncome: d(core.totalInKindIncome),
+    totalInterestPaid: d(core.totalInterestPaid),
+    totalRent: d(core.totalRent),
+    totalAppreciation: d(core.totalAppreciation),
+    totalIncome: d(core.totalIncome),
+    accruedInterest: d(core.accruedInterest),
+    projectedAnnualInterest: d(core.projectedAnnualInterest),
+    oversold: core.oversold,
+    converted: {
+      currentValue: d(core.converted.currentValue),
+      totalInvested: d(core.converted.totalInvested),
+      totalBuyCost: d(core.converted.totalBuyCost),
+      totalSellProceeds: d(core.converted.totalSellProceeds),
+      avgCostBasis: d(core.converted.avgCostBasis),
+      realizedGain: d(core.converted.realizedGain),
+      unrealizedGain: d(core.converted.unrealizedGain),
+      totalGain: d(core.converted.totalGain),
+      gainLoss: d(core.converted.gainLoss),
+      gainLossPercent: d(core.converted.gainLossPercent),
+      assetGain: d(core.converted.assetGain),
+      fxGain: d(core.converted.fxGain),
+      totalFees: d(core.converted.totalFees),
+      totalTaxes: d(core.converted.totalTaxes),
+      totalDividends: d(core.converted.totalDividends),
+      totalInKindIncome: d(core.converted.totalInKindIncome),
+      totalIncome: d(core.converted.totalIncome),
+    },
+  };
+}
+
+/**
+ * One operation of the portfolio summary core
+ * (packages/shared-utils/src/portfolio.ts), with the Decimals the core
+ * returns recorded as decimal text; the message the core threw, or `null` when
+ * the op is unknown.
+ */
+export function evaluatePortfolioCore(op: readonly unknown[]): unknown {
+  try {
+    const [name, ...args] = op;
+    // JSON.stringify turns an absent array item into null; only a real value is an argument.
+    const arg = (index: number): unknown => args[index] ?? undefined;
+    const method = (index: number): CostBasisMethod | undefined => {
+      const value = arg(index);
+      return value === undefined ? undefined : (value as string) as CostBasisMethod;
+    };
+    switch (name) {
+      case "daysBetween":
+        return daysBetweenYmd(String(args[0]), String(args[1]));
+      case "projected":
+        return projectedAnnualInterest(Number(args[0]), Number(args[1]));
+      case "accrued":
+        return calculateAccruedInterest(
+          args[0] as never,
+          Number(args[1]),
+          Number(args[2]),
+          String(args[3]),
+        );
+      case "costBasis": {
+        const tsxns = portfolioLegs(args[0] as PortfolioRow[]);
+        const result = calculateCostBasisByMethod(
+          tsxns,
+          method(1),
+          arg(2) === undefined ? {} : { defaultFxMultiplier: args[2] as never },
+        );
+        return { ...result, _oversold: result._oversold ?? false };
+      }
+      case "summary":
+        return portfolioCoreWire(
+          buildInvestmentSummaryCore(
+            args[0] as InvestmentLike,
+            portfolioLegs(args[1] as PortfolioRow[]),
+            portfolioOptions(args[2] as PortfolioRow),
+          ),
+        );
+      case "summaryPartitioned": {
+        const result: PartitionedInvestmentSummaryCore =
+          buildInvestmentSummaryCorePartitioned(
+            args[0] as InvestmentLike,
+            args[1] as never,
+            portfolioOptions(args[2] as PortfolioRow),
+          );
+        return {
+          core: portfolioCoreWire(result.core),
+          partitions: result.partitions.map((partition) => ({
+            accountId: partition.accountId,
+            contributionKind: partition.contributionKind,
+            core: portfolioCoreWire(partition.core),
+          })),
+          fullyAssigned: result.fullyAssigned,
+        };
+      }
+      case "partition": {
+        const streams = partitionTxnsByAccount(
+          args[0] as never,
+          method(1),
+          arg(2) === undefined ? {} : { defaultFxMultiplier: args[2] as never },
+        );
+        return [...streams.entries()].map(
+          ([key, rows]) => [key, rows.map(portfolioLegWire)],
+        );
+      }
+      case "custody": {
+        const rows = portfolioLegs(args[0] as PortfolioRow[]);
+        const streams = projectAssetTransferPartitions(
+          rows,
+          method(1),
+          arg(2) === undefined ? {} : { defaultFxMultiplier: args[2] as never },
+        );
+        return [...streams.entries()].map(
+          ([key, streamRows]) => [key, streamRows.map(portfolioLegWire)],
+        );
+      }
+      case "oversell": {
+        const deficits = partitionOversellDeficits(args[0] as never);
+        return Object.fromEntries([...deficits.entries()]);
+      }
+      default:
+        return null;
+    }
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 /**
  * One operation of the loan schedule generator
  * (`services/calculations/loanSchedule.ts`): `["loan", config]` answers the
@@ -1778,6 +2044,14 @@ if (isEntrypoint(import.meta)) {
     (text) => {
       const { op } = JSON.parse(text) as { op: unknown[] };
       return { op, r: evaluateLoan(op) };
+    },
+    check,
+  );
+  rerecord(
+    PORTFOLIO_CORE,
+    (text) => {
+      const { op } = JSON.parse(text) as { op: unknown[] };
+      return { op, r: evaluatePortfolioCore(op) };
     },
     check,
   );
