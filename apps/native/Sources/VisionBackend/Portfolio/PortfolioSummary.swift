@@ -31,7 +31,7 @@ enum PortfolioSummaryService {
         var id = "0"
         var investmentId: Int  // lint:allow raw-id the event's investment target
         var type: String
-        var date: String
+        var date = ""
         var amount = "0"
         var units = "0"
         var fees = "0"
@@ -79,7 +79,7 @@ enum PortfolioSummaryService {
         if let hashes = try? row.optionalText("eligible_source_record_hashes"), !hashes.isEmpty,
             case .array(let items)? = JSValue.parse(Data(hashes.utf8))
         {
-            out.eligibleSourceRecordHashes = items.map { item in
+            out.eligibleSourceRecordHashes = items.map { item -> String? in
                 if case .string(let value) = item { return value }
                 return nil
             }
@@ -137,7 +137,7 @@ enum PortfolioSummaryService {
 
     /// `resolveCostBasisMethod`: the stored setting, `weighted_avg` when missing or malformed.
     static func costBasisMethod(_ session: BackendSession) -> String {
-        guard let stored = try? SettingsArea.get(session, "cost_basis_method"),
+        guard let stored = try? SettingsArea.get(session, key: "cost_basis_method"),
             case .string(let value)? = stored,
             PortfolioCore.isCostBasisMethod(value)
         else { return "weighted_avg" }

@@ -198,7 +198,7 @@ enum ExposureArea {
                     code: "unrecognized_keys", path: path,
                     message: "Unrecognized key: \"\(unknown.first ?? "")\"", keys: unknown))
         }
-        guard let type = trimmedString(fields["type"], at: path + [.key("type")], issues: issues, limit: 64) else {
+        guard let type = trimmedString(fields["type"], at: path + [.key("type")], issues: &issues, limit: 64) else {
             return nil
         }
         if !identifierTypes.contains(type) {
@@ -208,7 +208,7 @@ enum ExposureArea {
                     message: "Invalid input: expected \(identifierTypes.map { "\"\($0)\"" }.joined(separator: ", ")), received \"\(type)\""))
             return nil
         }
-        guard let text = trimmedString(fields["value"], at: path + [.key("value")], issues: issues, limit: 128) else {
+        guard let text = trimmedString(fields["value"], at: path + [.key("value")], issues: &issues, limit: 128) else {
             return nil
         }
         if type != "ticker", let exchange = fields["exchange"], exchange != .null {
@@ -220,7 +220,7 @@ enum ExposureArea {
         }
         var exchange: String? = nil
         if type == "ticker", let raw = fields["exchange"], raw != .null {  // lint:allow string-literal-compare the schema's identifier enum
-            guard let text = trimmedString(raw, at: path + [.key("exchange")], issues: issues, limit: 64) else {
+            guard let text = trimmedString(raw, at: path + [.key("exchange")], issues: &issues, limit: 64) else {
                 return nil
             }
             exchange = text
@@ -251,6 +251,23 @@ enum ExposureArea {
             guard (65...90).contains(value) || (48...57).contains(value) else { return false }
         }
         return (48...57).contains(Int(units[11]))
+    }
+
+    /// `replace(/\s+/g, " ")` over the schema's trim: every whitespace run one
+    /// space (JS `\s`: WhiteSpace and LineTerminator).
+    static func collapseWhitespace(_ text: String) -> String {
+        var collapsed = ""
+        var previousWasSpace = false
+        for scalar in text.unicodeScalars {
+            if JavaScriptWhitespace.contains(scalar) {
+                if !previousWasSpace { collapsed.append(" ") }
+                previousWasSpace = true
+            } else {
+                collapsed.append(Character(scalar))
+                previousWasSpace = false
+            }
+        }
+        return collapsed
     }
 }
 
@@ -485,7 +502,7 @@ struct ExposureClassification: Sendable {
 
     init(_ row: SQLRow) throws {
         id = try row.text("id")
-        investmentId = try row.optionalText("investmentId").flatMap { $0.isEmpty ? nil : $0 }.map { Int($0) }
+        investmentId = try row.optionalText("investmentId").flatMap { $0.isEmpty ? nil : $0 }.flatMap { Int($0) }
         identifierType = try row.optionalText("identifierType").flatMap { $0.isEmpty ? nil : $0 }
         identifierValue = try row.optionalText("identifierValue").flatMap { $0.isEmpty ? nil : $0 }
         identifierExchange = try row.optionalText("identifierExchange").flatMap { $0.isEmpty ? nil : $0 }
@@ -837,7 +854,7 @@ extension ExposureArea {
 
     /// `normalizedName`: trim, collapse whitespace, `toLocaleLowerCase("en")`.
     private static func normalizedName(_ value: String) -> String {
-        JavaScriptCase.lowercased(JavaScriptWhitespace.collapse(JavaScriptWhitespace.trim(value)))
+        JavaScriptCase.lowercased(ExposureArea.collapseWhitespace(JavaScriptWhitespace.trim(value)))
     }
 
     /// `issuerIdFor`: the own id, the matching stored name's id, or `name:<key>` cut to 128.
@@ -925,7 +942,7 @@ extension ExposureArea {
             set.append((
                 item.investmentId,
                 issuerIdFor(name: item.issuerName, own: own[item.investmentId], byName: byName),
-                JavaScriptWhitespace.collapse(JavaScriptWhitespace.trim(item.issuerName)),
+                ExposureArea.collapseWhitespace(JavaScriptWhitespace.trim(item.issuerName)),
                 item.sector, item.country))
         }
         try storeManual(session, set: set, clear: changes.clear)
@@ -1137,13 +1154,17 @@ extension ExposureArea {
                     }
                 }
                 if ambiguous {
+                    var rowNumber = 0
+                    if let provenance = row["provenance"]?.objectValue,
+                        let number = provenance["rowNumber"]?.javaScriptNumber
+                    {
+                        rowNumber = Int(number)
+                    }
                     uncovered = uncovered.plus(amount)
                     warnings.append(.object([
                         "code": .string("AMBIGUOUS_CONSTITUENT_MAPPING"),
                         "investmentId": .int(holding.id),
-                        "rowNumber": .int(
-                            row["provenance"]?.objectValue?["rowNumber"]?.javaScriptNumber.map(Int.init)
-                                ?? 0),
+                        "rowNumber": .int(rowNumber),
                     ]))
                     continue
                 }
