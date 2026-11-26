@@ -400,7 +400,7 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
 
 ### P17 Portfolio core and prices
 
-- [ ] Investments: `getInvestments`, `createInvestment`, `updateInvestment`, `deleteInvestment`,
+- [x] Investments: `getInvestments`, `createInvestment`, `updateInvestment`, `deleteInvestment`,
       `getInvestment`, `getInvestmentSummary`
       (the reads except `getInvestment` are ported in `Areas/Investments.swift` with the corpus
       `investments-mutations`; `getInvestment` waits for the exposure reads — its `/:id` route
@@ -412,7 +412,7 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
 - [x] Prices: `refreshInvestmentPrices`, `listInvestmentProviders`, `getInvestmentPriceHistory`
       (Yahoo client, price cache, provider registry, backfill; the pure `Prices` core is on main).
       Provider answers are stubbed with the corpus `fetch` map.
-- [ ] Exposure: `getPortfolioExposure`, `upsertPortfolioExposureSources`,
+- [x] Exposure: `getPortfolioExposure`, `upsertPortfolioExposureSources`,
       `getPortfolioExposureClassifications`, `savePortfolioExposureClassifications` (ADR-267: manual
       edits win over re-imports)
 
