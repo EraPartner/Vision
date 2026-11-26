@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-26
-updated: 2026-11-25
+date: 2026-11-27
+updated: 2026-11-27
 tags:
   [
     architecture,
@@ -789,6 +789,26 @@ its fixed route wins there. The two 60 s Bun response caches over these reads ar
 ported; Swift reads fresh, so a write is visible immediately. The mutated read queries of
 `investments-mutations` (205 steps) replay the same way; the `investments` corpus itself
 waits for the exposure reads, which need the portfolio summary core.
+
+The price routes run in-process (`Areas/Prices.swift`, with the pure `VisionBackend/Prices`
+core): `POST /refresh-prices` walks the same live-price chain (`refreshPrices` ->
+`fetchLivePricesDetailed`): the five-minute in-memory cache, then the provider bucket fetches
+(Binance's batched `/ticker/price`, Yahoo's batched quote with the per-symbol chart fallback,
+the SSRF-guarded custom JSON fetch with manual redirects, Kinesis converted at the latest
+stored rate), then the stored `current_price` tier and the `asset_price_history` fallback, and
+finally one `json_each` UPDATE of every live price with `price_updated_at = now()`. The
+`GET /:id/price-history` route reproduces `fetchHistoricalPrices`: `db_only` (default true)
+serves the persisted series, a spanning series skips the provider, Yahoo's chart URL is
+composed exactly as yahoo-finance2 composes it (`query2.finance.yahoo.com`, its parameter
+order and `Math.floor(ms/1000)` periods), Binance klines paginate past the 1000-row limit, the
+custom provider fetch passes `assertPublicHttpUrl` at every redirect hop, and a remapped
+Kinesis series converts per point at the historical (else latest) stored rate. Yahoo answers
+reach the Swift side through the same `fetch` map the recorder stubbed. The provider-health
+success writes of the task runners land in `provider_health` as Bun's do. The corpus is
+`prices-mutations` (10 steps on the 2026-11-26 fixed clock): the provider list, two refreshes
+(the second served from the in-memory cache), Yahoo history served first from the provider
+then from the table it persisted into, `db_only` on stored history, a custom provider whose
+history URL is its latest URL, and the 404.
 
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each
