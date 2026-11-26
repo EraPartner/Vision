@@ -414,7 +414,7 @@ import VisionNativeCore
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
         "recipients-mutations", "transactions-mutations", "planned-mutations", "importParsers-mutations",
-        "importReview-mutations", "importUploads-mutations",
+        "importReview-mutations", "importUploads-mutations", "investments-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)

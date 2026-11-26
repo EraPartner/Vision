@@ -1,0 +1,5926 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n         is_active, price_provider, notes, created_at, updated_at) VALUES\n        (1, 'ACME Corp', 'ACME', 'stock', 'EUR', vision_numeric('150.50', 18, 6), NULL,\n         1, 'manual', 'growth stock', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,\n         1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('42', 18, 6), NULL,\n         0, 'manual', 'closed', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n         fees, taxes, currency, note, created_at, updated_at) VALUES\n        (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),\n         vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n         'initial buy', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,\n         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 2, 'rent_income', '2024-02-01', vision_numeric('950.40', 18, 4), NULL, NULL,\n         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'february rent',\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/3/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 3,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/2147483648/transactions?type=true&type=true&type=abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=abc%2C01&type=5001&other=1e2&per_investment_limit=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: abc"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=1.5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1%2C%205%2C0&limit=2&type=5001&offset=-3&offset=",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value:  5"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/ 5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=2147483648%2C1e3%2C-1%2C1&other=stock&type=false&limit=abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 2147483648"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=1.5&limit=5001&other=1001",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/3/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 3,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/abc/transactions?limit&limit=1001&other=false",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1.5%2C0%2C0&per_investment_limit=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1.5"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=1e2&active=1001&asset_class=true&limit=stock",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/-1/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1e3%2C1%2C1.5%2C1.5&type=1001&per_investment_limit=0&type=all",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=&limit=-3&asset_class=1.5&offset=200000",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "asset_class: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/3/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 3,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/2/transactions?other",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "investment_id": 2,
+              "type": "rent_income",
+              "date": "2024-02-01",
+              "amount": 950.4,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "february rent",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 1,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=0%2C01%2C2&limit&limit=1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=&offset=-3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?offset=-3&per_investment_limit=abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?other=0&limit=-3&limit=1001",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/ 5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=-1%2C-1%2C2%2C0&offset=stock&per_investment_limit=stock",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: -1"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=0&other=1e2&limit&limit=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/999/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=200000&other",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/01/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions?offset",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=2147483648&investment_ids= 5&type=2&type=200000&type=-3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=-3&asset_class=-3&limit=false&limit=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1e3/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1.5/transactions?offset=1&offset=true",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit&asset_class",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/-1/transactions?limit=2&limit=abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/999/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 999,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1.5"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=true&other=5001",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/ 5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?limit=&limit=1e2&other=1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=0&active=200000",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=3&per_investment_limit=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 0,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/2/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 2,
+          "breakdown": [
+            {
+              "type": "rent_income",
+              "income_recognition_role": "standard",
+              "total_amount": 950.4,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/abc/transactions?offset=0&limit=-3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1.5%2Cabc%2C01&offset=&limit=1e2&offset=false&limit=false",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1.5"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/abc/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?type=5001&limit=2&per_investment_limit",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/2147483648/transactions?type=true",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?type=1001&per_investment_limit=2&limit=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=true&limit=1.5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 1,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1e3/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions?other=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?limit=200000&type=false&type=stock",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=1e2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 1,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?other=1001&per_investment_limit=0&offset=false&offset=1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=abc&asset_class=5001&other=&offset=abc",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/ 5/transactions?type=all&offset=1&other=1e2",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=3%2C01&offset=all&per_investment_limit=200000&offset&type=1e2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 0,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=abc&asset_class=&limit=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=all&offset=all&active=5001&active=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/3/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 3,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/999/transactions?type=1.5&limit=1&limit=all&type=1001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=-3&limit=&offset=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/3/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 3,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions?limit=0&other=stock&offset=5001&limit=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 5001,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=%205%2C1e3%2C999&limit=1",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value:  5"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=false&other=abc&offset=&offset",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/3/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 3,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/abc/transactions?offset=2&limit=200000",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=2147483648&offset=stock&limit=2",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 2147483648"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=1.5&limit=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/999/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 999,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=0%2C2%2C1&per_investment_limit=1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=%205&investment_ids=1&offset=false&offset=all",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value:  5"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=all&offset=false&active&other=stock",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/-1/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?offset=-3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=0%2C%205&other=1.5&other=abc&per_investment_limit=-3&limit=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=all&offset=1&limit=1001",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 1000,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/01/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/999/transactions?offset=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=3%2C3%2C0%2C1e3&investment_ids=3&type=0&offset=false&per_investment_limit=abc&offset=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=5001",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/-1/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/01/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=999&offset=1e2&offset=stock&offset",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 0,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/ 5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=2%2C2&offset=1e2&per_investment_limit=-3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 1,
+          "limit": 0,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=all&limit=5001&limit=200000&other=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 1000,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=999%2C1&type=1.5&other&other=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 0,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?other=1.5&asset_class=true&active=&active",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1.5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1.5/transactions?type=1001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=%205%2C1e3%2Cabc%2C2147483648&type=1",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value:  5"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=false&offset=true&active=all&limit=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?other=false&per_investment_limit=1e2&type=2&type=all",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=stock&active=1e2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1e3/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions?type&type=true&type=stock&other=200000",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?per_investment_limit=1e2&type=200000",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=&asset_class&offset=5001&asset_class=",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "asset_class: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/0/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1e3%2C1%2C3%2C1.5&investment_ids=999&limit=true&offset=false&other=all",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1e3"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=2&asset_class=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/999/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 999,
+          "breakdown": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1.5/transactions?limit=all&limit=200000",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/01/transactions?offset=1001&type=200000&type=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1&type=2&type=0&offset=all",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=1.5&offset=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/01/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/abc/transactions?offset=1001&limit=all&offset",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=2%2C1e3%2C0%2C1e3&limit=all",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1e3"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=false&offset=abc&active=1&asset_class=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1e3/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions?limit=1001&offset=1e2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 1000,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids is required"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=-3&limit=true",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/0/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/2147483648/transactions?limit=abc&type=true&type",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=abc&asset_class=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "asset_class: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/01/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=-1%2Cabc&investment_ids=abc&type=1e2&offset=true&type=-3&type=1",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit&limit=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 1,
+          "breakdown": [
+            {
+              "type": "buy",
+              "income_recognition_role": "standard",
+              "total_amount": 1000,
+              "total_units": 10,
+              "total_fees": 1.5,
+              "total_taxes": 0,
+              "count": 1
+            },
+            {
+              "type": "dividend",
+              "income_recognition_role": "standard",
+              "total_amount": 12.25,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1.5%2Cabc&limit=5001&type=stock",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1.5"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/ 5/transactions?offset=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1&per_investment_limit=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 2,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset&active=all&offset=-3",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class&offset=&other=1e2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=abc&active=1&offset=false&offset=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/-1/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/ 5/transactions?offset=-3&other=&other=-3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=abc&type=1.5&type&offset=stock&offset=true",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?other=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/abc/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/3/transactions?other=1.5&type=1001&offset=all",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=0%2Cabc%2C%205&limit=1001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/2147483648/transactions?offset=1.5&offset=1e2&type=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=999%2C%205",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value:  5"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=2&offset=abc&offset=5001",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/abc/transactions?limit=0&offset=2&type=&type",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1%2C999%2C0%2C2147483648&type=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=1.5&active=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/ 5/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=01%2C1%2C1e3&limit=0&limit=false&offset=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1e3"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/2/summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "investment_id": 2,
+          "breakdown": [
+            {
+              "type": "rent_income",
+              "income_recognition_role": "standard",
+              "total_amount": 950.4,
+              "total_units": null,
+              "total_fees": 0,
+              "total_taxes": 0,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/-1/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=999%2C2147483648&type=stock",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 2147483648"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?limit=stock&limit=200000",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/0/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1.5/transactions?limit=1.5&other=1001&limit=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=0%2C2%2C%205&type=2&type=false&offset=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "listInvestmentProviders",
+      "method": "GET",
+      "path": "/api/investments/providers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "providers": [
+            {
+              "key": "manual",
+              "name": "Manual",
+              "description": "Set price manually"
+            },
+            {
+              "key": "binance",
+              "name": "Binance",
+              "description": "Free crypto prices (use symbol, e.g. \"BTCUSDT\", \"ETHUSDT\", \"BNBEUR\")"
+            },
+            {
+              "key": "yahoo",
+              "name": "Yahoo Finance",
+              "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")"
+            },
+            {
+              "key": "custom",
+              "name": "Custom JSON",
+              "description": "Any JSON endpoint with a configurable price path"
+            },
+            {
+              "key": "kinesis",
+              "name": "Kinesis",
+              "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\", \"XAU_USD\", \"XAG_USD\")"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=200000",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/1.5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1e3%2C0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 1e3"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?offset=5001&offset=false&limit=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 200,
+          "offset": 5001,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1.5/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=3%2Cabc&per_investment_limit=1&limit=-3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: abc"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=200000&active=all&asset_class=-3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "asset_class: must be a single value"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions?type=false&limit=2",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 0,
+          "limit": 2,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=0%2C1%2C-1%2C1.5&investment_ids=2147483648&type=1.5&offset=1001&per_investment_limit=0&offset=0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 0"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?other=stock&limit",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentSummary",
+      "method": "GET",
+      "path": "/api/investments/ 5/summary",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/abc/transactions",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=2147483648%2C1e3%2C2147483648&limit=5001",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "investment_ids contains invalid value: 2147483648"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?active=&active=false&asset_class=",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "EUR",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "growth stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            },
+            {
+              "id": 2,
+              "name": "City Loft",
+              "symbol": null,
+              "asset_class": "real_estate",
+              "currency": "EUR",
+              "current_price": 250000,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": null,
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 2,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/01/transactions?type=1&offset=1e2&type=stock",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: must be a single value"
+        }
+      }
+    }
+  ]
+}

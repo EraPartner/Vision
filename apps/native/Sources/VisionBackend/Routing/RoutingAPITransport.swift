@@ -30,6 +30,8 @@ public enum PortedOperations {
         "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch",
         "uploadAttachment", "getSupportedAdapters", "getInfoBanks", "getRecurringPatterns",
         "importCsv", "importCsvCustom", "importCsvStream", "importRecipients", "importCategories",
+        "getInvestments", "getInvestmentSummary", "getInvestmentTransactions",
+        "getBulkPortfolioTransactions", "listInvestmentProviders",
     ]
 }
 
@@ -159,6 +161,7 @@ public struct InProcessBackend: Sendable {
         ImportCommitArea.register(&backend, database: database)
         ImportUploadsArea.register(&backend, database: database)
         InfoArea.register(&backend, database: database)
+        InvestmentsArea.register(&backend, database: database)
         return backend
     }
 
