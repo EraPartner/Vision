@@ -297,6 +297,9 @@ import VisionNativeCore
             let matched = try #require(backend.match(request), "\(label) is not ported")
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
+            if response.status >= 500, step.status < 500 {
+                print("parity server-error body: \(String(decoding: response.body, as: UTF8.self))")
+            }
             #expect(response.status == step.status, "\(label)")
             // Headers the route set itself, such as execute's `Idempotent-Replay`.
             for (wanted, value) in step.headers ?? [:] {
@@ -415,6 +418,7 @@ import VisionNativeCore
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
         "recipients-mutations", "transactions-mutations", "planned-mutations", "importParsers-mutations",
         "importReview-mutations", "importUploads-mutations", "investments-mutations",
+        "portfolio-transactions-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)

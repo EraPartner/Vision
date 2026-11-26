@@ -32,6 +32,8 @@ public enum PortedOperations {
         "importCsv", "importCsvCustom", "importCsvStream", "importRecipients", "importCategories",
         "getInvestments", "getInvestmentSummary", "getInvestmentTransactions",
         "getBulkPortfolioTransactions", "listInvestmentProviders",
+        "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction",
+        "bulkRetagPortfolioTransactions",
     ]
 }
 
@@ -162,6 +164,7 @@ public struct InProcessBackend: Sendable {
         ImportUploadsArea.register(&backend, database: database)
         InfoArea.register(&backend, database: database)
         InvestmentsArea.register(&backend, database: database)
+        PortfolioTransactionsArea.register(&backend, database: database)
         return backend
     }
 
