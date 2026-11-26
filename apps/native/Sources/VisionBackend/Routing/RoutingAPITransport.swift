@@ -34,6 +34,8 @@ public enum PortedOperations {
         "getBulkPortfolioTransactions", "listInvestmentProviders",
         "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction",
         "bulkRetagPortfolioTransactions", "refreshInvestmentPrices", "getInvestmentPriceHistory",
+        "getPortfolioExposure", "upsertPortfolioExposureSources", "getPortfolioExposureClassifications",
+        "savePortfolioExposureClassifications", "getInvestment",
     ]
 }
 
@@ -167,6 +169,7 @@ public struct InProcessBackend: Sendable {
         PortfolioTransactionsArea.register(&backend, database: database)
         PricesArea.register(
             &backend, database: database, service: PricesService(fetcher: fetcher))
+        ExposureArea.register(&backend, database: database)
         return backend
     }
 
