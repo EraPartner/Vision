@@ -1,0 +1,1220 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO custom_parser_configs (id, name, kind, config_json, created_at, updated_at) VALUES\n          (1, 'Bolero trades', 'portfolio', vision_jsonb('{\"dateColumn\":\"Datum\",\"symbolColumn\":\"Symbool\",\"nameColumn\":\"Naam\",\"typeColumn\":\"Type\",\"unitsColumn\":\"Aantal\",\"amountColumn\":\"Bedrag\",\"feesColumn\":\"Kosten\",\"currencyColumn\":\"Munt\",\"defaultAssetClass\":\"stock\",\"number_format\":\"decimal_comma\",\"encoding\":\"latin1\",\"skipRows\":1}'), '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 'Degiro positions', 'portfolio', vision_jsonb('{\"dateColumn\":\"Date\",\"nameColumn\":\"Product\",\"defaultAssetClass\":\"etf\",\"number_format\":\"auto\",\"skipRows\":0}'), '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getPortfolioParsers",
+      "method": "GET",
+      "path": "/api/portfolio/import/parsers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "Bolero trades",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "latin1",
+                "skipRows": 1,
+                "dateColumn": "Datum",
+                "feesColumn": "Kosten",
+                "nameColumn": "Naam",
+                "typeColumn": "Type",
+                "unitsColumn": "Aantal",
+                "amountColumn": "Bedrag",
+                "symbolColumn": "Symbool",
+                "number_format": "decimal_comma",
+                "currencyColumn": "Munt",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "name": "Degiro positions",
+              "kind": "portfolio",
+              "config": {
+                "skipRows": 0,
+                "dateColumn": "Date",
+                "nameColumn": "Product",
+                "number_format": "auto",
+                "defaultAssetClass": "etf"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            }
+          ],
+          "total": 2
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "  Key trade  ",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "name": "Key trade",
+          "kind": "portfolio",
+          "config": {
+            "encoding": "utf-8",
+            "skipRows": 1,
+            "dateColumn": "Date",
+            "feesColumn": "Fees",
+            "nameColumn": "Name",
+            "typeColumn": "Type",
+            "unitsColumn": "Units",
+            "amountColumn": "Amount",
+            "symbolColumn": "Symbol",
+            "number_format": "auto",
+            "currencyColumn": "Currency",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2026-11-26T11:07:15.929Z",
+          "updated_at": "2026-11-26T11:07:15.929Z"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Bolero trades",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A portfolio parser named \"Bolero trades\" already exists"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "No symbol or name",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "",
+          "nameColumn": " ",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "config requires symbolColumn or nameColumn"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Bad asset class",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stamps",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "config.defaultAssetClass must be a valid asset class"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Bad encoding",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "bogus",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unsupported CSV encoding \"bogus\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Bad number format",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "dot",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid option: expected one of \"auto\"|\"decimal_dot\"|\"decimal_comma\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Bad transfer account",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1,
+          "transferDestinationAccountId": "1e3"
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "config.transferDestinationAccountId must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Bad yield policy",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1,
+          "yieldBasisPolicy": "fifo"
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected \"zero\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Missing date column",
+        "config": {
+          "symbolColumn": "Symbol",
+          "defaultAssetClass": "stock"
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "config.dateColumn is required"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "No config"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"config\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": 7,
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"name\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"name\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"name\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "   ",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"name\""
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": {
+        "name": "Extra keys kept",
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1,
+          "futureKey": "kept"
+        }
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 4,
+          "name": "Extra keys kept",
+          "kind": "portfolio",
+          "config": {
+            "encoding": "utf-8",
+            "skipRows": 1,
+            "futureKey": "kept",
+            "dateColumn": "Date",
+            "feesColumn": "Fees",
+            "nameColumn": "Name",
+            "typeColumn": "Type",
+            "unitsColumn": "Units",
+            "amountColumn": "Amount",
+            "symbolColumn": "Symbol",
+            "number_format": "auto",
+            "currencyColumn": "Currency",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2026-11-26T11:07:16.016Z",
+          "updated_at": "2026-11-26T11:07:16.016Z"
+        }
+      }
+    },
+    {
+      "operationId": "createPortfolioParser",
+      "method": "POST",
+      "path": "/api/portfolio/import/parsers",
+      "body": [],
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid input: expected object, received array"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioParsers",
+      "method": "GET",
+      "path": "/api/portfolio/import/parsers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "Bolero trades",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "latin1",
+                "skipRows": 1,
+                "dateColumn": "Datum",
+                "feesColumn": "Kosten",
+                "nameColumn": "Naam",
+                "typeColumn": "Type",
+                "unitsColumn": "Aantal",
+                "amountColumn": "Bedrag",
+                "symbolColumn": "Symbool",
+                "number_format": "decimal_comma",
+                "currencyColumn": "Munt",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 2,
+              "name": "Degiro positions",
+              "kind": "portfolio",
+              "config": {
+                "skipRows": 0,
+                "dateColumn": "Date",
+                "nameColumn": "Product",
+                "number_format": "auto",
+                "defaultAssetClass": "etf"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 4,
+              "name": "Extra keys kept",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": 1,
+                "futureKey": "kept",
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2026-11-26T11:07:16.016Z",
+              "updated_at": "2026-11-26T11:07:16.016Z"
+            },
+            {
+              "id": 3,
+              "name": "Key trade",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": 1,
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2026-11-26T11:07:15.929Z",
+              "updated_at": "2026-11-26T11:07:15.929Z"
+            }
+          ],
+          "total": 4
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "name": "Bolero renamed"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "Bolero renamed",
+          "kind": "portfolio",
+          "config": {
+            "encoding": "latin1",
+            "skipRows": 1,
+            "dateColumn": "Datum",
+            "feesColumn": "Kosten",
+            "nameColumn": "Naam",
+            "typeColumn": "Type",
+            "unitsColumn": "Aantal",
+            "amountColumn": "Bedrag",
+            "symbolColumn": "Symbool",
+            "number_format": "decimal_comma",
+            "currencyColumn": "Munt",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T11:07:16.037Z"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "Bolero renamed",
+          "kind": "portfolio",
+          "config": {
+            "encoding": "utf-8",
+            "skipRows": 1,
+            "dateColumn": "Date",
+            "feesColumn": "Fees",
+            "nameColumn": "Name",
+            "typeColumn": "Type",
+            "unitsColumn": "Units",
+            "amountColumn": "Amount",
+            "symbolColumn": "Symbol",
+            "number_format": "auto",
+            "currencyColumn": "Currency",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T11:07:16.045Z"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {},
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "Bolero renamed",
+          "kind": "portfolio",
+          "config": {
+            "encoding": "utf-8",
+            "skipRows": 1,
+            "dateColumn": "Date",
+            "feesColumn": "Fees",
+            "nameColumn": "Name",
+            "typeColumn": "Type",
+            "unitsColumn": "Units",
+            "amountColumn": "Amount",
+            "symbolColumn": "Symbol",
+            "number_format": "auto",
+            "currencyColumn": "Currency",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T11:07:16.045Z"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/999",
+      "body": {
+        "name": "Ghost"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Parser config not found"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/abc",
+      "body": {
+        "name": "Bad id"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1.5",
+      "body": {
+        "name": "Bad id"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1e3",
+      "body": {
+        "name": "Bad id"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/-1",
+      "body": {
+        "name": "Bad id"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/0",
+      "body": {
+        "name": "Bad id"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "name": "Degiro positions"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "A portfolio parser named \"Degiro positions\" already exists"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "name": 5
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"name\""
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "name": "  ",
+        "config": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Missing or invalid \"name\"; Missing or invalid \"config\""
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "config": {
+          "dateColumn": "D",
+          "nameColumn": "N",
+          "defaultAssetClass": "stock"
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "Bolero renamed",
+          "kind": "portfolio",
+          "config": {
+            "dateColumn": "D",
+            "nameColumn": "N",
+            "number_format": "auto",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T11:07:16.098Z"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stock",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": "abc"
+        }
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 1,
+          "name": "Bolero renamed",
+          "kind": "portfolio",
+          "config": {
+            "encoding": "utf-8",
+            "skipRows": "abc",
+            "dateColumn": "Date",
+            "feesColumn": "Fees",
+            "nameColumn": "Name",
+            "typeColumn": "Type",
+            "unitsColumn": "Units",
+            "amountColumn": "Amount",
+            "symbolColumn": "Symbol",
+            "number_format": "auto",
+            "currencyColumn": "Currency",
+            "defaultAssetClass": "stock"
+          },
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T11:07:16.106Z"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioParser",
+      "method": "PATCH",
+      "path": "/api/portfolio/import/parsers/1",
+      "body": {
+        "config": {
+          "dateColumn": "Date",
+          "symbolColumn": "Symbol",
+          "nameColumn": "Name",
+          "typeColumn": "Type",
+          "unitsColumn": "Units",
+          "amountColumn": "Amount",
+          "feesColumn": "Fees",
+          "currencyColumn": "Currency",
+          "defaultAssetClass": "stamps",
+          "number_format": "auto",
+          "encoding": "utf-8",
+          "skipRows": 1
+        }
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "config.defaultAssetClass must be a valid asset class"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioParsers",
+      "method": "GET",
+      "path": "/api/portfolio/import/parsers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "Bolero renamed",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": "abc",
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-26T11:07:16.106Z"
+            },
+            {
+              "id": 2,
+              "name": "Degiro positions",
+              "kind": "portfolio",
+              "config": {
+                "skipRows": 0,
+                "dateColumn": "Date",
+                "nameColumn": "Product",
+                "number_format": "auto",
+                "defaultAssetClass": "etf"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 4,
+              "name": "Extra keys kept",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": 1,
+                "futureKey": "kept",
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2026-11-26T11:07:16.016Z",
+              "updated_at": "2026-11-26T11:07:16.016Z"
+            },
+            {
+              "id": 3,
+              "name": "Key trade",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": 1,
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2026-11-26T11:07:15.929Z",
+              "updated_at": "2026-11-26T11:07:15.929Z"
+            }
+          ],
+          "total": 4
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioParser",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/parsers/1",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deletePortfolioParser",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/parsers/1",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Parser config not found"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioParser",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/parsers/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Parser config not found"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioParser",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/parsers/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioParser",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/parsers/2.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioParser",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/parsers/bogus",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioParsers",
+      "method": "GET",
+      "path": "/api/portfolio/import/parsers",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "name": "Degiro positions",
+              "kind": "portfolio",
+              "config": {
+                "skipRows": 0,
+                "dateColumn": "Date",
+                "nameColumn": "Product",
+                "number_format": "auto",
+                "defaultAssetClass": "etf"
+              },
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z"
+            },
+            {
+              "id": 4,
+              "name": "Extra keys kept",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": 1,
+                "futureKey": "kept",
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2026-11-26T11:07:16.016Z",
+              "updated_at": "2026-11-26T11:07:16.016Z"
+            },
+            {
+              "id": 3,
+              "name": "Key trade",
+              "kind": "portfolio",
+              "config": {
+                "encoding": "utf-8",
+                "skipRows": 1,
+                "dateColumn": "Date",
+                "feesColumn": "Fees",
+                "nameColumn": "Name",
+                "typeColumn": "Type",
+                "unitsColumn": "Units",
+                "amountColumn": "Amount",
+                "symbolColumn": "Symbol",
+                "number_format": "auto",
+                "currencyColumn": "Currency",
+                "defaultAssetClass": "stock"
+              },
+              "created_at": "2026-11-26T11:07:15.929Z",
+              "updated_at": "2026-11-26T11:07:15.929Z"
+            }
+          ],
+          "total": 3
+        }
+      }
+    }
+  ]
+}
