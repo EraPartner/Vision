@@ -1,0 +1,1122 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n           closed_at, created_at, updated_at, import_identity) VALUES\n          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'tax_advantaged', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000aa01'),\n          (2, 'Degiro', NULL, 'Degiro', 'USD', 'brokerage', 'liquid', 1, 1, 'none', 'me', 1, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000aa02'),\n          (3, 'Cash', NULL, NULL, 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000aa03')",
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n          ('USD', vision_numeric('0.9163', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          ('GBP', vision_numeric('1.1541', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n           is_active, price_provider, notes, created_at, updated_at) VALUES\n          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,\n           1, 'manual', 'usd stock', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,\n           1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n           fees, taxes, currency, fx_rate_to_eur, note, account_id, created_at, updated_at) VALUES\n          (1, 1, 'buy', '2024-01-10', vision_numeric('1000', 18, 4), vision_numeric('10', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('1.5', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.9', 20, 10), 'initial buy', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 1, 'dividend', '2024-03-01', vision_numeric('12.25', 18, 4), NULL, NULL,\n           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD', NULL, NULL, 1,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (3, 2, 'rent_income', '2024-02-01', vision_numeric('950.40', 18, 4), NULL, NULL,\n           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, 'february rent', NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (4, 1, 'sell', '2024-05-20', vision_numeric('600', 18, 4), vision_numeric('4', 18, 8),\n           vision_numeric('150', 18, 6), vision_numeric('2', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           vision_numeric('0.92', 20, 10), 'partial exit', 2, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (5, 1, 'gift', '2024-06-15', vision_numeric('0', 18, 4), vision_numeric('2', 18, 8),\n           vision_numeric('0', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',\n           NULL, 'inherited shares', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "now": "2026-11-26T12:00:00.000Z",
+  "steps": [
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "investment_id": 1,
+              "type": "gift",
+              "date": "2024-06-15",
+              "amount": 0,
+              "units": 2,
+              "price_per_unit": 0,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": null,
+              "note": "inherited shares",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 4,
+              "investment_id": 1,
+              "type": "sell",
+              "date": "2024-05-20",
+              "amount": 600,
+              "units": 4,
+              "price_per_unit": 150,
+              "fees": 2,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": 0.92,
+              "note": "partial exit",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 2,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": 0.9,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 4,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-07-01",
+        "amount": "750",
+        "units": "5",
+        "price_per_unit": "150",
+        "fees": 2.5,
+        "currency": "usd",
+        "note": "july top-up",
+        "account_id": 2
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "dividend",
+        "date": "2024-07-02",
+        "amount": 3.75,
+        "dividend_amount_convention": "gross"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/2/transactions",
+      "body": {
+        "type": "rent_income",
+        "date": "2024-03-01",
+        "amount": "1000",
+        "is_recurring": true,
+        "recurrence_interval": "monthly",
+        "recurrence_end_date": "2024-12-31"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type and date are required"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {},
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type and date are required"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-07-03",
+        "amount": "abc"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "amount: amount must be a number"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-07-03",
+        "amount": "10",
+        "currency": "euro"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency: currency must be a 3-letter ISO code"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-07-03",
+        "amount": "10",
+        "account_id": "0x10"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-07-03",
+        "amount": "10",
+        "account_id": 999
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "For buy/sell transactions, provide at least two of amount, units, and price_per_unit"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "bonus",
+        "date": "2024-07-03",
+        "amount": "10"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "type: Invalid option: expected one of \"buy\"|\"sell\"|\"dividend\"|\"fee\"|\"tax\"|\"interest\"|\"rent_income\"|\"appreciation\"|\"gift\"|\"split\"|\"merger\"|\"spinoff\"|\"return_of_capital\""
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/1/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-13-45",
+        "amount": "10"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "date: date is not a valid date"
+        }
+      }
+    },
+    {
+      "operationId": "createInvestmentTransaction",
+      "method": "POST",
+      "path": "/api/investments/999/transactions",
+      "body": {
+        "type": "buy",
+        "date": "2024-07-03",
+        "amount": "10"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Investment not found"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestments",
+      "method": "GET",
+      "path": "/api/investments?asset_class=stock",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 1,
+              "name": "ACME Corp",
+              "symbol": "ACME",
+              "asset_class": "stock",
+              "currency": "USD",
+              "current_price": 150.5,
+              "interest_rate": null,
+              "maturity_date": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "notes": "usd stock",
+              "is_active": true,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "show_in_ticker": true
+            }
+          ],
+          "total": 1,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getBulkPortfolioTransactions",
+      "method": "GET",
+      "path": "/api/investments/transactions?investment_ids=1,2&limit=50",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 5,
+              "investment_id": 1,
+              "type": "gift",
+              "date": "2024-06-15",
+              "amount": 0,
+              "units": 2,
+              "price_per_unit": 0,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": null,
+              "note": "inherited shares",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 4,
+              "investment_id": 1,
+              "type": "sell",
+              "date": "2024-05-20",
+              "amount": 600,
+              "units": 4,
+              "price_per_unit": 150,
+              "fees": 2,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": 0.92,
+              "note": "partial exit",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 2,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-01",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": null,
+              "note": null,
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 3,
+              "investment_id": 2,
+              "type": "rent_income",
+              "date": "2024-02-01",
+              "amount": 950.4,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "february rent",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": null,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": 0.9,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 5,
+          "limit": 50,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/2",
+      "body": {
+        "note": "withholding included"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "investment_id": 1,
+          "type": "dividend",
+          "date": "2024-03-01",
+          "amount": 12.25,
+          "units": null,
+          "price_per_unit": null,
+          "fees": 0,
+          "taxes": 0,
+          "currency": "USD",
+          "fx_rate_to_eur": null,
+          "note": "withholding included",
+          "is_recurring": false,
+          "recurrence_interval": null,
+          "recurrence_end_date": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T12:00:00.000Z",
+          "account_id": 1,
+          "import_batch_id": null,
+          "dividend_amount_convention": "unknown",
+          "income_recognition_role": "standard"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/2",
+      "body": {
+        "currency": ""
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "currency cannot be cleared"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/2",
+      "body": {
+        "currency": "usd",
+        "date": "2024-03-02"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 2,
+          "investment_id": 1,
+          "type": "dividend",
+          "date": "2024-03-02",
+          "amount": 12.25,
+          "units": null,
+          "price_per_unit": null,
+          "fees": 0,
+          "taxes": 0,
+          "currency": "USD",
+          "fx_rate_to_eur": null,
+          "note": "withholding included",
+          "is_recurring": false,
+          "recurrence_interval": null,
+          "recurrence_end_date": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T12:00:00.000Z",
+          "account_id": 1,
+          "import_batch_id": null,
+          "dividend_amount_convention": "unknown",
+          "income_recognition_role": "standard"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/3",
+      "body": {
+        "account_id": null
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "investment_id": 2,
+          "type": "rent_income",
+          "date": "2024-02-01",
+          "amount": 950.4,
+          "units": null,
+          "price_per_unit": null,
+          "fees": 0,
+          "taxes": 0,
+          "currency": "EUR",
+          "fx_rate_to_eur": null,
+          "note": "february rent",
+          "is_recurring": false,
+          "recurrence_interval": null,
+          "recurrence_end_date": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T12:00:00.000Z",
+          "account_id": null,
+          "import_batch_id": null,
+          "dividend_amount_convention": "unknown",
+          "income_recognition_role": "standard"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/3",
+      "body": {
+        "account_id": "0x10"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/3",
+      "body": {
+        "account_id": 3
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 3,
+          "investment_id": 2,
+          "type": "rent_income",
+          "date": "2024-02-01",
+          "amount": 950.4,
+          "units": null,
+          "price_per_unit": null,
+          "fees": 0,
+          "taxes": 0,
+          "currency": "EUR",
+          "fx_rate_to_eur": null,
+          "note": "february rent",
+          "is_recurring": false,
+          "recurrence_interval": null,
+          "recurrence_end_date": null,
+          "created_at": "2025-03-01T09:00:00.000Z",
+          "updated_at": "2026-11-26T12:00:00.000Z",
+          "account_id": 3,
+          "import_batch_id": null,
+          "dividend_amount_convention": "unknown",
+          "income_recognition_role": "standard"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/999",
+      "body": {
+        "note": "nothing"
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Portfolio transaction not found"
+        }
+      }
+    },
+    {
+      "operationId": "updatePortfolioTransaction",
+      "method": "PATCH",
+      "path": "/api/investments/transactions/abc",
+      "body": {
+        "note": "nothing"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "txnId: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioTransaction",
+      "method": "DELETE",
+      "path": "/api/investments/transactions/12abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "txnId: must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioTransaction",
+      "method": "DELETE",
+      "path": "/api/investments/transactions/4",
+      "status": 204,
+      "response": {}
+    },
+    {
+      "operationId": "deletePortfolioTransaction",
+      "method": "DELETE",
+      "path": "/api/investments/transactions/4",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Portfolio transaction not found"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions?limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-02",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": null,
+              "note": "withholding included",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-26T12:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            },
+            {
+              "id": 1,
+              "investment_id": 1,
+              "type": "buy",
+              "date": "2024-01-10",
+              "amount": 1000,
+              "units": 10,
+              "price_per_unit": 100,
+              "fees": 1.5,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": 0.9,
+              "note": "initial buy",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 3,
+          "limit": 2,
+          "offset": 1,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          1,
+          2
+        ],
+        "from_account_id": 1,
+        "to_account_id": 2,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeeff"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "idempotency_key": "{{uuid}}",
+          "from_account_id": 1,
+          "to_account_id": 2,
+          "transaction_ids": [
+            1,
+            2
+          ],
+          "previous_assignments": [
+            {
+              "transaction_id": 1,
+              "account_id": 1
+            },
+            {
+              "transaction_id": 2,
+              "account_id": 1
+            }
+          ],
+          "selected_count": 2,
+          "changed_count": 2,
+          "replayed": false
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          1,
+          2
+        ],
+        "from_account_id": 1,
+        "to_account_id": 2,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef1"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "idempotency_key": "{{uuid}}",
+          "from_account_id": 1,
+          "to_account_id": 2,
+          "transaction_ids": [
+            1,
+            2
+          ],
+          "previous_assignments": [
+            {
+              "transaction_id": 1,
+              "account_id": 2
+            },
+            {
+              "transaction_id": 2,
+              "account_id": 2
+            }
+          ],
+          "selected_count": 2,
+          "changed_count": 0,
+          "replayed": true
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          1,
+          2
+        ],
+        "from_account_id": 2,
+        "to_account_id": 1,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef2"
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "idempotency_key": "{{uuid}}",
+          "from_account_id": 2,
+          "to_account_id": 1,
+          "transaction_ids": [
+            1,
+            2
+          ],
+          "previous_assignments": [
+            {
+              "transaction_id": 1,
+              "account_id": 2
+            },
+            {
+              "transaction_id": 2,
+              "account_id": 2
+            }
+          ],
+          "selected_count": 2,
+          "changed_count": 2,
+          "replayed": false
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          1,
+          1
+        ],
+        "from_account_id": 2,
+        "to_account_id": 1,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef3"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: transaction_ids must be distinct"
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [],
+        "from_account_id": null,
+        "to_account_id": 1,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef4"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transaction_ids: Too small: expected array to have >=1 items"
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          1
+        ],
+        "from_account_id": null,
+        "to_account_id": 1
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "idempotency_key: Invalid input: expected string, received undefined"
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          999
+        ],
+        "from_account_id": 1,
+        "to_account_id": 2,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef5"
+      },
+      "status": 409,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "CONFLICT",
+          "message": "selected portfolio transactions are missing or no longer have the expected broker assignment",
+          "details": {
+            "stale_transaction_ids": [
+              999
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operationId": "bulkRetagPortfolioTransactions",
+      "method": "PUT",
+      "path": "/api/investments/transactions/broker",
+      "body": {
+        "transaction_ids": [
+          1
+        ],
+        "from_account_id": 1,
+        "to_account_id": 999,
+        "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef6"
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "to_account_id must reference an active portfolio account"
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/1/transactions?type=dividend",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 2,
+              "investment_id": 1,
+              "type": "dividend",
+              "date": "2024-03-02",
+              "amount": 12.25,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "USD",
+              "fx_rate_to_eur": null,
+              "note": "withholding included",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-26T12:00:00.000Z",
+              "account_id": 1,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 1,
+          "limit": 200,
+          "offset": 0,
+          "links": []
+        }
+      }
+    },
+    {
+      "operationId": "getInvestmentTransactions",
+      "method": "GET",
+      "path": "/api/investments/2/transactions?limit=5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": 3,
+              "investment_id": 2,
+              "type": "rent_income",
+              "date": "2024-02-01",
+              "amount": 950.4,
+              "units": null,
+              "price_per_unit": null,
+              "fees": 0,
+              "taxes": 0,
+              "currency": "EUR",
+              "fx_rate_to_eur": null,
+              "note": "february rent",
+              "is_recurring": false,
+              "recurrence_interval": null,
+              "recurrence_end_date": null,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2026-11-26T12:00:00.000Z",
+              "account_id": 3,
+              "import_batch_id": null,
+              "dividend_amount_convention": "unknown",
+              "income_recognition_role": "standard"
+            }
+          ],
+          "total": 1,
+          "limit": 5,
+          "offset": 0,
+          "links": []
+        }
+      }
+    }
+  ]
+}
