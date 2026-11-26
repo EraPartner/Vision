@@ -183,10 +183,15 @@ enum InvestmentsArea {
             offset: JavaScriptInteger.clamped(request.query("offset"), min: 0, fallback: 0))
     }
 
-    /// `getBulkTransactions`: the required `investment_ids` with `validateIntArray`'s accept set
+    /// `getBulkTransactions`: the route's query gate first (its zod issues answer before the
+    /// handler runs), then the required `investment_ids` with `validateIntArray`'s accept set
     /// (a plain base-10 digit string per element, 1..2^31-1; one bad element rejects the list),
     /// the repository's dedupe, then `parseBulkTransactionsOptions`.
     static func bulkQuery(_ request: InProcessRequest) throws -> BulkOptions {
+        var issues: [String] = []
+        let type = singleQuery(request, "type", &issues)
+        if !issues.isEmpty { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
+
         guard let rawIds = request.query("investment_ids"), !rawIds.isEmpty else {
             throw BackendHTTPError.validation("investment_ids is required")
         }
@@ -200,10 +205,6 @@ enum InvestmentsArea {
         // `normalizeInvestmentIds`: the `json_each` predicate wants distinct ids.
         var distinct: [InvestmentID] = []
         for id in ids where !distinct.contains(id) { distinct.append(id) }
-
-        var issues: [String] = []
-        let type = singleQuery(request, "type", &issues)
-        if !issues.isEmpty { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
 
         // `limit` stays opt-in (absent or empty means no outer LIMIT); anything else runs the
         // `parsePagination` clamp whose fallback of 1 keeps the previous `|| 1` behavior.
