@@ -139,6 +139,12 @@ function upload(
 const UUID_RE =
   /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi;
 
+// The yahoo chart payloads of the prices corpus: schema-valid for yahoo-finance2's
+// runtime validation (chart.schema), so the per-symbol close fallback and the
+// price-history backfill succeed against the stubbed endpoints.
+const CHART_ACME_RECENT = {"chart":{"result":[{"meta":{"currency":"USD","symbol":"ACME","exchangeName":"NMS","instrumentType":"EQUITY","firstTradeDate":1637971200,"regularMarketTime":1795435200,"gmtoffset":3600,"timezone":"CET","exchangeTimezoneName":"Europe/Brussels","regularMarketPrice":151.4,"priceHint":2,"currentTradingPeriod":{"pre":{"timezone":"CET","start":1795262400,"end":1795298400,"gmtoffset":3600},"regular":{"timezone":"CET","start":1795348800,"end":1795384800,"gmtoffset":3600},"post":{"timezone":"CET","start":1795435200,"end":1795471200,"gmtoffset":3600}},"dataGranularity":"1d","range":"5d","validRanges":["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]},"timestamp":[1795262400,1795348800,1795435200],"indicators":{"quote":[{"high":[151.25,151.6,151.9],"low":[150.25,150.6,150.9],"open":[150.5,150.85,151.15],"close":[150.75,151.1,151.4],"volume":[1000,1100,900]}]}}],"error":null}};
+const CHART_ACME_WINDOW = {"chart":{"result":[{"meta":{"currency":"USD","symbol":"ACME","exchangeName":"NMS","instrumentType":"EQUITY","firstTradeDate":1637971200,"regularMarketTime":1638662400,"gmtoffset":3600,"timezone":"CET","exchangeTimezoneName":"Europe/Brussels","regularMarketPrice":121.25,"priceHint":2,"currentTradingPeriod":{"pre":{"timezone":"CET","start":1637971200,"end":1638007200,"gmtoffset":3600},"regular":{"timezone":"CET","start":1638316800,"end":1638352800,"gmtoffset":3600},"post":{"timezone":"CET","start":1638662400,"end":1638698400,"gmtoffset":3600}},"dataGranularity":"1d","range":"5d","validRanges":["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]},"timestamp":[1637971200,1638316800,1638662400],"indicators":{"quote":[{"high":[121.0,122.5,121.75],"low":[120.0,121.5,120.75],"open":[120.25,121.75,121.0],"close":[120.5,122,121.25],"volume":[1000,1100,900]}]}}],"error":null}};
+
 const SEED_TIME = "2025-03-01T09:00:00.000000Z";
 
 /** A complete, valid Belgian tax household (ADR-200) for the settings corpus. */
@@ -5545,6 +5551,64 @@ function mutationAreas(): Record<string, ParityArea> {
         },
         { operationId: "getInvestmentTransactions", method: "GET", path: "/api/investments/1/transactions?type=dividend" },
         { operationId: "getInvestmentTransactions", method: "GET", path: "/api/investments/2/transactions?limit=5" },
+      ],
+    },
+    "prices-mutations": {
+      router: { module: "investments.ts", mountPath: "/api/investments" },
+      now: "2026-11-26T12:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+           closed_at, created_at, updated_at, import_identity) VALUES
+          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+           '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bb01')`,
+        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+          ${RATE_ROW("USD", "0.9163", "2025-01-02", 1)}`,
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+           is_active, price_provider, price_provider_id, price_provider_latest_url, price_provider_latest_path,
+           notes, created_at, updated_at) VALUES
+          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,
+           1, 'yahoo', NULL, NULL, NULL, 'yahoo quote stub', '${SEED_TIME}', '${SEED_TIME}'),
+          (2, 'Custom Fund', NULL, 'stock', 'EUR', vision_numeric('40', 18, 6), NULL,
+           1, 'custom', NULL, 'http://example.com/prices/latest.json', 'data.price',
+           'custom json stub', '${SEED_TIME}', '${SEED_TIME}'),
+          (3, 'City Loft', NULL, 'real_estate', 'EUR', vision_numeric('250000', 18, 6), NULL,
+           1, 'manual', NULL, NULL, NULL, NULL, '${SEED_TIME}', '${SEED_TIME}'),
+          (4, 'Quiet Holdings', 'QUIET', 'stock', 'USD', NULL, NULL,
+           1, 'yahoo', NULL, NULL, NULL, 'falls back to stored history', '${SEED_TIME}', '${SEED_TIME}')`,
+        `INSERT INTO asset_price_history (investment_id, price_date, close_price, source, fetched_at, updated_at) VALUES
+          (4, '2026-11-20', vision_numeric('77.25', 18, 6), 'provider',
+           '2026-11-20T22:00:00.000000Z', '2026-11-20T22:00:00.000000Z'),
+          (4, '2026-11-23', vision_numeric('78.5', 18, 6), 'provider',
+           '2026-11-23T22:00:00.000000Z', '2026-11-23T22:00:00.000000Z')`,
+      ],
+      fetch: {
+        "http://example.com/prices/latest.json": {
+          status: 200,
+          body: JSON.stringify({ data: { price: 42.5 }, asof: "2026-11-26" }),
+        },
+        // The yahoo batch quote fails deterministically (its spec fetch is not
+        // stubbed), so the per-symbol chart fallback supplies the live quote.
+        "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1795262400&period2=1795694400": {
+          status: 200,
+          body: JSON.stringify(CHART_ACME_RECENT),
+        },
+        "https://query2.finance.yahoo.com/v8/finance/chart/ACME?useYfid=true&interval=1d&includePrePost=false&events=div%7Csplit%7Cearn&lang=en-US&period1=1637971200&period2=1795737600": {
+          status: 200,
+          body: JSON.stringify(CHART_ACME_WINDOW),
+        },
+      },
+      steps: [
+        { operationId: "listInvestmentProviders", method: "GET", path: "/api/investments/providers" },
+        { operationId: "refreshInvestmentPrices", method: "POST", path: "/api/investments/refresh-prices" },
+        { operationId: "refreshInvestmentPrices", method: "POST", path: "/api/investments/refresh-prices" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/1/price-history" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/1/price-history?db_only=false" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/1/price-history" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/4/price-history?db_only=true" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/4/price-history?db_only=false&from_ms=1794787200000" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/2/price-history?db_only=false" },
+        { operationId: "getInvestmentPriceHistory", method: "GET", path: "/api/investments/999/price-history" },
       ],
     },
     "importBatches-mutations": {
