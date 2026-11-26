@@ -45,11 +45,15 @@ public enum StatisticsPeriodFormat {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
         guard let date = calendar.date(from: DateComponents(year: year, month: month, day: 1)) else { return period }
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.locale = locale
-        formatter.dateFormat = pattern
+        let formatter = SharedFormatters.shared("statistics.period|\(pattern)|\(locale.identifier)") {
+            () -> DateFormatter in
+            let made = DateFormatter()
+            made.calendar = calendar
+            made.timeZone = calendar.timeZone
+            made.locale = locale
+            made.dateFormat = pattern
+            return made
+        }
         return formatter.string(from: date)
     }
 }
