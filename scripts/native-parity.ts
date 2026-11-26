@@ -521,6 +521,7 @@ const batchCommit = (id: string): ParityStep => ({
   path: `/api/import/batches/${id}/commit`,
 });
 const csvUploadStep = (
+  operationId: string,
   path: string,
   {
     filename,
@@ -534,7 +535,7 @@ const csvUploadStep = (
     fields?: Record<string, string>;
   },
 ): ParityStep => ({
-  operationId: "importCsv",
+  operationId,
   method: "POST",
   path,
   multipart: {
@@ -1816,18 +1817,18 @@ export const AREAS: Record<string, ParityArea> = {
         (10, 'DupCoffee', 'dupcoffee', 3, 1, '${SEED_TIME}', '${SEED_TIME}')`,
     ],
     steps: [
-      csvUploadStep("/api/import/csv", {
+      csvUploadStep("importCsv", "/api/import/csv", {
         filename: "",
         content: "",
         fields: { bank_name: "kbc" },
       }),
-      csvUploadStep("/api/import/csv", {
+      csvUploadStep("importCsv", "/api/import/csv", {
         filename: "x.txt",
         contentType: "text/plain",
         content: "a;b\nc;d",
         fields: { bank_name: "kbc" },
       }),
-      csvUploadStep("/api/import/csv", {
+      csvUploadStep("importCsv", "/api/import/csv", {
         filename: "kbc.csv",
         content: kbcLine(
           "01/06/2024",
@@ -1839,7 +1840,7 @@ export const AREAS: Record<string, ParityArea> = {
         ),
         fields: { bank_name: "kbc" },
       }),
-      csvUploadStep("/api/import/csv", {
+      csvUploadStep("importCsv", "/api/import/csv", {
         filename: "kbc-new.csv",
         content: kbcLine(
           "02/06/2024",
@@ -1851,7 +1852,7 @@ export const AREAS: Record<string, ParityArea> = {
         ),
         fields: { bank_name: "kbc" },
       }),
-      csvUploadStep("/api/import/csv", {
+      csvUploadStep("importCsv", "/api/import/csv", {
         filename: "kbc-nobank.csv",
         content: kbcLine(
           "03/06/2024",
@@ -1862,7 +1863,7 @@ export const AREAS: Record<string, ParityArea> = {
           "FreshNoBankName",
         ),
       }),
-      csvUploadStep("/api/import/csv/custom", {
+      csvUploadStep("importCsvCustom", "/api/import/csv/custom", {
         filename: "custom.csv",
         content:
           "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n",
@@ -1900,16 +1901,16 @@ export const AREAS: Record<string, ParityArea> = {
           ],
         },
       },
-      csvUploadStep("/api/import/recipients", {
+      csvUploadStep("importRecipients", "/api/import/recipients", {
         filename: "recipients.csv",
         content:
           "name,category\nImported One,FOOD:GROCERIES\nImported Two,\n,worthless row",
       }),
-      csvUploadStep("/api/import/categories", {
+      csvUploadStep("importCategories", "/api/import/categories", {
         filename: "categories.csv",
         content: "category,description\nIMPORT:FIRST,first test description\n",
       }),
-      csvUploadStep("/api/import/recipients", {
+      csvUploadStep("importRecipients", "/api/import/recipients", {
         filename: "recipients-sep.csv",
         content: "name;category\nSemicolon Rcpt;IMPORT:FIRST\n",
         fields: { separator: ";" },
@@ -2447,6 +2448,11 @@ export const AREAS: Record<string, ParityArea> = {
 
   attachments: {
     router: { module: "attachments.ts", mountPath: "/api/attachments" },
+    // The whole area records on the fixed clock: the list after the last upload is
+    // `ORDER BY created_at DESC` with no tiebreak, and the replay's one frozen
+    // `now()` must meet the ordering the TypeScript recorder saw, not the sub-second
+    // progression of a wall-clock run.
+    now: "2026-06-15T09:00:00.000Z",
     // The upload steps answer 201 with `created_at`/`stored_path` the run wrote, and
     // write the file bytes under the throwaway ATTACHMENTS_DIR; the later list and
     // download steps read both back.
@@ -4415,6 +4421,7 @@ function mutationAreas(): Record<string, ParityArea> {
   const importParsersArea = AREAS.importParsers;
   const importBatchesArea = AREAS.importBatches;
   const importReviewArea = AREAS.importReview;
+  const importUploadsArea = AREAS.importUploads;
   if (
     tags === undefined ||
     settings === undefined ||
@@ -4426,7 +4433,8 @@ function mutationAreas(): Record<string, ParityArea> {
     plannedArea === undefined ||
     importParsersArea === undefined ||
     importBatchesArea === undefined ||
-    importReviewArea === undefined
+    importReviewArea === undefined ||
+    importUploadsArea === undefined
   )
     throw new Error("missing base area");
 
@@ -4978,6 +4986,242 @@ function mutationAreas(): Record<string, ParityArea> {
       });
     }
   }
+  // The upload area's mutations: uploads with mutated multipart fields, file
+  // names, content types and CSV contents, with batch reads between so a wrong
+  // staged state shows up as a difference. Every bank name routes to a real
+  // adapter or fails the pipeline's own validation — an unknown name is the
+  // pipeline's 500, which the corpus cannot replay usefully.
+  const uploadRandom = new Random(0x7a16e);
+  const uploadSteps: ParityStep[] = [];
+  const uploadBankNames = ["kbc", "KBC", "K B C", "kbc ", "", "  "];
+  const uploadFileNames = [
+    "a.csv",
+    "b.CSV",
+    "c.txt",
+    "x.tar.gz",
+    " sta-p až 1.csv",
+    "UP.CSV",
+  ];
+  const uploadContentTypes = [
+    "text/csv",
+    "text/plain",
+    "application/vnd.ms-excel",
+    "application/octet-stream",
+    "",
+    "application/json",
+  ];
+  const uploadDates = [
+    "10/07/2024",
+    "10/13/2024",
+    "31/12/2024",
+    "",
+    "aa/bb/cccc",
+    "1/2/2024",
+    "2024-07-10",
+  ];
+  const uploadAmounts = [
+    "-1,25",
+    "0,00",
+    "9,95",
+    "-0,01",
+    "1e3,45",
+    "",
+    "abc",
+    "12",
+  ];
+  const uploadCounterparties = [
+    "DupCoffee",
+    "DUPCOFFEE",
+    "fresh place x2c",
+    "Fresh Café",
+    "",
+    "   ",
+    "Стамбул food",
+    "Dup Coffee",
+  ];
+  const uploadCustomBodies = (): Record<string, string> => {
+    const fields: Record<string, string> = {};
+    if (uploadRandom.chance(0.92))
+      fields.bank_name = uploadRandom.pick(uploadBankNames);
+    if (uploadRandom.chance(0.8))
+      fields.date_format = uploadRandom.pick([
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "",
+        "Y-m-d",
+      ]);
+    if (uploadRandom.chance(0.8))
+      fields.date_column = uploadRandom.pick([
+        "Date",
+        "date",
+        "Datum",
+        "",
+        "  ",
+      ]);
+    if (uploadRandom.chance(0.8))
+      fields.recipient_column = uploadRandom.pick([
+        "Name",
+        "Naam",
+        "",
+        "Payee",
+      ]);
+    if (uploadRandom.chance(0.8))
+      fields.amount_column = uploadRandom.pick(["Amount", "Bedrag", "", "Amt"]);
+    if (uploadRandom.chance(0.4))
+      fields.memo_column = uploadRandom.pick(["Memo", "", "Note"]);
+    if (uploadRandom.chance(0.3))
+      fields.number_format = uploadRandom.pick([
+        "auto",
+        "dot",
+        "comma",
+        "weird",
+      ]);
+    if (uploadRandom.chance(0.3))
+      fields.separator = uploadRandom.pick([",", ";", ";;", "\t", ",,"]);
+    if (uploadRandom.chance(0.3))
+      fields.skip_rows = uploadRandom.pick(["0", "1", "-2", "3", "abc"]);
+    if (uploadRandom.chance(0.2))
+      fields.encoding = uploadRandom.pick(["utf-8", "latin1", "", "utf8"]);
+    return fields;
+  };
+  const uploadBatchIds = ["1", "2", "3", "4", "10", "999", "0", "abc", "1e3"];
+  const uploadCsvContent = (): string => {
+    if (uploadRandom.chance(0.15))
+      return "\uFEFFgarbage header;line;with\nno structure";
+    const rows: string[] = [];
+    const count = 1 + uploadRandom.int(3);
+    for (let r = 0; r < count; r++) {
+      rows.push(
+        kbcLine(
+          uploadRandom.pick(uploadDates),
+          uploadRandom.pick(uploadAmounts),
+          uploadRandom.pick(["100,00", "", "-5,00"]),
+          uploadRandom.chance(0.5) ? "" : "1,00",
+          uploadRandom.chance(0.5) ? "" : "2,00",
+          uploadRandom.pick(uploadCounterparties),
+        ),
+      );
+    }
+    return rows.join("");
+  };
+  const uploadRecipientsContent = (): string => {
+    const rows: string[] = ["name,category,bank_account,address"];
+    const count = 1 + uploadRandom.int(3);
+    for (let r = 0; r < count; r++) {
+      rows.push(
+        [
+          uploadRandom.pick(uploadCounterparties),
+          uploadRandom.pick([
+            "FOOD:GROCERIES",
+            "IMPORT:MUT",
+            "no colon here",
+            "",
+            "general:",
+            ":detail",
+          ]),
+          uploadRandom.chance(0.3)
+            ? uploadRandom.pick(["BE10", "", "abc"])
+            : "",
+          uploadRandom.chance(0.3)
+            ? uploadRandom.pick(["Street 1", "", "x;s"])
+            : "",
+        ].join(","),
+      );
+    }
+    return rows.join("\n");
+  };
+  const uploadCategoriesContent = (): string => {
+    const rows: string[] = ["category,description"];
+    const count = 1 + uploadRandom.int(3);
+    for (let r = 0; r < count; r++) {
+      rows.push(
+        [
+          uploadRandom.pick([
+            "IMPORT:MUT" + r,
+            "no colon",
+            "",
+            "gen:eral",
+            "FOOD:GROCERIES",
+            "INTER:SPIØ",
+          ]),
+          uploadRandom.pick(["", "d", "x;s"] as string[]),
+        ].join(","),
+      );
+    }
+    return rows.join("\n");
+  };
+  const withMultipart = (
+    operationId: string,
+    path: string,
+    content: string,
+  ): ParityStep => {
+    if (uploadRandom.chance(0.08)) {
+      // No file part at all: the route's "No file uploaded" answer.
+      return csvUploadStep(operationId, path, {
+        filename: "",
+        content: "",
+        fields: uploadCustomBodies(),
+      });
+    }
+    return csvUploadStep(operationId, path, {
+      filename: uploadRandom.pick(uploadFileNames),
+      contentType: uploadRandom.pick(uploadContentTypes),
+      content,
+      fields: uploadCustomBodies(),
+    });
+  };
+  for (let i = 0; i < 430; i++) {
+    const roll = uploadRandom.next();
+    if (roll < 0.5) {
+      uploadSteps.push(
+        withMultipart("importCsv", "/api/import/csv", uploadCsvContent()),
+      );
+    } else if (roll < 0.68) {
+      uploadSteps.push(
+        withMultipart(
+          "importCsvCustom",
+          "/api/import/csv/custom",
+          "Date,Name,Amount,Memo\n2024-07-01,FreshCustom,10.50,Custom memo\n2024-07-02,Second,\x221,\n",
+        ),
+      );
+    } else if (roll < 0.85) {
+      uploadSteps.push(
+        withMultipart(
+          "importRecipients",
+          "/api/import/recipients",
+          uploadRecipientsContent(),
+        ),
+      );
+    } else {
+      uploadSteps.push(
+        withMultipart(
+          "importCategories",
+          "/api/import/categories",
+          uploadCategoriesContent(),
+        ),
+      );
+    }
+    if (uploadRandom.chance(0.1)) {
+      // The batch list grows with every upload, so the corpus keeps each read
+      // a bounded page; the preview reads carry the staged state.
+      uploadSteps.push(batches("?limit=5&offset=0"));
+    }
+    if (uploadRandom.chance(0.08)) {
+      uploadSteps.push(batchPreview(uploadRandom.pick(uploadBatchIds)));
+    }
+  }
+  uploadSteps.push(
+    batches("?limit=5"),
+    batchPreview("2"),
+    withMultipart("importCsv", "/api/import/csv", uploadCsvContent()),
+    withMultipart(
+      "importCsvStream",
+      "/api/import/csv/stream",
+      kbcLine("01/06/2025", "-1,00", "99,00", "", "1,00", "DupCoffee"),
+    ),
+    batches("?limit=5"),
+  );
+
   plannedSteps.push(
     {
       operationId: "getPlannedTransactions",
@@ -5028,6 +5272,13 @@ function mutationAreas(): Record<string, ParityArea> {
     "importReview-mutations": {
       ...importReviewArea,
       steps: asRecorded(reviewSteps),
+    },
+    "importUploads-mutations": {
+      ...importUploadsArea,
+      // The interleaved batch reads show `NOW()` timestamps the uploads write, so the
+      // area records on the fixed clock the replay runs on.
+      now: "2026-11-20T12:00:00.000Z",
+      steps: asRecorded(uploadSteps),
     },
   };
 }

@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-11-25
+date: 2026-11-26
 updated: 2026-11-25
 tags:
   [
@@ -752,6 +752,29 @@ the last-three-pairs amount-change report, the planned-payment coverage probe, a
 stable confidence sort. The area's corpus records on the fixed clock
 (`sub_interval(today(), '3 years')`); the service's 3-minute result cache does not port
 (the corpus is deterministic without it).
+
+The five upload routes run in-process (`Areas/ImportUploads.swift`): the plain statement
+import (`importCsv`), the column-mapped one (`importCsvCustom`), the SSE stream
+(`importCsvStream`), and the payee/category CSV imports (`importRecipients`,
+`importCategories`). `MultipartParts` is the form; the `csvUpload` filter (extension plus
+MIME) and the two `bank_name` messages precede everything else, as multer orders them. The
+pipeline is the TS one phase by phase: `createBatch` and the 500-row staging inserts, the
+sha256 staging identities of `importIdentity.ts` (source record, budgeting fingerprint,
+occurrence ordinal), the validate/match chunk updates through `json_each`, the pattern
+phase through the JSC regex of `RecipientText`, the exact/trigram phase over
+`SQLText.similarity`, and the new-recipient upsert. All-exact batches auto-commit through
+`ImportCommitArea.commitBatch` and the completion stamp; the reconcile, forecast-cache
+clear and MV refresh that follow have no answer the corpus observes, so they stay with
+`ImportCommitArea.commit`'s tail decision. The simple imports are the set-based resolves of
+`dataImportService.ts` (`resolveRecipients`/`resolveCategories` with their alias join and
+raced re-select) folded per row: notes, bank accounts, default category in that order. The
+stream route answers the full SSE event text (`createSseWriter`'s padding, the percent
+banding of `progressToPercent`), and `RoutingAPITransport.stream` feeds a ported stream to
+the client reader in one chunk; the recorder holds the raw text, compared byte-for-byte.
+The uploads' corpora are `importUploads` (10 steps) plus the seeded
+`importUploads-mutations` (516 steps, 590 KB with the batch reads kept to bounded
+pages), which mixes mutated multipart fields, file names, content types and CSV contents
+with batch list and preview reads between.
 
 `bun run native:parity` records each area's parity corpus (`apps/native/parity/*.json`) from the
 TypeScript routers on a migrated database with a small seed. `ParityTests` replays it, with each

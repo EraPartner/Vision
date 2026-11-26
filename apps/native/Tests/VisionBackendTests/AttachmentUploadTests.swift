@@ -36,11 +36,13 @@ import VisionNativeCore
     /// A migrated database with one transaction (id 1) to upload against.
     static func uploadDatabase() throws -> BackendDatabase {
         let file = try ParityTests.migratedDatabase(seed: [
+            "INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES"
+                + " (1, 'Seeded', 'seeded', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
             "INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES"
                 + " (1, 'Main', 'EUR', 'checking', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z',"
                 + " '00000000-0000-4000-8000-000000000001')",
             "INSERT INTO transactions (id, date, amount, currency, recipient_id, account_id, is_active, created_at, updated_at) VALUES"
-                + " (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', NULL, 1, 1,"
+                + " (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 1, 1, 1,"
                 + " '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
         ])
         return BackendDatabase(path: file.path, attachmentsDirectory: file.deletingLastPathComponent().path + "/attachments")
@@ -76,7 +78,7 @@ import VisionNativeCore
                 == nil)
         #expect(
             MultipartParts.parse(
-                headers: ["Content-Type": "multipart/form-data; boundary=""], body: Data("--\r\n\r\n\r\n--".utf8)) == nil)
+                headers: ["Content-Type": "multipart/form-data; boundary=\"\""], body: Data("--\r\n\r\n\r\n--".utf8)) == nil)
     }
 
     // MARK: - The content checks
@@ -94,7 +96,14 @@ import VisionNativeCore
     }
 
     @Test func extensionChecks() throws {
-        #expect(try AttachmentsArea.verifyAttachmentContent(bytes: Self.png, filename: "photo.JPG") == "image/png")
+        // A mismatching extension throws, like the TS: `extensionMime('.jpg')` is
+        // image/jpeg, not the sniffed image/png.
+        do {
+            _ = try AttachmentsArea.verifyAttachmentContent(bytes: Self.png, filename: "photo.JPG")
+            Issue.record("a mismatching extension must be rejected")
+        } catch let error as BackendHTTPError {
+            #expect(error.message == "File extension .jpg does not match content (image/png).")
+        }
         #expect(try AttachmentsArea.verifyAttachmentContent(bytes: Self.png, filename: "no-file-name") == "image/png")
         do {
             _ = try AttachmentsArea.verifyAttachmentContent(bytes: Self.png, filename: "x.exe")
@@ -114,7 +123,7 @@ import VisionNativeCore
 
     // MARK: - The route, on the size limit and the unexpected field
 
-    @Test func rejectsOversizeAndUnexpectedFields() throws {
+    @Test func rejectsOversizeAndUnexpectedFields() async throws {
         let database = try Self.uploadDatabase()
         let oversize = Data(repeating: 0x89, count: AttachmentsArea.maxUploadBytes + 1)
         let contentType = "multipart/form-data; boundary=VisionBoundary"
@@ -122,7 +131,7 @@ import VisionNativeCore
             ("file", "big.png", "image/png", oversize),
         ])
         do {
-            _ = try database.run { session in
+            _ = try await database.run { session in
                 try AttachmentsArea.upload(
                     session,
                     request: Self.request(path: "1", contentType: contentType, body: oversizeBody), root: nil)
@@ -137,7 +146,7 @@ import VisionNativeCore
             ("other", "a.png", "image/png", Self.png),
         ])
         do {
-            _ = try database.run { session in
+            _ = try await database.run { session in
                 try AttachmentsArea.upload(
                     session,
                     request: Self.request(path: "1", contentType: contentType, body: unexpectedField), root: nil)

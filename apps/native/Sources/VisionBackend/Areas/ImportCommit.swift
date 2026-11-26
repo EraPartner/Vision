@@ -418,6 +418,7 @@ enum ImportCommitArea {
         for row in chunk {
             let key = "\(row.fingerprintVersion ?? 0):\(row.dedupFingerprint ?? "")"
             if let transaction = candidateIds.contains(row.id) ? insertedByKey[key] : nil {
+                result.imported += 1
                 result.inserted.append(
                     InsertedRow(
                         transaction: TransactionID(rawValue: transaction),

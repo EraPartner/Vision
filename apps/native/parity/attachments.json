@@ -6,6 +6,7 @@
     "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,\n         created_at, updated_at) VALUES\n        (1, '2024-01-05', vision_numeric('-12.5', 18, 4), 'EUR', 'CARD 1234', 1, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
     "INSERT INTO attachments (id, transaction_id, filename, stored_path, mime_type, size_bytes, created_at) VALUES\n        (101, 1, 'receipt.png', '1/aaaaaaaa-0000-4000-8000-000000000001.png', 'image/png', 1024,\n         '2025-03-01T09:00:00.000000Z'),\n        (102, 1, 'invoice.pdf', '1/bbbbbbbb-0000-4000-8000-000000000002.pdf', 'application/pdf', 2048,\n         '2025-03-02T09:00:00.000000Z'),\n        (103, 1, 'scan.png', '1/cccccccc-0000-4000-8000-000000000003.png', 'image/png', 512,\n         '2025-03-03T09:00:00.000000Z')"
   ],
+  "now": "2026-06-15T09:00:00.000Z",
   "steps": [
     {
       "operationId": "getTransactionAttachments",
@@ -281,7 +282,7 @@
           "stored_path": "1/{{uuid}}.png",
           "mime_type": "image/png",
           "size_bytes": 11,
-          "created_at": "2026-11-25T21:42:03.731Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -301,7 +302,7 @@
               "stored_path": "1/{{uuid}}.png",
               "mime_type": "image/png",
               "size_bytes": 11,
-              "created_at": "2026-11-25T21:42:03.731Z"
+              "created_at": "2026-06-15T09:00:00.000Z"
             },
             {
               "id": "103",
@@ -359,7 +360,7 @@
           "stored_path": "1/{{uuid}}.jpg",
           "mime_type": "image/jpeg",
           "size_bytes": 6,
-          "created_at": "2026-11-25T21:42:03.760Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -387,7 +388,7 @@
           "stored_path": "1/{{uuid}}.pdf",
           "mime_type": "application/pdf",
           "size_bytes": 15,
-          "created_at": "2026-11-25T21:42:03.771Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -415,7 +416,7 @@
           "stored_path": "1/{{uuid}}.gif",
           "mime_type": "image/gif",
           "size_bytes": 12,
-          "created_at": "2026-11-25T21:42:03.782Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -443,7 +444,7 @@
           "stored_path": "1/{{uuid}}.webp",
           "mime_type": "image/webp",
           "size_bytes": 16,
-          "created_at": "2026-11-25T21:42:03.793Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -540,7 +541,7 @@
           "stored_path": "1/{{uuid}}",
           "mime_type": "image/png",
           "size_bytes": 8,
-          "created_at": "2026-11-25T21:42:03.823Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -698,7 +699,7 @@
           "stored_path": "1/{{uuid}}.jpg",
           "mime_type": "image/jpeg",
           "size_bytes": 4,
-          "created_at": "2026-11-25T21:42:03.882Z"
+          "created_at": "2026-06-15T09:00:00.000Z"
         }
       }
     },
@@ -712,49 +713,13 @@
         "data": {
           "items": [
             {
-              "id": "7",
+              "id": "1",
               "transaction_id": 1,
-              "filename": "tagged.jpg",
-              "stored_path": "1/{{uuid}}.jpg",
-              "mime_type": "image/jpeg",
-              "size_bytes": 4,
-              "created_at": "2026-11-25T21:42:03.882Z"
-            },
-            {
-              "id": "6",
-              "transaction_id": 1,
-              "filename": "noextension",
-              "stored_path": "1/{{uuid}}",
+              "filename": "receipt.png",
+              "stored_path": "1/{{uuid}}.png",
               "mime_type": "image/png",
-              "size_bytes": 8,
-              "created_at": "2026-11-25T21:42:03.823Z"
-            },
-            {
-              "id": "5",
-              "transaction_id": 1,
-              "filename": "shot.webp",
-              "stored_path": "1/{{uuid}}.webp",
-              "mime_type": "image/webp",
-              "size_bytes": 16,
-              "created_at": "2026-11-25T21:42:03.793Z"
-            },
-            {
-              "id": "4",
-              "transaction_id": 1,
-              "filename": "anim.gif",
-              "stored_path": "1/{{uuid}}.gif",
-              "mime_type": "image/gif",
-              "size_bytes": 12,
-              "created_at": "2026-11-25T21:42:03.782Z"
-            },
-            {
-              "id": "3",
-              "transaction_id": 1,
-              "filename": "doc.pdf",
-              "stored_path": "1/{{uuid}}.pdf",
-              "mime_type": "application/pdf",
-              "size_bytes": 15,
-              "created_at": "2026-11-25T21:42:03.771Z"
+              "size_bytes": 11,
+              "created_at": "2026-06-15T09:00:00.000Z"
             },
             {
               "id": "2",
@@ -763,16 +728,52 @@
               "stored_path": "1/{{uuid}}.jpg",
               "mime_type": "image/jpeg",
               "size_bytes": 6,
-              "created_at": "2026-11-25T21:42:03.760Z"
+              "created_at": "2026-06-15T09:00:00.000Z"
             },
             {
-              "id": "1",
+              "id": "3",
               "transaction_id": 1,
-              "filename": "receipt.png",
-              "stored_path": "1/{{uuid}}.png",
+              "filename": "doc.pdf",
+              "stored_path": "1/{{uuid}}.pdf",
+              "mime_type": "application/pdf",
+              "size_bytes": 15,
+              "created_at": "2026-06-15T09:00:00.000Z"
+            },
+            {
+              "id": "4",
+              "transaction_id": 1,
+              "filename": "anim.gif",
+              "stored_path": "1/{{uuid}}.gif",
+              "mime_type": "image/gif",
+              "size_bytes": 12,
+              "created_at": "2026-06-15T09:00:00.000Z"
+            },
+            {
+              "id": "5",
+              "transaction_id": 1,
+              "filename": "shot.webp",
+              "stored_path": "1/{{uuid}}.webp",
+              "mime_type": "image/webp",
+              "size_bytes": 16,
+              "created_at": "2026-06-15T09:00:00.000Z"
+            },
+            {
+              "id": "6",
+              "transaction_id": 1,
+              "filename": "noextension",
+              "stored_path": "1/{{uuid}}",
               "mime_type": "image/png",
-              "size_bytes": 11,
-              "created_at": "2026-11-25T21:42:03.731Z"
+              "size_bytes": 8,
+              "created_at": "2026-06-15T09:00:00.000Z"
+            },
+            {
+              "id": "7",
+              "transaction_id": 1,
+              "filename": "tagged.jpg",
+              "stored_path": "1/{{uuid}}.jpg",
+              "mime_type": "image/jpeg",
+              "size_bytes": 4,
+              "created_at": "2026-06-15T09:00:00.000Z"
             },
             {
               "id": "103",

@@ -51,11 +51,16 @@ import VisionNativeCore
                     body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
                 }
                 for file in files {
-                    body.append(
-                        Data(
-                            "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(file.name)\"; "
-                                + "filename=\"\(file.filename)\"\r\nContent-Type: \(file.contentType ?? "application/octet-stream")\r\n\r\n"
-                                .utf8))
+                    // A part without a recorded content type carries no Content-Type header at
+                    // all, as the recorder's `attach` without options leaves it to busboy.
+                    var head =
+                        "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(file.name)\"; "
+                        + "filename=\"\(file.filename)\"\r\n"
+                    if let contentType = file.contentType {
+                        head += "Content-Type: \(contentType)\r\n"
+                    }
+                    head += "\r\n"
+                    body.append(Data(head.utf8))
                     body.append(Data(base64Encoded: file.base64) ?? Data())
                     body.append(Data("\r\n".utf8))
                 }
@@ -176,7 +181,7 @@ import VisionNativeCore
     static let uuidToken = "{{uuid}}"
 
     static func isUuidForm(_ text: String) -> Bool {
-        text.count == 36 && text.split(separator: "-", omittingEmptySubsequences: false).map { $0.count } == [8, 4, 4, 4, 12]
+        text.count == 36 && text.components(separatedBy: "-").map { $0.count } == [8, 4, 4, 4, 12]
     }
 
     /// A `{{uuid}}` the run recorded: the answer holds a random UUID (as a written
@@ -305,7 +310,7 @@ import VisionNativeCore
             // today token applied.
             // A binary answer (an attachment download) is recorded as the base64 of its
             // bytes; the response body is compared with them exactly.
-            if case .object(let expected)? = step.response, expected.count == 1,
+            if case .object(let expected) = step.response, expected.count == 1,
                 case .string(let base64)? = expected["buffer"]
             {
                 #expect(response.body == Data(base64Encoded: base64), "\(label)")
@@ -320,11 +325,11 @@ import VisionNativeCore
                 #expect(found == nil, "\(label): \(found ?? "")")
                 continue
             }
-            let body = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
+            let parsedBody = response.body.isEmpty ? JSONValue.object([:]) : try JSONDecoder().decode(JSONValue.self, from: response.body)
             let found = difference(
-                step.response, withoutRequestId(body), at: "response", seedTimes: seedTimes, today: today)
+                step.response, withoutRequestId(parsedBody), at: "response", seedTimes: seedTimes, today: today)
             #expect(found == nil, "\(label): \(found ?? "")")
-            if case .object(let fields) = body, case .object(let meta)? = fields["meta"] {
+            if case .object(let fields) = parsedBody, case .object(let meta)? = fields["meta"] {
                 #expect(meta["requestId"] != nil, "\(label)")
                 #expect(response.headers["x-request-id"] != nil, "\(label)")
             }
@@ -401,11 +406,15 @@ import VisionNativeCore
         try await Self.replay("info")
     }
 
+    @Test func importUploads() async throws {
+        try await Self.replay("importUploads")
+    }
+
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
         "recipients-mutations", "transactions-mutations", "planned-mutations", "importParsers-mutations",
-        "importReview-mutations",
+        "importReview-mutations", "importUploads-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
