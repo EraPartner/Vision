@@ -24,30 +24,83 @@ enum MultipartParts {
             let boundary = boundary(of: header),
             let body
         else { return nil }
-        let delimiter = Data("--\(boundary)".utf8)
-        var marks: [Data.Index] = []
-        var cursor = body.startIndex
-        while cursor < body.endIndex,
-            let range = body.range(of: delimiter, in: cursor..<body.endIndex)
-        {
-            marks.append(range.lowerBound)
-            cursor = range.upperBound
+        let bytes = [UInt8](body)
+        let delimiter: [UInt8] = Array("--\(boundary)".utf8)
+
+        func delimiter(at index: Int) -> Bool {
+            guard index + delimiter.count <= bytes.count else { return false }
+            for (offset, byte) in delimiter.enumerated() where bytes[index + offset] != byte { return false }
+            return true
+        }
+        var marks: [Int] = []
+        var cursor = 0
+        while cursor < bytes.count {
+            if delimiter(at: cursor) {
+                marks.append(cursor)
+                cursor += delimiter.count
+            } else {
+                cursor += 1
+            }
         }
         var parts: [Part] = []
         for (index, mark) in marks.enumerated() {
             let start = mark + delimiter.count
             // The closing `--boundary--`: nothing follows it.
             guard index + 1 < marks.count else { break }
-            let end = marks[index + 1]
-            var block = body[start..<end]
+            var blockStart = start
+            var blockEnd = marks[index + 1]
             // A part's content ends with the CRLF that starts the next boundary, and the
             // first part needs no preamble at all.
-            let breakBytes = Data("\r\n".utf8)
-            if block.prefix(2) == breakBytes { block = block.dropFirst(2) }
-            if block.suffix(2) == breakBytes { block = block.dropLast(2) }
-            if let part = part(of: block) { parts.append(part) }
+            if blockStart + 2 <= bytes.count, bytes[blockStart] == 0x0D, bytes[blockStart + 1] == 0x0A {
+                blockStart += 2
+            }
+            if blockEnd - 2 >= blockStart, bytes[blockEnd - 2] == 0x0D, bytes[blockEnd - 1] == 0x0A {
+                blockEnd -= 2
+            }
+            if let part = part(of: bytes[blockStart..<blockEnd]) { parts.append(part) }
         }
         return parts
+    }
+
+    /// One block between boundary markers: its headers to the blank line, its bytes after.
+    static func part(of block: ArraySlice<UInt8>) -> Part? {
+        let bytes = Array(block)
+        // The headers end at the first blank line.
+        var headersEnd: Int? = nil
+        var scan = 0
+        while scan + 4 <= bytes.count {
+            if bytes[scan] == 0x0D, bytes[scan + 1] == 0x0A, bytes[scan + 2] == 0x0D, bytes[scan + 3] == 0x0A {
+                headersEnd = scan
+                break
+            }
+            scan += 1
+        }
+        guard let headersEnd else { return nil }
+        var name: String? = nil
+        var filename: String? = nil
+        var contentType = ""
+        var lineStart = 0
+        while lineStart < headersEnd {
+            var lineEnd = lineStart
+            while lineEnd + 2 <= bytes.count, !(bytes[lineEnd] == 0x0D && bytes[lineEnd + 1] == 0x0A) {
+                lineEnd += 1
+            }
+            let line = String(decoding: bytes[lineStart..<lineEnd], as: UTF8.self)
+            let lower = line.lowercased()
+            if lower.hasPrefix("content-disposition:") {
+                name = Self.parameter(named: "name", of: line)
+                filename = Self.parameter(named: "filename", of: line)
+            } else if lower.hasPrefix("content-type:") {
+                contentType = String(line.dropFirst("content-type:".count)).trimmingCharacters(in: .whitespaces)
+            }
+            lineStart = lineEnd + 2
+        }
+        guard let name else { return nil }
+        // A file part carries a `filename=`; a text field does not. An absent Content-Type
+        // header stays empty, as busboy leaves `mimetype` for a part without one.
+        return Part(
+            name: name, filename: filename, contentType: contentType,
+            data: Data(bytes[(headersEnd + 4)...]))
     }
 
     /// The request's boundary, from the `Content-Type` header's `boundary=` parameter.
@@ -62,32 +115,6 @@ enum MultipartParts {
                 ? String(value.dropFirst().dropLast()) : value
         }
         return nil
-    }
-
-    /// One block between boundary markers: its headers to the blank line, its bytes after.
-    static func part(of block: Data) -> Part? {
-        guard let headersEnd = block.range(of: Data("\r\n\r\n".utf8)) else { return nil }
-        var name: String?
-        var filename: String?
-        var contentType = ""
-        var headerStart = block.startIndex
-        while let lineBreak = block.range(of: Data("\r\n".utf8), in: headerStart..<headersEnd.lowerBound) {
-            let line = String(decoding: block[headerStart..<lineBreak.lowerBound], as: UTF8.self)
-            let lower = line.lowercased()
-            if lower.hasPrefix("content-disposition:") {
-                name = Self.parameter(named: "name", of: line)
-                filename = Self.parameter(named: "filename", of: line)
-            } else if lower.hasPrefix("content-type:") {
-                contentType = String(line.dropFirst("content-type:".count)).trimmingCharacters(in: .whitespaces)
-            }
-            headerStart = lineBreak.upperBound
-        }
-        guard let name else { return nil }
-        // A file part carries a `filename=`; a text field does not. An absent Content-Type
-        // header stays empty, as busboy leaves `mimetype` for a part without one.
-        return Part(
-            name: name, filename: filename, contentType: contentType,
-            data: Data(block[headersEnd.upperBound...]))
     }
 
     /// `name="value"` of a `Content-Disposition` header, verbatim (the client percent-escapes
