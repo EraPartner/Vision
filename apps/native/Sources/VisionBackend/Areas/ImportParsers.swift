@@ -206,14 +206,14 @@ enum ImportParsersArea {
     /// translated error carries the SQLSTATE and the table; the constraint name is only
     /// resolved when the connection wires the schema resolver in, so the table is the
     /// stable witness (the pkey never conflicts here: the id is the autoincrement's).
-    static func writeError(_ error: any Error, name: String?) -> any Error {
+    static func writeError(_ error: any Error, name: String?, label: String = "") -> any Error {
         if let databaseError = error as? DatabaseError,
             uniqueViolationCodes.contains(databaseError.code),
             parserConfigTable.contains(databaseError.table ?? "")
         {
             // `conflictMessage(name)`: undefined prints as the literal text in JS.
-            let label = name ?? "undefined"
-            return BackendHTTPError.conflict("A parser named \"\(label)\" already exists")
+            let name = name ?? "undefined"
+            return BackendHTTPError.conflict("A \(label)parser named \"\(name)\" already exists")
         }
         return error
     }
@@ -333,5 +333,260 @@ enum ImportParsersArea {
                 try ImportParsersArea.delete(session, id: id)
             }
         }
+    }
+}
+
+// MARK: - The portfolio kind (`portfolioImportRoutes`'s mount, P18)
+
+extension ImportParsersArea {
+    /// `VALID_ASSET_CLASSES` of `lib/assetClasses.ts`.
+    static let portfolioAssetClasses = ["stock", "etf", "crypto", "metals", "real_estate", "savings", "bond"]
+    /// The portfolio label of `registerParserRoutes`'s conflict message.
+    static let portfolioLabel = "portfolio "
+
+    /// `optionalAccountIdField`: absent, null and `""` are undefined, anything else
+    /// `validateId` must accept or the field's issue lands in the enclosing parse. `field`
+    /// is the message's own prefix (`config.transferDestinationAccountId`).
+    private static func optionalAccountId(
+        _ object: JSObject, _ field: String, _ message: String, issues: inout [String]
+    ) -> JSValue? {
+        if let id = TransactionsArea.validId(object[field]) {
+            return JSValue.int(id)
+        }
+        guard let value = object[field] else { return nil }
+        if value == .null { return nil }
+        if case .string(let text) = value, text.isEmpty { return nil }
+        issues.append("\(message) must be a positive integer")
+        return nil
+    }
+
+    /// `portfolioParserConfigSchema` (`normalizePortfolioParserConfig`): a loose object,
+    /// so unknown keys pass through untouched; the known fields replace themselves with
+    /// their transforms, an issue drops the field. Issue order follows the shape.
+    static func normalizePortfolioConfig(_ value: JSValue, issues: inout [String]) -> JSObject? {
+        guard case .object(let input) = value else {
+            issues.append("Missing or invalid \"config\"")
+            return nil
+        }
+        var output = JSObject()
+        // number_format: the enum, `auto` by default.
+        switch input["number_format"] {
+        case .none, .null:
+            output["number_format"] = .string("auto")
+        case .some(let present):
+            if case .string(let choice) = present, csvNumberFormats.contains(choice) {
+                output["number_format"] = .string(choice)
+            } else {
+                issues.append(
+                    "Invalid option: expected one of \"auto\"|\"decimal_dot\"|\"decimal_comma\"")
+                output["number_format"] = .string("auto")
+            }
+        }
+        // encoding: `z.unknown().transform(norm).optional()` — an absent key stays absent,
+        // null and "" normalize to utf-8, anything unrecognized carries the guard's message.
+        switch input["encoding"] {
+        case .none:
+            break
+        case .some(.null):
+            output["encoding"] = .string("utf-8")
+        case .some(let present):
+            output["encoding"] = .string(normalizeEncoding(present, issues: &issues))
+        }
+        // dateColumn: required, kept as written (the transaction schema trims; this one does not).
+        if case .string(let raw)? = input["dateColumn"], !JavaScriptWhitespace.trim(raw).isEmpty {
+            output["dateColumn"] = .string(raw)
+        } else {
+            issues.append("config.dateColumn is required")
+        }
+        // defaultAssetClass: the enum.
+        switch input["defaultAssetClass"] {
+        case .some(.string(let assetClass)):
+            if portfolioAssetClasses.contains(assetClass) {
+                output["defaultAssetClass"] = .string(assetClass)
+            } else {
+                issues.append("config.defaultAssetClass must be a valid asset class")
+            }
+        default:
+            issues.append("config.defaultAssetClass must be a valid asset class")
+        }
+        // The three optional account ids, then the yield literal.
+        for field in [
+            "transferDestinationAccountId", "transferOriginAccountId", "accountId",
+        ] {
+            if let id = optionalAccountId(
+                input, field, "config.\(field)", issues: &issues)
+            {
+                output[field] = id
+            }
+        }
+        switch input["yieldBasisPolicy"] {
+        case .none, .null:
+            break
+        case .some(.string("zero")):
+            output["yieldBasisPolicy"] = .string("zero")
+        default:
+            issues.append("Invalid input: expected \"zero\"")
+        }
+        // The loose passthrough: every key the schema does not own, as written.
+        let owned = [
+            "number_format", "encoding", "dateColumn", "defaultAssetClass",
+            "transferDestinationAccountId", "transferOriginAccountId", "yieldBasisPolicy", "accountId",
+        ]
+        for (key, entry) in input.entries where !owned.contains(key) {
+            output[key] = entry
+        }
+        // `superRefine`: a symbol or a name column.
+        let hasSymbol = symbolColumnFilled(input["symbolColumn"])
+        let hasName = symbolColumnFilled(input["nameColumn"])
+        if !hasSymbol && !hasName {
+            issues.append("config requires symbolColumn or nameColumn")
+        }
+        return output
+    }
+
+    /// `symbolColumn`/`nameColumn` as the refine reads them.
+    private static func symbolColumnFilled(_ value: JSValue?) -> Bool {
+        guard case .string(let text)? = value else { return false }
+        return !JavaScriptWhitespace.trim(text).isEmpty
+    }
+
+    /// `parseInput(bodySchemas.create, ...)` with the portfolio normaliser.
+    static func portfolioCreateBody(_ request: InProcessRequest) throws -> (name: String, config: JSObject) {
+        let object = try bodyObject(request)
+        var issues: [String] = []
+        var name: String?
+        if let trimmed = try normalizeName(object["name"]) {
+            name = trimmed
+        } else {
+            issues.append("Missing or invalid \"name\"")
+        }
+        var config: JSObject? = nil
+        if let rawConfig = object["config"] {
+            config = try normalizePortfolioConfig(rawConfig, issues: &issues)
+        } else {
+            issues.append("Missing or invalid \"config\"")
+        }
+        guard issues.isEmpty, let name, let config else { throw validation(issues) }
+        return (name: name, config: config)
+    }
+
+    /// `parseInput(bodySchemas.update, ...)`: an absent field stays unchanged.
+    static func portfolioUpdateBody(_ request: InProcessRequest) throws -> (name: String?, config: JSObject?) {
+        let object = try bodyObject(request)
+        var issues: [String] = []
+        var name: String?
+        if let rawName = object["name"] {
+            if let trimmed = try normalizeName(rawName) {
+                name = trimmed
+            } else {
+                issues.append("Missing or invalid \"name\"")
+            }
+        }
+        var config: JSObject? = nil
+        if let rawConfig = object["config"] {
+            config = try normalizePortfolioConfig(rawConfig, issues: &issues)
+        }
+        if !issues.isEmpty { throw validation(issues) }
+        return (name, config)
+    }
+
+    // MARK: Portfolio handlers
+
+    static func portfolioList(_ session: BackendSession) throws -> HandlerResult {
+        let rows = try session.rows(
+            "SELECT \(columns) FROM custom_parser_configs WHERE kind = ? ORDER BY name", [
+                .text("portfolio"),
+            ])
+        let items = try rows.map { row -> JSONValue in .object(try parserJSON(row)) }
+        return HandlerResult(
+            data: .object(["items": .array(items), "total": .int(items.count)]))
+    }
+
+    static func portfolioCreate(
+        _ session: BackendSession, _ body: (name: String, config: JSObject)
+    ) throws -> HandlerResult {
+        do {
+            let row = try session.row(
+                """
+                INSERT INTO custom_parser_configs (name, kind, config_json)
+                VALUES (?, ?, vision_jsonb(?))
+                RETURNING \(columns)
+                """,
+                [
+                    .text(body.name), .text("portfolio"),
+                    .text(JSValue.object(body.config).jsonText),
+                ])
+            guard let row else { throw SQLRowDecodingError(column: "id", problem: "insert returned no row") }
+            return HandlerResult(status: 201, data: .object(try parserJSON(row)))
+        } catch let error {
+            throw writeError(error, name: body.name, label: portfolioLabel)
+        }
+    }
+
+    static func portfolioUpdate(
+        _ session: BackendSession, id: Int, _ body: (name: String?, config: JSObject?)
+    ) throws -> HandlerResult {
+        if body.name == nil && body.config == nil {
+            guard let row = try byId(session, id) else {
+                throw BackendHTTPError.notFound("Parser config not found")
+            }
+            return HandlerResult(data: .object(try parserJSON(row)))
+        }
+        var arguments: [SQLValue] = []
+        var sets: [String] = []
+        if let name = body.name {
+            sets.append("name = ?")
+            arguments.append(.text(name))
+        }
+        if let config = body.config {
+            sets.append("config_json = vision_jsonb(?)")
+            arguments.append(.text(JSValue.object(config).jsonText))
+        }
+        arguments.append(.integer(Int64(id)))
+        do {
+            let written = try session.row(
+                "UPDATE custom_parser_configs SET \(sets.joined(separator: ", ")) WHERE id = ? RETURNING id",
+                arguments)
+            guard written != nil else { throw BackendHTTPError.notFound("Parser config not found") }
+            guard let row = try byId(session, id) else {
+                throw BackendHTTPError.notFound("Parser config not found")
+            }
+            return HandlerResult(data: .object(try parserJSON(row)))
+        } catch let error {
+            throw writeError(error, name: body.name, label: portfolioLabel)
+        }
+    }
+
+    /// The portfolio parser routes of `portfolioImportRoutes.ts` (P18).
+    static func registerPortfolio(_ backend: inout InProcessBackend, database: BackendDatabase) {
+        backend.serve(OpenAPIOperations.GetPortfolioParsers.self) { _ in
+            try await database.run { session in try ImportParsersArea.portfolioList(session) }
+        }
+        backend.serve(OpenAPIOperations.CreatePortfolioParser.self) { request in
+            let body = try ImportParsersArea.portfolioCreateBody(request)
+            return try await database.run { session in
+                try ImportParsersArea.portfolioCreate(session, body)
+            }
+        }
+        backend.serve(OpenAPIOperations.UpdatePortfolioParser.self) { request in
+            let id = try ImportParsersArea.pathId(request)
+            let body = try ImportParsersArea.portfolioUpdateBody(request)
+            return try await database.run { session in
+                try ImportParsersArea.portfolioUpdate(session, id: id, body)
+            }
+        }
+        backend.serve(OpenAPIOperations.DeletePortfolioParser.self) { request in
+            let id = try ImportParsersArea.pathId(request)
+            return try await database.run { session in
+                try ImportParsersArea.portfolioDelete(session, id: id)
+            }
+        }
+    }
+
+    static func portfolioDelete(_ session: BackendSession, id: Int) throws -> HandlerResult {
+        let deleted = try session.row(
+            "DELETE FROM custom_parser_configs WHERE id = ? RETURNING id", [.integer(Int64(id))])
+        guard deleted != nil else { throw BackendHTTPError.notFound("Parser config not found") }
+        return HandlerResult.noContent
     }
 }
