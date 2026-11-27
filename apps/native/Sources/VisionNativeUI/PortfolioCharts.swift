@@ -48,9 +48,10 @@ struct PortfolioSeriesChart: View {
             Chart {
                 ForEach(plot.drawn) { line in
                     let color = lineColor(line)
-                    let marks = markLabels.marks(for: line, context: context) { point in
-                        ChartMarkLabelCache.Mark(
-                            label: line.label + ". " + pointDate(point.key), value: format(point.value))
+                    let marks = markLabels.marks(for: line, context: context) { point -> ChartMarkLabelCache.Mark in
+                        // Interpolation, not `+`: the concatenation timed out the type checker in this builder.
+                        let label = "\(line.label). \(pointDate(point.key))"
+                        return ChartMarkLabelCache.Mark(label: label, value: format(point.value))
                     }
                     ForEach(line.points.indices, id: \.self) { position in
                         let point = line.points[position]
