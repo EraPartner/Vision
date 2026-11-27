@@ -740,7 +740,7 @@ and then the content verification (`fileSniff.ts`'s magic bytes, the extension m
 writes the file under `BackendDatabase`'s `attachmentsDirectory` with a random-uuid name and
 inserts the row. The corpus carries it as a `multipart` step kind (the recorder's `httpAgent`
 sends parts with `.field`/`.attach`), the random uuid of a created `stored_path` as `{{uuid}}`
-(compared by form, like a written timestamp), a binary download answer as base64 bytes, and upload
+(compared by form, like a written timestamp; a UUID the request itself sent stays literal), a binary download answer as base64 bytes, and upload
 files under the throwaway `ATTACHMENTS_DIR` of a recording; the 10 MB size branch is proven by
 `AttachmentUploadTests` (a corpus file may not weigh megabytes).
 

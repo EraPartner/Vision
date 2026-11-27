@@ -1890,6 +1890,13 @@ export const AREAS: Record<string, ParityArea> = {
         amount: 25,
         note: "half",
       }),
+      // A split that fits the remaining total: the success path of createSplit.
+      splitCreate({
+        transaction_id: 3,
+        recipient_id: 2,
+        amount: "25.5",
+        note: "fits",
+      }),
       splitCreate({ transaction_id: 6, recipient_id: 5, amount: 100 }),
       splitCreate({ transaction_id: 6, recipient_id: 5, amount: 0 }),
       splitCreate({}),
@@ -7388,6 +7395,13 @@ async function recordArea(
         .send(JSON.stringify(step.body));
     const res = await request;
     const today = todayAppDateString();
+    // UUIDs the caller sent (path, query, body) are fixed by the corpus, so an answer
+    // that echoes one must echo it exactly; only server-generated UUIDs are masked.
+    const callerUuids = new Set(
+      (JSON.stringify([step.path, step.body ?? null]).match(UUID_RE) ?? []).map(
+        (uuid) => uuid.toLowerCase(),
+      ),
+    );
     // A streamed file answer (the exports' text/csv and x-ndjson) never parses into
     // `res.body` — its raw text is the answer the corpus must hold; everything
     // else round-trips the parsed body 1:1, and a 204 keeps recording `{}`.
@@ -7411,7 +7425,9 @@ async function recordArea(
               withoutRequestId(res.body),
               (_key, value: unknown) => {
                 if (typeof value !== "string") return value;
-                const withoutUuid = value.replace(UUID_RE, UUID_TOKEN);
+                const withoutUuid = value.replace(UUID_RE, (uuid) =>
+                  callerUuids.has(uuid.toLowerCase()) ? uuid : UUID_TOKEN,
+                );
                 return withoutUuid === today ? TODAY_TOKEN : withoutUuid;
               },
             ),

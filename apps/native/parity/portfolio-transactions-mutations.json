@@ -827,7 +827,7 @@
       "response": {
         "ok": true,
         "data": {
-          "idempotency_key": "{{uuid}}",
+          "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeeff",
           "from_account_id": 1,
           "to_account_id": 2,
           "transaction_ids": [
@@ -867,7 +867,7 @@
       "response": {
         "ok": true,
         "data": {
-          "idempotency_key": "{{uuid}}",
+          "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef1",
           "from_account_id": 1,
           "to_account_id": 2,
           "transaction_ids": [
@@ -907,7 +907,7 @@
       "response": {
         "ok": true,
         "data": {
-          "idempotency_key": "{{uuid}}",
+          "idempotency_key": "0f0e0d0c-1a2b-4c3d-9e8f-aabbccddeef2",
           "from_account_id": 2,
           "to_account_id": 1,
           "transaction_ids": [

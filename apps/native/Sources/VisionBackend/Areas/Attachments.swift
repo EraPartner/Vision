@@ -278,13 +278,29 @@ enum AttachmentsArea {
             throw BackendHTTPError.notFound("Attachment not found")
         }
         _ = try session.rows("DELETE FROM attachments WHERE id = ?", [.integer(Int64(id))])
-        if let root, let storedPath = try? row.text("stored_path") {
-            let absolute = URL(fileURLWithPath: root).appendingPathComponent(storedPath).standardized
-            let rootUrl = URL(fileURLWithPath: root).standardized
-            if absolute == rootUrl || absolute.path.hasPrefix(rootUrl.path + "/") {
-                try? FileManager.default.removeItem(at: absolute)
-            }
+        if let storedPath = try? row.text("stored_path") {
+            removeStoredFiles([storedPath], root: root)
         }
         return HandlerResult.noContent
+    }
+
+    /// A stored path (relative to the attachment directory, as upload writes it) as an absolute
+    /// file URL; nil without a directory or for a path that escapes it.
+    static func storedFile(_ storedPath: String, root: String?) -> URL? {
+        guard let root else { return nil }
+        let absolute = URL(fileURLWithPath: root).appendingPathComponent(storedPath).standardized
+        let rootUrl = URL(fileURLWithPath: root).standardized
+        guard absolute != rootUrl, absolute.path.hasPrefix(rootUrl.path + "/") else { return nil }
+        return absolute
+    }
+
+    /// `removeAttachmentFilesBestEffort`: each file under the attachment directory goes; a
+    /// failure leaves the file orphaned and never fails the request, the rows being gone.
+    static func removeStoredFiles(_ storedPaths: [String], root: String?) {
+        for storedPath in storedPaths {
+            if let file = storedFile(storedPath, root: root) {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
     }
 }

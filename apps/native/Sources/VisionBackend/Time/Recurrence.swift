@@ -36,13 +36,16 @@ enum Recurrence {
         // digits, `day` or `days`, and nothing after.
         guard normalized.hasPrefix("every") else { return nil }
         var rest = Substring(normalized.dropFirst(5))
-        guard let space = rest.firstIndex(where: { !$0.isJSWhitespace }) else { return nil }
+        // `\s+` needs at least one whitespace character before the digits and after them.
+        guard rest.first?.isJSWhitespace == true,
+            let space = rest.firstIndex(where: { !$0.isJSWhitespace })
+        else { return nil }
         rest = rest[space...]
         guard let lastDigit = rest.firstIndex(where: { !$0.isASCIIDigit }) else { return nil }
         let digits = rest[..<lastDigit]
         guard !digits.isEmpty else { return nil }
         rest = rest[lastDigit...]
-        guard let afterDigits = rest.firstIndex(where: { !$0.isJSWhitespace }) else { return nil }
+        guard rest.first?.isJSWhitespace == true, let afterDigits = rest.firstIndex(where: { !$0.isJSWhitespace }) else { return nil }
         let tail = JavaScriptWhitespace.trim(String(rest[afterDigits...]))
         guard ["day", "days"].contains(tail) else { return nil }
         guard let days = JavaScriptInteger.parse(String(digits)), days >= 1 else { return nil }

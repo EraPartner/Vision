@@ -81,7 +81,9 @@ struct AccountRow: Equatable, Sendable {
 /// writes clear with `invalidatePortfolioCaches`: they re-validate on `PRAGMA data_version`
 /// (ADR-270 decision 4), so a write here clears them too.
 enum AccountsArea {
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
         backend.serve(OpenAPIOperations.GetAccounts.self) { request in
             let active = QueryInput.activeOrAll(request.query("active"))
             let page = PageParams.optional(
@@ -126,9 +128,12 @@ enum AccountsArea {
         backend.serve(OpenAPIOperations.CloseAccount.self) { request in
             let id = AccountID(rawValue: try RequestID.pathParameter(request))
             let body = try RequestBody.parseJavaScript(request.body)
-            return try await database.run { session in
+            let result = try await database.run { session in
                 try AccountsArea.close(session, id: id, body: body)
             }
+            // routes/accounts.ts: the new anchor or adjustment feeds the views and forecasts.
+            followUps.scheduleAggregationRefresh()
+            return result
         }
         backend.serve(OpenAPIOperations.PreviewAccountMerge.self) { request in
             let source = AccountID(rawValue: try RequestID.pathParameter(request))
@@ -151,16 +156,22 @@ enum AccountsArea {
         backend.serve(OpenAPIOperations.SetAccountOpeningBalance.self) { request in
             let id = AccountID(rawValue: try RequestID.pathParameter(request))
             let body = try RequestBody.parseJavaScript(request.body)
-            return try await database.run { session in
+            let result = try await database.run { session in
                 try AccountsArea.openingBalance(session, id: id, body: body)
             }
+            // routes/accounts.ts: the new anchor or adjustment feeds the views and forecasts.
+            followUps.scheduleAggregationRefresh()
+            return result
         }
         backend.serve(OpenAPIOperations.ReconcileAccount.self) { request in
             let id = AccountID(rawValue: try RequestID.pathParameter(request))
             let body = try RequestBody.parseJavaScript(request.body)
-            return try await database.run { session in
+            let result = try await database.run { session in
                 try AccountsArea.reconcile(session, id: id, body: body)
             }
+            // routes/accounts.ts: the new anchor or adjustment feeds the views and forecasts.
+            followUps.scheduleAggregationRefresh()
+            return result
         }
     }
 
@@ -1097,19 +1108,20 @@ enum AccountsArea {
             }
             let unionJson = JSValue.array(union.map(JSValue.int)).jsonText
             let arguments: [SQLValue] = [.integer(Int64(target.rawValue)), .text(sourceJson)]
+            // The affected-row count, as the TypeScript repoints read it; no id list is built.
             func repointed(_ sql: String) throws -> Int {
-                try session.rows(sql, arguments).count
+                try session.write(sql, arguments)
             }
             let transactions = try repointed(
-                "UPDATE transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+                "UPDATE transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2))")
             let planned = try repointed(
-                "UPDATE planned_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+                "UPDATE planned_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2))")
             let portfolio = try repointed(
-                "UPDATE portfolio_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+                "UPDATE portfolio_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2))")
             _ = try repointed(
-                "UPDATE portfolio_import_batches SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+                "UPDATE portfolio_import_batches SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2))")
             let funding = try repointed(
-                "UPDATE accounts SET funding_account_id = ?1 WHERE funding_account_id IN (SELECT value FROM json_each(?2)) RETURNING id")
+                "UPDATE accounts SET funding_account_id = ?1 WHERE funding_account_id IN (SELECT value FROM json_each(?2))")
             if stampsInterleaved {
                 _ = try session.rows(
                     "DELETE FROM account_statement_balances WHERE account_id = ?", [.integer(Int64(target.rawValue))])

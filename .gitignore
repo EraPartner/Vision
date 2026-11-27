@@ -100,3 +100,7 @@ apps/native/VisionNative/Info.plist
 apps/native/.build/
 apps/native/.swiftpm/
 apps/native/Config/Local.xcconfig
+
+# Runtime SQLite database files the backend creates in its data directory
+apps/node-backend/data/*.sqlite3
+apps/node-backend/data/*.sqlite3-*

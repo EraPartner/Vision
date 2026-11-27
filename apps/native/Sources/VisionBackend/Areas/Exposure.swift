@@ -1162,7 +1162,7 @@ extension ExposureArea {
                     if let provenance = row["provenance"]?.objectValue,
                         let number = provenance["rowNumber"]?.javaScriptNumber
                     {
-                        rowNumber = Int(number)
+                        rowNumber = JavaScriptInteger.saturating(number)
                     }
                     uncovered = uncovered.plus(amount)
                     warnings.append(.object([

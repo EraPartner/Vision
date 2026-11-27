@@ -110,6 +110,18 @@ struct ObjectInput {
 struct JavaScriptInteger: Equatable, Sendable {
     let value: Double
 
+    /// `value` as a Swift `Int`, saturating: a finite value beyond the `Int` range (or an
+    /// infinity) clamps to the nearest bound and NaN reads 0, so a request number never traps.
+    var intValue: Int { Self.saturating(value) }
+
+    /// `Int(value)` without the trap on NaN, infinities and values beyond the `Int` range.
+    static func saturating(_ value: Double) -> Int {
+        if value.isNaN { return 0 }
+        if value >= 9_223_372_036_854_775_807 { return Int.max }
+        if value <= -9_223_372_036_854_775_808 { return Int.min }
+        return Int(value)
+    }
+
     /// Bound as SQLite would receive the JavaScript number.
     var sqlValue: SQLValue {
         if let exact = Int64(exactly: value) { return .integer(exact) }

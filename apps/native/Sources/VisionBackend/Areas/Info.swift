@@ -89,11 +89,21 @@ enum InfoArea {
         ("yearly", 365, 20),
     ]
 
-    /// `GET /recurring-patterns`: groups the last three years of transactions by resolved
-    /// recipient and flow direction, detects the interval cadence, and answers the patterns
-    /// the route's `graceful degradation` guards (a thrown error becomes `{patterns: [], total: 0}`)
-    /// as the envelope's masked 500 — never seen by the corpus — so no error path is ported.
+    /// `GET /recurring-patterns` with the route's intentional graceful degradation: a failed
+    /// detection answers the successful empty result, so the page stays usable.
     static func recurringPatterns(
+        _ session: BackendSession, request: InProcessRequest
+    ) throws -> HandlerResult {
+        do {
+            return try detectRecurringPatterns(session, request: request)
+        } catch {
+            return HandlerResult(data: .object(["patterns": .array([]), "total": .int(0)]))
+        }
+    }
+
+    /// `detectRecurringPatterns`: groups the last three years of transactions by resolved
+    /// recipient and flow direction, detects the interval cadence, and answers the patterns.
+    static func detectRecurringPatterns(
         _ session: BackendSession, request: InProcessRequest
     ) throws -> HandlerResult {
         // The compiled Kysely query: one big join, the effective category as the canonical

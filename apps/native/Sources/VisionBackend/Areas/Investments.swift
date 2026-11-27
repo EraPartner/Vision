@@ -72,7 +72,8 @@ struct PortfolioTxRow: Equatable, Sendable {
             "created_at": .string(createdAt.text),
             "updated_at": .string(updatedAt.text),
             "account_id": accountId.map { JSONValue.int($0.rawValue) } ?? .null,
-            "import_batch_id": importBatchId.map { JSONValue.int(Int($0)) } ?? .null,
+            // BIGINT as the decimal string `dbBigint` parses, which the client requires.
+            "import_batch_id": importBatchId.map { JSONValue.string(String($0)) } ?? .null,
             "dividend_amount_convention": .string(dividendAmountConvention),
             "income_recognition_role": .string(incomeRecognitionRole),
         ]
@@ -213,7 +214,7 @@ enum InvestmentsArea {
         if rawLimit == nil || rawLimit == "" {  // lint:allow string-literal-compare Node querystring's empty string, not a content comparison
             limit = nil
         } else {
-            limit = Int(JavaScriptInteger.clamped(rawLimit, min: 1, max: 200_000, fallback: 1).value)
+            limit = JavaScriptInteger.clamped(rawLimit, min: 1, max: 200_000, fallback: 1).intValue
         }
         return BulkOptions(
             investmentIds: distinct,
@@ -223,7 +224,7 @@ enum InvestmentsArea {
                     request.query("per_investment_limit"), min: 1, max: 5000, fallback: 1000
                 ).value),
             limit: limit,
-            offset: Int(JavaScriptInteger.clamped(request.query("offset"), min: 0, fallback: 0).value))
+            offset: JavaScriptInteger.clamped(request.query("offset"), min: 0, fallback: 0).intValue)
     }
 
     // MARK: - The parsed options

@@ -118,7 +118,9 @@ struct TransactionRow: Sendable {
 /// reads: the list (with the uncategorised queue, running balances and EUR normalization) and
 /// one transaction. Writes, bulk actions, exports and transfers stay on Bun for now.
 enum TransactionsArea {
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
         backend.serve(OpenAPIOperations.GetTransactions.self) { request in
             let query = try TransactionsArea.listQuery(request)
             return try await database.run { session in try TransactionsArea.list(session, query) }
@@ -134,17 +136,28 @@ enum TransactionsArea {
         }
         backend.serve(OpenAPIOperations.CreateTransaction.self) { request in
             let fields = try TransactionsArea.createFields(request)
-            return try await database.run { session in try TransactionsArea.create(session, fields: fields) }
+            let result = try await database.run { session in try TransactionsArea.create(session, fields: fields) }
+            // transactionService.ts: every successful create, update and delete schedules the
+            // transfer reconcile (and through it the aggregation refresh).
+            followUps.scheduleReconcile()
+            return result
         }
         backend.serve(OpenAPIOperations.UpdateTransaction.self) { request in
             let id = try TransactionsArea.pathId(request)
-            return try await database.run { session in
+            let result = try await database.run { session in
                 try TransactionsArea.update(session, id: id, request: request)
             }
+            followUps.scheduleReconcile()
+            return result
         }
         backend.serve(OpenAPIOperations.DeleteTransaction.self) { request in
             let id = try TransactionsArea.pathId(request)
-            return try await database.run { session in try TransactionsArea.delete(session, id: id) }
+            let root = await database.attachmentsDirectory
+            let result = try await database.run { session in
+                try TransactionsArea.delete(session, id: id, root: root)
+            }
+            followUps.scheduleReconcile()
+            return result
         }
     }
 
@@ -739,7 +752,20 @@ enum TransactionsArea {
         guard let decimal = try? DecimalJS.from(text) else {
             throw UnhandledJSError("[decimaljs] Invalid argument: not a valid number")
         }
-        return decimal.toDecimalPlaces(4).description
+        return decimal.toDecimalPlaces(4, .halfUp).description
+    }
+
+    /// `(memo || "").trim().toUpperCase()`: an absent, null or empty memo is "".
+    static func manualMemoIdentity(_ data: JSObject) -> String {
+        let memo = orNull(data["memo"]).map(\.javaScriptString) ?? ""
+        return JavaScriptWhitespace.trim(memo).uppercased()
+    }
+
+    /// `(currency || "EUR").trim().toUpperCase()`: an absent, null or empty currency is EUR,
+    /// the currency the insert stores.
+    static func manualCurrencyIdentity(_ data: JSObject) -> String {
+        let currency = orNull(data["currency"]).map(\.javaScriptString) ?? "EUR"
+        return JavaScriptWhitespace.trim(currency).uppercased()
     }
 
     /// `createManualTransactionHash`: the versioned identity of a manual create.
@@ -756,9 +782,9 @@ enum TransactionsArea {
             .string(String(date.prefix(10))),
             .string(try manualAmountIdentity(data["amount"])),
             recipientHash,
-            .string(JavaScriptWhitespace.trim((data["memo"] ?? .null).javaScriptString).uppercased()),
+            .string(manualMemoIdentity(data)),
             .string("id:\(accountId)"),
-            .string(JavaScriptWhitespace.trim((data["currency"] ?? .null).javaScriptString).uppercased()),
+            .string(manualCurrencyIdentity(data)),
         ])
         return SHA256Digest.hex(Array(hashInput.jsonText.utf8))
     }
@@ -769,8 +795,8 @@ enum TransactionsArea {
         // lint:allow raw-id the predicate binds the account row id as a plain integer
         accountId: Int
     ) throws -> [SQLValue] {
-        let memo = JavaScriptWhitespace.trim((data["memo"] ?? .null).javaScriptString).uppercased()
-        let currency = JavaScriptWhitespace.trim((data["currency"] ?? .null).javaScriptString).uppercased()
+        let memo = manualMemoIdentity(data)
+        let currency = manualCurrencyIdentity(data)
         let recipientParam: SQLValue
         if let recipient = data["recipient_id"], recipient != .null {
             recipientParam = try looseSQL(recipient)
@@ -1085,7 +1111,7 @@ enum TransactionsArea {
         var targetAccount: Int?
         if let index = sanitized.firstIndex(where: { $0.0 == "account_id" }) {  // lint:allow string-literal-compare the column key is a TypeScript literal
             if case .number(let number) = sanitized[index].1, number != 0 {
-                targetAccount = Int(number)
+                targetAccount = JavaScriptInteger.saturating(number)
             }
         }
 
@@ -1145,7 +1171,11 @@ enum TransactionsArea {
                 }
             }
             if !changes.isEmpty {
-                let assignments = changes.map { "\($0.0) = ?" }.joined(separator: ", ")
+                // The amount goes through vision_numeric(…, 18, 4), as the TypeScript update
+                // assigns it, so a longer fraction rounds to the ledger's four places.
+                let assignments = changes.map {
+                    $0.0 == "amount" ? "amount = vision_numeric(?, 18, 4)" : "\($0.0) = ?"  // lint:allow string-literal-compare the column key is a TypeScript literal
+                }.joined(separator: ", ")
                 let updated = try session.rows(
                     """
                     UPDATE transactions SET \(assignments), updated_at = now() \
@@ -1170,10 +1200,12 @@ enum TransactionsArea {
     /// DELETE `/:id`: `hardDeleteWithCleanup` — the planned-execution guard refuses a
     /// linked row, then the attachments' paths are collected before the CASCADE, the row
     /// goes, and the stored files are unlinked best-effort.
-    static func delete(_ session: BackendSession, id: TransactionID) throws -> HandlerResult {
+    static func delete(_ session: BackendSession, id: TransactionID, root: String?) throws -> HandlerResult {
         let paths = try session.rows(
             "SELECT stored_path FROM attachments WHERE transaction_id = ?", [id.sqlValue])
         let deleted = try session.transaction { () throws -> Int? in
+            // `lockAccountsForLedgerMutation`: a closed account's ledger stays as it is.
+            try TransactionBulkArea.lockAccounts(session, [id.rawValue])
             let linked = try session.row(
                 """
                 SELECT 1 FROM planned_transaction_executions \
@@ -1188,11 +1220,8 @@ enum TransactionsArea {
             return removed.isEmpty ? nil : try removed[0].integerId("id")
         }
         guard deleted != nil else { throw BackendHTTPError.notFound("Transaction with ID \(id.rawValue) not found") }
-        for row in paths {
-            if let path = try row.optionalText("stored_path") {
-                try? FileManager.default.removeItem(atPath: path)
-            }
-        }
+        AttachmentsArea.removeStoredFiles(
+            try paths.compactMap { try $0.optionalText("stored_path") }, root: root)
         return HandlerResult.noContent
     }
 }

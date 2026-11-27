@@ -122,6 +122,15 @@ public final class BackendSession {
         try statement { try connection.rows(sql, arguments) }
     }
 
+    /// Runs one write statement and answers the rows it changed, without materializing any
+    /// row (the affected-row count the TypeScript repositories read).
+    public func write(_ sql: String, _ arguments: [SQLValue] = []) throws -> Int {
+        try statement {
+            try connection.query(sql, arguments)
+            return connection.changes()
+        }
+    }
+
     /// The first row of one statement, or nil.
     public func row(_ sql: String, _ arguments: [SQLValue] = []) throws -> SQLRow? {
         try rows(sql, arguments).first

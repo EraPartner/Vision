@@ -8,9 +8,14 @@ import VisionNativeCore
 enum TransfersArea {
     // MARK: - Register
 
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
         backend.serve(OpenAPIOperations.MarkTransfer.self) { request in
-            try await database.run { session in try TransfersArea.mark(session, request: request) }
+            let result = try await database.run { session in try TransfersArea.mark(session, request: request) }
+            // `markTransfer` then `scheduleReconcile`.
+            followUps.scheduleReconcile()
+            return result
         }
     }
 

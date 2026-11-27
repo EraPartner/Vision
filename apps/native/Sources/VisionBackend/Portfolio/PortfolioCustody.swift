@@ -346,6 +346,13 @@ enum PortfolioCustody {
                     return receivedLot
                 }
                 let feeRatio = PortfolioCore.div(feeUnits, units)
+                let feeLots = moved.map { lot in
+                    var feeLot = lot
+                    feeLot.units = lot.units.times(feeRatio)
+                    feeLot.costBasis = lot.costBasis.times(feeRatio)
+                    feeLot.costBasisConv = lot.costBasisConv.times(feeRatio)
+                    return feeLot
+                }
                 let receivedBasis = transferredBasis.times(ratio)
                 let receivedBasisConv = transferredBasisConv.times(ratio)
                 var leg = row
@@ -360,6 +367,7 @@ enum PortfolioCustody {
                 outLeg.accountId = sourceId
                 outLeg.assetFeeBasis = transferredBasis.minus(receivedBasis)
                 outLeg.assetFeeBasisConv = transferredBasisConv.minus(receivedBasisConv)
+                outLeg.assetFeeLots = feeLots
                 partitions.push(sourceId, outLeg)
                 var inLeg = leg
                 inLeg.type = "transfer_in"

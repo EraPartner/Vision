@@ -34,10 +34,19 @@ enum MultipartParts {
         let bytes = [UInt8](body)
         let delimiterBytes: [UInt8] = Array("--\(boundary)".utf8)
 
+        // RFC 2046: a delimiter starts the body or a line (it follows a CRLF), and the line it
+        // starts holds only the boundary, optionally `--`, then optional padding before the CRLF
+        // or the end. Boundary text inside a line is content, as busboy reads it.
         func isDelimiter(at index: Int) -> Bool {
             guard index + delimiterBytes.count <= bytes.count else { return false }
+            if index > 0 {
+                guard index >= 2, bytes[index - 2] == 0x0D, bytes[index - 1] == 0x0A else { return false }
+            }
             for (offset, byte) in delimiterBytes.enumerated() where bytes[index + offset] != byte { return false }
-            return true
+            var next = index + delimiterBytes.count
+            if next + 1 < bytes.count, bytes[next] == 0x2D, bytes[next + 1] == 0x2D { next += 2 }
+            while next < bytes.count, bytes[next] == 0x20 || bytes[next] == 0x09 { next += 1 }
+            return next == bytes.count || (next + 1 < bytes.count && bytes[next] == 0x0D && bytes[next + 1] == 0x0A)
         }
         var marks: [Int] = []
         var cursor = 0

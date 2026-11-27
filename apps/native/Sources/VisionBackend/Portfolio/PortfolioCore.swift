@@ -127,6 +127,9 @@ enum PortfolioCore {
         var transferredLots: [CustodyLot] = []
         var assetFeeBasis: DecimalJS?
         var assetFeeBasisConv: DecimalJS?
+        /// A `transfer_out` leg's fee share of each moved lot (`assetFeeLots`): the per-lot
+        /// acquisition history the asset-transfer service stores as the fee basis allocation.
+        var assetFeeLots: [CustodyLot]?
         var consumedLots: [CustodyLot] = []
 
         init(

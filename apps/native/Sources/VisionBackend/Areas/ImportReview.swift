@@ -119,6 +119,9 @@ enum ImportReviewArea {
         }
 
         var groups: [PreviewGroup] = []
+        // The group of each effective recipient (nil: unresolved), as the TypeScript `groupMap`
+        // keeps it, so grouping stays linear in the staged rows.
+        var groupIndex: [Int?: Int] = [:]
         var totals: [String: Int] = [:]
         var alreadyImported = 0
         for row in rows {
@@ -144,7 +147,7 @@ enum ImportReviewArea {
             }
             let effective =
                 try row.optionalInt64("effective_recipient_id").map { Int($0) }
-            if let index = groups.firstIndex(where: { $0.key == effective }) {
+            if let index = groupIndex[effective] {
                 groups[index].rows.append(try stagingRow(row))
             } else {
                 let defaultLabel =
@@ -178,6 +181,7 @@ enum ImportReviewArea {
                         "matched_pattern_kind": try optionalTextValue(row, "matched_pattern_kind"),
                     ],
                     rows: [try stagingRow(row)])
+                groupIndex[effective] = groups.count
                 groups.append(group)
             }
             let source = try row.optionalText("match_source") ?? "unresolved"

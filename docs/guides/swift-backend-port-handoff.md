@@ -2,7 +2,7 @@
 title: Swift backend port handoff
 type: guide
 status: active
-date: 2026-11-24
+date: 2026-11-27
 tags: [guide, swift, native, backend, parity, handoff]
 description: State, method and next steps of the ADR-270 Swift backend port, for the agent that continues it on branch claude/project-thread-8yvcm0.
 ---
@@ -351,11 +351,13 @@ TS: `routes/transactions.ts`, `transactionService.ts`, `transactionRepository.ts
 - [x] `deleteTransaction`. Covers the planned guard 409 and best-effort attachment file unlink. Pass
       the attachments directory into `BackendDatabase` next to `resume(databasePath:)`; the app knows
       it as `layout.attachments`.
-- [ ] The debounced transfer reconcile (`transferReconciliationService.scheduleReconcile`: 5 s
-      debounce, 10 s max wait). It also invalidates statistics caches and schedules the MV refresh.
+- [x] The debounced transfer reconcile (`transferReconciliationService.scheduleReconcile`: 5 s
+      debounce, 10 s max wait), in `Areas/TransferReconciliation.swift` (`LedgerFollowUps`). It
+      then runs the aggregation refresh: the MV refresh and the 1 s debounced forecast-cache clear.
 - [x] `getTransactionAttachments`, `downloadAttachment` (binary), `deleteAttachment` (#460).
 - [x] The hand-written multipart `uploadAttachment` (P11, `MultipartParts` parses the form; the
-      recorder's `multipart` step and `{{uuid}}` token carry the corpus).
+      recorder's `multipart` step and `{{uuid}}` token carry the corpus; a UUID the request sent
+      is recorded as it is).
 
 ### P12 Transfers and bulk
 
@@ -392,8 +394,8 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
       `importCategories` (`Areas/ImportUploads.swift`, the corpora `importUploads` +
       `importUploads-mutations`; `RoutingAPITransport.stream` feeds a ported SSE stream to the
       reader in one chunk). `runImportPipeline`'s commit tail (reconcileTransfers,
-      forecast-cache clears, MV refresh) keeps `ImportCommitArea.commit`'s decision: it has no
-      answer the corpus observes.
+      forecast-cache clears, MV refresh) and the rollback tail run through
+      `LedgerFollowUps.afterImportCommit` and `afterImportRollback`.
 - [x] `getSupportedAdapters`, `getInfoBanks`, `getRecurringPatterns` (`Areas/Info.swift`;
       the corpus area is `info`, recorded on the fixed clock because `recurring-patterns` reads
       `sub_interval(today(), '3 years')`)

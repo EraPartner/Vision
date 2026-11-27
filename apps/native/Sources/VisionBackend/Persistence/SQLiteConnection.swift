@@ -168,6 +168,9 @@ public final class SQLiteConnection {
         }
     }
 
+    /// The rows the last INSERT, UPDATE or DELETE changed directly (`sqlite3_changes`).
+    public func changes() -> Int { Int(sqlite3_changes(handle)) }
+
     /// The first column of the first row, or `nil` without a row.
     public func scalar(_ sql: String, _ arguments: [SQLValue] = []) throws -> SQLValue? {
         try query(sql, arguments).first?.first
