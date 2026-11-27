@@ -469,7 +469,7 @@ extension PortfolioImportCommitArea {
             """,
             [.integer(Int64(row.batchID.rawValue)), .integer(Int64(row.id.rawValue)),
              .integer(Int64(decision.transactionID.rawValue)), .text(decision.policy.rawValue),
-             .text(try cashEnvelope(amount, currency: currency ?? decision.existing.currency.rawValue, memo: memo, decision: decision, row: row, after: false)),
+             .text(try cashEnvelope(amount ?? decision.existing.amount, currency: currency ?? decision.existing.currency.rawValue, memo: memo, decision: decision, row: row, after: false)),
              .text(try cashEnvelope(decision.after.amount, currency: decision.after.currency.rawValue, memo: memo, decision: decision, row: row, after: true))])
     }
 
@@ -1996,23 +1996,16 @@ extension PortfolioImportCommitArea {
         var approved: [String: String] = [:]
         for row in scheduledRows
         where row.route == StagingRoute.assetTransfer || row.route == StagingRoute.assetAdjustment {
-            let prepared = row.route == StagingRoute.assetTransfer
-                ? try PortfolioCustodyPreviews.assetTransfer(row)
-                : try PortfolioCustodyPreviews.assetAdjustment(row)
-            guard case .event = prepared else {
-                throw BackendHTTPError.conflict(
-                    "Reviewed custody source changed during commit preparation")
-            }
             let key = "\(row.batchID.rawValue):\(row.id.rawValue)"
             guard !approved.keys.contains(key) else {
                 throw BackendHTTPError.conflict(
                     "Reviewed custody scope contains an invalid source event")
             }
             if row.route == StagingRoute.assetTransfer,
-                case .event(let event) = prepared
+                case .event(let event) = try PortfolioCustodyPreviews.assetTransfer(row)
             {
                 approved[key] = transferSignature(row, event, batchId: row.batchID.rawValue)
-            } else if case .event(let event) = prepared {
+            } else if case .event(let event) = try PortfolioCustodyPreviews.assetAdjustment(row) {
                 let sources = event.kind == .yieldReversal
                     ? try eligibleYieldSources(
                         session, investmentId: event.investmentID.rawValue,
@@ -2020,6 +2013,9 @@ extension PortfolioImportCommitArea {
                     : []
                 approved[key] = adjustmentSignature(
                     row, event, batchId: row.batchID.rawValue, hashes: sources.map { $0.hash })
+            } else {
+                throw BackendHTTPError.conflict(
+                    "Reviewed custody source changed during commit preparation")
             }
         }
         return CustodyImportScope(approved: approved)
@@ -2078,19 +2074,27 @@ extension PortfolioImportCommitArea {
         var events: [RetainedCustodyEvent] = []
         for row in scheduledRows
         where row.route == StagingRoute.assetTransfer || row.route == StagingRoute.assetAdjustment {
-            guard let prepared = row.route == StagingRoute.assetTransfer
-                ? try? PortfolioCustodyPreviews.assetTransfer(row)
-                : try? PortfolioCustodyPreviews.assetAdjustment(row),
-                case .event(let event) = prepared
-            else { continue }
-            events.append(RetainedCustodyEvent(
-                isTransfer: row.route == StagingRoute.assetTransfer,
-                investmentId: event.investmentID.rawValue,
-                day: event.day,
-                units: event.units,
-                sourceRecordHash: row.sourceRecordHash,
-                fingerprint: event.dedupFingerprint,
-                version: event.dedupFingerprintVersion))
+            if row.route == StagingRoute.assetTransfer,
+                case .event(let event) = try? PortfolioCustodyPreviews.assetTransfer(row)
+            {
+                events.append(RetainedCustodyEvent(
+                    isTransfer: true,
+                    investmentId: event.investmentID.rawValue,
+                    day: event.day,
+                    units: event.units,
+                    sourceRecordHash: row.sourceRecordHash,
+                    fingerprint: event.dedupFingerprint,
+                    version: event.dedupFingerprintVersion))
+            } else if case .event(let event) = try? PortfolioCustodyPreviews.assetAdjustment(row) {
+                events.append(RetainedCustodyEvent(
+                    isTransfer: false,
+                    investmentId: event.investmentID.rawValue,
+                    day: event.day,
+                    units: event.units,
+                    sourceRecordHash: row.sourceRecordHash,
+                    fingerprint: event.dedupFingerprint,
+                    version: event.dedupFingerprintVersion))
+            }
         }
         return events
     }
