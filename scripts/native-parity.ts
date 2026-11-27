@@ -974,6 +974,38 @@ const PORTFOLIO_PARSER_CONFIG = {
   encoding: "utf-8",
   skipRows: 1,
 };
+const UPLOAD_FIELDS = {
+  date_column: "Date",
+  symbol_column: "Symbol",
+  name_column: "Name",
+  units_column: "Units",
+  price_column: "Price",
+  amount_column: "Amount",
+  fees_column: "Fees",
+  currency_column: "Currency",
+  default_asset_class: "stock",
+  date_format: "%Y-%m-%d",
+};
+const UPLOAD_CSV =
+  "Date,Symbol,Name,Units,Price,Amount,Fees,Currency\n" +
+  "2024-01-02,TSTK,Test Stock,10,100,1000,1.50,EUR\n";
+const UNKNOWN_SYMBOL_CSV =
+  "Date,Symbol,Name,Units,Price,Amount,Fees,Currency\n" +
+  "2024-01-03,MYST,Unknown Asset,2,50,100,0,EUR\n";
+const NAME_EXACT_CSV =
+  "Date,Symbol,Name,Units,Price,Amount,Fees,Currency\n" +
+  "2024-01-04,,Second Fund,4,50,200,0,EUR\n";
+const UNDERDETERMINED_CSV =
+  "Date,Symbol,Name,Units,Price,Amount,Fees,Currency\n" +
+  "2024-01-05,TSTK,Test Stock,5,,,0,EUR\n";
+const TWO_SYMBOL_CSV =
+  "Date,Symbol,Name,Units,Price,Amount,Fees,Currency\n" +
+  "2024-01-06,TSTK,Test Stock,1,100,100,0,EUR\n" +
+  "2024-01-07,FUND,Second Fund,2,50,100,0,EUR\n";
+const SEMICOLON_CSV =
+  "junk row to skip\n" +
+  "Date;Symbol;Name;Units;Price;Amount;Fees;Currency\n" +
+  "2024-01-08;TSTK;Test Stock;3;100;300;0;EUR\n";
 const transactions = (query = ""): ParityStep => ({
   operationId: "getTransactions",
   method: "GET",
@@ -7325,6 +7357,366 @@ function mutationAreas(): Record<string, ParityArea> {
         portfolioReconciliationCommit([1]),
         portfolioReconciliationCommit(true),
       ]),
+    },
+    "portfolio-uploads-mutations": {
+      router: {
+        module: "portfolioImportRoutes.ts",
+        mountPath: "/api/portfolio/import",
+      },
+      // The pipeline stamps NOW() as it stages, validates and commits; the
+      // area records on the fixed clock the replay runs on.
+      now: "2026-11-20T12:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Test Broker', 'Test brokerage', 'Test Broker', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000ba01'),
+        (2, 'Piggy Bank', 'Piggy savings', 'Piggy', 'EUR', 'savings', 'liquid', 1, 1, 'none', 'me', 0, 0, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000ba02')`,
+
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'Test Stock', 'TSTK', 'stock', 'EUR', vision_numeric('100', 18, 6), NULL,
+         1, 'manual', 'upload match asset', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'Second Fund', 'FUND', 'etf', 'EUR', vision_numeric('50', 18, 6), NULL,
+         1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+      ],
+      steps: [
+        // ── config validation (no batch is created) ──
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "empty-config.csv",
+            content: UPLOAD_CSV,
+            fields: {},
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "no-mapping.csv",
+            content: UPLOAD_CSV,
+            fields: { default_asset_class: "stock" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-separator.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, separator: ";;" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-skip.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, skip_rows: "-1" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-type.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, default_type: "notatype" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-class.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, default_asset_class: "stamps" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-encoding.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, encoding: "bogus" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-number-format.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, number_format: "dot" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-symbols.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, included_symbols: "!!!,OK1" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "bad-format.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, portfolio_format: "bogus" },
+          },
+        ),
+
+        // ── brokerage and custody account validation ──
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "saxo-no-brokerage.csv",
+            content: UPLOAD_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              portfolio_format: "saxo_transaction_history",
+            },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "brokerage-no-account.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, is_brokerage: "true" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "brokerage-savings.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS, is_brokerage: "true", account_id: "2" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "brokerage-missing-account.csv",
+            content: UPLOAD_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              is_brokerage: "true",
+              account_id: "999",
+            },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "same-transfer-account.csv",
+            content: UPLOAD_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              is_brokerage: "true",
+              account_id: "1",
+              transfer_destination_account_id: "1",
+            },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "coerced-transfer-account.csv",
+            content: UPLOAD_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              transfer_destination_account_id: "1e3",
+            },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "ghost-transfer-account.csv",
+            content: UPLOAD_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              transfer_destination_account_id: "999",
+            },
+          },
+        ),
+
+        // ── file-type validation ──
+        {
+          operationId: "portfolioImportCsvCustom",
+          method: "POST",
+          path: "/api/portfolio/import/csv/custom",
+          multipart: {
+            fields: { ...UPLOAD_FIELDS },
+            files: [
+              {
+                name: "file",
+                filename: "notes.txt",
+                contentType: "text/plain",
+                base64: Buffer.from("not a csv", "utf8").toString("base64"),
+              },
+            ],
+          },
+        },
+        {
+          operationId: "portfolioImportCsvCustom",
+          method: "POST",
+          path: "/api/portfolio/import/csv/custom",
+          multipart: {
+            fields: { ...UPLOAD_FIELDS },
+            files: [
+              {
+                name: "file",
+                filename: "book.csv",
+                contentType: "text/csv",
+                base64: Buffer.concat([
+                  Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+                  Buffer.from(" not a workbook", "utf8"),
+                ]).toString("base64"),
+              },
+            ],
+          },
+        },
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "empty.csv",
+            content: "",
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+        {
+          operationId: "portfolioImportCsvCustom",
+          method: "POST",
+          path: "/api/portfolio/import/csv/custom",
+          multipart: {
+            fields: { ...UPLOAD_FIELDS },
+            files: [],
+          },
+        },
+
+        // ── one-shot imports ──
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "clean.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "clean.csv",
+            content: UPLOAD_CSV,
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "unknown-symbol.csv",
+            content: UNKNOWN_SYMBOL_CSV,
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "name-exact.csv",
+            content: NAME_EXACT_CSV,
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "underdetermined.csv",
+            content: UNDERDETERMINED_CSV,
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "filtered.csv",
+            content: TWO_SYMBOL_CSV,
+            fields: { ...UPLOAD_FIELDS, included_symbols: "TSTK" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvCustom",
+          "/api/portfolio/import/csv/custom",
+          {
+            filename: "semicolon.csv",
+            content: SEMICOLON_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              separator: ";",
+              skip_rows: "1",
+            },
+          },
+        ),
+
+        // ── the SSE stream: the pre-SSE rejections (the heartbeat padding after
+        // the committed headers is timing-dependent, so success streams record
+        // only their committed padding, like the bank import corpus) ──
+        csvUploadStep(
+          "portfolioImportCsvStream",
+          "/api/portfolio/import/csv/stream",
+          {
+            filename: "stream-bad-config.csv",
+            content: UPLOAD_CSV,
+            fields: { default_asset_class: "stock" },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvStream",
+          "/api/portfolio/import/csv/stream",
+          {
+            filename: "stream-missing-account.csv",
+            content: UPLOAD_CSV,
+            fields: {
+              ...UPLOAD_FIELDS,
+              is_brokerage: "true",
+              account_id: "999",
+            },
+          },
+        ),
+        csvUploadStep(
+          "portfolioImportCsvStream",
+          "/api/portfolio/import/csv/stream",
+          {
+            filename: "notes.txt",
+            content: "not a csv",
+            fields: { ...UPLOAD_FIELDS },
+          },
+        ),
+      ],
     },
     "prices-mutations": {
       router: { module: "investments.ts", mountPath: "/api/investments" },

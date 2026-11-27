@@ -1,0 +1,1116 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n         closed_at, created_at, updated_at, import_identity) VALUES\n        (1, 'Test Broker', 'Test brokerage', 'Test Broker', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000ba01'),\n        (2, 'Piggy Bank', 'Piggy savings', 'Piggy', 'EUR', 'savings', 'liquid', 1, 1, 'none', 'me', 0, 0, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000ba02')",
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n         is_active, price_provider, notes, created_at, updated_at) VALUES\n        (1, 'Test Stock', 'TSTK', 'stock', 'EUR', vision_numeric('100', 18, 6), NULL,\n         1, 'manual', 'upload match asset', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'Second Fund', 'FUND', 'etf', 'EUR', vision_numeric('50', 18, 6), NULL,\n         1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+  ],
+  "now": "2026-11-20T12:00:00.000Z",
+  "steps": [
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {},
+        "files": [
+          {
+            "name": "file",
+            "filename": "empty-config.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "date_column is required; default_asset_class is required and must be a valid asset class"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "default_asset_class": "stock"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "no-mapping.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "date_column is required"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "separator": ";;"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-separator.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "separator must be a single character"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "skip_rows": "-1"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-skip.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "skip_rows must be zero or a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "default_type": "notatype"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-type.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "default_type \"notatype\" is not a valid transaction type"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stamps",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-class.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "default_asset_class is required and must be a valid asset class"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "encoding": "bogus"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-encoding.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Unsupported CSV encoding \"bogus\""
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "number_format": "dot"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-number-format.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid option: expected one of \"auto\"|\"decimal_dot\"|\"decimal_comma\""
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "included_symbols": "!!!,OK1"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-symbols.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid string: must match pattern /^[A-Z0-9][A-Z0-9._-]{0,29}$/"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "portfolio_format": "bogus"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "bad-format.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "portfolio_format must be a supported portfolio format"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "portfolio_format": "saxo_transaction_history"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "saxo-no-brokerage.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Saxo Transaction History requires is_brokerage=true and account_id"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "is_brokerage": "true"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "brokerage-no-account.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "A brokerage import requires account_id (the sleeve cash + trades land on)"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "is_brokerage": "true",
+          "account_id": "2"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "brokerage-savings.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "account_id must reference an active portfolio account"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "is_brokerage": "true",
+          "account_id": "999"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "brokerage-missing-account.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "is_brokerage": "true",
+          "account_id": "1",
+          "transfer_destination_account_id": "1"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "same-transfer-account.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Transfer source and destination accounts must differ"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "transfer_destination_account_id": "1e3"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "coerced-transfer-account.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "transfer_destination_account_id must be a positive integer"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "transfer_destination_account_id": "999"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "ghost-transfer-account.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "notes.txt",
+            "contentType": "text/plain",
+            "base64": "bm90IGEgY3N2"
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "File must be a CSV, XLSX or supported XLS workbook"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "book.csv",
+            "contentType": "text/csv",
+            "base64": "UEsDBCBub3QgYSB3b3JrYm9vaw=="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Portfolio workbooks require supported Saxo XLSX transaction history or IBKR XLS/XLSX funding history"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "empty.csv",
+            "contentType": "text/csv",
+            "base64": ""
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "No importable rows found in the file."
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": []
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "No file uploaded."
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "clean.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 2,
+          "total": 1,
+          "skipped": 0,
+          "imported": 1,
+          "duplicates": 0,
+          "errors": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "clean.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 3,
+          "total": 1,
+          "skipped": 0,
+          "imported": 0,
+          "duplicates": 1,
+          "errors": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "unknown-symbol.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAzLE1ZU1QsVW5rbm93biBBc3NldCwyLDUwLDEwMCwwLEVVUgo="
+          }
+        ]
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 4,
+          "requires_review": true,
+          "match_source_counts": {
+            "symbol": 0,
+            "name_exact": 0,
+            "unresolved": 1
+          },
+          "skipped": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "name-exact.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTA0LCxTZWNvbmQgRnVuZCw0LDUwLDIwMCwwLEVVUgo="
+          }
+        ]
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 5,
+          "requires_review": true,
+          "match_source_counts": {
+            "symbol": 0,
+            "name_exact": 1,
+            "unresolved": 0
+          },
+          "skipped": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "underdetermined.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTA1LFRTVEssVGVzdCBTdG9jayw1LCwsMCxFVVIK"
+          }
+        ]
+      },
+      "status": 202,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 6,
+          "requires_review": true,
+          "match_source_counts": {
+            "symbol": 0,
+            "name_exact": 0,
+            "unresolved": 0
+          },
+          "skipped": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "included_symbols": "TSTK"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "filtered.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTA2LFRTVEssVGVzdCBTdG9jaywxLDEwMCwxMDAsMCxFVVIKMjAyNC0wMS0wNyxGVU5ELFNlY29uZCBGdW5kLDIsNTAsMTAwLDAsRVVSCg=="
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 7,
+          "total": 1,
+          "skipped": 0,
+          "imported": 1,
+          "duplicates": 0,
+          "errors": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvCustom",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/custom",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "separator": ";",
+          "skip_rows": "1"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "semicolon.csv",
+            "contentType": "text/csv",
+            "base64": "anVuayByb3cgdG8gc2tpcApEYXRlO1N5bWJvbDtOYW1lO1VuaXRzO1ByaWNlO0Ftb3VudDtGZWVzO0N1cnJlbmN5CjIwMjQtMDEtMDg7VFNUSztUZXN0IFN0b2NrOzM7MTAwOzMwMDswO0VVUgo="
+          }
+        ]
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 8,
+          "total": 1,
+          "skipped": 0,
+          "imported": 1,
+          "duplicates": 0,
+          "errors": 0
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvStream",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/stream",
+      "multipart": {
+        "fields": {
+          "default_asset_class": "stock"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "stream-bad-config.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "date_column is required"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvStream",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/stream",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d",
+          "is_brokerage": "true",
+          "account_id": "999"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "stream-missing-account.csv",
+            "contentType": "text/csv",
+            "base64": "RGF0ZSxTeW1ib2wsTmFtZSxVbml0cyxQcmljZSxBbW91bnQsRmVlcyxDdXJyZW5jeQoyMDI0LTAxLTAyLFRTVEssVGVzdCBTdG9jaywxMCwxMDAsMTAwMCwxLjUwLEVVUgo="
+          }
+        ]
+      },
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Account 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "portfolioImportCsvStream",
+      "method": "POST",
+      "path": "/api/portfolio/import/csv/stream",
+      "multipart": {
+        "fields": {
+          "date_column": "Date",
+          "symbol_column": "Symbol",
+          "name_column": "Name",
+          "units_column": "Units",
+          "price_column": "Price",
+          "amount_column": "Amount",
+          "fees_column": "Fees",
+          "currency_column": "Currency",
+          "default_asset_class": "stock",
+          "date_format": "%Y-%m-%d"
+        },
+        "files": [
+          {
+            "name": "file",
+            "filename": "notes.txt",
+            "contentType": "text/csv",
+            "base64": "bm90IGEgY3N2"
+          }
+        ]
+      },
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "File must be a CSV, XLSX or supported XLS workbook"
+        }
+      }
+    }
+  ]
+}
