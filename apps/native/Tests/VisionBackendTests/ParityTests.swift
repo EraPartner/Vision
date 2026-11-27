@@ -438,6 +438,7 @@ import VisionNativeCore
         "portfolio-transactions-mutations", "prices-mutations", "exposure-mutations",
         "portfolio-parsers-mutations", "portfolio-batches-mutations",
         "portfolio-overrides-mutations", "portfolio-reconciliation-mutations",
+        "portfolio-commit-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
