@@ -237,7 +237,7 @@ import VisionNativeCore
     @Test func mergingPayeesWithPrimaryAccountsSucceeds() async throws {
         let database = try Self.database([
             "INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES"
-                + " (2, 'Other', 'other', 1, \(stamp), \(stamp))",
+                + " (2, 'Other', 'other', 1, \(Self.stamp), \(Self.stamp))",
             "INSERT INTO recipient_bank_accounts (recipient_id, account_number, is_primary) VALUES (1, 'BE01', 1)",
             "INSERT INTO recipient_bank_accounts (recipient_id, account_number, is_primary) VALUES (2, 'BE02', 1)",
         ])
