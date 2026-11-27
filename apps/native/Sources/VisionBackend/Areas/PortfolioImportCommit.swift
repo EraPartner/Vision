@@ -23,7 +23,7 @@ enum PortfolioImportCommitArea {
             """,
             [.integer(Int64(accountId))])
         else {
-            throw BackendHTTPError.notFound("Account not found")
+            throw BackendHTTPError.notFound("Account \(accountId) not found")
         }
         let active = (try account.int64("is_active")) != 0
         let type = try account.text("type")
