@@ -1,0 +1,980 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n           closed_at, created_at, updated_at, import_identity) VALUES\n          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000bb01'),\n          (2, 'Spending', NULL, NULL, 'EUR', 'checking', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n           '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000bb02')",
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n           is_active, price_provider, notes, created_at, updated_at) VALUES\n          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,\n           1, 'manual', 'usd stock', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n          (2, 'Euro Fund', 'EFUND', 'etf', 'EUR', vision_numeric('12', 18, 6), NULL,\n           1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,\n           default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,\n           error_summary, started_at, completed_at, account_id, is_brokerage) VALUES\n          (1, 'Keytrade custom', 'keytrade.csv', 312, 'stock', 'buy', 'awaiting_review', 5, 0, 0, 1, NULL,\n           '2026-10-05T10:00:00.000000Z', NULL, 1, 1),\n          (2, 'Bolero adapter', 'bolero.csv', 8, 'etf', 'dividend', 'complete', 2, 2, 0, 0, NULL,\n           '2026-09-05T10:00:00.000000Z', '2026-09-05T10:00:05.000000Z', 1, 1),\n          (3, 'Degiro', 'degiro.csv', 10, 'stock', 'buy', 'staging', 10, 0, 0, 0, NULL,\n           '2026-10-06T10:00:00.000000Z', NULL, 1, 1),\n          (4, 'Aborted One', 'aborted.csv', 4, 'stock', 'buy', 'aborted', 4, 0, 0, 4, 'could not parse the header',\n           '2026-08-05T10:00:00.000000Z', '2026-08-05T10:00:01.000000Z', 1, 1),\n          (5, 'Mixed Bag', 'mixed.csv', 6, 'stock', 'buy', 'complete_with_errors', 6, 4, 1, 1, 'one row had no instrument',\n           '2026-07-05T10:00:00.000000Z', '2026-07-05T10:00:08.000000Z', NULL, 1),\n          (6, 'Wrong Account', 'wrong.csv', 2, 'stock', 'buy', 'awaiting_review', 2, 0, 0, 0, NULL,\n           '2026-06-05T10:00:00.000000Z', NULL, 2, 1)",
+    "INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type,\n           type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note,\n           match_source, error_message, resolved_investment_id, route, created_at, updated_at) VALUES\n          (1, 1, 1, 'matched', '2026-10-01', 'buy', 'BUY', 'ACME', NULL, vision_numeric('10', 18, 8),\n           vision_numeric('100', 18, 6), vision_numeric('1000', 18, 4), vision_numeric('1.5', 18, 4),\n           vision_numeric('0', 18, 4), 'EUR', 'first buy', 'symbol', NULL, 1, 'portfolio',\n           '2026-10-05T10:00:01.000000Z', '2026-10-05T10:00:01.000000Z'),\n          (2, 1, 2, 'matched', '2026-10-02', 'dividend', 'DIV', NULL, 'Euro Fund', NULL, NULL,\n           vision_numeric('12.25', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           'quarterly dividend', 'name_exact', NULL, 2, 'portfolio',\n           '2026-10-05T10:00:02.000000Z', '2026-10-05T10:00:02.000000Z'),\n          (3, 1, 3, 'error', '2026-10-03', 'buy', 'BUY', 'NOBODY', 'Nobody AG', vision_numeric('1', 18, 8),\n           vision_numeric('42', 18, 6), vision_numeric('42', 18, 4), vision_numeric('0', 18, 4),\n           vision_numeric('0', 18, 4), 'EUR', NULL, NULL,\n           'unresolved instrument — pick or create a holding', NULL, 'portfolio',\n           '2026-10-05T10:00:03.000000Z', '2026-10-05T10:00:03.000000Z'),\n          (4, 1, 4, 'matched', '2026-10-04', 'interest', 'INT', NULL, NULL, NULL, NULL,\n           vision_numeric('50', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n           'cash interest', NULL, NULL, NULL, 'cash',\n           '2026-10-05T10:00:04.000000Z', '2026-10-05T10:00:04.000000Z'),\n          (5, 1, 5, 'duplicate', '2026-10-05', 'sell', 'SELL', 'ACME', NULL, vision_numeric('2', 18, 8),\n           vision_numeric('150', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4),\n           vision_numeric('0', 18, 4), 'EUR', 'seen before', 'symbol', NULL, 1, 'portfolio',\n           '2026-10-05T10:00:05.000000Z', '2026-10-05T10:00:05.000000Z')"
+  ],
+  "steps": [
+    {
+      "operationId": "getPortfolioImportBatches",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "adapter_name": "Degiro",
+              "source_filename": "degiro.csv",
+              "source_size_bytes": "10",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "staging",
+              "account_id": 1,
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-10-06T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "1",
+              "adapter_name": "Keytrade custom",
+              "source_filename": "keytrade.csv",
+              "source_size_bytes": "312",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 1,
+              "rows_total": 5,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": null,
+              "started_at": "2026-10-05T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "2",
+              "adapter_name": "Bolero adapter",
+              "source_filename": "bolero.csv",
+              "source_size_bytes": "8",
+              "default_asset_class": "etf",
+              "default_type": "dividend",
+              "status": "complete",
+              "account_id": 1,
+              "rows_total": 2,
+              "rows_imported": 2,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-09-05T10:00:00.000Z",
+              "completed_at": "2026-09-05T10:00:05.000Z"
+            },
+            {
+              "id": "4",
+              "adapter_name": "Aborted One",
+              "source_filename": "aborted.csv",
+              "source_size_bytes": "4",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "aborted",
+              "account_id": 1,
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2026-08-05T10:00:00.000Z",
+              "completed_at": "2026-08-05T10:00:01.000Z"
+            },
+            {
+              "id": "5",
+              "adapter_name": "Mixed Bag",
+              "source_filename": "mixed.csv",
+              "source_size_bytes": "6",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "complete_with_errors",
+              "account_id": null,
+              "rows_total": 6,
+              "rows_imported": 4,
+              "rows_duplicate": 1,
+              "rows_error": 1,
+              "error_summary": "one row had no instrument",
+              "started_at": "2026-07-05T10:00:00.000Z",
+              "completed_at": "2026-07-05T10:00:08.000Z"
+            },
+            {
+              "id": "6",
+              "adapter_name": "Wrong Account",
+              "source_filename": "wrong.csv",
+              "source_size_bytes": "2",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 2,
+              "rows_total": 2,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-06-05T10:00:00.000Z",
+              "completed_at": null
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatches",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches?limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "1",
+              "adapter_name": "Keytrade custom",
+              "source_filename": "keytrade.csv",
+              "source_size_bytes": "312",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 1,
+              "rows_total": 5,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": null,
+              "started_at": "2026-10-05T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "2",
+              "adapter_name": "Bolero adapter",
+              "source_filename": "bolero.csv",
+              "source_size_bytes": "8",
+              "default_asset_class": "etf",
+              "default_type": "dividend",
+              "status": "complete",
+              "account_id": 1,
+              "rows_total": 2,
+              "rows_imported": 2,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-09-05T10:00:00.000Z",
+              "completed_at": "2026-09-05T10:00:05.000Z"
+            }
+          ],
+          "total": 6,
+          "limit": 2,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatches",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches?limit=abc&offset=-5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "adapter_name": "Degiro",
+              "source_filename": "degiro.csv",
+              "source_size_bytes": "10",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "staging",
+              "account_id": 1,
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-10-06T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "1",
+              "adapter_name": "Keytrade custom",
+              "source_filename": "keytrade.csv",
+              "source_size_bytes": "312",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 1,
+              "rows_total": 5,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": null,
+              "started_at": "2026-10-05T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "2",
+              "adapter_name": "Bolero adapter",
+              "source_filename": "bolero.csv",
+              "source_size_bytes": "8",
+              "default_asset_class": "etf",
+              "default_type": "dividend",
+              "status": "complete",
+              "account_id": 1,
+              "rows_total": 2,
+              "rows_imported": 2,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-09-05T10:00:00.000Z",
+              "completed_at": "2026-09-05T10:00:05.000Z"
+            },
+            {
+              "id": "4",
+              "adapter_name": "Aborted One",
+              "source_filename": "aborted.csv",
+              "source_size_bytes": "4",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "aborted",
+              "account_id": 1,
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2026-08-05T10:00:00.000Z",
+              "completed_at": "2026-08-05T10:00:01.000Z"
+            },
+            {
+              "id": "5",
+              "adapter_name": "Mixed Bag",
+              "source_filename": "mixed.csv",
+              "source_size_bytes": "6",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "complete_with_errors",
+              "account_id": null,
+              "rows_total": 6,
+              "rows_imported": 4,
+              "rows_duplicate": 1,
+              "rows_error": 1,
+              "error_summary": "one row had no instrument",
+              "started_at": "2026-07-05T10:00:00.000Z",
+              "completed_at": "2026-07-05T10:00:08.000Z"
+            },
+            {
+              "id": "6",
+              "adapter_name": "Wrong Account",
+              "source_filename": "wrong.csv",
+              "source_size_bytes": "2",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 2,
+              "rows_total": 2,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-06-05T10:00:00.000Z",
+              "completed_at": null
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatches",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches?limit=500",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "adapter_name": "Degiro",
+              "source_filename": "degiro.csv",
+              "source_size_bytes": "10",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "staging",
+              "account_id": 1,
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-10-06T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "1",
+              "adapter_name": "Keytrade custom",
+              "source_filename": "keytrade.csv",
+              "source_size_bytes": "312",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 1,
+              "rows_total": 5,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": null,
+              "started_at": "2026-10-05T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "2",
+              "adapter_name": "Bolero adapter",
+              "source_filename": "bolero.csv",
+              "source_size_bytes": "8",
+              "default_asset_class": "etf",
+              "default_type": "dividend",
+              "status": "complete",
+              "account_id": 1,
+              "rows_total": 2,
+              "rows_imported": 2,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-09-05T10:00:00.000Z",
+              "completed_at": "2026-09-05T10:00:05.000Z"
+            },
+            {
+              "id": "4",
+              "adapter_name": "Aborted One",
+              "source_filename": "aborted.csv",
+              "source_size_bytes": "4",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "aborted",
+              "account_id": 1,
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2026-08-05T10:00:00.000Z",
+              "completed_at": "2026-08-05T10:00:01.000Z"
+            },
+            {
+              "id": "5",
+              "adapter_name": "Mixed Bag",
+              "source_filename": "mixed.csv",
+              "source_size_bytes": "6",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "complete_with_errors",
+              "account_id": null,
+              "rows_total": 6,
+              "rows_imported": 4,
+              "rows_duplicate": 1,
+              "rows_error": 1,
+              "error_summary": "one row had no instrument",
+              "started_at": "2026-07-05T10:00:00.000Z",
+              "completed_at": "2026-07-05T10:00:08.000Z"
+            },
+            {
+              "id": "6",
+              "adapter_name": "Wrong Account",
+              "source_filename": "wrong.csv",
+              "source_size_bytes": "2",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 2,
+              "rows_total": 2,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-06-05T10:00:00.000Z",
+              "completed_at": null
+            }
+          ],
+          "total": 6,
+          "limit": 200,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatches",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches?limit=1&offset=999",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [],
+          "total": 6,
+          "limit": 1,
+          "offset": 999
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": "1",
+          "adapter_name": "Keytrade custom",
+          "source_filename": "keytrade.csv",
+          "source_size_bytes": "312",
+          "default_asset_class": "stock",
+          "default_type": "buy",
+          "status": "awaiting_review",
+          "account_id": 1,
+          "rows_total": 5,
+          "rows_imported": 0,
+          "rows_duplicate": 0,
+          "rows_error": 1,
+          "error_summary": null,
+          "started_at": "2026-10-05T10:00:00.000Z",
+          "completed_at": null
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Import batch 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/1.5",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "previewPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/1/preview",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 1,
+          "account_id": 1,
+          "account_name": "Bolero brokerage",
+          "account_valid": true,
+          "groups": [
+            {
+              "is_cash": false,
+              "investment_id": 1,
+              "investment_name": "ACME Corp",
+              "investment_symbol": "ACME",
+              "investment_asset_class": "stock",
+              "raw_symbol": "ACME",
+              "raw_name": null,
+              "rows": [
+                {
+                  "id": "1",
+                  "row_index": 1,
+                  "status": "matched",
+                  "route": "portfolio",
+                  "tx_date": "2026-10-01",
+                  "type": "buy",
+                  "type_raw": "BUY",
+                  "symbol_raw": "ACME",
+                  "name_raw": null,
+                  "units": "10.00000000",
+                  "price_per_unit": "100.000000",
+                  "amount": "1000.0000",
+                  "fees": "1.5000",
+                  "taxes": "0.0000",
+                  "currency": "EUR",
+                  "fx_rate_to_eur": null,
+                  "note": "first buy",
+                  "match_source": "symbol",
+                  "error_message": null,
+                  "user_override_investment_id": null
+                },
+                {
+                  "id": "5",
+                  "row_index": 5,
+                  "status": "duplicate",
+                  "route": "portfolio",
+                  "tx_date": "2026-10-05",
+                  "type": "sell",
+                  "type_raw": "SELL",
+                  "symbol_raw": "ACME",
+                  "name_raw": null,
+                  "units": "2.00000000",
+                  "price_per_unit": "150.000000",
+                  "amount": "300.0000",
+                  "fees": "0.0000",
+                  "taxes": "0.0000",
+                  "currency": "EUR",
+                  "fx_rate_to_eur": null,
+                  "note": "seen before",
+                  "match_source": "symbol",
+                  "error_message": null,
+                  "user_override_investment_id": null
+                }
+              ],
+              "row_count": 2
+            },
+            {
+              "is_cash": false,
+              "investment_id": 2,
+              "investment_name": "Euro Fund",
+              "investment_symbol": "EFUND",
+              "investment_asset_class": "etf",
+              "raw_symbol": null,
+              "raw_name": "Euro Fund",
+              "rows": [
+                {
+                  "id": "2",
+                  "row_index": 2,
+                  "status": "matched",
+                  "route": "portfolio",
+                  "tx_date": "2026-10-02",
+                  "type": "dividend",
+                  "type_raw": "DIV",
+                  "symbol_raw": null,
+                  "name_raw": "Euro Fund",
+                  "units": null,
+                  "price_per_unit": null,
+                  "amount": "12.2500",
+                  "fees": "0.0000",
+                  "taxes": "0.0000",
+                  "currency": "EUR",
+                  "fx_rate_to_eur": null,
+                  "note": "quarterly dividend",
+                  "match_source": "name_exact",
+                  "error_message": null,
+                  "user_override_investment_id": null
+                }
+              ],
+              "row_count": 1
+            },
+            {
+              "is_cash": false,
+              "investment_id": null,
+              "investment_name": null,
+              "investment_symbol": null,
+              "investment_asset_class": null,
+              "raw_symbol": "NOBODY",
+              "raw_name": "Nobody AG",
+              "rows": [
+                {
+                  "id": "3",
+                  "row_index": 3,
+                  "status": "error",
+                  "route": "portfolio",
+                  "tx_date": "2026-10-03",
+                  "type": "buy",
+                  "type_raw": "BUY",
+                  "symbol_raw": "NOBODY",
+                  "name_raw": "Nobody AG",
+                  "units": "1.00000000",
+                  "price_per_unit": "42.000000",
+                  "amount": "42.0000",
+                  "fees": "0.0000",
+                  "taxes": "0.0000",
+                  "currency": "EUR",
+                  "fx_rate_to_eur": null,
+                  "note": null,
+                  "match_source": null,
+                  "error_message": "unresolved instrument — pick or create a holding",
+                  "user_override_investment_id": null
+                }
+              ],
+              "row_count": 1
+            },
+            {
+              "is_cash": true,
+              "investment_id": null,
+              "investment_name": null,
+              "investment_symbol": null,
+              "investment_asset_class": null,
+              "raw_symbol": null,
+              "raw_name": null,
+              "rows": [
+                {
+                  "id": "4",
+                  "row_index": 4,
+                  "status": "matched",
+                  "route": "cash",
+                  "tx_date": "2026-10-04",
+                  "type": "interest",
+                  "type_raw": "INT",
+                  "symbol_raw": null,
+                  "name_raw": null,
+                  "units": null,
+                  "price_per_unit": null,
+                  "amount": "50.0000",
+                  "fees": "0.0000",
+                  "taxes": "0.0000",
+                  "currency": "EUR",
+                  "fx_rate_to_eur": null,
+                  "note": "cash interest",
+                  "match_source": null,
+                  "error_message": null,
+                  "user_override_investment_id": null
+                }
+              ],
+              "row_count": 1
+            }
+          ],
+          "totals": {
+            "symbol": 2,
+            "name_exact": 1,
+            "unresolved": 1,
+            "error": 1
+          }
+        }
+      }
+    },
+    {
+      "operationId": "previewPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/6/preview",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 6,
+          "account_id": 2,
+          "account_name": "Spending",
+          "account_valid": false,
+          "groups": [],
+          "totals": {
+            "symbol": 0,
+            "name_exact": 0,
+            "unresolved": 0,
+            "error": 0
+          }
+        }
+      }
+    },
+    {
+      "operationId": "previewPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/3/preview",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "batch_id": 3,
+          "account_id": 1,
+          "account_name": "Bolero brokerage",
+          "account_valid": true,
+          "groups": [],
+          "totals": {
+            "symbol": 0,
+            "name_exact": 0,
+            "unresolved": 0,
+            "error": 0
+          }
+        }
+      }
+    },
+    {
+      "operationId": "previewPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/999/preview",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Import batch 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "previewPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/abc/preview",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioImportBatch",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/batches/4",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Batch is already aborted"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioImportBatch",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/batches/3",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Cannot rollback a batch that is still in progress"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioImportBatch",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/batches/5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "deleted": 0
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatch",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches/5",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": "5",
+          "adapter_name": "Mixed Bag",
+          "source_filename": "mixed.csv",
+          "source_size_bytes": "6",
+          "default_asset_class": "stock",
+          "default_type": "buy",
+          "status": "aborted",
+          "account_id": null,
+          "rows_total": 6,
+          "rows_imported": 4,
+          "rows_duplicate": 1,
+          "rows_error": 1,
+          "error_summary": "one row had no instrument",
+          "started_at": "2026-07-05T10:00:00.000Z",
+          "completed_at": "2026-07-05T10:00:08.000Z"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioImportBatch",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/batches/999",
+      "status": 404,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Import batch 999 not found"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioImportBatch",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/batches/abc",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "deletePortfolioImportBatch",
+      "method": "DELETE",
+      "path": "/api/portfolio/import/batches/0",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid batch id"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioImportBatches",
+      "method": "GET",
+      "path": "/api/portfolio/import/batches",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "items": [
+            {
+              "id": "3",
+              "adapter_name": "Degiro",
+              "source_filename": "degiro.csv",
+              "source_size_bytes": "10",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "staging",
+              "account_id": 1,
+              "rows_total": 10,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-10-06T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "1",
+              "adapter_name": "Keytrade custom",
+              "source_filename": "keytrade.csv",
+              "source_size_bytes": "312",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 1,
+              "rows_total": 5,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 1,
+              "error_summary": null,
+              "started_at": "2026-10-05T10:00:00.000Z",
+              "completed_at": null
+            },
+            {
+              "id": "2",
+              "adapter_name": "Bolero adapter",
+              "source_filename": "bolero.csv",
+              "source_size_bytes": "8",
+              "default_asset_class": "etf",
+              "default_type": "dividend",
+              "status": "complete",
+              "account_id": 1,
+              "rows_total": 2,
+              "rows_imported": 2,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-09-05T10:00:00.000Z",
+              "completed_at": "2026-09-05T10:00:05.000Z"
+            },
+            {
+              "id": "4",
+              "adapter_name": "Aborted One",
+              "source_filename": "aborted.csv",
+              "source_size_bytes": "4",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "aborted",
+              "account_id": 1,
+              "rows_total": 4,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 4,
+              "error_summary": "could not parse the header",
+              "started_at": "2026-08-05T10:00:00.000Z",
+              "completed_at": "2026-08-05T10:00:01.000Z"
+            },
+            {
+              "id": "5",
+              "adapter_name": "Mixed Bag",
+              "source_filename": "mixed.csv",
+              "source_size_bytes": "6",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "aborted",
+              "account_id": null,
+              "rows_total": 6,
+              "rows_imported": 4,
+              "rows_duplicate": 1,
+              "rows_error": 1,
+              "error_summary": "one row had no instrument",
+              "started_at": "2026-07-05T10:00:00.000Z",
+              "completed_at": "2026-07-05T10:00:08.000Z"
+            },
+            {
+              "id": "6",
+              "adapter_name": "Wrong Account",
+              "source_filename": "wrong.csv",
+              "source_size_bytes": "2",
+              "default_asset_class": "stock",
+              "default_type": "buy",
+              "status": "awaiting_review",
+              "account_id": 2,
+              "rows_total": 2,
+              "rows_imported": 0,
+              "rows_duplicate": 0,
+              "rows_error": 0,
+              "error_summary": null,
+              "started_at": "2026-06-05T10:00:00.000Z",
+              "completed_at": null
+            }
+          ],
+          "total": 6,
+          "limit": 50,
+          "offset": 0
+        }
+      }
+    }
+  ]
+}
