@@ -38,18 +38,25 @@ enum DonutHoverMotion {
 /// PageTransition: each pathname enters with opacity 0 → 1 and y 14 → 0 over 0.52 s on the
 /// out-expo curve; enter-only, and none under Reduce Motion. The web's scale 0.995 → 1 is left
 /// out: an invisible half-percent, it made every layer of the page re-render each frame.
+/// The page always settles on appear; Reduce Motion only decides whether it animates there, so
+/// turning the preference off while the page stays mounted cannot hide it.
 struct PageEntrance: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var entered = false
 
+    static func shown(entered: Bool, reduceMotion: Bool) -> Bool { entered || reduceMotion }
+    /// The animation to settle with, or nil to settle at once.
+    static func settleAnimation(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : VisionMotion.outExpo(VisionMotion.page)
+    }
+
     func body(content: Content) -> some View {
-        let shown = entered || reduceMotion
+        let shown = Self.shown(entered: entered, reduceMotion: reduceMotion)
         content
             .opacity(shown ? 1 : 0)
             .offset(y: shown ? 0 : 14)
             .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(VisionMotion.outExpo(VisionMotion.page)) { entered = true }
+                withAnimation(Self.settleAnimation(reduceMotion: reduceMotion)) { entered = true }
             }
     }
 }
@@ -90,8 +97,13 @@ struct RollingNumber: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(value)
         .onAppear {
-            guard rolls else { return }
-            DispatchQueue.main.async { settled = true }
+            // Always settle, so reels drawn later (Reduce Motion turned off while mounted) show
+            // the value rather than zeros. Only a rolling figure waits a turn to roll from 0.
+            if rolls {
+                DispatchQueue.main.async { settled = true }
+            } else {
+                settled = true
+            }
         }
     }
 

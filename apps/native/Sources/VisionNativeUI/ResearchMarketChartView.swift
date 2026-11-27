@@ -180,8 +180,9 @@ struct ResearchMarketChartView: View {
 
 /// The volume strip under the price chart: one evenly spaced band per point (the web `BarChart`
 /// band scale), not a bar on the time axis, whose bars were thin slivers with gaps at weekends.
-/// Equatable on what it draws, so the price chart's hover does not rebuild its bars.
-private struct MarketVolumeBars: View, Equatable {
+/// Equatable on what it draws, so the price chart's hover does not rebuild its bars. Every bar is
+/// compared: a refresh that changes only a middle volume must redraw that bar.
+struct MarketVolumeBars: View, Equatable {
     let bars: [ChartLinePlot.Bar]
     let count: Int
     let color: Color
@@ -190,8 +191,7 @@ private struct MarketVolumeBars: View, Equatable {
 
     nonisolated static func == (lhs: MarketVolumeBars, rhs: MarketVolumeBars) -> Bool {
         lhs.count == rhs.count && lhs.color == rhs.color && lhs.label == rhs.label
-            && lhs.bars.count == rhs.bars.count && lhs.bars.first?.volume == rhs.bars.first?.volume
-            && lhs.bars.last?.volume == rhs.bars.last?.volume
+            && lhs.bars == rhs.bars
     }
 
     var body: some View {
