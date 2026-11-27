@@ -24,7 +24,7 @@ struct PortfolioTaxDataTests {
         var row = PortfolioTaxAdjustmentDraft(
             investment: source.summaries[0], year: 2026, values: settings, format: .eu)
         row.taxes = "7,123456789012345"
-        row.fees = "invalid"
+        row.fees = ""
         row.etfStructure = .distributing
         row.reynders = .no
         row.interestPortion = "100"
@@ -55,6 +55,24 @@ struct PortfolioTaxDataTests {
         row.interestPortion = "25"
         try values.apply(rows: [row], year: 2026, format: .us)
         #expect(values.classifications["1"]?["reyndersInterestPortion"] == .number(Decimal(string: "0.25")!))
+    }
+    /// Astra report 1, findings 32 and 33: an explicit 0% interest portion is kept, and an
+    /// unreadable amount blocks the save instead of storing zero.
+    @Test func zeroPortionIsKeptAndUnreadableAmountsBlock() throws {
+        let source = try portfolioTaxFixture()
+        var values = try PortfolioTaxSettingsDraft(records: source.records)
+        var row = PortfolioTaxAdjustmentDraft(investment: source.summaries[0], year: 2026, values: values, format: .eu)
+        row.reynders = .yes
+        row.interestPortion = "0"
+        try values.apply(rows: [row], year: 2026, format: .eu)
+        if row.showsReynders {
+            #expect(values.classifications["1"]?["reyndersInterestPortion"] == .number(0))
+        }
+        row.fees = "125.50"
+        #expect(row.hasInvalidAmount(format: .eu))
+        #expect(throws: APIError.self) { try values.apply(rows: [row], year: 2026, format: .eu) }
+        row.fees = "125,50"
+        #expect(!row.hasInvalidAmount(format: .eu))
     }
     @Test func legacyNumericStringsUseStorageNotationThenTheEditingLocale() throws {
         let source = try portfolioTaxFixture()

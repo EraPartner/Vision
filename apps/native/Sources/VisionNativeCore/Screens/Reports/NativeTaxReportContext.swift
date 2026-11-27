@@ -23,8 +23,9 @@ public enum NativeTaxReportContext {
             let breakdown = calculation["breakdown"]?.arrayValue
         else { throw invalid("household/profile/calculation: missing or mismatched source authority") }
         var reportProfile: [String: TaxValue] = [:]
-        // ExportDialog passes employmentType under filingStatus, not the legal filing-status field.
-        reportProfile["filingStatus"] = profile["employmentType"]
+        // The report prints this as "Filing status": the legal field, not the employment type
+        // the web ExportDialog passed under it (Astra report 1, finding 21).
+        reportProfile["filingStatus"] = profile["filingStatus"]
         reportProfile["region"] = profile["region"]
         reportProfile["taxYear"] = profile["taxYear"]
         var pit: [String: TaxValue] = [:]

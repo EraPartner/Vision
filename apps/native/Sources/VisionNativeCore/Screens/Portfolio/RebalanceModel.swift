@@ -148,11 +148,24 @@ public final class RebalanceModel {
     public func loadPreset(_ preset: RebalancePreset) {
         updateDraft { $0.rows = RebalanceForm.rows(preset.weights, format: numberFormat) }
     }
+    /// An enabled cap whose entry does not read as a number: it used to drop the cap
+    /// silently (Astra report 1, finding 35).
+    public var capIsInvalid: Bool {
+        draft.capEnabled && !draft.cap.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && LocaleNumber.parse(draft.cap, format: numberFormat) == nil
+    }
+    static let capInvalidKey = "addInv.error.numberInvalid"
+
     public func compute() async {
         guard canCompute else { return }
         guard let floor = LocaleNumber.parse(reserveFloor, format: numberFormat), floor >= 0 else {
             computeError = nil
             errorKey = "rebalance.commitment.invalidFloor"
+            return
+        }
+        guard !capIsInvalid else {
+            computeError = nil
+            errorKey = Self.capInvalidKey
             return
         }
         let token = UUID()
@@ -203,6 +216,11 @@ public final class RebalanceModel {
         let weights = RebalanceForm.weights(draft.rows, format: numberFormat)
         guard !weights.isEmpty else {
             errorKey = "rebalance.editor.needSleeve"
+            publishActionNotice()
+            return
+        }
+        guard !capIsInvalid else {
+            errorKey = Self.capInvalidKey
             publishActionNotice()
             return
         }

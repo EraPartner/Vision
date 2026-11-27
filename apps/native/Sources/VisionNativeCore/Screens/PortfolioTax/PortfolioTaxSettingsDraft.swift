@@ -61,6 +61,13 @@ public struct PortfolioTaxAdjustmentDraft: Equatable, Sendable, Identifiable {
         default: return nil
         }
     }
+    /// A taxes or fees entry that does not read as a number in the chosen format: saving it
+    /// would replace the stored amount with zero (Astra report 1, finding 33).
+    public func hasInvalidAmount(format: NumberFormat) -> Bool {
+        [taxes, fees].contains { text in
+            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && LocaleNumber.parse(text, format: format) == nil
+        }
+    }
     /// Matches the number input's min/max/step constraints when that field is mounted.
     public var hasInvalidInterestPortion: Bool {
         guard showsReynders, reyndersResolved, !interestPortion.isEmpty else { return false }
@@ -99,7 +106,7 @@ public struct PortfolioTaxSettingsDraft: Equatable, Sendable {
     }
     public mutating func apply(rows: [PortfolioTaxAdjustmentDraft], year: Int, format: NumberFormat) throws {
         for row in rows {
-            guard row.id.rawValue > 0, !row.hasInvalidInterestPortion else {
+            guard row.id.rawValue > 0, !row.hasInvalidInterestPortion, !row.hasInvalidAmount(format: format) else {
                 throw APIError.invalidRequest("Invalid investment tax treatment")
             }
             let key = "\(year):\(row.id.rawValue)"
@@ -111,9 +118,16 @@ public struct PortfolioTaxSettingsDraft: Equatable, Sendable {
             var cls = classifications[classKey]?.objectValue.map(TaxValue.object) ?? .object([:])
             cls["etfStructure"] = row.etfStructure.map { .string($0.rawValue) }
             cls["subjectToReynders"] = row.reynders == .auto ? nil : .bool(row.reynders == .yes)
-            let percent = LocaleNumber.parseOrZero(row.interestPortion, format: format)
-            // `portionPct > 0 && portionPct <= 100`: 100% is a full interest portion.
-            cls["reyndersInterestPortion"] = percent > 0 && percent <= 100 ? .number(percent / 100) : nil
+            // An empty entry falls back to the default. An explicit 0% in the shown field is
+            // kept, as dropping it would activate the 100% default (Astra report 1, finding 32).
+            let entry = row.interestPortion.trimmingCharacters(in: .whitespacesAndNewlines)
+            let percent = entry.isEmpty ? nil : Decimal(string: entry, locale: Locale(identifier: "en_US_POSIX"))
+            let zeroAllowed = row.showsReynders && row.reyndersResolved
+            if let percent, percent <= 100, percent > 0 || (percent == 0 && zeroAllowed) {
+                cls["reyndersInterestPortion"] = .number(percent / 100)
+            } else {
+                cls["reyndersInterestPortion"] = nil
+            }
             classifications[classKey] = cls.objectValue?.isEmpty == true ? nil : cls
         }
     }

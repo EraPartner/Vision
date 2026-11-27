@@ -195,6 +195,21 @@ struct RebalanceModelTests {
         #expect(await service.requests.last?.model == .sixtyForty)
         #expect(await service.requests.last?.targetWeights == nil)
     }
+    /// Astra report 1, finding 35: an unreadable cap blocks instead of computing uncapped.
+    @Test func anUnreadableCapBlocksTheComputation() async throws {
+        let service = try RebalanceFixtureService()
+        let model = RebalanceModel(service: service)
+        await model.load(
+            route: NativeRoute("/portfolio/rebalance?source=custom&target=stocks%3A20&cap=100.50")!,
+            settings: .defaults)
+        let count = await service.requests.count
+        #expect(model.capIsInvalid)
+        await model.compute()
+        #expect(model.errorKey == RebalanceModel.capInvalidKey)
+        #expect(await service.requests.count == count)
+        model.updateDraft { $0.cap = "100,50" }
+        #expect(!model.capIsInvalid)
+    }
     @Test func editedWeightsInvalidateInFlightResultsButRenamingDoesNot() async throws {
         let service = try RebalanceFixtureService()
         let model = RebalanceModel(service: service)

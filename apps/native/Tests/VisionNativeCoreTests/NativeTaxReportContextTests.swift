@@ -73,12 +73,12 @@ import Testing
         let encoded = try APIBody.encode(context)
         #expect(try JSONDecoder().decode(TaxValue.self, from: encoded) == context)
     }
-    @Test func reportProfileUsesEmploymentMetadataAndSelectedYear() throws {
+    @Test func reportProfileUsesTheFilingStatusAndSelectedYear() throws {
         let context = try make(overview())
         #expect(
             context["taxProfile"]
                 == .object([
-                    "filingStatus": .string("self_employed"), "region": .string("wallonia"), "taxYear": .number(2020),
+                    "filingStatus": .string("married"), "region": .string("wallonia"), "taxYear": .number(2020),
                 ]))
     }
     @Test func bracketsUseLocalizedOrdinalLabelsAndOriginalPercentRates() throws {
