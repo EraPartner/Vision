@@ -163,6 +163,13 @@ public final class SplitDialogModel {
         totalPeople > 1 ? MoneyMath.round(absoluteAmount / Decimal(totalPeople)) : 0
     }
 
+    /// Equal split: the cent-exact shares of the chosen people, so the payer's own share is at
+    /// most one cent from theirs (Astra report 1, finding 51).
+    public var equalShares: [Decimal] {
+        guard splitType == .equal, totalPeople > 1 else { return [] }
+        return Array(MoneyMath.allocateEvenly(absoluteAmount, parts: totalPeople).prefix(validEntries.count))
+    }
+
     /// Others pay all: one cent-exact share per chosen person.
     public var fullShares: [Decimal] {
         splitType == .full ? MoneyMath.allocateEvenly(absoluteAmount, parts: validEntries.count) : []
@@ -192,7 +199,7 @@ public final class SplitDialogModel {
     /// What the new splits add.
     public func newSplitTotal(format: NumberFormat) -> Decimal {
         switch splitType {
-        case .equal: return MoneyMath.round(equalShare * Decimal(validEntries.count))
+        case .equal: return MoneyMath.round(equalShares.reduce(Decimal(0), +))
         case .full: return MoneyMath.round(fullShares.reduce(Decimal(0), +))
         case .custom: return customTotal(format: format)
         }
@@ -201,7 +208,7 @@ public final class SplitDialogModel {
     /// A share of zero or less blocks the Split button.
     public func hasNonPositiveShare(format: NumberFormat) -> Bool {
         switch splitType {
-        case .equal: return !validEntries.isEmpty && equalShare <= 0
+        case .equal: return !validEntries.isEmpty && (equalShares.isEmpty || equalShares.contains { $0 <= 0 })
         case .full: return fullShares.contains { $0 <= 0 }
         case .custom: return validEntries.contains { LocaleNumber.parseOrZero($0.amount, format: format) <= 0 }
         }
@@ -227,13 +234,15 @@ public final class SplitDialogModel {
     public func shares(format: NumberFormat) -> [SplitShare]? {
         let valid = validEntries
         let full = fullShares
+        let equal = equalShares
         var shares: [SplitShare] = []
         for (index, entry) in valid.enumerated() {
             guard let recipientId = entry.recipientId else { continue }
             let amount: Decimal
             switch splitType {
             case .equal:
-                amount = equalShare
+                guard index < equal.count else { return nil }
+                amount = equal[index]
             case .full:
                 guard index < full.count else { return nil }
                 amount = full[index]

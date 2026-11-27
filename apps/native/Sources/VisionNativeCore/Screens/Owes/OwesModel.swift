@@ -74,6 +74,8 @@ public final class OwesModel {
 
     /// `useOwedSummary`; `nil` until the first answer.
     public private(set) var summary: [OpenAPI.SplitOwed]?
+    /// The currency `summary` was read in.
+    @ObservationIgnored private var summaryCurrency: CurrencyCode?
     /// `summary` of the owed read: the total outstanding in the default currency, computed on
     /// the server, and the open splits left out for want of a stored rate.
     public private(set) var summaryTotals: OpenAPI.OwedTotals?
@@ -88,6 +90,9 @@ public final class OwesModel {
     public private(set) var recent: [OpenAPI.Transaction] = []
     public private(set) var recentTotal = 0
     public private(set) var recentLoaded = false
+    /// The first page's read failed: the view offers a retry, not "No recent transactions"
+    /// (Astra report 1, finding 66).
+    public private(set) var recentError: APIError?
     public private(set) var isFetchingMoreRecent = false
     /// The Recent transactions table's search, column filters and sort.
     public var recentQuery = LocalTableQuery()
@@ -178,7 +183,14 @@ public final class OwesModel {
     public func loadSummary(force: Bool = false) async {
         if let summaryInFlight {
             await summaryInFlight.value
-            if !force { return }
+            if !force, summaryCurrency == defaultCurrency { return }
+        }
+        // Amounts in another currency are not relabelled: a currency change drops them and
+        // reads again (Astra report 1, finding 50).
+        if summary != nil, summaryCurrency != defaultCurrency {
+            summary = nil
+            summaryTotals = nil
+            summaryFetchedAt = nil
         }
         if !force, summary != nil, summaryError == nil, let summaryFetchedAt,
             now().timeIntervalSince(summaryFetchedAt) < Self.staleAfter
@@ -191,6 +203,8 @@ public final class OwesModel {
         let task = Task { [weak self] in
             do {
                 let page = try await service.owedSummary(currency: currency)
+                guard self?.defaultCurrency == currency else { return }
+                self?.summaryCurrency = currency
                 self?.summary = page.items
                 self?.summaryTotals = page.summary
                 self?.summaryError = nil
@@ -528,6 +542,7 @@ public final class OwesModel {
         recentTotal = 0
         recentOffset = 0
         recentLoaded = false
+        recentError = nil
         isFetchingMoreRecent = false
         recentQuery = LocalTableQuery()
         recentInFlight = nil
@@ -544,18 +559,23 @@ public final class OwesModel {
             await recentInFlight.task.value
             if !force { return }
         }
-        if !force, recentLoaded { return }
+        if !force, recentLoaded, recentError == nil { return }
         let version = recentVersion
         let service = service
         let task = Task { [weak self] in
-            guard
-                let page = try? await service.recipientTransactions(
+            let page: TransactionPage
+            do {
+                page = try await service.recipientTransactions(
                     groupId: RecipientGroupID(rawValue: id.rawValue), offset: 0, limit: OwesModel.recentPageSize)
-            else {
-                if self?.recentVersion == version { self?.recentLoaded = true }
+            } catch {
+                if self?.recentVersion == version {
+                    self?.recentError = APIError.wrapping(error)
+                    self?.recentLoaded = true
+                }
                 return
             }
             guard let self, self.recentVersion == version else { return }
+            self.recentError = nil
             self.recent = page.items
             self.recentTotal = page.total
             self.recentOffset = page.items.count
@@ -582,6 +602,17 @@ public final class OwesModel {
         recentOffset += page.items.count
         recentTotal = page.total
     }
+
+    /// While search or a filter narrows the table, further pages load until enough rows match
+    /// or none are left, so a match on a later page is found (Astra report 1, finding 65).
+    public func fillNarrowedRecent() async {
+        while recentQuery.isNarrowed, recentLoaded, recentHasMore, recentRows.count < Self.narrowedFillTarget {
+            let offset = recentOffset
+            await loadMoreRecent()
+            if recentOffset == offset { return }
+        }
+    }
+    static let narrowedFillTarget = 10
 
     /// A row was drawn: near the end of the loaded rows, the next page loads.
     public func recentRowAppeared(_ id: TransactionID) async {

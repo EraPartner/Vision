@@ -407,6 +407,8 @@ struct OwesRecentTransactions: View {
                         }
                     }
                 }
+            } else if model.recentError != nil && model.recent.isEmpty {
+                OwesErrorCard(strings: strings) { Task { await model.loadRecent(force: true) } }
             } else if model.recent.isEmpty {
                 AdminCard {
                     VStack(alignment: .leading, spacing: 12) {
@@ -435,6 +437,7 @@ struct OwesRecentTransactions: View {
                     .rowAppeared { id in Task { await model.recentRowAppeared(id) } }
                     // `RecentRecipientTransactionsTable`: `VirtualDataTable maxHeight={320}`.
                     .bodyMaxHeight(320)
+                    .task(id: model.recentQuery) { await model.fillNarrowedRecent() }
                 }
             }
         }
