@@ -98,13 +98,15 @@ public enum NativeTaxReportContext {
 
 /// The report's v1 profile fields (`projectHouseholdToProfileV1` in
 /// `@vision/shared-utils/belgian-tax/householdMigration`): partner A's primary activity sets
-/// the employment type; region and tax year are the household's. Only the three fields the
-/// report reads are projected (ADR-211).
+/// the employment type; region and tax year are the household's. `filingStatus` is `single`
+/// without partner B; with partner B it is `married_joint` when `jointFiling` says so, else
+/// `single`, and left out when `jointFiling` is nil. Only the fields the report reads are
+/// projected (ADR-211).
 public enum NativeTaxReportProfile {
     /// `PRIMARY_ACTIVITY_ID`.
     static let primaryActivityID = "act_A_1"
 
-    public static func project(_ household: TaxValue) throws -> TaxValue {
+    public static func project(_ household: TaxValue, jointFiling: Bool? = nil) throws -> TaxValue {
         guard household.objectValue != nil, let partners = household["partners"]?.arrayValue else {
             throw APIError.contract(
                 APIContractError(endpoint: "/api/belgian-tax/overview", issues: ["household: invalid source household"]))
@@ -119,6 +121,11 @@ public enum NativeTaxReportProfile {
         var profile: [String: TaxValue] = ["employmentType": .string(employmentType(kind))]
         profile["region"] = household["region"]
         profile["taxYear"] = household["taxYear"]
+        if !partners.contains(where: { $0["id"] == .string("B") }) {
+            profile["filingStatus"] = .string("single")
+        } else if let jointFiling {
+            profile["filingStatus"] = .string(jointFiling ? "married_joint" : "single")
+        }
         return .object(profile)
     }
 
@@ -141,12 +148,12 @@ public enum NativeTaxReportProfile {
 @MainActor public struct NativeTaxReportContextService {
     private let client: APIClient
     private let localize: @MainActor (String) -> String
-    private let projectProfile: @MainActor (TaxValue, Int) async throws -> TaxValue
+    private let projectProfile: (@MainActor (TaxValue, Int) async throws -> TaxValue)?
+    /// `projectProfile` nil: the native projection, with the joint-filing answer the overview's
+    /// assessment gives (`filesJointly`).
     public init(
         client: APIClient, localize: @escaping @MainActor (String) -> String,
-        projectProfile: @escaping @MainActor (TaxValue, Int) async throws -> TaxValue = { household, _ in
-            try NativeTaxReportProfile.project(household)
-        }
+        projectProfile: (@MainActor (TaxValue, Int) async throws -> TaxValue)? = nil
     ) {
         self.client = client
         self.localize = localize
@@ -160,12 +167,30 @@ public enum NativeTaxReportProfile {
         let profile: TaxValue?
         if overview["hasProfile"]?.boolValue == true {
             guard let household = overview["household"] else { throw APIError.invalidRequest("Report household") }
-            profile = try await projectProfile(household, year)
+            if let projectProfile {
+                profile = try await projectProfile(household, year)
+            } else {
+                profile = try NativeTaxReportProfile.project(household, jointFiling: Self.filesJointly(household, overview))
+            }
         } else {
             profile = nil
         }
         return try NativeTaxReportContext.make(
             overview: overview, requestedYear: year, projectedProfile: profile, localize: localize)
+    }
+
+    /// `filesJointly`: a legacy joint profile without relationship events stays joint;
+    /// otherwise the assessment of the household's tax year decides (nil: no assessment).
+    static func filesJointly(_ household: TaxValue, _ overview: TaxValue) -> Bool? {
+        let relationship = household["relationship"]
+        if relationship?["legacyAssumedJoint"]?.boolValue == true,
+            relationship?["events"]?.arrayValue?.isEmpty ?? true
+        {
+            return true
+        }
+        let result = overview["metadata"]?["frozenHouseholdResult"] ?? overview["result"]
+        guard let mode = result?["assessment"]?["mode"], mode.stringValue != nil else { return nil }
+        return mode == .string("joint")
     }
 }
 

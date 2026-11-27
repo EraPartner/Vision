@@ -1429,12 +1429,12 @@
       "body": {
         "name": "system"
       },
-      "status": 500,
+      "status": 400,
       "response": {
         "ok": false,
         "error": {
-          "code": "INTERNAL_SERVER_ERROR",
-          "message": "An internal server error occurred. Please try again later."
+          "code": "VALIDATION_ERROR",
+          "message": "SYSTEM is reserved for server-generated transactions"
         }
       }
     },
@@ -1689,12 +1689,12 @@
       "body": {
         "name": "System"
       },
-      "status": 500,
+      "status": 400,
       "response": {
         "ok": false,
         "error": {
-          "code": "INTERNAL_SERVER_ERROR",
-          "message": "An internal server error occurred. Please try again later."
+          "code": "VALIDATION_ERROR",
+          "message": "SYSTEM is reserved for server-generated transactions"
         }
       }
     },

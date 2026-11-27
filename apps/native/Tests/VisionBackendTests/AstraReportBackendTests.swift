@@ -13,7 +13,7 @@ import VisionNativeCore
     static func database(_ transactions: [String]) throws -> BackendDatabase {
         let file = try ParityTests.migratedDatabase(seed: [
             "INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES"
-                + " (1, 'Seeded', 'seeded', 1, \(stamp), \(stamp))",
+                + " (1, 'Seeded', 'SEEDED', 1, \(stamp), \(stamp))",
             "INSERT INTO accounts (id, name, currency, type, created_at, updated_at, import_identity) VALUES"
                 + " (1, 'Main', 'EUR', 'checking', \(stamp), \(stamp), '00000000-0000-4000-8000-000000000001')",
         ] + transactions)
@@ -224,7 +224,7 @@ import VisionNativeCore
                     _ = try RecipientsArea.create(
                         session, JSObject([("name", .string("Fresh")), ("default_category_id", .number(987_654))]))
                 } == 400)
-            #expect(try session.row("SELECT id FROM recipients WHERE normalized_name = 'fresh'") == nil)
+            #expect(try session.row("SELECT id FROM recipients WHERE normalized_name = 'FRESH'") == nil)
             // 53: adding an existing payee does not overwrite its note.
             let result = try RecipientsArea.create(
                 session, JSObject([("name", .string("Seeded")), ("notes", .string("Replaced"))]))
@@ -237,7 +237,7 @@ import VisionNativeCore
     @Test func mergingPayeesWithPrimaryAccountsSucceeds() async throws {
         let database = try Self.database([
             "INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES"
-                + " (2, 'Other', 'other', 1, \(Self.stamp), \(Self.stamp))",
+                + " (2, 'Other', 'OTHER', 1, \(Self.stamp), \(Self.stamp))",
             "INSERT INTO recipient_bank_accounts (recipient_id, account_number, is_primary) VALUES (1, 'BE01', 1)",
             "INSERT INTO recipient_bank_accounts (recipient_id, account_number, is_primary) VALUES (2, 'BE02', 1)",
         ])

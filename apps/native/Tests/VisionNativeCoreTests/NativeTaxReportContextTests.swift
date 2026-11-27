@@ -206,7 +206,23 @@ import Testing
         let context = try await service.context(year: 2020)
         #expect(context["taxProfile"]?["region"] == .string("wallonia"))
         #expect(context["taxProfile"]?["taxYear"] == .number(2020))
-        #expect(context["taxProfile"]?["filingStatus"] != nil)
+        #expect(context["taxProfile"]?["filingStatus"] == .string("married_joint"))
+    }
+    /// Astra report 1, finding 21: the default projection fills the legal filing status the
+    /// report prints, like `projectHouseholdToProfileV1` with `filesJointly`.
+    @Test func theProjectionCarriesTheFilingStatus() throws {
+        let single: TaxValue = .object(["partners": .array([.object(["id": .string("A")])])])
+        #expect(try NativeTaxReportProfile.project(single)["filingStatus"] == .string("single"))
+        let couple: TaxValue = .object(["partners": .array([.object(["id": .string("A")]), .object(["id": .string("B")])])])
+        #expect(try NativeTaxReportProfile.project(couple, jointFiling: false)["filingStatus"] == .string("single"))
+        #expect(try NativeTaxReportProfile.project(couple, jointFiling: true)["filingStatus"] == .string("married_joint"))
+        #expect(try NativeTaxReportProfile.project(couple)["filingStatus"] == nil)
+        let legacy: TaxValue = .object([
+            "relationship": .object(["legacyAssumedJoint": .bool(true), "events": .array([])])
+        ])
+        #expect(NativeTaxReportContextService.filesJointly(legacy, .object([:])) == true)
+        let separate: TaxValue = .object(["result": .object(["assessment": .object(["mode": .string("separate")])])])
+        #expect(NativeTaxReportContextService.filesJointly(.object([:]), separate) == false)
     }
     @Test func projectionPicksPartnerAsPrimaryActivityLikeTheSharedMigration() throws {
         func household(_ partners: [TaxValue]) -> TaxValue {
