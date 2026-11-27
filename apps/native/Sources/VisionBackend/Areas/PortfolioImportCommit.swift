@@ -683,3 +683,215 @@ extension PortfolioImportCommitArea {
             ])), as: UTF8.self)
     }
 }
+
+// MARK: - Custody commits
+
+/// The approved custody scope `withPortfolioCustodyImportScope` holds. The pipeline's
+/// unscoped path passes nil: its history is unfiltered and no approval is required.
+struct CustodyImportScope: Sendable {
+    /// eventKey → approved signature.
+    var approved: [String: String]
+}
+
+extension PortfolioImportCommitArea {
+    /// The reviewed scope's approval of one event, or the reason it is out of scope.
+    static func custodyScopeCheck(
+        _ scope: CustodyImportScope?, _ signature: String, _ key: String
+    ) throws {
+        guard let scope else { return }
+        guard scope.approved[key] == signature else {
+            throw BackendHTTPError.conflict("Custody write is outside its reviewed transaction scope")
+        }
+    }
+
+    /// `validatePortfolioAssetTransferHistory`: chronology and custody, independent of
+    /// the cost-basis selection.
+    static func validateCustodyHistory(_ txns: [PortfolioCore.Txn]) throws {
+        guard txns.contains(where: { PortfolioCustody.custodyEventTypes.contains($0.type) }) else {
+            return
+        }
+        guard PortfolioCore.areLotsFullyAssigned(txns) else {
+            throw BackendHTTPError.conflict(
+                "Asset custody events require the original acquisitions to be reconciled"
+                + " to their source accounts")
+        }
+        do {
+            for method in PortfolioCore.costBasisMethods {
+                _ = try PortfolioCustody.projectAssetTransferPartitions(txns, method: method)
+            }
+            if try !PortfolioCore.partitionOversellDeficits(txns).isEmpty {
+                throw PortfolioCore.Failure(message: "Custody history contains an oversell")
+            }
+        } catch let error as BackendHTTPError {
+            throw error
+        } catch {
+            throw BackendHTTPError.conflict(
+                "Asset transfer custody history is invalid: \(String(describing: error))")
+        }
+    }
+
+    /// The custody accounts a transfer names: both must exist, be active, and support custody.
+    static func assertCustodyAccounts(
+        _ session: BackendSession, _ accountIds: [Int]
+    ) throws {  // lint:allow raw-id business table ids of the TypeScript route and repository reads
+        let placeholders = accountIds.map { _ in "?" }.joined(separator: ", ")
+        let rows = try session.rows(
+            """
+            SELECT a.id, a.is_active, a.type
+              FROM accounts a
+             WHERE a.id IN (\(placeholders))
+             ORDER BY a.id
+            """,
+            accountIds.map { .integer(Int64($0)) })
+        let valid = try rows.filter { row in
+            (try row.optionalBool("is_active") ?? false)
+                && portfolioAccountTypes.contains(try row.text("type"))
+        }
+        guard rows.count == accountIds.count, valid.count == rows.count else {
+            throw BackendHTTPError.conflict("Asset transfer accounts must be active")
+        }
+    }
+
+    /// `commitPortfolioAssetTransfer`: the canonical event, with its per-method fee-basis
+    /// allocations. A matching fingerprint is a duplicate; a conflicting one is a 409.
+    static func commitAssetTransfer(
+        _ session: BackendSession, row: ReconciliationSourceRow, batchId: Int,  // lint:allow raw-id business table ids of the TypeScript route and repository writes
+        scope: CustodyImportScope?
+    ) throws -> (id: Int, duplicate: Bool) {
+        let prepared = try PortfolioCustodyPreviews.assetTransfer(row)
+        guard case .event(let event) = prepared else {
+            let reason = (prepared as? CustodyPreview<AssetTransferEvent>)
+            let message: String
+            if case .error(let block)? = reason {
+                message = "Asset transfer requires repair: \(block.rawValue)"
+            } else {
+                message = "Asset transfer requires repair"
+            }
+            throw BackendHTTPError.validation(message)
+        }
+        try assertCustodyAccounts(session, [event.sourceAccountID.rawValue, event.destinationAccountID.rawValue])
+        let existing = try session.row(
+            """
+            SELECT t.id, t.investment_id, t.source_account_id, t.destination_account_id,
+                   to_char(t.date, 'YYYY-MM-DD') AS date, t.units, t.fee_units
+              FROM portfolio_asset_transfers t
+             WHERE t.dedup_fingerprint = ? AND t.dedup_fingerprint_version = ?
+            """,
+            [.text(event.dedupFingerprint), .integer(Int64(event.dedupFingerprintVersion))])
+        if let existing {
+            let storedInvestment = try existing.optionalInt64("investment_id").flatMap { Int(exactly: $0) }
+            let storedSource = try existing.optionalInt64("source_account_id").flatMap { Int(exactly: $0) }
+            let storedDestination = try existing.optionalInt64("destination_account_id").flatMap { Int(exactly: $0) }
+            let storedDate = try existing.optionalText("date")
+            let storedUnits = try existing.optionalText("units")
+            let storedFeeUnits = try existing.optionalText("fee_units")
+            guard storedInvestment == event.investmentID.rawValue,
+                storedSource == event.sourceAccountID.rawValue,
+                storedDestination == event.destinationAccountID.rawValue,
+                storedDate == event.day,
+                try DecimalJS.from(storedUnits ?? "0").eq(try DecimalJS.from(event.units)),
+                try DecimalJS.from(storedFeeUnits ?? "0").eq(try DecimalJS.from(event.feeUnits))
+            else {
+                throw BackendHTTPError.conflict(
+                    "Asset transfer source identity conflicts with existing custody history")
+            }
+            return (Int(try existing.int64("id")), true)
+        }
+        let signature = transferSignature(row, event, batchId: batchId)
+        try custodyScopeCheck(
+            scope, signature, "\(batchId):\(row.id.rawValue)")
+        var history = try PortfolioTransactionsArea.unitEvents(session, event.investmentID.rawValue)
+        if scope != nil {
+            history = history.filter { $0.date <= event.day }
+        }
+        let eventTxn = transferTxn(row, event, batchId: batchId)
+        try validateCustodyHistory(history.map(\.txn) + [eventTxn])
+        var feeBasisAllocations: [String: JSONValue] = [:]
+        for method in PortfolioCore.costBasisMethods {
+            let projected = try PortfolioCustody.projectAssetTransferPartitions(
+                history.map(\.txn) + [eventTxn], method: method)
+            let legs = projected.rows(of: Double(event.sourceAccountID.rawValue))
+            guard let leg = legs.first(where: { $0.type == "transfer_out"  // lint:allow string-literal-compare the partition engine's leg kinds
+                && $0.id == eventTxn.id })
+            else {
+                throw RequiredValueError(message: "the validated history holds the transfer_out leg")
+            }
+            let lots = leg.assetFeeLots.filter { try $0.units.gt(DecimalJS.zero) }
+            feeBasisAllocations[method] = .object([
+                "feeUnits": .string(event.feeUnits),
+                "lots": .array(lots.map { lot in
+                    .object([
+                        "acquisitionId": .int(Int(lot.acquisitionId)),
+                        "acquisitionDate": .string(lot.acquiredDate),
+                        "currency": lot.currency.map { JSONValue.string($0) } ?? .null,
+                        "units": .string(lot.units.description),
+                        "nativeBasis": .string(lot.costBasis.description),
+                        "eurBasis": lot.fxResolved
+                            ? .string(lot.costBasisConv.description) : .null,
+                    ])
+                }),
+            ])
+        }
+        let allocationsJSON = String(
+            decoding: try JSONEncoder().encode(JSONValue.object(feeBasisAllocations)), as: UTF8.self)
+        let inserted = try session.rows(
+            """
+            INSERT INTO portfolio_asset_transfers (
+                investment_id, source_account_id, destination_account_id, date, units,
+                fee_units, import_batch_id, staging_row_id, source_record_hash,
+                dedup_fingerprint, dedup_fingerprint_version, fee_basis_allocations
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, vision_jsonb(?)) RETURNING id
+            """,
+            [.integer(Int64(event.investmentID.rawValue)),
+             .integer(Int64(event.sourceAccountID.rawValue)),
+             .integer(Int64(event.destinationAccountID.rawValue)),
+             .text(event.day), .text(event.units), .text(event.feeUnits),
+             .integer(Int64(batchId)), .integer(Int64(row.id.rawValue)),
+             row.sourceRecordHash.map { SQLValue.text($0) } ?? .null,
+             .text(event.dedupFingerprint), .integer(Int64(event.dedupFingerprintVersion)),
+             .text(allocationsJSON)])
+        guard let id = try inserted.first?.optionalInt64("id") else {
+            throw RequiredValueError(message: "asset transfer insert returned no row")
+        }
+        return (Int(id), false)
+    }
+
+    /// `signature(event)` of `portfolioCustodyImportScope.ts`, as the approved scope holds it.
+    static func transferSignature(
+        _ row: ReconciliationSourceRow, _ event: AssetTransferEvent, batchId: Int  // lint:allow raw-id the ids the reviewed scope's signature carries
+    ) -> String {
+        let object: [(String, JSONValue)] = [
+            ("type", .string("asset_transfer")),
+            ("investment", .int(event.investmentID.rawValue)),
+            ("account", .null),
+            ("source", .int(event.sourceAccountID.rawValue)),
+            ("destination", .int(event.destinationAccountID.rawValue)),
+            ("date", .string(event.day)),
+            ("units", .string((try? DecimalJS.from(event.units).toFixed()) ?? event.units)),
+            ("feeUnits", .string((try? DecimalJS.from(event.feeUnits).toFixed()) ?? event.feeUnits)),
+            ("adjustmentKind", .null),
+            ("basisPolicy", .null),
+            ("eligibleSourceHashes", .null),
+            ("sourceRecordHash", row.sourceRecordHash.map { JSONValue.string($0) } ?? .null),
+            ("fingerprint", .string(event.dedupFingerprint)),
+            ("fingerprintVersion", .int(event.dedupFingerprintVersion)),
+        ]
+        return String(
+            decoding: (try? JSONEncoder().encode(
+                JSONValue.object(Dictionary(uniqueKeysWithValues: object)))) ?? Data(),
+            as: UTF8.self)
+    }
+
+    /// The transfer event as the partition engine replays it (`asPartitionedTxns`).
+    static func transferTxn(
+        _ row: ReconciliationSourceRow, _ event: AssetTransferEvent, batchId: Int  // lint:allow raw-id the ids the partition engine replays
+    ) -> PortfolioCore.Txn {
+        PortfolioCore.Txn(
+            id: Double(row.id.rawValue), type: "asset_transfer", date: event.day,
+            units: .text(event.units), amount: .text("0"), fees: .text("0"), taxes: .text("0"),
+            accountId: nil, sourceAccountId: Double(event.sourceAccountID.rawValue),
+            destinationAccountId: Double(event.destinationAccountID.rawValue),
+            feeUnits: .text(event.feeUnits),
+            sourceRecordHash: row.sourceRecordHash)
+    }
+}
