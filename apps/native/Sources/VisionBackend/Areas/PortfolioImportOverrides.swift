@@ -172,11 +172,16 @@ enum PortfolioImportOverridesArea {
                 return false
             }
             let rowStatus = try row.text("status")
-            return rowStatus == "matched"  // lint:allow string-literal-compare the staging-row status values
-                || (rowStatus == "error"  // lint:allow string-literal-compare the staging-row status values
-                    && try row.optionalText("error_message") == unresolvedInstrument)
+            if rowStatus == "matched" {  // lint:allow string-literal-compare the staging-row status values
+                return true
+            }
+            if rowStatus != "error" {  // lint:allow string-literal-compare the staging-row status values
+                return false
+            }
+            return try row.optionalText("error_message") == unresolvedInstrument
         }
-        if rows.count != rowIds.count || try rows.contains(where: { try !reviewable($0) }) {
+        let everyRowReviewable = try rows.allSatisfy(reviewable)
+        if rows.count != rowIds.count || !everyRowReviewable {
             throw BackendHTTPError.notFound(
                 "One or more rows were not found in this batch or are no longer reviewable")
         }
@@ -193,9 +198,7 @@ enum PortfolioImportOverridesArea {
 
     /// `storedConfigObject` narrowed to the `format` key the create path reads.
     static func storedConfigFormat(_ raw: String?) -> String? {
-        guard let raw, let data = raw.data(using: .utf8),
-            let value = try? RequestBody.parseJavaScript(data),
-            case .object(let object)? = value,
+        guard let raw, let value = JSValue.parse(raw), case .object(let object) = value,
             case .string(let format)? = object["format"]
         else { return nil }
         return format
@@ -327,7 +330,7 @@ enum PortfolioImportOverridesArea {
             ])
         else {
             throw RequiredValueError(
-                "createInvestmentFromRow returns the holding it created")
+                message: "createInvestmentFromRow returns the holding it created")
         }
         return inserted
     }
