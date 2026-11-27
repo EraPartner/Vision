@@ -347,3 +347,339 @@ extension PortfolioImportCommitArea {
         return batchRows.count == 1
     }
 }
+
+// MARK: - Scope commit
+
+extension PortfolioImportCommitArea {
+    /// `applyPortfolioImportReconciliation`: the plan's adoptions and settlements, under the
+    /// caller's locks. An unready plan writes nothing.
+    static func applyReconciliation(
+        _ session: BackendSession, _ scope: PortfolioImportReconciliationArea.Scope
+    ) throws -> (result: ReconciliationPlanResult, adoptedByBatch: [Int: Int], settledByBatch: [Int: Int]) {
+        let loaded = try PortfolioImportReconciliationArea.loadPlan(session, scope)
+        let result = loaded.result
+        if !result.plan.ready {
+            throw BackendHTTPError.conflict(
+                "Import needs reconciliation before any history can be changed",
+                details: .object([
+                    "reason": .string("reconciliation_required"),
+                    "blockers": .array(result.plan.blockers.map { $0.jsonValue.envelopeValue }),
+                ]))
+        }
+        try PortfolioImportReconciliationArea.assertProjectedHistory(
+            loaded.history,
+            try PortfolioImportReconciliationArea.projectedHistory(
+                result, rows: loaded.rows, history: loaded.history))
+        var adoptedByBatch: [Int: Int] = [:]
+        for adoption in result.adoptions {
+            guard let persisted = try compareAndSetReconciledTransaction(
+                session, adoption.before, adoption.after)
+            else {
+                throw BackendHTTPError.conflict(
+                    "An existing portfolio transaction changed during reconciliation",
+                    details: .object(["reason": .string("stale_existing_transaction")]))
+            }
+            _ = try insertReconciliationReceipt(
+                session, batchId: adoption.row.batchID.rawValue,
+                stagingRowId: adoption.row.id.rawValue,
+                transactionId: adoption.before.id.rawValue,
+                action: "adopt", policy: adoption.policy.rawValue,
+                before: adoption.before, after: persisted)
+            try markAdoptedSourceDuplicate(
+                session, adoption.row.id.rawValue, adoption.row.batchID.rawValue)
+            adoptedByBatch[adoption.row.batchID.rawValue, default: 0] += 1
+        }
+        var settledByBatch: [Int: Int] = [:]
+        func settle(_ row: ReconciliationSourceRow, adopted: Bool) throws {
+            guard try markCrossFormatSourceDuplicate(session, row) else {
+                throw BackendHTTPError.conflict(
+                    "An import row changed during reconciliation",
+                    details: .object(["reason": .string("stale_existing_transaction")]))
+            }
+            if !adopted {
+                settledByBatch[row.batchID.rawValue, default: 0] += 1
+            }
+        }
+        for row in result.settledDuplicates { try settle(row, adopted: false) }
+        for adoption in result.cashAdoptions {
+            try writeCashAdoption(session, adoption: adoption)
+            try settle(adoption.row, adopted: true)
+            adoptedByBatch[adoption.row.batchID.rawValue, default: 0] += 1
+        }
+        return (result, adoptedByBatch, settledByBatch)
+    }
+}
+
+extension PortfolioImportCommitArea {
+
+extension PortfolioImportCommitArea {
+    /// `writeCashAdoption`: apply one planned cash correction only while the transaction
+    /// still matches the plan's before image, and journal both images with the proof.
+    static func writeCashAdoption(
+        _ session: BackendSession, adoption: PlanCashAdoption
+    ) throws {
+        let decision = adoption.decision
+        let row = adoption.row
+        guard let before = try session.row(
+            """
+            SELECT t.id, t.date, t.amount, t.currency, t.memo, t.account_id, t.is_active,
+                   t.dedup_fingerprint, t.source_record_hash
+              FROM transactions t
+             WHERE t.id = ?
+            """,
+            [.integer(Int64(decision.transactionID.rawValue))])
+        else {
+            throw staleCash()
+        }
+        let isActive = try before.optionalBool("is_active") ?? false
+        let accountId = try before.optionalInt64("account_id").flatMap { Int(exactly: $0) }
+        let day = String(try before.text("date").prefix(10))
+        let amount = try before.optionalText("amount")
+        let currency = try before.optionalText("currency")
+        let memo = try before.optionalText("memo")
+        let fingerprint = try before.optionalText("dedup_fingerprint")
+        let sourceHash = try before.optionalText("source_record_hash")
+        let amountMatches = try equalNumber(amount, decision.existing.amount, 4)
+        guard isActive,
+            accountId == row.accountID?.rawValue,
+            day == decision.existing.day,
+            currency == decision.existing.currency.rawValue,
+            amountMatches,
+            decision.reason != .manualCash || (fingerprint == nil && sourceHash == nil)
+        else {
+            throw staleCash()
+        }
+        _ = try session.rows(
+            """
+            UPDATE transactions SET
+               amount = vision_numeric(?, 18, 4),
+               currency = ?,
+               dedup_fingerprint = ?,
+               dedup_fingerprint_version = ?,
+               updated_at = now()
+             WHERE id = ?
+            RETURNING id
+            """,
+            [.text(decision.after.amount), .text(decision.after.currency.rawValue),
+             row.dedupFingerprint.map { SQLValue.text($0) } ?? .null,
+             row.dedupFingerprintVersion.map { SQLValue.integer(Int64($0)) } ?? .null,
+             .integer(Int64(decision.transactionID.rawValue))])
+        _ = try session.rows(
+            """
+            INSERT INTO portfolio_import_reconciliation_journal (
+                batch_id, staging_row_id, transaction_id, action, policy, before_data, after_data
+            ) VALUES (?, ?, ?, 'adopt', ?, ?, ?) RETURNING id
+            """,
+            [.integer(Int64(row.batchID.rawValue)), .integer(Int64(row.id.rawValue)),
+             .integer(Int64(decision.transactionID.rawValue)), .text(decision.policy.rawValue),
+             .text(try cashEnvelope(amount, currency: currency, memo: memo, decision: decision, row: row, after: false)),
+             .text(try cashEnvelope(decision.after.amount, currency: decision.after.currency.rawValue, memo: memo, decision: decision, row: row, after: true))])
+    }
+
+    private static func staleCash() -> BackendHTTPError {
+        BackendHTTPError.conflict(
+            "An existing cash transaction changed during reconciliation",
+            details: .object(["reason": .string("stale_existing_transaction")]))
+    }
+
+    /// `equalNumber` of the reconciliation service: both parse, then compare at `places`.
+    static func equalNumber(_ left: String?, _ right: String?, _ places: Int) throws -> Bool {
+        guard let left, let right else { return left == nil && right == nil }
+        return try DecimalJS.from(left).toDecimalPlaces(places)
+            .eq(try DecimalJS.from(right).toDecimalPlaces(places))
+    }
+
+    /// The `IbkrCashProof` + snapshot envelope the journal's data columns hold.
+    static func cashEnvelope(
+        _ amount: String, currency: String, memo: String?, decision: CashAdoptionDecision,
+        row: ReconciliationSourceRow, after: Bool
+    ) throws -> String {
+        func binding(_ source: CashAdoptionDecision.Original) -> JSONValue {
+            .object([
+                "id": .int(source.stagingRowID.rawValue),
+                "batch_id": .int(source.batchID.rawValue),
+                "account_id": row.accountID.map { JSONValue.int($0.rawValue) } ?? .null,
+                "custom_config": .null,
+                "staging": .object([:]),
+            ])
+        }
+        let imported = CashAdoptionDecision.Original(
+            batchID: row.batchID, stagingRowID: row.id)
+        let proof: JSONValue
+        if decision.reason == .ibkrNativeFunding, let original = decision.original {
+            proof = .object([
+                "kind": .string("ibkr_native_funding"),
+                "version": .int(1),
+                "original": .object([
+                    "batchId": .int(original.batchID.rawValue),
+                    "stagingRowId": .int(original.stagingRowID.rawValue),
+                ]),
+                "native": .object([
+                    "batchId": .int(imported.batchID.rawValue),
+                    "stagingRowId": .int(imported.stagingRowID.rawValue),
+                ]),
+                "sourceBindings": .array([binding(original), binding(imported)]),
+            ])
+        } else {
+            proof = .object([
+                "kind": .string("cash_adoption"),
+                "version": .int(1),
+                "sourceBindings": .array([binding(imported)]),
+            ])
+        }
+        let fingerprint = after ? row.dedupFingerprint : nil
+        let version = after ? row.dedupFingerprintVersion : nil
+        let snapshot: JSONValue = .object([
+            "id": .int(decision.transactionID.rawValue),
+            "date": .string(decision.existing.day),
+            "amount": .string(amount),
+            "currency": .string(currency),
+            "account_id": row.accountID.map { JSONValue.int($0.rawValue) } ?? .null,
+            "memo": memo.map { JSONValue.string($0) } ?? .null,
+            "dedup_fingerprint": fingerprint.map { JSONValue.string($0) } ?? .null,
+            "dedup_fingerprint_version": version.map { JSONValue.int($0) } ?? .null,
+            "is_active": .bool(true),
+        ])
+        return String(decoding: try JSONEncoder().encode(
+            JSONValue.object([
+                "ledgerKind": .string("cash"),
+                "version": .int(1),
+                "snapshot": snapshot,
+                "proof": proof,
+            ])), as: UTF8.self)
+    }
+}
+
+    /// still matches the plan's before image, and journal both images with the proof.
+    static func writeCashAdoption(
+        _ session: BackendSession, adoption: PlanCashAdoption
+    ) throws {
+        let decision = adoption.decision
+        let row = adoption.row
+        guard let before = try session.row(
+            """
+            SELECT t.id, t.date, t.amount, t.currency, t.account_id, t.is_active,
+                   t.dedup_fingerprint, t.source_record_hash
+              FROM transactions t
+             WHERE t.id = ?
+            """,
+            [.integer(Int64(decision.transactionID.rawValue))])
+        else {
+            throw BackendHTTPError.conflict(
+                "An existing cash transaction changed during reconciliation",
+                details: .object(["reason": .string("stale_existing_transaction")]))
+        }
+        func decimalText(_ value: SQLValue) throws -> String? {
+            if case .text(let text) = value { return text }
+            if case .integer(let int) = value { return String(int) }
+            if case .real(let real) = value { return String(real) }
+            return nil
+        }
+        let isActive = (try before.int64("is_active")) != 0
+        let accountId = try before.optionalInt64("account_id").flatMap { Int(exactly: $0) }
+        let day = try PortfolioImportReconciliationArea.shiftDayBack(try before.text("date"))
+        let amount = try decimalText(try before.value("amount"))
+        let currency = try before.optionalText("currency")
+        let fingerprint = try before.optionalText("dedup_fingerprint")
+        let sourceHash = try before.optionalText("source_record_hash")
+        let amountMatches = try CashLedgerValues.equalAmount4(
+            amount, decision.existing.amount)
+        guard isActive,
+            accountId == row.accountID?.rawValue,
+            day == decision.existing.day,
+            currency == decision.existing.currency.rawValue,
+            amountMatches,
+            decision.reason == .manualCash
+                ? (fingerprint == nil && sourceHash == nil)
+                : true
+        else {
+            throw BackendHTTPError.conflict(
+                "An existing cash transaction changed during reconciliation",
+                details: .object(["reason": .string("stale_existing_transaction")]))
+        }
+        _ = try session.rows(
+            """
+            UPDATE transactions SET
+               amount = vision_numeric(?, 18, 4),
+               currency = ?,
+               dedup_fingerprint = ?,
+               dedup_fingerprint_version = ?,
+               updated_at = now()
+             WHERE id = ?
+            RETURNING id
+            """,
+            [.text(decision.after.amount), .text(decision.after.currency.rawValue),
+             row.dedupFingerprint.map { SQLValue.text($0) } ?? .null,
+             row.dedupFingerprintVersion.map { SQLValue.integer(Int64($0)) } ?? .null,
+             .integer(Int64(decision.transactionID.rawValue))])
+        _ = try session.rows(
+            """
+            INSERT INTO portfolio_import_reconciliation_journal (
+                batch_id, staging_row_id, transaction_id, action, policy, before_data, after_data
+            ) VALUES (?, ?, ?, 'adopt', ?, ?, ?) RETURNING id
+            """,
+            [.integer(Int64(row.batchID.rawValue)), .integer(Int64(row.id.rawValue)),
+             .integer(Int64(decision.transactionID.rawValue)), .text(decision.policy.rawValue),
+             .text(try cashEnvelope(before: before, decision: decision, row: row)),
+             .text(try cashEnvelope(after: true, decision: decision, row: row))])
+    }
+
+    /// The `IbkrCashProof` + snapshot envelope the journal's data columns hold.
+    static func cashEnvelope(
+        after: Bool = false, before: SQLRow? = nil, decision: CashAdoptionDecision,
+        row: ReconciliationSourceRow
+    ) throws -> String {
+        func binding(_ source: CashAdoptionDecision.Original) -> JSONValue {
+            .object([
+                "id": .int(source.stagingRowID.rawValue),
+                "batch_id": .int(source.batchID.rawValue),
+                "account_id": row.accountID.map { JSONValue.int($0.rawValue) } ?? .null,
+                "custom_config": .null,
+                "staging": .object([:]),
+            ])
+        }
+        let imported = CashAdoptionDecision.Original(
+            batchID: row.batchID, stagingRowID: row.id)
+        let proof: JSONValue
+        if decision.reason == .ibkrNativeFunding, let original = decision.original {
+            proof = .object([
+                "kind": .string("ibkr_native_funding"),
+                "version": .int(1),
+                "original": .null,
+                "native": .object([
+                    "batchId": .int(imported.batchID.rawValue),
+                    "stagingRowId": .int(imported.stagingRowID.rawValue),
+                ]),
+                "sourceBindings": .array([binding(original), binding(imported)]),
+            ])
+        } else {
+            proof = .object([
+                "kind": .string("cash_adoption"),
+                "version": .int(1),
+                "sourceBindings": .array([binding(imported)]),
+            ])
+        }
+        let amount = after ? decision.after.amount : decision.existing.amount
+        let currency = after ? decision.after.currency.rawValue : decision.existing.currency.rawValue
+        let fingerprint = after ? row.dedupFingerprint : nil
+        let version = after ? row.dedupFingerprintVersion : nil
+        let snapshot: JSONValue = .object([
+            "id": .int(decision.transactionID.rawValue),
+            "date": .string(decision.existing.day),
+            "amount": .string(amount),
+            "currency": .string(currency),
+            "account_id": row.accountID.map { JSONValue.int($0.rawValue) } ?? .null,
+            "memo": before.map { try row -> JSONValue in .null } ?? .null,
+            "dedup_fingerprint": fingerprint.map { JSONValue.string($0) } ?? .null,
+            "dedup_fingerprint_version": version.map { JSONValue.int($0) } ?? .null,
+            "is_active": .bool(true),
+        ])
+        return String(decoding: try JSONEncoder().encode(
+            JSONValue.object([
+                "ledgerKind": .string("cash"),
+                "version": .int(1),
+                "snapshot": snapshot,
+                "proof": proof,
+            ])), as: UTF8.self)
+    }
+}
