@@ -114,11 +114,25 @@ extension TransactionsModel {
                 OpenAPI.TransactionCreate(
                     transactionDate: transactionDate, accountId: fromId, recipientId: toRecipient.id, memo: memo,
                     amount: -magnitude, currency: currency, comment: comment))
-            let inflow = try await service.createTransaction(
-                OpenAPI.TransactionCreate(
-                    transactionDate: transactionDate, accountId: toId, recipientId: fromRecipient.id, memo: memo,
-                    amount: magnitude, currency: currency, comment: comment))
-            try await bulk.markTransfer(outflow.id, inflow.id)
+            let inflow: OpenAPI.Transaction
+            do {
+                inflow = try await service.createTransaction(
+                    OpenAPI.TransactionCreate(
+                        transactionDate: transactionDate, accountId: toId, recipientId: fromRecipient.id, memo: memo,
+                        amount: magnitude, currency: currency, comment: comment))
+            } catch {
+                // The legs are separate writes: a failed inflow must not leave the debit posted.
+                try? await service.deleteTransaction(id: outflow.id)
+                throw error
+            }
+            do {
+                try await bulk.markTransfer(outflow.id, inflow.id)
+            } catch {
+                // Unlinked legs would count as spending and income: take both back.
+                try? await service.deleteTransaction(id: inflow.id)
+                try? await service.deleteTransaction(id: outflow.id)
+                throw error
+            }
             await finishAdd(outflow)
         } catch {
             post(.error, "transactions.createFailedTitle", detail: errorText(error))

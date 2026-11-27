@@ -977,6 +977,7 @@ public final class TransactionsModel {
             }
             if inspector?.id == id, let updated = row(id) { inspector?.tagSlugs = updated.tags.map(\.slug) }
             post(.success, "transactions.updated")
+            if patch.movesRunningBalances { await refreshRunningBalances() }
             return true
         } catch is CancellationError {
             if let before { restore(before) }
@@ -987,6 +988,29 @@ public final class TransactionsModel {
             return false
         }
     }
+
+    /// A change of amount, date, account, currency or exclusion moves the running balance of
+    /// the row and of every later row in its ledger: the loaded range is read again and only
+    /// the balances are taken, so the scroll position and any open editor stay.
+    func refreshRunningBalances() async {
+        guard var query, let loaded = rows, !loaded.isEmpty else { return }
+        let mine = listVersion
+        query.pageSize = min(Self.balanceRefreshLimit, max(loadedOffset, loaded.count))
+        guard let page = try? await service.transactionPage(query, offset: 0), mine == listVersion else { return }
+        var balances: [TransactionID: Decimal?] = [:]
+        for item in page.items { balances.updateValue(item.runningBalance, forKey: item.id) }
+        guard var current = rows else { return }
+        var changed = false
+        for index in current.indices {
+            guard let balance = balances[current[index].id], current[index].runningBalance != balance else { continue }
+            current[index].runningBalance = balance
+            changed = true
+        }
+        if changed { rows = current }
+    }
+
+    /// The backend's page-size ceiling.
+    static let balanceRefreshLimit = 5000
 
     private func restore(_ row: TransactionRow) {
         guard let index = rows?.firstIndex(where: { $0.id == row.id }) else { return }
@@ -1000,6 +1024,9 @@ public final class TransactionsModel {
         guard let index = rows?.firstIndex(where: { $0.id == id }) else { return }
         rows?.remove(at: index)
         total = max(0, total - 1)
+        // The server's list lost the row too: the next page starts one earlier, or it would
+        // skip the row that moved up into this page.
+        loadedOffset = max(0, loadedOffset - 1)
         reconcileSelection()
     }
 
@@ -1078,6 +1105,7 @@ public final class TransactionsModel {
                 let position = min(index, current.count)
                 rows?.insert(removed, at: position)
                 total += 1
+                loadedOffset += 1
             }
             post(.error, "transactions.deleteFailedTitle", detail: errorText(error))
         }

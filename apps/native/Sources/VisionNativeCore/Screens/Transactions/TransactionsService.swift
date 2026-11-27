@@ -138,6 +138,11 @@ public struct TransactionPatch: Equatable, Sendable, Encodable {
 
     public init() {}
 
+    /// The patch changes a field the running balance is computed from.
+    public var movesRunningBalances: Bool {
+        transactionDate != nil || accountId != nil || amount != nil || currency != nil || isActive != nil
+    }
+
     enum CodingKeys: String, CodingKey {
         case transactionDate = "transaction_date"
         case accountId = "account_id"

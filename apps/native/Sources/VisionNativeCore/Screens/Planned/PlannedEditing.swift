@@ -100,13 +100,17 @@ extension APIClient: PlannedEditingService {
 public struct PlannedPaymentPatch: Equatable, Sendable, Encodable {
     public var plannedDate: String?
     public var accountId: AccountID?
-    public var recipientId: RecipientID?
+    /// `.some(nil)` sends `null` (no payee).
+    public var recipientId: RecipientID??
     public var memo: String?
     public var amount: Decimal?
     public var currency: CurrencyCode?
-    public var categoryId: CategoryID?
-    public var comment: String?
-    public var url: String?
+    /// `.some(nil)` sends `null` (no category).
+    public var categoryId: CategoryID??
+    /// `.some(nil)` sends `null` (no notes).
+    public var comment: String??
+    /// `.some(nil)` sends `null` (no link).
+    public var url: String??
     public var isRecurring: Bool?
     public var recurrencePattern: String?
     /// `.some(nil)` sends `null`.
@@ -154,13 +158,13 @@ public struct PlannedPaymentPatch: Equatable, Sendable, Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(plannedDate, forKey: .plannedDate)
         try container.encodeIfPresent(accountId, forKey: .accountId)
-        try container.encodeIfPresent(recipientId, forKey: .recipientId)
+        try Self.encodeClearable(recipientId, forKey: .recipientId, in: &container)
         try container.encodeIfPresent(memo, forKey: .memo)
         try container.encodeIfPresent(amount, forKey: .amount)
         try container.encodeIfPresent(currency, forKey: .currency)
-        try container.encodeIfPresent(categoryId, forKey: .categoryId)
-        try container.encodeIfPresent(comment, forKey: .comment)
-        try container.encodeIfPresent(url, forKey: .url)
+        try Self.encodeClearable(categoryId, forKey: .categoryId, in: &container)
+        try Self.encodeClearable(comment, forKey: .comment, in: &container)
+        try Self.encodeClearable(url, forKey: .url, in: &container)
         try container.encodeIfPresent(isRecurring, forKey: .isRecurring)
         try container.encodeIfPresent(recurrencePattern, forKey: .recurrencePattern)
         if let endDate = recurrenceEndDate {
@@ -186,6 +190,14 @@ public struct PlannedPaymentPatch: Equatable, Sendable, Encodable {
         try container.encodeIfPresent(loanStartDate, forKey: .loanStartDate)
         try container.encodeIfPresent(loanPaymentDay, forKey: .loanPaymentDay)
         try container.encodeIfPresent(tags, forKey: .tags)
+    }
+
+    /// Absent leaves the field alone; `.some(nil)` writes `null`.
+    private static func encodeClearable<Value: Encodable>(
+        _ value: Value??, forKey key: CodingKeys, in container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
+        guard let value else { return }
+        if let value { try container.encode(value, forKey: key) } else { try container.encodeNil(forKey: key) }
     }
 }
 

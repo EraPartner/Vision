@@ -165,10 +165,11 @@ public final class PlannedLinkModel: Identifiable {
         selectedTransactionId = transactionId
     }
 
-    /// The chosen candidate, from the loaded answer.
+    /// The chosen candidate, while the search and amount match still show it: a choice the
+    /// filters hid cannot be linked unseen.
     public var selectedTransaction: OpenAPI.Transaction? {
         guard let selectedTransactionId else { return nil }
-        return candidates.first { $0.id == selectedTransactionId }
+        return visibleCandidates.first { $0.id == selectedTransactionId }
     }
 
     /// The execution date: the chosen transaction's own date, without a time.
@@ -177,7 +178,7 @@ public final class PlannedLinkModel: Identifiable {
     }
 
     /// Link and mark as paid is enabled once a candidate is chosen and nothing runs.
-    public var canExecute: Bool { selectedTransactionId != nil && !isExecuting }
+    public var canExecute: Bool { selectedTransaction != nil && !isExecuting }
 
     /// The candidate's first line: memo, payee or `plannedPage.link.txFallback`.
     public static func title(_ transaction: OpenAPI.Transaction, strings: any Localizing) -> String {

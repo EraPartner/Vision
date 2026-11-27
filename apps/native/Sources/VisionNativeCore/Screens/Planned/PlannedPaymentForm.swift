@@ -217,15 +217,21 @@ public final class PlannedPaymentFormModel: Identifiable {
         case .name:
             return name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "plannedForm.nameRequired" : nil
         case .amount:
-            return !isLoan && amount.isEmpty ? "plannedForm.amountRequired" : nil
+            guard !isLoan else { return nil }
+            if amount.isEmpty { return "plannedForm.amountRequired" }
+            return LocaleNumber.parse(amount, format: numberFormat) == nil ? Self.numberInvalid : nil
         case .dueDate:
             return dueDate == nil ? "validation.required" : nil
         case .bank:
             return accountId == nil ? "portfolio.move.selectAccount" : nil
         case .loanPrincipal:
-            return isLoan && loanPrincipal.isEmpty ? "validation.required" : nil
+            guard isLoan else { return nil }
+            if loanPrincipal.isEmpty { return "validation.required" }
+            return LocaleNumber.parse(loanPrincipal, format: numberFormat) == nil ? Self.numberInvalid : nil
         case .loanRate:
-            return isLoan && loanRate.isEmpty ? "validation.required" : nil
+            guard isLoan else { return nil }
+            if loanRate.isEmpty { return "validation.required" }
+            return Self.rate(loanRate, format: numberFormat) == nil ? Self.numberInvalid : nil
         case .loanTerm:
             guard isLoan else { return nil }
             if loanTermMonths.isEmpty { return "validation.required" }
@@ -271,6 +277,23 @@ public final class PlannedPaymentFormModel: Identifiable {
         return payload(dueDate: dueDate, dueDay: dueDay, accountId: accountId)
     }
 
+    /// A number field that does not parse in the chosen format (it used to save as zero).
+    static let numberInvalid = "addInv.error.numberInvalid"
+
+    /// The interest rate: a trailing `%` is accepted, as a pasted `4.5%` means 4.5.
+    static func rate(_ text: String, format: NumberFormat) -> Decimal? {
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix("%") { trimmed = String(trimmed.dropLast()) }
+        return LocaleNumber.parse(trimmed, format: format)
+    }
+
+    /// The loan terms differ from the ones the sheet opened with.
+    private var loanTermsChanged: Bool {
+        loanType != initialSnapshot.loanType || loanPrincipal != initialSnapshot.loanPrincipal
+            || loanRate != initialSnapshot.loanRate || loanTermMonths != initialSnapshot.loanTermMonths
+            || loanPaymentDay != initialSnapshot.loanPaymentDay
+    }
+
     // MARK: Payload
 
     private func payload(dueDate: PlannedDay, dueDay: CalendarDay, accountId: AccountID) -> PlannedFormSubmission {
@@ -296,9 +319,11 @@ public final class PlannedPaymentFormModel: Identifiable {
         if isLoan {
             loanType = self.loanType
             principal = LocaleNumber.parseOrZero(loanPrincipal, format: numberFormat)
-            rate = LocaleNumber.parseOrZero(loanRate, format: numberFormat)
+            rate = Self.rate(loanRate, format: numberFormat) ?? 0
             term = JSInteger.parse(loanTermMonths)
-            startDate = due
+            // An existing loan keeps the start its schedule was built from: the due date is
+            // the next installment, not the loan's start (Astra report 1, finding 3).
+            startDate = initial?.wire.loanStartDate?.description ?? due
             loanStartDay = dueDay
             paymentDay = loanPaymentDay.isEmpty ? dueDate.day : JSInteger.parse(loanPaymentDay)
         }
@@ -330,13 +355,15 @@ public final class PlannedPaymentFormModel: Identifiable {
         var patch = PlannedPaymentPatch()
         patch.plannedDate = due
         patch.accountId = accountId
-        patch.recipientId = recipient
+        // Cleared fields go as explicit nulls (and no tags as []), or the server keeps the
+        // old values (Astra report 1, finding 11).
+        patch.recipientId = .some(recipient)
         patch.memo = trimmedName
         patch.amount = signed
         patch.currency = currency
-        patch.categoryId = categoryId
-        patch.comment = comment
-        patch.url = link
+        patch.categoryId = .some(categoryId)
+        patch.comment = .some(comment)
+        patch.url = .some(link)
         patch.isRecurring = recurring
         patch.recurrencePattern = pattern
         patch.recurrenceEndDate = endDate
@@ -349,7 +376,18 @@ public final class PlannedPaymentFormModel: Identifiable {
         patch.loanTermMonths = term
         patch.loanStartDate = startDate
         patch.loanPaymentDay = paymentDay
-        patch.tags = tagList
+        patch.tags = tags
+        // A loan whose terms did not change leaves them out: any loan field in the PATCH
+        // regenerates the schedule (a rename used to rebuild it from the next due date).
+        if isLoan, initial?.isLoan == true, !loanTermsChanged {
+            patch.isLoan = nil
+            patch.loanType = nil
+            patch.loanPrincipal = nil
+            patch.loanAnnualInterestRate = nil
+            patch.loanTermMonths = nil
+            patch.loanStartDate = nil
+            patch.loanPaymentDay = nil
+        }
         return PlannedFormSubmission(name: trimmedName, create: create, patch: patch)
     }
 

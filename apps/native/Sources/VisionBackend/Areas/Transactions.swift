@@ -351,11 +351,17 @@ enum TransactionsArea {
         "category": categoryName, "bank": "acct.name", "currency": "t.currency",
     ]
 
+    /// The `sort_by` key of the category column.
+    static let categorySortKey = "category"
+
     /// `transactionOrderBy`.
+    /// Ties on a day break by bank chronology before id, as the running-balance window
+    /// orders them, so the balances read in display order (Astra report 1, finding 49).
     static func orderBy(_ sortBy: String?, _ sortDir: String?) -> String {
-        guard let sortBy, let column = sortColumns[sortBy] else { return "t.date DESC, t.id DESC" }
+        let newestFirst = AccountBalanceSQL.newestFirst("t")
+        guard let sortBy, let column = sortColumns[sortBy] else { return newestFirst }
         let direction = sortDir == "asc" ? "ASC NULLS LAST" : "DESC NULLS FIRST"
-        return "\(column) \(direction), t.date DESC, t.id DESC"
+        return "\(column) \(direction), \(newestFirst)"
     }
 
     /// `pageCte`.
@@ -487,7 +493,9 @@ enum TransactionsArea {
     /// `getUncategorisedWithCount`: the active rows whose effective category is NULL.
     static func uncategorisedWithCount(_ session: BackendSession, _ query: ListQuery) throws -> ([TransactionRow], Int) {
         let clause = query.filters.clause
-        let order = orderBy(query.sortBy, query.sortDir)
+        // Every row here is uncategorised, and the category joins are absent: the category
+        // sort would name tables this query lacks (Astra report 1, finding 12).
+        let order = orderBy(query.sortBy == categorySortKey ? nil : query.sortBy, query.sortDir)
         let uncategorisedWhere = "\(clause.sql)\n      AND \(effectiveCategoryId) IS NULL"
         let uncategorisedJoins = """
               LEFT JOIN recipients r ON t.recipient_id = r.id

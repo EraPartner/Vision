@@ -485,8 +485,10 @@ enum EditingFixture {
         #expect(form.isDirty)
         let submission = try #require(form.submit())
         #expect(submission.patch.isActive == false)
-        #expect(submission.patch.recipientId == 9)
-        #expect(submission.patch.categoryId == 4)
+        let payee: RecipientID?? = .some(9)
+        let category: CategoryID?? = .some(4)
+        #expect(submission.patch.recipientId == payee)
+        #expect(submission.patch.categoryId == category)
         #expect(submission.patch.amount == Decimal(string: "-40.5"))
         #expect(submission.patch.recurrencePattern == "every 14 days")
         let end: String?? = .some("2027-01-01")
@@ -494,7 +496,54 @@ enum EditingFixture {
         let maximum: Int?? = .some(6)
         #expect(submission.patch.maxOccurrences == maximum)
         #expect(submission.patch.tags == ["sport", "health"])
-        #expect(submission.patch.comment == "note")
+        let note: String?? = .some("note")
+        #expect(submission.patch.comment == note)
+    }
+
+    /// Astra report 1, finding 11: cleared fields are sent as nulls (and no tags as []).
+    @Test func clearedFieldsAreSentAsNulls() throws {
+        let row = OpenAPI.PlannedTransaction(
+            id: 5, plannedDate: "2026-11-01", bankAccount: "Main", accountId: 3, recipientId: 9,
+            memo: "Gym", amount: Decimal(string: "-40.5")!, currency: "EUR", categoryId: 4, comment: "note",
+            url: "https://example.com", isRecurring: false, isExecuted: false, executionCount: 0,
+            tags: [OpenAPI.TransactionTagRef(id: 1, slug: "sport", isActive: true)], isActive: true, links: [])
+        let form = EditingFixture.form(PlannedFixture.payment(row))
+        form.recipientId = nil
+        form.categoryId = nil
+        form.notes = ""
+        form.url = ""
+        form.tags = []
+        let submission = try #require(form.submit())
+        let json = try #require(String(data: try APIBody.encode(submission.patch), encoding: .utf8))
+        #expect(json.contains("\"recipient_id\":null"))
+        #expect(json.contains("\"category_id\":null"))
+        #expect(json.contains("\"comment\":null"))
+        #expect(json.contains("\"url\":null"))
+        #expect(json.contains("\"tags\":[]"))
+    }
+
+    /// Astra report 1, findings 3 and 4: a rename leaves the loan terms out, a terms change
+    /// keeps the stored start, and a pasted `4.5%` is 4.5 while an unreadable rate blocks.
+    @Test func aLoanEditKeepsItsScheduleAndReadsThePercentSign() throws {
+        let row = OpenAPI.PlannedTransaction(
+            id: 6, plannedDate: "2026-12-05", bankAccount: "Main", accountId: 3, memo: "Car",
+            amount: Decimal(string: "-200")!, currency: "EUR", isRecurring: true, recurrencePattern: "monthly",
+            isLoan: true, loanType: .amortizing, loanPrincipal: 10000, loanAnnualInterestRate: Decimal(string: "3.5"),
+            loanTermMonths: 60, loanStartDate: "2026-01-05", loanPaymentDay: 5, isExecuted: false, executionCount: 0,
+            isActive: true, links: [])
+        let form = EditingFixture.form(PlannedFixture.payment(row), settings: NativeAppSettings(numberFormat: .us))
+        form.name = "Family car"
+        let rename = try #require(form.submit())
+        let renamed = try #require(String(data: try APIBody.encode(rename.patch), encoding: .utf8))
+        #expect(!renamed.contains("loan_"))
+        #expect(!renamed.contains("is_loan"))
+        form.loanRate = "4.5%"
+        let terms = try #require(form.submit())
+        #expect(terms.patch.loanAnnualInterestRate == Decimal(string: "4.5"))
+        #expect(terms.patch.loanStartDate == "2026-01-05")
+        form.loanRate = "4.5x"
+        #expect(form.errorKey(.loanRate) == "addInv.error.numberInvalid")
+        #expect(form.submit() == nil)
     }
 }
 
@@ -708,6 +757,14 @@ enum EditingFixture {
         link.select(3)
         #expect(link.selectedTransaction?.id == 3)
         #expect(link.executionDate == "2026-10-13")
+        #expect(link.canExecute)
+        // Astra report 1, finding 9: a choice the search hides cannot be executed.
+        link.search = "RENT"
+        #expect(link.selectedTransaction == nil)
+        #expect(!link.canExecute)
+        await model.executeLink(strings: EditingFixture.strings)
+        #expect(await editing.executed.isEmpty)
+        link.search = ""
         #expect(link.canExecute)
         #expect(PlannedLinkModel.title(Self.candidates[2], strings: EditingFixture.strings) == "Landlord")
         #expect(PlannedLinkModel.detail(Self.candidates[2], format: .isoDate) == "Landlord · 2026-10-13")
