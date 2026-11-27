@@ -828,7 +828,7 @@ enum PortfolioImportReconciliationArea {
             }
             let hashes = try eligibleYieldSourceHashes(
                 session, investmentId: rows[index].investmentID?.rawValue ?? 0, accountId: accountId)
-            details["eligibleSourceRecordHashes"] = .array(hashes.map(JSONValue.string))
+            details["eligibleSourceRecordHashes"] = .array(hashes.map(JSValue.string))
             rows[index].assetAdjustmentDetails = details
         }
         var investmentIds: [Int] = []
@@ -902,7 +902,7 @@ enum PortfolioImportReconciliationArea {
                 plan.ready = false
             }
         }
-        return HandlerResult(data: plan.jsonValue)
+        return HandlerResult(data: plan.jsonValue.envelopeValue)
     }
 
     /// A row of the projected history: the fields `assertProjectedHistory` and the partition
