@@ -382,13 +382,17 @@ enum XLSXWorkbook {
         return found
     }
 
-    private static func workbookInfo(_ xml: Units) throws -> (epoch1904: Bool, sheets: [(name: Units, relation: Units?)]) {
+    private static let xsdTrue = [units("1"), units("true")]
+
+    static func workbookInfo(_ xml: Units) throws -> (epoch1904: Bool, sheets: [(name: Units, relation: Units?)]) {
         var epoch1904: Bool?
         var sheets: [(name: Units, relation: Units?)] = []
         var handlers = XLSXMarkup.Handlers()
         handlers.open = { name, attributes in
             if name == units("workbookPr") {
-                if epoch1904 == nil { epoch1904 = attributes["date1904"] == units("1") }
+                // An xsd:boolean: "true" turns the 1904 date system on as "1" does (Astra
+                // report 1, finding 38).
+                if epoch1904 == nil { epoch1904 = attributes["date1904"].map { xsdTrue.contains($0) } ?? false }
             } else if name == units("sheet"), let sheet = attributes.filled("name") {
                 sheets.append((sheet, attributes["id"]))
             }

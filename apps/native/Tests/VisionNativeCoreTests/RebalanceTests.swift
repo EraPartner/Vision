@@ -195,6 +195,40 @@ struct RebalanceModelTests {
         #expect(await service.requests.last?.model == .sixtyForty)
         #expect(await service.requests.last?.targetWeights == nil)
     }
+    /// Astra report 1, finding 35: an unreadable cap blocks instead of computing uncapped.
+    @Test func anUnreadableCapBlocksTheComputation() async throws {
+        let service = try RebalanceFixtureService()
+        let model = RebalanceModel(service: service)
+        await model.load(
+            route: NativeRoute("/portfolio/rebalance?source=custom&target=stocks%3A20&cap=100.50")!,
+            settings: .defaults)
+        let count = await service.requests.count
+        #expect(model.capIsInvalid)
+        await model.compute()
+        #expect(model.errorKey == RebalanceModel.capInvalidKey)
+        #expect(await service.requests.count == count)
+        model.updateDraft { $0.cap = "100,50" }
+        #expect(!model.capIsInvalid)
+    }
+    /// Astra report 1, finding 36: a saved cap keeps its currency and is converted, not relabelled.
+    @Test func aSavedCapKeepsItsCurrencyUnderAnotherReportingCurrency() async throws {
+        let service = try RebalanceFixtureService()
+        let route = NativeRoute("/portfolio/rebalance?source=plan%3Afirst")!
+        let legacy = RebalanceModel(service: service)
+        await legacy.load(route: route, settings: .init(defaultCurrency: "JPY"))
+        #expect(legacy.draft.cap == "250")
+        let euro = RebalanceModel(service: service)
+        await euro.load(route: route, settings: .defaults)
+        await euro.savePlan()
+        let saved = try #require(await service.writes.last?.plans.first)
+        #expect(saved.cashCapCurrency == "EUR" && saved.storedValue["cashCapCurrency"] == .string("EUR"))
+        let yen = RebalanceModel(service: service)
+        await yen.load(route: route, settings: .init(defaultCurrency: "JPY"))
+        #expect(yen.draft.capEnabled && yen.draft.cap == "25000")
+        let dollar = RebalanceModel(service: service)
+        await dollar.load(route: route, settings: .init(defaultCurrency: "USD"))
+        #expect(dollar.draft.capEnabled && dollar.draft.cap.isEmpty)
+    }
     @Test func editedWeightsInvalidateInFlightResultsButRenamingDoesNot() async throws {
         let service = try RebalanceFixtureService()
         let model = RebalanceModel(service: service)
@@ -382,6 +416,7 @@ private actor RebalanceFixtureService: RebalanceService {
         await waitIfPaused("plans")
         return value
     }
+    func ratesToEur() async throws -> [CurrencyCode: Decimal] { ["EUR": 1, "JPY": Decimal(string: "0.01")!] }
     func saveRebalancePlans(_ plans: [RebalancePlan], expected: JSONValue) async throws -> OpenAPI.Setting {
         writes.append(.init(plans: plans, expected: expected))
         if fails { throw APIError.network("Synthetic settings conflict") }

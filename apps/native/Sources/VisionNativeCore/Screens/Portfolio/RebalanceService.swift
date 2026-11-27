@@ -5,6 +5,8 @@ public protocol RebalanceService: Sendable {
     func rebalanceCash(currency: CurrencyCode, reserveFloor: Decimal) async throws -> RebalanceCashProjection
     func rebalancePlans() async throws -> OpenAPI.Setting
     func saveRebalancePlans(_ plans: [RebalancePlan], expected: JSONValue) async throws -> OpenAPI.Setting
+    /// The stored value of one unit of each currency in EUR (EUR itself is 1).
+    func ratesToEur() async throws -> [CurrencyCode: Decimal]
 }
 
 extension APIClient: RebalanceService {
@@ -39,6 +41,12 @@ extension APIClient: RebalanceService {
     public func rebalancePlans() async throws -> OpenAPI.Setting { try await setting(key: .rebalancePlans) }
     public func saveRebalancePlans(_ plans: [RebalancePlan], expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(RebalancePlansWrite(plans: plans, expected: expected))
+    }
+    public func ratesToEur() async throws -> [CurrencyCode: Decimal] {
+        let rates = try await send(OpenAPIOperations.GetExchangeRates(dbOnly: true))
+        var result: [CurrencyCode: Decimal] = [.eur: 1]
+        for rate in rates.rates where rate.rateToEur > 0 { result[rate.currency] = rate.rateToEur }
+        return result
     }
 }
 

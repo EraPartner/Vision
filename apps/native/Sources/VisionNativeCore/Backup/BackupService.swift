@@ -155,6 +155,16 @@ public actor BackupService {
         return BackupPassphrase.resolve(environment: [:], store: await passphraseStore())
     }
 
+    /// The passphrase a new backup is encrypted with, `nil` when none is configured. Throws
+    /// when one is stored but cannot be read (Astra report 1, finding 24).
+    func encryptingPassphrase() async throws -> String? {
+        if let secret = await passphrase() { return secret }
+        if BackupPassphrase.isStoredButUnreadable(store: await passphraseStore()) {
+            throw BackupFailure(BackupPassphrase.unreadableMessage)
+        }
+        return nil
+    }
+
     /// `backup:get-encryption-status`.
     public func encryptionStatus() async -> PassphraseStatus {
         BackupPassphrase.status(environment: context.environment, store: await passphraseStore())
@@ -250,6 +260,9 @@ public actor BackupService {
         guard !destination.isEmpty else { throw BackupFailure("No backup directory configured") }
         let runtime = try await requireRuntime()
         let deviceId = try await deviceId()
+        // Read before the backend stops: a stored passphrase the Keychain will not hand over
+        // fails the backup instead of writing it unencrypted.
+        let secret = try await encryptingPassphrase()
         let work = try BackupFiles.makeTemporaryDirectory(prefix: "vision_bak_", in: context.temporaryDirectory)
         defer { BackupFiles.remove(work) }
         let databasePath = PathUtilities.join(work, BackupBundle.databaseMember)
@@ -271,7 +284,6 @@ public actor BackupService {
         let state = frontendState
         // With a passphrase the plain archive is built in the private work directory and
         // only its encrypted form reaches `destination`.
-        let secret = await passphrase()
         let bundleDirectory = secret == nil ? destination : work
         let bundlePath = try await runBlocking {
             try BackupBundle.create(

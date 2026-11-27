@@ -456,7 +456,7 @@ public final class PlannedPaymentsModel {
     /// suggestions refetch in the background; a failure toasts `plannedPage.link.executeFailed`
     /// and keeps it open.
     public func executeLink(strings: any Localizing) async {
-        guard let dialog = link, let transactionId = dialog.selectedTransactionId, !dialog.isExecuting else { return }
+        guard let dialog = link, let transactionId = dialog.selectedTransaction?.id, !dialog.isExecuting else { return }
         let key = showAll
         dialog.isExecuting = true
         defer { dialog.isExecuting = false }

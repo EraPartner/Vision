@@ -35,7 +35,11 @@ enum ForecastEnsemble {
     /// towards the mean by sample size, blended with a small equal share.
     static func weights(accuracy: [Accuracy], methodIDs: [String]) -> Weights {
         let rows = accuracy.compactMap { row -> (id: String, rmse: Double, sampleDays: Double?)? in
-            guard let rmse = row.rmse, rmse > 0, methodIDs.contains(row.method) else { return nil }
+            // A measured zero error is a perfect method, not a missing one (Astra report 1,
+            // finding 18); a zero with no measured days is still the "not measured" marker.
+            let measured = row.sampleDays.map { $0.isFinite && $0 > 0 } ?? false
+            guard let rmse = row.rmse, rmse > 0 || (rmse == 0 && measured), methodIDs.contains(row.method)
+            else { return nil }
             return (row.method, rmse, row.sampleDays)
         }
         if rows.isEmpty { return [] }
@@ -63,7 +67,13 @@ enum ForecastEnsemble {
             return out
         }
         let sum = eligible.reduce(0) { $0 + (weight(weights, $1) ?? 0) }
-        for id in eligible { set(&out, id, sum > 0 ? (weight(weights, id) ?? 0) / sum : 0) }
+        // Stored weights that name none of the eligible methods share the forecast equally
+        // instead of zeroing it (Astra report 1, finding 42).
+        guard sum > 0 else {
+            for id in eligible { set(&out, id, 1 / Double(eligible.count)) }
+            return out
+        }
+        for id in eligible { set(&out, id, (weight(weights, id) ?? 0) / sum) }
         return out
     }
 

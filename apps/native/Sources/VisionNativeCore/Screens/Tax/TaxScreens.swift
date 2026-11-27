@@ -87,6 +87,11 @@ public final class TaxScreens {
     }
 
     /// Adopt and mirror the URL after the live household and stored snapshot years are known.
+    /// Belgian tax is assessed in euros: the tax screens read and show every figure in EUR,
+    /// whatever the reporting currency, so a euro amount is never labelled as another
+    /// currency (Astra report 1, finding 6).
+    public static let currency: CurrencyCode = .eur
+
     public func loadRoute(route: NativeRoute, currency: CurrencyCode, force: Bool = false) async -> NativeRoute? {
         let token = UUID()
         routeRevision = token

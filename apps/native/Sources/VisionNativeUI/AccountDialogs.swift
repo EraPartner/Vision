@@ -608,7 +608,7 @@ struct ReconcileSheet: View {
 
     @ViewBuilder
     private func resolutions(_ draft: ReconcileDraft, busy: Bool) -> some View {
-        let blocked = busy || draft.readingNeedsDate
+        let blocked = busy || draft.readingBlocksResolution
         resolution(
             title: "accounts.reconcile.acceptTitle", description: strings.t("accounts.reconcile.acceptDescription"),
             button: "accounts.reconcile.acceptSubmit", pending: draft.pendingAction == .resolve(.accept),

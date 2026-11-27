@@ -189,9 +189,7 @@ enum FormulaSemantics {
     /// `compare(left, op, right)`: numeric when either side is a `Decimal` (an empty cell
     /// then gives no result), JavaScript's own operators otherwise.
     static func compare(_ left: FormulaValue, _ op: FormulaOperator, _ right: FormulaValue) throws -> Bool? {
-        if left.isDecimalInstance || right.isDecimalInstance {
-            guard let a = try decimal(left), let b = try decimal(right) else { return nil }
-            let ordering = a.compared(to: b)
+        func result(_ ordering: Int) -> Bool {
             switch op {
             case .equal: return ordering == 0
             case .notEqual: return ordering != 0
@@ -200,6 +198,17 @@ enum FormulaSemantics {
             case .greater: return ordering > 0
             case .greaterOrEqual, .add, .subtract, .multiply, .divide: return ordering >= 0
             }
+        }
+        if left.isDecimalInstance || right.isDecimalInstance {
+            guard let a = try decimal(left), let b = try decimal(right) else { return nil }
+            return result(a.compared(to: b))
+        }
+        // Two numeric texts (decimal columns arrive as text) compare as numbers, so "10" > "2"
+        // (Astra report 1, finding 30).
+        if case .json(.string(let a)) = left, case .json(.string(let b)) = right, looksNumeric(a), looksNumeric(b),
+            case .finite(let x) = DecimalJS.parse(a), case .finite(let y) = DecimalJS.parse(b)
+        {
+            return result(x.compared(to: y))
         }
         guard case .json(let a) = left, case .json(let b) = right else { return nil }
         switch op {

@@ -32,6 +32,9 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     private var nextId = 1000
     private var createConflicts = false
     private var createFails = false
+    /// Creates beyond this many recorded ones fail.
+    private var createLimit: Int?
+    private var runningBalances = false
 
     init(rows: [OpenAPI.Transaction] = []) {
         self.rows = rows
@@ -45,6 +48,8 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     /// A create without `allow_duplicate` answers 409.
     func conflictCreates(_ conflict: Bool) { createConflicts = conflict }
     func failCreates(_ fail: Bool) { createFails = fail }
+    func failCreates(after count: Int) { createLimit = count }
+    func computeRunningBalances(_ on: Bool) { runningBalances = on }
     func setRecipients(_ list: [OpenAPI.Recipient]) {
         recipients = Dictionary(uniqueKeysWithValues: list.map { recipient in (recipient.id, recipient) })
     }
@@ -69,7 +74,19 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         queries.append(query)
         offsets.append(offset)
         if pageFailures.contains(offset) { throw APIError.network("offline") }
-        let all = matching(query)
+        var all = matching(query)
+        if runningBalances {
+            // Newest first: a row's balance is its own amount plus every older row's.
+            let source = all
+            all = source.enumerated().map { index, row in
+                let balance = source[index...].filter { $0.accountId == row.accountId }.reduce(Decimal(0)) { $0 + $1.amount }
+                return TxFixture.wire(
+                    id: row.id, date: row.transactionDate, recipientId: row.recipientId, recipient: row.recipientName,
+                    categoryId: row.categoryId, category: row.categoryName, accountId: row.accountId,
+                    bank: row.bankAccount, amount: row.amount, currency: row.currency, memo: row.memo,
+                    comment: row.comment, isActive: row.isActive ?? true, tags: row.tags ?? [], runningBalance: balance)
+            }
+        }
         let end = min(all.count, offset + query.pageSize)
         let items = offset < end ? Array(all[offset..<end]) : []
         return TransactionPage(items: items, total: all.count)
@@ -109,6 +126,7 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     func createTransaction(_ body: OpenAPI.TransactionCreate) async throws -> OpenAPI.Transaction {
         created.append(body)
         if createFails { throw APIError.network("offline") }
+        if let createLimit, created.count > createLimit { throw APIError.network("offline") }
         if createConflicts && body.allowDuplicate != true {
             throw APIError.client(APIClientError(status: 409, code: .conflict, message: "Duplicate"))
         }
@@ -222,12 +240,13 @@ enum TxFixture {
         id: TransactionID, date: CalendarDay = "2026-10-01", recipientId: RecipientID? = 1, recipient: String? = "Bakery",
         categoryId: CategoryID? = nil, category: String? = nil, accountId: AccountID? = 7, bank: String? = "BE00 1234",
         amount: Decimal = Decimal(string: "-4.5")!, currency: CurrencyCode? = "EUR", memo: String? = nil,
-        comment: String? = nil, isActive: Bool = true, tags: [OpenAPI.TransactionTagRef] = []
+        comment: String? = nil, isActive: Bool = true, tags: [OpenAPI.TransactionTagRef] = [],
+        runningBalance: Decimal? = nil
     ) -> OpenAPI.Transaction {
         OpenAPI.Transaction(
             id: id, transactionDate: date, accountId: accountId, bankAccount: bank, recipientId: recipientId,
-            recipientName: recipient, memo: memo, amount: amount, currency: currency, categoryId: categoryId,
-            categoryName: category, comment: comment, isActive: isActive, tags: tags, links: [])
+            recipientName: recipient, memo: memo, amount: amount, currency: currency, runningBalance: runningBalance,
+            categoryId: categoryId, categoryName: category, comment: comment, isActive: isActive, tags: tags, links: [])
     }
 
     static func tag(_ id: TagID, _ slug: String) -> OpenAPI.TransactionTagRef {
@@ -724,29 +743,77 @@ extension TransactionPatch {
         #expect(model.actionIsUndo)
         let notice = try #require(model.notice)
         #expect(model.duration(of: notice) == TransactionsModel.undoDuration)
+        // Astra report 1, finding 1: the DELETE waits for the Undo window, so Undo puts the
+        // same row back (splits and attachments included) without recreating it.
+        #expect(await service.deleted.isEmpty)
         await model.performPendingAction()
-        #expect(await service.created.count == 1)
-        #expect(await service.created.first?.recipientId == 2)
+        #expect(await service.deleted.isEmpty)
+        #expect(await service.created.isEmpty)
         #expect(model.notice?.key == "transactions.restored")
-        #expect(model.rows?.count == 3)
+        #expect(model.rows?.map(\.id) == [1, 2, 3])
+        // Once flushed, the DELETE is sent.
+        model.requestDelete(try #require(model.row(2)))
+        await model.confirmDelete()
+        await model.flushDeferredDeletes()
+        #expect(await service.deleted == [2])
         // A failed delete puts the row back where it was.
         await service.failDeletes(true)
         let second = try #require(model.rows?[1])
         model.requestDelete(second)
         await model.confirmDelete()
+        await model.flushDeferredDeletes()
         #expect(model.rows?[1].id == second.id)
         #expect(model.notice?.key == "transactions.deleteFailedTitle")
     }
 
-    @Test func aRowWithoutAnAccountIsDeletedWithoutUndo() async throws {
+    /// Astra report 1, finding 10: a delete moves the next page's offset back by one.
+    @Test func deletingALoadedRowDoesNotSkipTheNextPagesFirstRow() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(120))
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        model.requestDelete(try #require(model.row(3)))
+        await model.confirmDelete()
+        await model.loadMore()
+        #expect(await service.offsets.last == 49)
+        let ids = model.rows?.map(\.id) ?? []
+        #expect(ids.contains(51))
+        #expect(ids.count == 99)
+        #expect(Set(ids).count == ids.count)
+    }
+
+    /// Astra report 1, finding 7: an amount edit refreshes the running balances in place.
+    @Test func anAmountEditRefreshesTheRunningBalances() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(3))
+        await service.computeRunningBalances(true)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        #expect(model.row(1)?.runningBalance == Decimal(string: "-13.5"))
+        var patch = TransactionPatch()
+        patch.amount = Decimal(-20)
+        #expect(await model.update(3, patch: patch))
+        #expect(model.row(3)?.runningBalance == Decimal(-20))
+        #expect(model.row(1)?.runningBalance == Decimal(string: "-29"))
+        // A memo edit leaves the balances alone and reads nothing.
+        let reads = await service.queries.count
+        var memo = TransactionPatch()
+        memo.memo = .some("Bread")
+        #expect(await model.update(1, patch: memo))
+        #expect(await service.queries.count == reads)
+    }
+
+    @Test func aRowWithoutAnAccountCanStillBeUndone() async throws {
         let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, accountId: nil)])
         let (model, shell) = try await TxFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         model.requestDelete(try #require(model.row(1)))
         await model.confirmDelete()
         #expect(model.notice?.key == "transactions.deleted")
-        #expect(model.pendingAction == nil)
         #expect(model.emptyState == .noTransactions)
+        // The held delete makes Undo work even for a row the create contract cannot rebuild.
+        #expect(model.actionIsUndo)
+        await model.performPendingAction()
+        #expect(model.row(1) != nil)
+        #expect(await service.created.isEmpty)
     }
 
     @Test func theInspectorFollowsTheSelectionAndFocusReturns() async throws {

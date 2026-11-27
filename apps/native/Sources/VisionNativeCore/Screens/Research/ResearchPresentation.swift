@@ -318,7 +318,16 @@ public enum ResearchPresentation {
             var previous: Double?
             for index in rows.indices {
                 let close = rows[index].cells[entry.id]?.value
-                let opening = previous ?? close
+                // The providers send no opening price, so the previous close stands in; it is
+                // kept inside the day's low and high, so a candle never opens outside its own
+                // range (Astra report 1, finding 57).
+                var opening = previous ?? close
+                if let value = opening {
+                    if let low = rows[index].cells[entry.id + "_l"]?.value { opening = max(value, low) }
+                    if let high = rows[index].cells[entry.id + "_h"]?.value, let value = opening {
+                        opening = min(value, high)
+                    }
+                }
                 rows[index].cells[entry.id + "_o"] = cell(opening)
                 previous = close ?? previous
             }
@@ -664,6 +673,14 @@ enum ResearchMath {
     /// Pearson correlation of two return series on their shared timestamps; nil below two pairs
     /// or without variance on either side.
     static func pearsonOnTime(_ a: OrderedSeries, _ b: OrderedSeries) -> Double? {
+        // Daily series pair by trading day, so two markets that stamp the same day at different
+        // hours still line up (Astra report 1, finding 56); intraday series pair by timestamp.
+        var a = a
+        var b = b
+        if let dayA = byDay(a), let dayB = byDay(b) {
+            a = dayA
+            b = dayB
+        }
         var pairs: [(Double, Double)] = []
         for key in a.keys {
             if let x = a.values[key], let y = b.values[key] { pairs.append((x, y)) }
@@ -686,6 +703,17 @@ enum ResearchMath {
         return cov / (varX * varY).squareRoot()
     }
 
+    /// The series keyed by UTC day number; nil when two of its values fall on one day.
+    static func byDay(_ series: OrderedSeries) -> OrderedSeries? {
+        var out = OrderedSeries()
+        for key in series.keys {
+            let day = (key / 86_400_000).rounded(.down)
+            guard out.values[day] == nil, let value = series.values[key] else { return nil }
+            out.set(day, value)
+        }
+        return out
+    }
+
     /// Rebase each series' closes to start at 100.
     static func rebaseTo100(_ points: [Point]) -> [(time: Double, value: Double)] {
         let valid = points.compactMap { point -> (time: Double, close: Double)? in
@@ -698,14 +726,20 @@ enum ResearchMath {
 
     // MARK: indicators.ts
 
+    /// A window with a missing close has no average; the average comes back once the gap has
+    /// left the window (Astra report 1, finding 59).
     static func sma(_ values: [Double], _ period: Int) -> [Double?] {
         var out = [Double?](repeating: nil, count: values.count)
         if period <= 0 { return out }
         var sum = 0.0
+        var gaps = 0
         for (index, value) in values.enumerated() {
-            sum += value
-            if index >= period { sum -= values[index - period] }
-            if index >= period - 1 { out[index] = sum / Double(period) }
+            if value.isFinite { sum += value } else { gaps += 1 }
+            if index >= period {
+                let leaving = values[index - period]
+                if leaving.isFinite { sum -= leaving } else { gaps -= 1 }
+            }
+            if index >= period - 1, gaps == 0 { out[index] = sum / Double(period) }
         }
         return out
     }

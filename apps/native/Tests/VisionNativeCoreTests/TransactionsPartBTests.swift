@@ -14,6 +14,7 @@ actor FakeTransactionBulkService: TransactionBulkService {
     private(set) var transfers: [[TransactionID]] = []
     private(set) var createdNames: [String] = []
     private var failing = false
+    private var transfersFail = false
     private var exportedCount: Int? = 3
     private var existing: [String: RecipientID] = [:]
     private var nextRecipient = 300
@@ -21,6 +22,7 @@ actor FakeTransactionBulkService: TransactionBulkService {
     init() {}
 
     func fail(_ on: Bool) { failing = on }
+    func failTransfers(_ on: Bool) { transfersFail = on }
     func setExportedCount(_ count: Int?) { exportedCount = count }
     func setExisting(_ names: [String: RecipientID]) { existing = names }
 
@@ -57,6 +59,7 @@ actor FakeTransactionBulkService: TransactionBulkService {
     func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws {
         transfers.append([first, second])
         try check()
+        if transfersFail { throw APIError.network("offline") }
     }
 
     func createRecipient(name: String) async throws -> CreatedRecipient {
@@ -457,6 +460,45 @@ enum SplitFixture {
         #expect(model.notice?.key == "transactions.createFailedTitle")
         #expect(model.isAddPresented)
         #expect(!form.isPending)
+    }
+
+    /// Astra report 1, finding 2: a failed second leg or link takes the posted legs back.
+    @Test func aTransferThatFailsHalfwayLeavesNoLegBehind() async throws {
+        let service = FakeTransactionsService()
+        await service.failCreates(after: 1)
+        let bulk = FakeTransactionBulkService()
+        let (model, shell) = try await TxFixture.opened(service, pickers: Self.pickers(), bulk: bulk)
+        defer { withExtendedLifetime(shell) {} }
+        await model.pickers.load()
+        model.requestAdd()
+        let form = try #require(model.addForm)
+        form.setKind(.transfer)
+        form.setAmount("100")
+        form.pickAccount(name: "BE00 1234", id: 7)
+        form.pickToAccount(name: "BE99 0000", id: 9)
+        await model.submitAdd()
+        #expect(await service.created.count == 2)
+        #expect(await service.deleted == [1001])
+        #expect(await service.rows.isEmpty)
+        #expect(model.notice?.key == "transactions.createFailedTitle")
+
+        // Both legs posted, the link fails: both go.
+        let linkService = FakeTransactionsService()
+        let linkBulk = FakeTransactionBulkService()
+        await linkBulk.failTransfers(true)
+        let (linkModel, linkShell) = try await TxFixture.opened(linkService, pickers: Self.pickers(), bulk: linkBulk)
+        defer { withExtendedLifetime(linkShell) {} }
+        await linkModel.pickers.load()
+        linkModel.requestAdd()
+        let linkForm = try #require(linkModel.addForm)
+        linkForm.setKind(.transfer)
+        linkForm.setAmount("100")
+        linkForm.pickAccount(name: "BE00 1234", id: 7)
+        linkForm.pickToAccount(name: "BE99 0000", id: 9)
+        await linkModel.submitAdd()
+        #expect(Set(await linkService.deleted) == [1001, 1002])
+        #expect(await linkService.rows.isEmpty)
+        #expect(linkModel.isAddPresented)
     }
 
     @Test func thePayeeCreateRowCreatesSelectsAndToasts() async throws {

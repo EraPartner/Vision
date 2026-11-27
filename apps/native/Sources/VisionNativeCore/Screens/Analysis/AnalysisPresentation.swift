@@ -162,6 +162,20 @@ public enum AnalysisPresentation {
         let labels = Array(Set(matches))
         return labels.count == 1 ? catalogLabel(labels[0], strings: strings) : id
     }
+    /// Each result column's label by id. A result may repeat a column name (`SELECT 1 AS a,
+    /// 2 AS a`); the first column of a name labels it (Astra report 1, finding 25).
+    public static func columnLabels(result: AnalysisResult, datasets: [AnalysisDataset], strings: any Localizing)
+        -> [String: String]
+    {
+        let catalog: [TaxValue] = datasets.map {
+            .object(["fields": .array($0.fields.map(\.raw)), "measures": .array($0.measures.map(\.raw))])
+        }
+        return Dictionary(
+            result.effectiveColumns.map {
+                ($0.id, columnLabel(result: result.raw, id: $0.id, datasets: catalog, strings: strings))
+            },
+            uniquingKeysWith: { first, _ in first })
+    }
     public static func catalogLabel(_ label: String, strings: any Localizing) -> String {
         let known: Set<String> = [
             "Transactions", "Accounts", "Holding events", "Cash flows", "Transaction ID", "Date", "Month",

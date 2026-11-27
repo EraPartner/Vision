@@ -205,6 +205,22 @@ struct ResearchPresentationTests {
 
     // MARK: indicators.test.ts
 
+    /// Astra report 1, finding 59: a missing close blanks only the windows that hold it.
+    @Test func smaRecoversOnceAGapLeavesTheWindow() {
+        #expect(ResearchMath.sma([1, 2, .nan, 4, 5, 6, 7], 2) == [nil, 1.5, nil, nil, 4.5, 5.5, 6.5])
+    }
+    /// Astra report 1, finding 56: daily series stamped at different hours pair by day.
+    @Test func dailyReturnsPairByTradingDay() {
+        let day = 86_400_000.0
+        var a = OrderedSeries()
+        var b = OrderedSeries()
+        for (index, value) in [0.01, -0.02, 0.03].enumerated() {
+            a.set(Double(index + 1) * day, value)
+            b.set(Double(index + 1) * day + 16 * 3_600_000, value)
+        }
+        let correlation = ResearchMath.pearsonOnTime(a, b)
+        #expect(correlation.map { abs($0 - 1) < 1e-12 } == true)
+    }
     @Test func smaNullsTheWarmUpThenAveragesTheWindow() {
         #expect(ResearchMath.sma([1, 2, 3, 4, 5], 3) == [nil, nil, 2, 3, 4])
     }

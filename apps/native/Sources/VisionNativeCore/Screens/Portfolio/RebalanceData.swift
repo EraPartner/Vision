@@ -144,19 +144,25 @@ public struct RebalancePlan: Codable, Equatable, Sendable, Identifiable {
     public let name: String
     public let targetWeights: [String: Decimal]
     public let cashCap: Decimal?
+    /// The currency the cap was saved in; nil for plans saved before it was recorded, whose cap
+    /// is read in the current reporting currency.
+    public let cashCapCurrency: CurrencyCode?
     public let storedValue: TaxValue
     public init(
-        id: String, name: String, targetWeights: [String: Decimal], cashCap: Decimal? = nil, preserving: TaxValue? = nil
+        id: String, name: String, targetWeights: [String: Decimal], cashCap: Decimal? = nil,
+        cashCapCurrency: CurrencyCode? = nil, preserving: TaxValue? = nil
     ) {
         self.id = id
         self.name = name
         self.targetWeights = targetWeights
         self.cashCap = cashCap
+        self.cashCapCurrency = cashCap == nil ? nil : cashCapCurrency
         var value = preserving ?? .object([:])
         value["id"] = .string(id)
         value["name"] = .string(name)
         value["targetWeights"] = .object(targetWeights.mapValues(TaxValue.number))
         value["cashCap"] = cashCap.map(TaxValue.number)
+        value["cashCapCurrency"] = self.cashCapCurrency.map { TaxValue.string($0.rawValue) }
         self.storedValue = value
     }
     public init(from decoder: any Decoder) throws {
@@ -188,6 +194,8 @@ public struct RebalancePlan: Codable, Equatable, Sendable, Identifiable {
         self.name = name
         self.targetWeights = weights
         self.cashCap = cap
+        self.cashCapCurrency =
+            cap == nil ? nil : value["cashCapCurrency"]?.stringValue.flatMap { CurrencyCode(rawValue: $0) }
         self.storedValue = value
     }
     public func encode(to encoder: any Encoder) throws { try storedValue.encode(to: encoder) }

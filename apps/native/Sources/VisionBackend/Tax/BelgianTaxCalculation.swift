@@ -29,7 +29,15 @@ enum BelgianTaxCalculation {
         for partner in all where !isIncomeLine(partner) {
             spouseIncome += TaxMath.sum(partner.activities, \.netProfessionalIncome) + partner.otherTaxableIncome
         }
-        let householdGross = gross + spouseIncome
+        // Net professional amounts of a partner on an income line count toward household income
+        // as the household totals count them; leaving them out turned take-home negative
+        // (Astra report 1, finding 47).
+        var lineNetAmounts = 0.0
+        for partner in lines {
+            lineNetAmounts += TaxMath.sum(
+                partner.activities.filter { $0.kind == .netProfessionalAmount }, \.netProfessionalIncome)
+        }
+        let householdGross = gross + spouseIncome + lineNetAmounts
         let employeeSS = TaxMath.sum(all, \.employeeSocialSecurity)
         let netAfterSS = gross - employeeSS
         let expenses = TaxMath.sum(all, \.professionalExpenses)
@@ -76,6 +84,7 @@ enum BelgianTaxCalculation {
         // `buildCalculationBreakdown`
         var breakdown: [JSValue] = [row("Gross Income", gross)]
         if spouseIncome > 0 { breakdown.append(row("Spouse professional income", spouseIncome)) }
+        if lineNetAmounts > 0 { breakdown.append(row("Net professional amount", lineNetAmounts)) }
         breakdown.append(row("Employee Social Security", -employeeSS, rate: table.employeeSSRate * 100))
         breakdown.append(row("Net after Social Security", netAfterSS))
         breakdown.append(row("Professional Expenses Deduction", -expenses))

@@ -13,8 +13,11 @@ public enum StatisticsWindow: String, Sendable, CaseIterable {
     /// The `?window=` value for this window; `nil` (no parameter) for the default.
     public var routeValue: String? { self == .rolling24 ? rawValue : nil }
 
-    public func queryItems(now: Date, calendar: Calendar, includeAllTime: Bool = false) -> [URLQueryItem] {
+    public func queryItems(now: Date, calendar zone: Calendar, includeAllTime: Bool = false) -> [URLQueryItem] {
         if self == .all { return includeAllTime ? [URLQueryItem(name: "all_time", value: "true")] : [] }
+        // The API takes Gregorian days whatever calendar the Mac uses (Astra report 1, finding 43).
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone.timeZone
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
         let start = calendar.date(byAdding: .month, value: -23, to: startOfMonth) ?? startOfMonth
         return [

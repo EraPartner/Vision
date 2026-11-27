@@ -4573,6 +4573,11 @@ components:
         post_anchor_count:
           type: integer
           description: Active ledger entries after the anchor, or all active entries when unstamped — the "{n} entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list endpoint.
+        anchored_currencies:
+          type: array
+          items:
+            type: string
+          description: Currency codes (sorted) that have a stamped balance row on or before today, so a per-currency opening balance knows which partitions are already anchored; absent when nothing is stamped. Only returned by the list endpoint.
         has_transactions:
           type: boolean
           description: Whether the account has any active ledger rows; only returned by the list endpoint.

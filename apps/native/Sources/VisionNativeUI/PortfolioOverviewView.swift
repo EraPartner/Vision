@@ -261,27 +261,23 @@ public struct PortfolioOverviewView: View {
                     "portfolio.figure.perYear", value: metrics.map { signedPercent($0.annualizedReturn) },
                     detail: annualHint.map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 },
                     hint: annualHint ?? strings.t("performance.emptyTitle"), gain: metrics?.annualizedReturn)
+                let inflation = performance?.hasInflationData == true ? metrics : nil
                 figure(
                     "performance.inflationAdjusted",
-                    value: metrics.flatMap { $0.cumulativeInflation != 0 ? signedPercent($0.realReturnPct) : nil },
-                    detail: metrics.flatMap {
-                        $0.cumulativeInflation != 0
-                            ? strings.t(
-                                "performance.cumulativeInflation", ["n": unsignedPercent($0.cumulativeInflation)]) : nil
+                    value: inflation.map { signedPercent($0.realReturnPct) },
+                    detail: inflation.map {
+                        strings.t("performance.cumulativeInflation", ["n": unsignedPercent($0.cumulativeInflation)])
                     }
                         ?? strings.t("portfolio.figure.inflationMissing"),
                     hint: strings.t(
-                        metrics?.cumulativeInflation != nil && metrics?.cumulativeInflation != 0
-                            ? "portfolio.figure.afterInflationHint" : "portfolio.figure.inflationMissing"),
-                    gain: metrics?.realReturnPct)
+                        inflation != nil ? "portfolio.figure.afterInflationHint" : "portfolio.figure.inflationMissing"),
+                    gain: inflation?.realReturnPct)
+                let sold = summary.hasSales || summary.totals.totalRealizedGain != 0
                 figure(
                     "portfolio.figure.realized",
-                    value: summary.totals.totalRealizedGain != 0
-                        ? money(summary.totals.totalRealizedGain, signed: true) : nil,
-                    detail: summary.totals.totalRealizedGain == 0 ? strings.t("portfolio.figure.noSales") : nil,
-                    hint: strings.t(
-                        summary.totals.totalRealizedGain == 0
-                            ? "portfolio.figure.noSales" : "portfolio.figure.realizedHint"),
+                    value: sold ? money(summary.totals.totalRealizedGain, signed: true) : nil,
+                    detail: sold ? nil : strings.t("portfolio.figure.noSales"),
+                    hint: strings.t(sold ? "portfolio.figure.realizedHint" : "portfolio.figure.noSales"),
                     gain: summary.totals.totalRealizedGain)
             }
         }

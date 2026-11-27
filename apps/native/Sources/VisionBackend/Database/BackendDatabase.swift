@@ -10,7 +10,7 @@ public actor BackendDatabase: InProcessDatabaseHolder {
     private var path: String?
     private var suspended = true
     private var session: BackendSession?
-    private let time: SQLTimestamps
+    private var time: SQLTimestamps
     private let wall: @Sendable () -> SQLTimestamps.Instant
 
     public init(time: SQLTimestamps = SQLTimestamps()) {
@@ -52,6 +52,22 @@ public actor BackendDatabase: InProcessDatabaseHolder {
         self.attachmentsDirectory = attachmentsDirectory
         suspended = false
     }
+
+    /// `resume` in the Bun backend's `APP_TIMEZONE`, which an explicit runtime.env value can
+    /// set apart from the Mac's zone (Astra report 1, finding 22). An unknown zone keeps the
+    /// current one; Bun refuses to start with it anyway.
+    public func resume(databasePath: String, attachmentsDirectory: String?, timeZone: String?) {
+        if let identifier = timeZone, let zone = TimeZone(identifier: identifier),
+            zone.identifier != time.timeZone.identifier
+        {
+            time = SQLTimestamps(timeZone: zone)
+            session = nil
+        }
+        resume(databasePath: databasePath, attachmentsDirectory: attachmentsDirectory)
+    }
+
+    /// The zone business dates are computed in.
+    public var timeZoneIdentifier: String { time.timeZone.identifier }
 
     /// Runs `body` on the connection. Throws `APIError.backendUnavailable` while suspended,
     /// as a request to the stopped Bun backend fails.

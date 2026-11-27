@@ -67,6 +67,10 @@ extension OpenAPI {
         /// entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list
         /// endpoint.
         public let postAnchorCount: Int?
+        /// Currency codes (sorted) that have a stamped balance row on or before today, so a
+        /// per-currency opening balance knows which partitions are already anchored; absent when
+        /// nothing is stamped. Only returned by the list endpoint.
+        public let anchoredCurrencies: [CurrencyCode]?
         /// Whether the account has any active ledger rows; only returned by the list endpoint.
         public let hasTransactions: Bool?
         public let isActive: Bool
@@ -76,7 +80,7 @@ extension OpenAPI {
         public let createdAt: Instant
         public let updatedAt: Instant
 
-        public init(id: AccountID, name: String, displayName: String? = nil, institution: String? = nil, currency: CurrencyCode, type: AccountType, liquidityClass: LiquidityClass, spendable: Bool, inNetWorth: Bool, taxWrapper: TaxWrapper, owner: Owner, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: AccountID? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [CurrencyCode]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil, anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: Instant? = nil, createdAt: Instant, updatedAt: Instant) {
+        public init(id: AccountID, name: String, displayName: String? = nil, institution: String? = nil, currency: CurrencyCode, type: AccountType, liquidityClass: LiquidityClass, spendable: Bool, inNetWorth: Bool, taxWrapper: TaxWrapper, owner: Owner, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: AccountID? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [CurrencyCode]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil, anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, anchoredCurrencies: [CurrencyCode]? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: Instant? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.displayName = displayName
@@ -101,6 +105,7 @@ extension OpenAPI {
             self.drift = drift
             self.anchorDate = anchorDate
             self.postAnchorCount = postAnchorCount
+            self.anchoredCurrencies = anchoredCurrencies
             self.hasTransactions = hasTransactions
             self.isActive = isActive
             self.closedAt = closedAt
@@ -133,6 +138,7 @@ extension OpenAPI {
             case drift = "drift"
             case anchorDate = "anchor_date"
             case postAnchorCount = "post_anchor_count"
+            case anchoredCurrencies = "anchored_currencies"
             case hasTransactions = "has_transactions"
             case isActive = "is_active"
             case closedAt = "closed_at"

@@ -279,7 +279,7 @@
 {"op":["binance",[null,null,null,{"price":"5"},null],[]],"r":{}}
 {"op":["binance",[{"price":"5"},{"symbol":"SS","price":"64000.12"},[1],null,{"symbol":"BTCUSDT"},[1],{"price":"5"},{"price":"5"}],["","BTCUSDT"]],"r":{}}
 {"op":["binance",{},["DOGEEUR"]],"r":{}}
-{"op":["binance",[[1],[1],{"symbol":"SS","price":" 7"},{"symbol":"BTCUSDT"},"x"],["ETHEUR","ß","btceur","btceur"]],"r":{"SS":{"price":7,"currency":"USD","source":"live"}}}
+{"op":["binance",[[1],[1],{"symbol":"SS","price":" 7"},{"symbol":"BTCUSDT"},"x"],["ETHEUR","ß","btceur","btceur"]],"r":{}}
 {"op":["binance",[{"symbol":"BTCUSDT"},{"symbol":"BTCUSDT"},[1],"x","x"],[]],"r":{}}
 {"op":["binance",{"symbol":"BTCUSDT","price":"1"},["ß"]],"r":{}}
 {"op":["binance",[{"symbol":5,"price":true},[1]],["BTCUSDT","BTCUSDT"]],"r":{}}

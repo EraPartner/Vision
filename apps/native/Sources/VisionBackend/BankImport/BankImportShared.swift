@@ -431,7 +431,7 @@ enum BankImportText {
         return exactDay(year: parseInt(parts[2]), month: parseInt(parts[1]), day: parseInt(parts[0]))
     }
 
-    /// `parseDateFlexibleUtc(text)` for text that starts with `YYYY-MM-DD`. Any other shape
+    /// `parseDateFlexibleUtc(text)` for text that starts with a real `YYYY-MM-DD` day. Any other shape
     /// goes to the JavaScript engine's own date parser in the TypeScript, whose answer
     /// depends on the engine and on the machine's time zone; here it is no date.
     static func flexibleDay(_ value: String?) -> Int? {
@@ -441,13 +441,17 @@ enum BankImportText {
             all.count == 10 || all[10] == 0x54 || isSpace(all[10])
         else { return nil }
         func number(_ range: Range<Int>) -> Int { Int(text(all[range])) ?? 0 }
-        // Date.UTC: a year below 100 is in the 1900s, and month and day roll over.
+        // Date.UTC: a year below 100 is in the 1900s. A month or day that would roll over
+        // (2026-02-30) is no date (Astra report 1, finding 20).
         var year = number(0..<4)
         if year < 100 { year += 1900 }
-        let monthIndex = number(5..<7) - 1
-        year += CalendarDays.floorDivide(monthIndex, 12)
-        let month = monthIndex - CalendarDays.floorDivide(monthIndex, 12) * 12 + 1
-        return ImportInterop.daysFromCivil(year: year, month: month, day: 1) + number(8..<10) - 1
+        let month = number(5..<7)
+        let day = number(8..<10)
+        let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+        guard (1...12).contains(month), day >= 1,
+            day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+        else { return nil }
+        return ImportInterop.daysFromCivil(year: year, month: month, day: day)
     }
 
     static let supportedDateFormats = ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y-%m-%d %H:%M:%S"]

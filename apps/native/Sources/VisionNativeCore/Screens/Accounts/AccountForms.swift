@@ -397,6 +397,11 @@ public struct ReconcileDraft: Equatable, Sendable {
     /// `readingNeedsDate`: blocks the resolutions.
     public var readingNeedsDate: Bool { hasReading && readingDate == nil }
 
+    /// A typed reading that is not an amount, or one without its date, blocks the
+    /// resolutions: they would otherwise fall back to the stored reading (Astra report 1,
+    /// finding 28).
+    public var readingBlocksResolution: Bool { readingInvalid || readingNeedsDate }
+
     /// The live Difference: the reading minus the base, else the stored difference.
     public var previewDrift: Decimal { parsedReading.map { $0 - base } ?? delta }
 
@@ -421,7 +426,9 @@ public struct ReconcileDraft: Equatable, Sendable {
 
     /// Set as opening balance: no statement anchor yet, and a reading or a stored statement.
     public var canBackfill: Bool {
-        let anchored = account.anchorDate != nil
+        // Per currency: a stamped EUR balance leaves the USD opening balance open (Astra report
+        // 1, finding 29). A backend without the list falls back to any stamp.
+        let anchored = account.anchoredCurrencies.map { $0.contains(selectedCurrency) } ?? (account.anchorDate != nil)
         let storedAvailable = reading.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedStatement != nil
         return !anchored && (canSaveReading || storedAvailable)
     }

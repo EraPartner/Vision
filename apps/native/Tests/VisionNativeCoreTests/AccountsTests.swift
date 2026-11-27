@@ -206,7 +206,8 @@ enum AccountsFixture {
         multiCurrencyCash: Bool = false, statements: [OpenAPI.Account.StatementBalancesItem]? = nil,
         parts: [OpenAPI.Account.BalancePartsItem]? = nil, incomplete: Bool? = nil, unconverted: [CurrencyCode]? = nil,
         reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil,
-        anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = true
+        anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = true,
+        anchoredCurrencies: [CurrencyCode]? = nil
     ) -> OpenAPI.Account {
         let kind = OpenAPI.Account.AccountType(rawValue: type)
         let flags = AccountTypeFlags.of(kind)
@@ -217,8 +218,8 @@ enum AccountsFixture {
             hasCashSleeve: flags.hasCashSleeve, statementBalances: statements, computedBalance: balance,
             balanceParts: parts, balanceIncomplete: incomplete, unconvertedCurrencies: unconverted,
             reconcilableBalance: reconcilableBalance, reconcilableCurrency: reconcilableCurrency, drift: drift,
-            anchorDate: anchorDate, postAnchorCount: postAnchorCount, hasTransactions: hasTransactions,
-            isActive: isActive, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
+            anchorDate: anchorDate, postAnchorCount: postAnchorCount, anchoredCurrencies: anchoredCurrencies,
+            hasTransactions: hasTransactions, isActive: isActive, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
     }
 
     static func decimal(_ text: String) -> Decimal {
@@ -701,6 +702,17 @@ enum AccountsFixture {
         #expect(!draft.canSaveReading)
     }
 
+    /// Astra report 1, finding 28: a reading that is not an amount blocks the resolutions
+    /// instead of falling back to the stored reading.
+    @Test func anInvalidReadingBlocksTheResolutions() {
+        var draft = ReconcileDraft(account: Self.drifting(), today: Self.today, numberFormat: .eu)
+        #expect(!draft.readingBlocksResolution)
+        draft.setReading("120x")
+        #expect(draft.readingBlocksResolution)
+        draft.setReading("120")
+        #expect(!draft.readingBlocksResolution)
+    }
+
     @Test func multiCurrencyAccountsPickAPartitionAndTheBackfillNeedsNoAnchor() {
         let account = AccountsFixture.account(
             7, "Multi", balance: 300, multiCurrencyCash: true,
@@ -720,6 +732,21 @@ enum AccountsFixture {
         let anchored = ReconcileDraft(
             account: AccountsFixture.account(1, "A", anchorDate: "2026-01-01"), today: Self.today, numberFormat: .eu)
         #expect(!anchored.canBackfill)
+    }
+
+    /// Astra report 1, finding 29: a stamped EUR balance leaves the USD opening balance open.
+    @Test func anAnchorInOneCurrencyLeavesAnotherCurrencysBackfillOpen() {
+        let account = AccountsFixture.account(
+            7, "Multi", balance: 300, multiCurrencyCash: true,
+            parts: [.init(currency: "EUR", balance: 200), .init(currency: "USD", balance: 200)],
+            reconcilableBalance: 200, reconcilableCurrency: "EUR", anchorDate: "2026-01-01",
+            anchoredCurrencies: ["EUR"])
+        var draft = ReconcileDraft(account: account, today: Self.today, numberFormat: .eu)
+        draft.setReading("210")
+        #expect(!draft.canBackfill)
+        draft.selectCurrency("USD")
+        draft.setReading("210")
+        #expect(draft.canBackfill)
     }
 
     @Test func aTypedReadingIsSavedBeforeTheResolution() async throws {

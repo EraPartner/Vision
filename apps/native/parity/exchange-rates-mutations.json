@@ -121,11 +121,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -517,11 +518,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -622,11 +624,12 @@
           "body": "{\"result\":\"\",\"rates\":{\"JPY\":true}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -727,11 +730,12 @@
           "body": "{\"result\":\"success\",\"rates\":1}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -937,11 +941,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"CAD\":1.5e+308,\"JPY\":-2}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -1042,11 +1047,12 @@
           "body": "{\"result\":\"success\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -1252,11 +1258,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"EUR\":162.25}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -1357,11 +1364,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -1567,11 +1575,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"PLN\":1e-300}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -1740,7 +1749,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -1783,11 +1792,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"PLN\":99999,\"NOK\":false}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -1851,7 +1861,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -1956,13 +1966,13 @@
             },
             {
               "currency": "SEK",
-              "rate_to_eur": 0.00001,
+              "rate_to_eur": 1e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.692Z"
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2005,11 +2015,12 @@
           "body": "{\"result\":\"Success\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2067,13 +2078,13 @@
             },
             {
               "currency": "SEK",
-              "rate_to_eur": 0.00001,
+              "rate_to_eur": 1e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.692Z"
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2116,11 +2127,12 @@
           "body": "{\"result\":\"success\",\"rates\":null}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2178,13 +2190,13 @@
             },
             {
               "currency": "SEK",
-              "rate_to_eur": 0.00001,
+              "rate_to_eur": 1e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.692Z"
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2227,11 +2239,12 @@
           "body": "[]"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2289,13 +2302,13 @@
             },
             {
               "currency": "SEK",
-              "rate_to_eur": 0.00001,
+              "rate_to_eur": 1e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.692Z"
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2406,7 +2419,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2449,11 +2462,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2517,7 +2531,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2560,11 +2574,12 @@
           "body": "{\"result\":\"success\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2628,7 +2643,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2739,7 +2754,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2788,11 +2803,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2856,7 +2872,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -2905,11 +2921,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"SEK\":true,\"USD\":true}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -2973,7 +2990,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3022,11 +3039,12 @@
           "body": ""
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3090,7 +3108,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3139,11 +3157,12 @@
           "body": "{\"result\":\"error\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3207,7 +3226,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3256,11 +3275,12 @@
           "body": ""
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3324,7 +3344,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3373,11 +3393,12 @@
           "body": "{\"result\":\"Success\",\"rates\":\"x\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3441,7 +3462,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3490,11 +3511,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"USDX\":1e+21,\"USD\":null}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3558,7 +3580,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3607,11 +3629,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"SEK\":\"\",\"GBP\":0.00011,\"USDX\":99999,\"CHF\":1000000,\"EUR\":-2}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3675,7 +3698,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3724,11 +3747,12 @@
           "body": "{\"result\":null,\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3792,7 +3816,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3841,11 +3865,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"NOK\":3.97,\"PLN\":3.97,\"USDX\":162.25}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -3909,7 +3934,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -3958,11 +3983,12 @@
           "body": "null"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -4026,7 +4052,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4143,7 +4169,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4192,11 +4218,12 @@
           "body": "\"success\""
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -4260,7 +4287,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4309,11 +4336,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"USDX\":0.85,\"USD\":162.25}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -4377,7 +4405,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4494,7 +4522,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4617,7 +4645,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4666,11 +4694,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"PLN\":0.0001}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -4740,7 +4769,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4789,11 +4818,12 @@
           "body": "{\"result\":\"success\",\"rates\":1}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -4863,7 +4893,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -4992,7 +5022,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5041,11 +5071,12 @@
           "body": "[]"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5121,7 +5152,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5170,11 +5201,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"usd\":0.85,\"USDX\":-2,\"US\":162.25}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5250,7 +5282,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5299,11 +5331,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5379,7 +5412,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5428,11 +5461,12 @@
           "body": "null"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5508,7 +5542,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5557,11 +5591,12 @@
           "body": "{\"result\":\"success\",\"rates\":\"x\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5637,7 +5672,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5686,11 +5721,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"USDX\":false,\"XAU\":\"100\"}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5766,7 +5802,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5815,11 +5851,12 @@
           "body": "{\"result\":\"success\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -5895,7 +5932,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -5944,11 +5981,12 @@
           "body": "{\"result\":\"success\",\"rates\":null}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -6024,7 +6062,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -6111,7 +6149,7 @@
             },
             {
               "currency": "CHF",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.118Z"
             },
@@ -6153,7 +6191,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -6202,11 +6240,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"XAU\":1e-300,\"GBP\":3.97}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -6240,7 +6279,7 @@
             },
             {
               "currency": "CHF",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.118Z"
             },
@@ -6282,7 +6321,7 @@
             },
             {
               "currency": "US",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:45.659Z"
             },
@@ -6369,7 +6408,7 @@
             },
             {
               "currency": "CHF",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.118Z"
             },
@@ -6498,7 +6537,7 @@
             },
             {
               "currency": "CHF",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.118Z"
             },
@@ -6589,11 +6628,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"USDX\":0.0001,\"SEK\":1001}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -6627,7 +6667,7 @@
             },
             {
               "currency": "CHF",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.118Z"
             },
@@ -6847,11 +6887,12 @@
           "body": "{\"result\":\"success\",\"rates\":null}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -7105,11 +7146,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"US\":1e-300}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -7504,11 +7546,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"JPY\":0,\"SEK\":false,\"CAD\":\"-0.5\"}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -7774,11 +7817,12 @@
           "body": "{\"result\":\"\",\"rates\":{\"NOK\":1000000,\"PLN\":\"中文[\",\"JPY\":false,\"USDX\":-2}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -7909,11 +7953,12 @@
           "body": "{\"result\":\"Success\",\"rates\":{\"USDX\":null}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8044,11 +8089,12 @@
           "body": "{\"result\":\"success\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8179,11 +8225,12 @@
           "body": "{\"result\":\"success\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8314,11 +8361,12 @@
           "body": "{\"result\":\"\",\"rates\":{}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8449,11 +8497,12 @@
           "body": ""
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8584,11 +8633,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"CAD\":25}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8719,11 +8769,12 @@
           "body": "\"success\""
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -8922,7 +8973,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },
@@ -9057,7 +9108,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },
@@ -9124,11 +9175,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"EUR\":-0.5,\"PLN\":3.97,\"NOK\":162.25,\"GBP\":1.09}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -9192,7 +9244,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },
@@ -9259,11 +9311,12 @@
           "body": "{\"result\":\"success\"}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -9327,7 +9380,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },
@@ -9394,11 +9447,12 @@
           "body": "{\"result\":\"success\",\"rates\":1}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -9462,7 +9516,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },
@@ -9597,7 +9651,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },
@@ -9664,11 +9718,12 @@
           "body": "{\"result\":\"success\",\"rates\":{\"GBP\":1.5e+308,\"AUD\":0.0001}}"
         }
       },
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },
@@ -9732,7 +9787,7 @@
             },
             {
               "currency": "PLN",
-              "rate_to_eur": 0.0000100001,
+              "rate_to_eur": 1.00001e-05,
               "rate_date": "{{today}}",
               "fetched_at": "2026-11-12T08:39:46.343Z"
             },

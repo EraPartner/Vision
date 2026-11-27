@@ -46,7 +46,7 @@ struct TaxComputationFlowView: View {
 
     private func money(_ amount: Decimal?) -> String {
         amount.map {
-            MoneyText.text($0, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false)
+            MoneyText.text($0, currency: TaxScreens.currency, settings: shell.settings, signed: false)
         } ?? "—"
     }
 
@@ -102,13 +102,17 @@ struct TaxComputationFlowView: View {
         let effective = c.effectiveRate.map { VisionFormat.percent($0, digits: 1, locale: locale) } ?? "—"
         let netOut = strings.t("tax.flow.op.netOut")
         var then = TaxFlowGroup(prose: netOut)
-        // The prose line stays a line of its own; the spouse row, when there is one, follows it.
-        if let income = c.spouseProfessionalIncome, income > 0 {
-            then = TaxFlowGroup(
-                items: [
-                    TaxFlowOperation(id: "netOut", label: netOut, amount: nil, sign: ""),
-                    operation("tax.pit.row.spouseIncome", income, "+"),
-                ])
+        // The prose line stays a line of its own; the spouse row and the net professional amounts
+        // that the household gross adds (Astra report 1, finding 47), when there are any, follow it.
+        var added: [TaxFlowOperation] = []
+        let spouse = c.spouseProfessionalIncome ?? 0
+        if spouse > 0 { added.append(operation("tax.pit.row.spouseIncome", spouse, "+")) }
+        if let household = c.householdGrossIncome, let gross = c.grossIncome, household - gross - spouse >= 0.01 {
+            added.append(
+                operation("tax.household.activity.kind.net_professional_amount", household - gross - spouse, "+"))
+        }
+        if !added.isEmpty {
+            then = TaxFlowGroup(items: [TaxFlowOperation(id: "netOut", label: netOut, amount: nil, sign: "")] + added)
         }
         return TaxFlowStage(
             id: "burden", label: strings.t("tax.pit.row.totalBurden"), amount: c.totalTaxBurden, tone: theme.loss,
@@ -184,7 +188,7 @@ private struct TaxFlowStageRow: View {
 
     private func moneyText(_ amount: Decimal?) -> String {
         amount.map {
-            MoneyText.text($0, currency: settings.portfolioCurrency, settings: settings, signed: false)
+            MoneyText.text($0, currency: TaxScreens.currency, settings: settings, signed: false)
         } ?? "—"
     }
 
@@ -567,7 +571,7 @@ struct TaxHouseholdBreakdownView: View {
             "tax.householdBreakdown.quotient.transfer",
             [
                 "amount": MoneyText.text(
-                    q.transfer, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false),
+                    q.transfer, currency: TaxScreens.currency, settings: shell.settings, signed: false),
                 "from": TaxYearPresentation.partner(from.rawValue, overview: overview, strings: strings),
                 "to": TaxYearPresentation.partner(to.rawValue, overview: overview, strings: strings),
             ])
@@ -577,7 +581,7 @@ struct TaxHouseholdBreakdownView: View {
             value.map {
                 MoneyText.text(
                     tone == .reduction ? -$0 : $0,
-                    currency: shell.settings.portfolioCurrency, settings: shell.settings,
+                    currency: TaxScreens.currency, settings: shell.settings,
                     signed: tone == .reduction || tone == .adjustment)
             } ?? "—"
         )
@@ -598,7 +602,7 @@ extension TaxPITBreakdownView {
             let value =
                 amount.map {
                     MoneyText.text(
-                        $0, currency: shell.settings.portfolioCurrency, settings: shell.settings,
+                        $0, currency: TaxScreens.currency, settings: shell.settings,
                         signed: tone == .reduction)
                 } ?? "—"
             let numeric = NativeTaxPrintCell(
@@ -661,7 +665,7 @@ extension TaxHouseholdBreakdownView {
         let text =
             value.map {
                 MoneyText.text(
-                    tone == .reduction ? -$0 : $0, currency: shell.settings.portfolioCurrency,
+                    tone == .reduction ? -$0 : $0, currency: TaxScreens.currency,
                     settings: shell.settings, signed: tone == .reduction || tone == .adjustment)
             } ?? "—"
         return .init(text: text, strong: tone == .total, tone: tone == .reduction ? .gain : .normal)

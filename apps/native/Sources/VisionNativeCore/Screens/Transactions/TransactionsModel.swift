@@ -42,6 +42,13 @@ public enum TransactionToastAction: Equatable, Sendable {
     case retryLoadMore
 }
 
+/// A delete held for the Undo window: the removed row, where it stood, and its timer.
+struct DeferredDelete {
+    let row: TransactionRow
+    let index: Int?
+    let task: Task<Void, Never>
+}
+
 /// The toast's action while it may still be taken.
 public struct TransactionPendingAction: Equatable, Sendable {
     public let noticeID: Int  // lint:allow raw-id local notice counter, not an API entity
@@ -181,6 +188,11 @@ public final class TransactionsModel {
     @ObservationIgnored public let calendar: Calendar
     @ObservationIgnored var fetchedAt: Date?
     @ObservationIgnored private var loadedOffset = 0
+    /// Deletes held for the Undo window: the row left the list, the server still has it, and
+    /// each task sends the DELETE once the window ends or a flush asks for it.
+    @ObservationIgnored private var deferredDeletes: [TransactionID: DeferredDelete] = [:]
+    /// How long a delete waits for Undo before it reaches the server; tests shorten it.
+    @ObservationIgnored public var deleteDelay: Duration = TransactionsModel.undoDuration
     @ObservationIgnored private var listVersion = 0
     @ObservationIgnored private var inFlight: (query: TransactionListQuery, task: Task<Void, Never>)?
     /// The rows through the column filters, kept while the loaded rows, the filters and the
@@ -428,6 +440,8 @@ public final class TransactionsModel {
     /// The first page for `next`: one request per query at a time, and a fresh answer for
     /// the same query (30 s) is reused unless `force`.
     public func load(_ next: TransactionListQuery, force: Bool = false) async {
+        // A held delete reaches the server first, or the read would bring the row back.
+        await flushDeferredDeletes()
         if let inFlight, inFlight.query == next {
             await inFlight.task.value
             if !force { return }
@@ -505,7 +519,7 @@ public final class TransactionsModel {
     private func releaseRows() {
         releaseTask = nil
         guard shell?.route.path != TransactionsRoutes.path, rows != nil, inFlight == nil, !isFetchingMore,
-            updatesInFlight == 0, !deletePending
+            updatesInFlight == 0, !deletePending, deferredDeletes.isEmpty
         else { return }
         listVersion += 1
         rows = nil
@@ -525,6 +539,7 @@ public final class TransactionsModel {
     /// dropped. A failure toasts `txPage.loadMoreFailed` with Retry.
     public func loadMore() async {
         guard let query, rows != nil, !isFetchingMore, hasMore, inFlight == nil, error == nil else { return }
+        await flushDeferredDeletes()
         isFetchingMore = true
         let mine = listVersion
         do {
@@ -977,6 +992,7 @@ public final class TransactionsModel {
             }
             if inspector?.id == id, let updated = row(id) { inspector?.tagSlugs = updated.tags.map(\.slug) }
             post(.success, "transactions.updated")
+            if patch.movesRunningBalances { await refreshRunningBalances() }
             return true
         } catch is CancellationError {
             if let before { restore(before) }
@@ -987,6 +1003,29 @@ public final class TransactionsModel {
             return false
         }
     }
+
+    /// A change of amount, date, account, currency or exclusion moves the running balance of
+    /// the row and of every later row in its ledger: the loaded range is read again and only
+    /// the balances are taken, so the scroll position and any open editor stay.
+    func refreshRunningBalances() async {
+        guard var query, let loaded = rows, !loaded.isEmpty else { return }
+        let mine = listVersion
+        query.pageSize = min(Self.balanceRefreshLimit, max(loadedOffset, loaded.count))
+        guard let page = try? await service.transactionPage(query, offset: 0), mine == listVersion else { return }
+        var balances: [TransactionID: Decimal?] = [:]
+        for item in page.items { balances.updateValue(item.runningBalance, forKey: item.id) }
+        guard var current = rows else { return }
+        var changed = false
+        for index in current.indices {
+            guard let balance = balances[current[index].id], current[index].runningBalance != balance else { continue }
+            current[index].runningBalance = balance
+            changed = true
+        }
+        if changed { rows = current }
+    }
+
+    /// The backend's page-size ceiling.
+    static let balanceRefreshLimit = 5000
 
     private func restore(_ row: TransactionRow) {
         guard let index = rows?.firstIndex(where: { $0.id == row.id }) else { return }
@@ -1000,6 +1039,9 @@ public final class TransactionsModel {
         guard let index = rows?.firstIndex(where: { $0.id == id }) else { return }
         rows?.remove(at: index)
         total = max(0, total - 1)
+        // The server's list lost the row too: the next page starts one earlier, or it would
+        // skip the row that moved up into this page.
+        loadedOffset = max(0, loadedOffset - 1)
         reconcileSelection()
     }
 
@@ -1042,9 +1084,11 @@ public final class TransactionsModel {
         pendingDelete = nil
     }
 
-    /// The alert's Delete: the inspector closes if it shows the row, the row leaves the list
-    /// at once, and the toast offers Undo when the row can be recreated. A failure puts it
-    /// back and toasts `transactions.deleteFailedTitle`.
+    /// The alert's Delete: the inspector closes if it shows the row and the row leaves the
+    /// list at once. The DELETE waits for the Undo window (`deleteDelay`), so Undo puts the
+    /// row back with everything it carries (splits, attachments, links) instead of recreating
+    /// a copy (Astra report 1, finding 1). A failed DELETE puts the row back and toasts
+    /// `transactions.deleteFailedTitle`.
     public func confirmDelete() async {
         guard let row = pendingDelete else { return }
         pendingDelete = nil
@@ -1054,33 +1098,53 @@ public final class TransactionsModel {
         }
         if rowEditor?.id == row.id { rowEditor = nil }
         let index = rows?.firstIndex(where: { $0.id == row.id })
-        let removed = index.flatMap { rows?[$0] }
+        let removed = index.flatMap { rows?[$0] } ?? row
         removeRow(row.id)
+        let id = row.id
+        let delay = deleteDelay
+        let task = Task { [weak self] in
+            // Cancelled by a flush: send it now.
+            try? await Task.sleep(for: delay)
+            await self?.commitDelete(id)
+        }
+        deferredDeletes[id] = DeferredDelete(row: removed, index: index, task: task)
+        let notice = notices.make(.success, "transactions.deleted")
+        self.notice = notice
+        pendingAction = TransactionPendingAction(noticeID: notice.id, action: .undoDelete(row))
+        notices.offerAction(for: notice, titleKey: "common.undo", lifetime: 8, isUndo: true) { [weak self] in
+            await self?.restoreDeleted(row)
+        }
+    }
+
+    /// Sends every held delete now and waits for them: before a read, and on quit.
+    public func flushDeferredDeletes() async {
+        let tasks = deferredDeletes.values.map(\.task)
+        for task in tasks { task.cancel() }
+        for task in tasks { await task.value }
+    }
+
+    private func commitDelete(_ id: TransactionID) async {
+        guard let held = deferredDeletes.removeValue(forKey: id) else { return }
         deletePending = true
         defer { deletePending = false }
         do {
-            try await service.deleteTransaction(id: row.id)
-            if row.restoreBody != nil {
-                let notice = notices.make(.success, "transactions.deleted")
-                self.notice = notice
-                pendingAction = TransactionPendingAction(noticeID: notice.id, action: .undoDelete(row))
-                notices.offerAction(for: notice, titleKey: "common.undo", lifetime: 8, isUndo: true) { [weak self] in
-                    await self?.restoreDeleted(row)
-                }
-            } else {
-                post(.success, "transactions.deleted")
-            }
+            try await service.deleteTransaction(id: id)
             await refreshNeedsCategoryCount()
         } catch {
-            if let index, let removed, let current = rows, !current.contains(where: { $0.id == removed.id }) {
-                // Read the count before the in-place insert: an argument that reads `rows`
-                // while its modify accessor is open is an exclusivity violation at runtime.
-                let position = min(index, current.count)
-                rows?.insert(removed, at: position)
-                total += 1
-            }
+            putBack(held)
             post(.error, "transactions.deleteFailedTitle", detail: errorText(error))
         }
+    }
+
+    private func putBack(_ held: DeferredDelete) {
+        guard let current = rows, !current.contains(where: { $0.id == held.row.id }) else { return }
+        // Read the count before the in-place insert: an argument that reads `rows` while its
+        // modify accessor is open is an exclusivity violation at runtime.
+        let position = min(held.index ?? 0, current.count)
+        rows?.insert(held.row, at: position)
+        total += 1
+        loadedOffset += 1
+        reconcileSelection()
     }
 
     /// The toast's action: Undo (also ⌘Z) or Retry.
@@ -1097,6 +1161,14 @@ public final class TransactionsModel {
     }
 
     private func restoreDeleted(_ row: TransactionRow) async {
+        if let held = deferredDeletes.removeValue(forKey: row.id) {
+            // Still held: the server never lost it.
+            held.task.cancel()
+            putBack(held)
+            post(.success, "transactions.restored")
+            return
+        }
+        // Already sent (a read or quit flushed it): recreate what the row carried.
         guard let body = row.restoreBody else { return }
         do {
             _ = try await service.createTransaction(body)

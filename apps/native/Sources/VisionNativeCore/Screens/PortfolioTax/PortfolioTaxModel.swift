@@ -172,6 +172,12 @@ public final class PortfolioTaxModel {
             focusInvestmentID = draftRows[index].id
             return false
         }
+        let format = numberFormat
+        if let index = draftRows.firstIndex(where: { $0.hasInvalidAmount(format: format) }) {
+            focusInvestmentID = draftRows[index].id
+            notice = notices.make(.error, "addInv.error.numberInvalid")
+            return false
+        }
         isSavingAdjustments = true
         adjustmentsError = nil
         var attemptedWrite = false

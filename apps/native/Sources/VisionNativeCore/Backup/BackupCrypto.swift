@@ -144,6 +144,17 @@ public enum BackupPassphrase {
         return stored
     }
 
+    public static let unreadableMessage =
+        "The backup passphrase could not be read from the Keychain, so no unencrypted backup was written."
+
+    /// Whether the store says a passphrase is saved but does not return it (a locked or
+    /// refused Keychain item).
+    public static func isStoredButUnreadable(store: (any PassphraseStore)?) -> Bool {
+        guard let store, store.contains() else { return false }
+        guard let stored = try? store.read(), !stored.isEmpty else { return true }
+        return false
+    }
+
     /// `getBackupPassphraseStatus`. The Keychain needs no availability probe: it is present
     /// on every Mac, and `setPassphrase` reports a failed write.
     public static func status(environment: [String: String], store: (any PassphraseStore)?) -> PassphraseStatus {

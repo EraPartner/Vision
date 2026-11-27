@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-27
 tags:
   [
     feature,
@@ -160,7 +160,7 @@ Every rendered current balance carries a muted subline (`useBalanceProvenance`):
 - stamped: _"as of {date} bank statement + {n} entries since"_
 - unstamped: _"sum of {n} entries"_
 
-fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Shown on hub rows, the detail header, the Reconcile dialog's computed row and the dashboard widget.
+fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. The list also returns `anchored_currencies`, the currencies with a stamped balance, which the Swift Reconcile dialog uses to offer a per-currency opening balance. Shown on hub rows, the detail header, the Reconcile dialog's computed row and the dashboard widget.
 
 ## Reconcile
 

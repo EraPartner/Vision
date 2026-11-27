@@ -280,7 +280,7 @@ public struct PortfolioTaxView: View {
     private func reload(force: Bool = false) async {
         let route = shell.route
         let requestedCurrency = currency
-        guard let canonical = await tax.loadRoute(route: route, currency: requestedCurrency, force: force),
+        guard let canonical = await tax.loadRoute(route: route, currency: TaxScreens.currency, force: force),
             !Task.isCancelled, shell.route == route, currency == requestedCurrency
         else { return }
         if canonical != route {

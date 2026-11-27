@@ -69,6 +69,8 @@ public struct ResearchCompareMetric: Equatable, Sendable, Identifiable {
     public let labelKey: String
     public let format: String
     public let higherIsBetter: Bool
+    /// The format of the amounts in the company's own currency.
+    public static let moneyFormat = "largeNum"
     public static let all: [Self] = [
         .init(id: "pe", labelKey: "market.pe", format: "ratio", higherIsBetter: false),
         .init(id: "forwardPE", labelKey: "market.forwardPE", format: "ratio", higherIsBetter: false),

@@ -359,12 +359,13 @@ enum RecipientsArea {
                 (
                       r.name REGEXP ? OR
                       r.notes REGEXP ? OR
-                      c.general REGEXP ? OR
-                      c.detail REGEXP ? OR
+                      c.path_name REGEXP ? OR
                       EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number REGEXP ?)
                     )
                 """)
-            arguments += Array(repeating: pattern, count: 5)
+            // The category path, which a rename keeps current, not the legacy general/detail
+            // text (Astra report 1, finding 54).
+            arguments += Array(repeating: pattern, count: 4)
         }
         return ("WHERE " + conditions.joined(separator: " AND "), arguments)
     }
@@ -407,42 +408,56 @@ enum RecipientsArea {
 
     static let systemName = "SYSTEM"
 
-    /// `makeValidationError`: a plain `Error` with a code, which the error handler answers as
-    /// a masked 500.
-    struct RepositoryValidationError: Error {
-        let message: String
-    }
-
+    /// The reserved payee name answers 400 with the reason, as `docs/api/recipients.md`
+    /// documents, not a masked 500 (Astra report 1, finding 55).
     static func assertNotSystem(_ name: String) throws {
         if RecipientText.normalizeForMatching(name) == RecipientText.normalizeForMatching(systemName) {
-            throw RepositoryValidationError(message: "\(systemName) is reserved for server-generated transactions")
+            throw BackendHTTPError.validation("\(systemName) is reserved for server-generated transactions")
         }
     }
 
-    /// `createOrGet`, then the default category and notes; 201 when created.
+    /// `createOrGet`, then the default category and notes; 201 when created. One transaction,
+    /// so a refused category leaves no payee behind (finding 14); an existing payee only has
+    /// an empty category or note filled, never overwritten (finding 53).
     static func create(_ session: BackendSession, _ body: JSObject) throws -> HandlerResult {
         let name = body["name"]?.stringValue ?? ""
         let upperName = JavaScriptWhitespace.trim(name.uppercased())
         let normalized = RecipientText.normalizeForMatching(name)
         try assertNotSystem(name)
-        let (recipientId, created) = try createOrGetId(session, upperName: upperName, normalized: normalized)
-        // Only nil if the row vanished between the upsert and the read.
-        guard let recipient = try getById(session, recipientId) else {
-            throw BackendHTTPError.notFound("Recipient not found")
-        }
-        var final: RecipientRow? = recipient
         let category = body["default_category_id"]
         let notes = body["notes"]
-        if (category != nil && category != .null) || (notes != nil && notes != .null) {
-            var changes: [(String, SQLValue)] = []
-            if let category { changes.append(("default_category_id", sqlValue(category))) }
-            if let notes { changes.append(("notes", sqlValue(notes))) }
-            final = try update(session, recipient.id, changes)
+        if let category, category != .null {
+            guard try session.row("SELECT id FROM categories WHERE id = ?", [sqlValue(category)]) != nil else {
+                throw BackendHTTPError.validation("Default category not found")
+            }
         }
-        var data = final?.json ?? [:]
-        data["created"] = .bool(created)
-        data["links"] = .array([])
-        return HandlerResult(status: created ? 201 : 200, data: .object(data))
+        return try session.transaction { () throws -> HandlerResult in
+            let (recipientId, created) = try createOrGetId(session, upperName: upperName, normalized: normalized)
+            // Only nil if the row vanished between the upsert and the read.
+            guard let recipient = try getById(session, recipientId) else {
+                throw BackendHTTPError.notFound("Recipient not found")
+            }
+            var final: RecipientRow? = recipient
+            var changes: [(String, SQLValue)] = []
+            if created {
+                if (category != nil && category != .null) || (notes != nil && notes != .null) {
+                    if let category { changes.append(("default_category_id", sqlValue(category))) }
+                    if let notes { changes.append(("notes", sqlValue(notes))) }
+                }
+            } else {
+                if let category, category != .null, recipient.defaultCategoryId == nil {
+                    changes.append(("default_category_id", sqlValue(category)))
+                }
+                if let notes, notes != .null, JavaScriptWhitespace.trim(recipient.notes ?? "").isEmpty {
+                    changes.append(("notes", sqlValue(notes)))
+                }
+            }
+            if !changes.isEmpty { final = try update(session, recipient.id, changes) }
+            var data = final?.json ?? [:]
+            data["created"] = .bool(created)
+            data["links"] = .array([])
+            return HandlerResult(status: created ? 201 : 200, data: .object(data))
+        }
     }
 
     /// The existing row's id without a write, else the insert's (or the concurrent winner's).
@@ -587,12 +602,28 @@ enum RecipientsArea {
                                 WHERE keep.recipient_id = ?
                                   AND keep.account_number = recipient_bank_accounts.account_number)
                 """, [aliases, primary.sqlValue])
+            // A payee has at most one primary account (uq_recipient_primary_account): the moved
+            // accounts arrive as secondary, and the first alias primary takes over only when
+            // the primary payee has none (Astra report 1, finding 13).
+            let aliasPrimary = try session.row(
+                """
+                SELECT id FROM recipient_bank_accounts
+                 WHERE recipient_id IN (SELECT value FROM json_each(?)) AND is_primary ORDER BY id LIMIT 1
+                """, [aliases])
             reassigned.bankAccounts = try count(
                 session,
                 """
-                UPDATE recipient_bank_accounts SET recipient_id = ?, updated_at = now()
+                UPDATE recipient_bank_accounts SET recipient_id = ?, is_primary = 0, updated_at = now()
                  WHERE recipient_id IN (SELECT value FROM json_each(?)) RETURNING id
                 """, [primary.sqlValue, aliases])
+            if let aliasPrimary {
+                _ = try session.rows(
+                    """
+                    UPDATE recipient_bank_accounts SET is_primary = 1, updated_at = now()
+                     WHERE id = ? AND NOT EXISTS (SELECT 1 FROM recipient_bank_accounts
+                                                   WHERE recipient_id = ? AND is_primary)
+                    """, [.integer(try aliasPrimary.int64("id")), primary.sqlValue])
+            }
             let merged = try session.rows(
                 """
                 UPDATE recipients SET primary_recipient_id = ?, updated_at = now()

@@ -31,7 +31,11 @@ enum ExchangeRatesArea {
             return HandlerResult(data: listed.body.envelopeValue)
         }
         backend.serve(OpenAPIOperations.RefreshExchangeRates.self) { _ in
-            await ExchangeRatesArea.refresh(database: database, fetcher: fetcher)
+            // Astra report 1, finding 15: a refresh that stored no rate is not a success.
+            guard await ExchangeRatesArea.refresh(database: database, fetcher: fetcher) else {
+                throw BackendHTTPError(
+                    status: 502, code: "BAD_GATEWAY", message: "No exchange-rate provider returned rates")
+            }
             return HandlerResult(data: .object(["message": .string("Exchange rates refreshed from ECB")]))
         }
     }
@@ -82,20 +86,23 @@ enum ExchangeRatesArea {
     // MARK: - Refresh (`warmCache`)
 
     /// Both providers at once; ECB wins where they overlap, and only the fetched rates are
-    /// written, dated today. With neither, nothing is written. Failures are swallowed.
-    static func refresh(database: BackendDatabase, fetcher: any ProviderFetching) async {
+    /// written, dated today. With neither, nothing is written. Failures are swallowed; the
+    /// answer is whether any rate was stored.
+    @discardableResult
+    static func refresh(database: BackendDatabase, fetcher: any ProviderFetching) async -> Bool {
         async let ecb = fetchEcb(fetcher)
         async let erApi = fetchErApi(fetcher)
         let (ecbRates, erApiRates) = await (ecb, erApi)
-        _ = try? await database.run { session in
+        let stored = try? await database.run { session -> Bool in
             recordProvider(session, "ecb", succeeded: ecbRates != nil, error: "ECB fetch returned no rates")
             recordProvider(
                 session, "open.er-api", succeeded: erApiRates != nil, error: "open.er-api fetch returned no rates")
-            guard ecbRates != nil || erApiRates != nil else { return }
+            guard ecbRates != nil || erApiRates != nil else { return false }
             var fresh = erApiRates ?? JSObject()
             for (currency, rate) in ecbRates?.entries ?? [] { fresh[currency] = rate }
-            save(session, fresh)
+            return save(session, fresh)
         }
+        return stored ?? false
     }
 
     /// `fetchFromEcb`: the daily feed, 5 seconds at most.
@@ -166,13 +173,15 @@ enum ExchangeRatesArea {
     }
 
     /// `saveToDatabase`: in one transaction, clear the latest marker of the fetched currencies
-    /// and upsert each rate dated today as the latest. A failure rolls back and is only logged.
-    static func save(_ session: BackendSession, _ rates: JSObject) {
+    /// and upsert each rate dated today as the latest. A failure rolls back and is only logged;
+    /// the answer is whether a rate was stored.
+    @discardableResult
+    static func save(_ session: BackendSession, _ rates: JSObject) -> Bool {
         let entries = rates.entries.filter { $0.0 != "EUR" }
-        guard !entries.isEmpty else { return }
+        guard !entries.isEmpty else { return false }
         let today = session.today()
         let codes = JSValue.array(entries.map { .string($0.0) }).jsonText
-        _ = try? session.transaction {
+        let stored: Void? = try? session.transaction {
             _ = try session.rows(
                 """
                 UPDATE exchange_rates SET is_latest = 0, updated_at = now() \
@@ -190,6 +199,7 @@ enum ExchangeRatesArea {
                     [.text(currency), .text(SQLArguments.javaScriptText(value)), .text(today)])
             }
         }
+        return stored != nil
     }
 
     /// `providerHealthService.recordSuccess` / `recordError` for an FX provider; a failed

@@ -150,7 +150,7 @@ struct PortfolioTaxAdjustmentsSheet: View {
     private func total(_ title: String, value: Decimal) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(strings.t(title)).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            Text(MoneyText.text(value, currency: shell.settings.portfolioCurrency, settings: shell.settings))
+            Text(MoneyText.text(value, currency: TaxScreens.currency, settings: shell.settings))
                 .font(.visionCardTitle).monospacedDigit().foregroundStyle(theme.loss)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }

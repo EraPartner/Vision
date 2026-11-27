@@ -20,7 +20,7 @@ public struct TaxOverviewView: View {
     }
     private var data: TaxDashboardData? {
         guard let data = screens.dashboard.data, data.year == overview?.year,
-            data.currency == shell.settings.portfolioCurrency
+            data.currency == TaxScreens.currency
         else { return nil }
         return data
     }
@@ -65,7 +65,7 @@ public struct TaxOverviewView: View {
             if let value {
                 Task {
                     await screens.dashboard.load(
-                        year: value.year, currency: shell.settings.portfolioCurrency, force: true)
+                        year: value.year, currency: TaxScreens.currency, force: true)
                 }
             }
         }
@@ -294,9 +294,9 @@ public struct TaxOverviewView: View {
     }
     private func reload(force: Bool = false) async {
         let route = shell.route
-        let currency = shell.settings.portfolioCurrency
+        let currency = TaxScreens.currency
         guard let canonical = await screens.loadRoute(route: route, currency: currency, force: force),
-            !Task.isCancelled, shell.route == route, shell.settings.portfolioCurrency == currency
+            !Task.isCancelled, shell.route == route, TaxScreens.currency == currency
         else { return }
         if canonical != route { shell.replaceQuery(canonical.query) }
     }

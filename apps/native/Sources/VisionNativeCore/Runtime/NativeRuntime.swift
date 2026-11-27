@@ -306,7 +306,10 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                     "The recorded backend process id belongs to another process; refusing to signal it.")
             }
             if (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil {
-                await databaseHolder?.resume(databasePath: layout.database, attachmentsDirectory: layout.attachments)
+                let runtimeEnvironment = RuntimeEnvFile.parse((try? fileSystem.readText(layout.env)) ?? "")
+                await databaseHolder?.resume(
+                    databasePath: layout.database, attachmentsDirectory: layout.attachments,
+                    timeZone: ChildEnvironment.appTimeZone(runtimeEnvironment: runtimeEnvironment))
                 return .alreadyRunning(pid: existing, port: appPort)
             }
             try await stopBackend()
@@ -344,7 +347,9 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                 pid: child.pid, port: port, runtimeId: names.id, command: tools.compiledBackend, now: now()
             ).serialized(),
             mode: 0o600)
-        await databaseHolder?.resume(databasePath: layout.database, attachmentsDirectory: layout.attachments)
+        await databaseHolder?.resume(
+            databasePath: layout.database, attachmentsDirectory: layout.attachments,
+            timeZone: environment["APP_TIMEZONE"])
         return .started(pid: child.pid, port: port, database: layout.database)
     }
 

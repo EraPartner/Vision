@@ -112,7 +112,7 @@ enum TagsArea {
 
         // `findOrCreateBySlug`: SQLite has no `xmax`, so the existence read runs first, in
         // the same transaction as the upsert.
-        let (tag, reactivated) = try session.transaction { () throws -> (TagRow, Bool) in
+        let (tag, existed) = try session.transaction { () throws -> (TagRow, Bool) in
             let existing = try session.row("SELECT * FROM tags WHERE slug = ?", [.text(slug)])
             guard
                 let row = try session.row(
@@ -123,15 +123,17 @@ enum TagsArea {
                     [.text(slug), body.color.map(SQLValue.text) ?? .null])
             else { throw SQLRowDecodingError(column: "tags", problem: "the tag upsert returned no row") }
             let tag = try TagRow(row)
-            return (tag, existing != nil && tag.isActive)
+            return (tag, existing != nil)
         }
 
+        // `reactivated` is true only when an inactive tag came back; an already active tag is
+        // neither created nor reactivated (Astra report 1, finding 67).
         var data = tag.json
-        data["reactivated"] = .bool(reactivated)
-        if reactivated && wasInactive { data["reactivated_junction_count"] = .int(junctionCount) }
-        data["created"] = .bool(!reactivated)
+        data["reactivated"] = .bool(existed && wasInactive)
+        if existed && wasInactive { data["reactivated_junction_count"] = .int(junctionCount) }
+        data["created"] = .bool(!existed)
         data["links"] = .array([])
-        return HandlerResult(status: reactivated && !wasInactive ? 200 : 201, data: .object(data))
+        return HandlerResult(status: existed && !wasInactive ? 200 : 201, data: .object(data))
     }
 
     /// `parseInt(row.count, 10)` of a `CAST(COUNT(*) AS TEXT)` row.

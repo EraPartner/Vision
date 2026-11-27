@@ -15,7 +15,7 @@ struct TaxMonthlyIncomeView: View {
 
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.portfolioCurrency
+            data.currency == TaxScreens.currency
         else { return nil }
         return data
     }
@@ -74,7 +74,7 @@ struct TaxYearlyOverviewView: View {
 
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.portfolioCurrency
+            data.currency == TaxScreens.currency
         else { return nil }
         return data
     }
@@ -133,7 +133,7 @@ struct TaxTrendStripView: View {
 
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.portfolioCurrency
+            data.currency == TaxScreens.currency
         else { return nil }
         return data
     }
@@ -198,7 +198,7 @@ struct TaxTrendStripView: View {
 
     private func currency(_ value: Decimal) -> String {
         VisionFormat.currency(
-            value, code: shell.settings.portfolioCurrency,
+            value, code: TaxScreens.currency,
             locale: shell.settings.numberFormat.locale, fractionDigits: 0)
     }
     private func widthRatio(_ value: Decimal, max maximum: Decimal) -> CGFloat {
@@ -229,7 +229,7 @@ struct TaxYearComparisonView: View {
     }
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.portfolioCurrency
+            data.currency == TaxScreens.currency
         else { return nil }
         return data
     }
@@ -339,7 +339,7 @@ struct TaxYearComparisonView: View {
         let locale = shell.settings.numberFormat.locale
         if percent { return VisionFormat.percent(value, locale: locale) }
         return VisionFormat.currency(
-            value, code: shell.settings.portfolioCurrency,
+            value, code: TaxScreens.currency,
             locale: locale, fractionDigits: 0, signed: signed)
     }
     private func deltaLabel(_ delta: Decimal, baseline: Decimal, percent: Bool, zero: Bool) -> String {

@@ -160,7 +160,7 @@ public struct ResearchChartBuilderView: View {
         ForEach(ResearchChartBuilderPreset.allCases, id: \.self) { name in
             Button(strings.t("research.builder.preset." + name.rawValue)) { model.preset(name) }
                 .buttonStyle(.vision(.outline, size: .sm))
-                .disabled(!model.state.series.contains { $0.field == .price })
+                .disabled(!model.canApply(name))
         }
     }
     private var storageKey: String {

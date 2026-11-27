@@ -163,7 +163,8 @@ struct ResearchCompareFundamentalsView: View {
                                         ? nil : snapshot?.data?.scorecard.flags.first { $0.metric == metric.id }
                                     let value =
                                         unavailable ? nil : snapshot?.data?.fundamentals[metric.id]?.decimalValue
-                                    Text(display(value, metric: metric)).monospacedDigit()
+                                    Text(display(value, metric: metric, currency: model.priceCurrency(symbol)))
+                                        .monospacedDigit()
                                         .foregroundStyle(tone(flag?.severity))
                                         .fontWeight(model.state.sort == metric.id ? .medium : .regular)
                                         .padding(.horizontal, 7).padding(.vertical, 6)
@@ -202,11 +203,15 @@ struct ResearchCompareFundamentalsView: View {
         default: theme.foreground
         }
     }
-    private func display(_ value: Decimal?, metric: ResearchCompareMetric) -> String {
+    /// An amount carries its currency code (Astra report 1, finding 58).
+    private func display(_ value: Decimal?, metric: ResearchCompareMetric, currency: String?) -> String {
         switch metric.format {
-        case "pct": ResearchCompareStyle.percent(value, settings: shell.settings)
-        case "largeNum": ResearchCompareStyle.compact(value)
-        default: ResearchCompareStyle.fixed(value)
+        case "pct": return ResearchCompareStyle.percent(value, settings: shell.settings)
+        case "largeNum":
+            let text = ResearchCompareStyle.compact(value)
+            guard value != nil, let currency else { return text }
+            return text + " " + currency
+        default: return ResearchCompareStyle.fixed(value)
         }
     }
 }

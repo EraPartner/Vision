@@ -6,6 +6,38 @@ import Testing
 @MainActor
 @Suite("Native portfolio reads and source scopes")
 struct PortfolioReadTests {
+    /// Astra report 1, findings 63 and 64: a measured 0% inflation and a sale at cost are data.
+    @Test func zeroInflationAndBreakEvenSalesAreNotMissingData() throws {
+        func performance(inflationAdjusted: Decimal) throws -> PortfolioPerformanceData {
+            guard case .object(var wire) = portfolioPerformanceWire(currency: "EUR", period: "all") else {
+                throw APIError.network("Synthetic fixture")
+            }
+            var snapshot: [String: TaxValue] = ["date": .string("2026-10-13"), "is_provisional": .bool(false)]
+            for key in [
+                "invested", "stocks_etfs_value", "crypto_value", "metals_value", "stocks_etfs_invested",
+                "crypto_invested", "metals_invested", "gain_loss", "return_pct",
+            ] { snapshot[key] = .number(0) }
+            snapshot["value"] = .number(100)
+            snapshot["inflation_adjusted_value"] = .number(inflationAdjusted)
+            wire["snapshots"] = .array([.object(snapshot)])
+            return try JSONDecoder().decode(PortfolioPerformanceData.self, from: APIBody.encode(TaxValue.object(wire)))
+        }
+        #expect(try performance(inflationAdjusted: 100).hasInflationData)
+        #expect(try !performance(inflationAdjusted: 0).hasInflationData)
+        func summary(sellProceeds: Decimal) throws -> PortfolioSummaryData {
+            var holding = portfolioHoldingWire(id: 1)
+            holding["totalSellProceeds"] = .number(sellProceeds)
+            let wire: TaxValue = .object([
+                "currency": .string("EUR"), "computed_at": .string("2026-10-13T12:00:00Z"),
+                "totals": portfolioTotalsWire(value: 100), "summaries": .array([holding]),
+                "byAccount": holding["byAccount"]!, "accountTotals": holding["accountTotals"]!,
+                "byAssetClass": .array([]), "byAssetGroup": .array([]),
+            ])
+            return try JSONDecoder().decode(PortfolioSummaryData.self, from: APIBody.encode(wire))
+        }
+        #expect(try summary(sellProceeds: 40).hasSales)
+        #expect(try !summary(sellProceeds: 0).hasSales)
+    }
     @Test func decimalsDecodeBeforeChartCoordinatesAndMissingFiguresAreContractFailures() async throws {
         let transport = PortfolioReadTransport()
         let client = portfolioReadClient(transport)
