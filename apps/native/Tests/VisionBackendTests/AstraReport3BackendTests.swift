@@ -69,9 +69,11 @@ import VisionNativeCore
         let normalized = PortfolioTransactionsArea.Normalized(
             dividendAmountConvention: "unknown", amount: 1, units: nil, pricePerUnit: nil, fees: 0, taxes: 0,
             fxRateToEur: nil)
+        let row = fields
+        let body = txn
         await #expect(throws: (any Error).self) {
             try await database.run { session in
-                _ = try PortfolioTransactionsArea.insert(session, fields, txn, normalized)
+                _ = try PortfolioTransactionsArea.insert(session, row, body, normalized)
             }
         }
         let count = try await database.run { session in
