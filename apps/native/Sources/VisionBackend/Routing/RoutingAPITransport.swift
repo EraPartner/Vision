@@ -41,7 +41,7 @@ public enum PortedOperations {
         "previewPortfolioImportBatch",
         "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride",
         "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports",
-        "commitPortfolioImportBatch",
+        "commitPortfolioImportBatch", "portfolioImportCsvCustom", "portfolioImportCsvStream",
     ]
 }
 
@@ -183,6 +183,7 @@ public struct InProcessBackend: Sendable {
         PortfolioImportOverridesArea.register(&backend, database: database)
         PortfolioImportReconciliationArea.register(&backend, database: database)
         PortfolioImportCommitArea.register(&backend, database: database)
+        PortfolioImportUploadsArea.register(&backend, database: database)
         return backend
     }
 
