@@ -277,11 +277,13 @@ enum PortfolioImportBatchesArea {
             if counts[source] == nil { sources.append(source) }
             counts[source] = (counts[source] ?? 0) + 1
         }
-        var totals: [String: JSONValue] = ["symbol": .int(0), "name_exact": .int(0), "unresolved": .int(0), "error": .int(0)]
-        for source in sources + ["symbol", "name_exact", "unresolved", "error"] where totals[source] == nil {
-            totals[source] = .int(counts[source] ?? 0)
-        }
-        for (source, count) in counts where totals[source] == nil { totals[source] = .int(count) }
+        var totals: [String: JSONValue] = [
+            "symbol": .int(counts["symbol"] ?? 0),
+            "name_exact": .int(counts["name_exact"] ?? 0),
+            "unresolved": .int(counts["unresolved"] ?? 0),
+            "error": .int(counts["error"] ?? 0),
+        ]
+        for source in sources where totals[source] == nil { totals[source] = .int(counts[source] ?? 0) }
         return totals
     }
 
