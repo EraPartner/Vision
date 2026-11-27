@@ -1233,6 +1233,8 @@
  "dashboard.widgetDescriptions.upcoming": "Geplande betalingen in de komende 7 dagen",
  "datePicker.inputLabel": "Datum invoeren ({format})",
  "datePicker.invalidFormat": "Voer een geldige datum in de notatie {format} in.",
+ "datePicker.month": "Maand",
+ "datePicker.year": "Jaar",
  "dbEditor.addRow": "Rij toevoegen",
  "dbEditor.applyFilters": "Filters toepassen",
  "dbEditor.back": "Terug",

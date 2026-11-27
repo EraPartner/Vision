@@ -24,7 +24,20 @@ struct PortfolioNewsView: View {
                     VisionEmptyState(
                         symbol: "newspaper", title: shell.strings.t("newsFeed.unableToLoad"), compact: true) {}
                 } else if model.isNewsLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(20)
+                    // The web feed's article skeletons: the list's space is held while it loads.
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            VStack(alignment: .leading, spacing: 8) {
+                                SkeletonBar(width: nil, height: 16)
+                                SkeletonBar(width: 220, height: 12)
+                                SkeletonBar(width: 120, height: 10)
+                            }.padding(.vertical, 12)
+                        }
+                    }
+                    .frame(height: 420, alignment: .top)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(shell.strings.t("common.loading"))
+                    .accessibilityAddTraits(.updatesFrequently)
                 } else {
                     VisionEmptyState(symbol: "newspaper", title: shell.strings.t("newsFeed.noNews"), compact: true) {}
                 }

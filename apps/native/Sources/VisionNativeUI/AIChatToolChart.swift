@@ -10,6 +10,7 @@ struct AIChatToolChart: View {
     @State private var selected: Int?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var strings: any Localizing { shell.strings }
     private var colors: [Color] {
         [
@@ -34,9 +35,8 @@ struct AIChatToolChart: View {
                         }, centered: true)
                 }
             }
-            if let selected {
-                readout(selected)
-            }
+            // The readout floats over the chart (a tooltip, or the donut's hollow), so exploring a
+            // result never changes the transcript's height.
         }.onChange(of: presentation) { _, _ in selected = nil }
     }
     private var cartesian: some View {
@@ -85,6 +85,14 @@ struct AIChatToolChart: View {
                                 focused = true
                                 selected = row(at: event.location.x, proxy: proxy, geometry: geometry)
                             })
+                    if let selected, presentation.rows.indices.contains(selected),
+                        let frame = proxy.plotFrame.map({ geometry[$0] }),
+                        let x = proxy.position(forX: Double(selected))
+                    {
+                        ChartHoverTooltip(
+                            title: axisLabel(selected), items: tooltipItems(selected),
+                            anchor: CGPoint(x: frame.minX + x, y: frame.minY), bounds: geometry.size)
+                    }
                 }
             }.frame(height: 224).focusable().focused($focused).onKeyPress(phases: .down, action: move)
             .accessibilityLabel(strings.t("aiChat.toolResult"))
@@ -124,8 +132,14 @@ struct AIChatToolChart: View {
             ZStack {
                 if presentation.pieRenderable {
                     ForEach(presentation.pieRows) { row in
+                        // The shared donut's hover: the active wedge grows and the hollow names it.
                         AIChatPieSector(start: row.startAngle, end: row.endAngle)
-                            .fill(color(row.id)).frame(width: 160, height: 160).position(center)
+                            .fill(color(row.id)).frame(width: 160, height: 160)
+                            .scaleEffect(
+                                DonutHoverMotion.outer(hovered: selected == row.id, reduceMotion: reduceMotion)
+                                    / DonutHoverMotion.restingOuter)
+                            .animation(DonutHoverMotion.arc(reduceMotion: reduceMotion), value: selected)
+                            .position(center)
                             .onHover { hovering in if hovering { selected = row.id } else if !focused { selected = nil }
                             }
                             .onTapGesture {
@@ -148,6 +162,18 @@ struct AIChatToolChart: View {
                         .font(.caption).foregroundStyle(color(row.id))
                         .position(x: far.x + (cos(middle) >= 0 ? 34 : -34), y: far.y).accessibilityHidden(true)
                     }
+                    if let selected, let row = presentation.pieRows.first(where: { $0.id == selected }) {
+                        VStack(spacing: 2) {
+                            Text(verbatim: row.name).font(.caption).multilineTextAlignment(.center).lineLimit(2)
+                            Text(verbatim: VisionFormat.plain(row.value)).font(.callout.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                        .frame(maxWidth: 72)
+                        .id(row.id)
+                        .transition(DonutHoverMotion.center(reduceMotion: reduceMotion))
+                        .position(center)
+                        .allowsHitTesting(false)
+                    }
                 }
             }
         }.frame(height: 224).focusable().focused($focused).onKeyPress(phases: .down, action: move)
@@ -158,26 +184,14 @@ struct AIChatToolChart: View {
                     strings, kind: .donut, names: presentation.pieRows.filter { $0.value > 0 }.map(\.name))
             }
     }
-    @ViewBuilder private func readout(_ index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if presentation.renderAs == .pie {
-                if let row = presentation.pieRows.first(where: { $0.id == index }) {
-                    Text(verbatim: row.name).font(.caption.weight(.medium))
-                    Text(verbatim: VisionFormat.plain(row.value)).font(.caption).monospacedDigit()
-                }
-            } else if presentation.rows.indices.contains(index) {
-                Text(verbatim: axisLabel(index)).font(.caption.weight(.medium))
-                ForEach(Array(presentation.yKeys.enumerated()), id: \.offset) { series, key in
-                    if let value = AIChatToolPresentation.value(presentation.rows[index], key: key), value != .null {
-                        HStack(spacing: 6) {
-                            Circle().fill(color(series)).frame(width: 6, height: 6)
-                            Text(verbatim: key + ": " + rawValue(index, key: key)).font(.caption).monospacedDigit()
-                        }
-                    }
-                }
+    private func tooltipItems(_ index: Int) -> [ChartTooltipItem] {
+        presentation.yKeys.enumerated().compactMap { series, key in
+            guard let value = AIChatToolPresentation.value(presentation.rows[index], key: key), value != .null else {
+                return nil
             }
-        }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(
-            theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+            return ChartTooltipItem(
+                id: String(series) + key, label: key, value: rawValue(index, key: key), color: color(series))
+        }
     }
     private func axisLabel(_ index: Int) -> String {
         AIChatToolDisplay.axis(AIChatToolPresentation.value(presentation.rows[index], key: presentation.xKey))

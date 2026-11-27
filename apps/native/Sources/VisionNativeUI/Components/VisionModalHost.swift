@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -22,7 +23,9 @@ enum VisionModalKind {
 ///   so the blur is on the content under the scrim, not on the scrim.
 /// - Enter: scale `Overlay.enterScale` and `Overlay.enterOffsetY` to rest on `Spring.smooth`
 ///   (`animate-dialog-in`). Exit: `Overlay.exitScale`/`exitOffsetY` over `Duration.dismiss` on
-///   `Ease.glide` (`animate-dialog-out`, without the genie origin, which needs the trigger's frame).
+///   `Ease.glide` (`animate-dialog-out`). A dialog opened by a recent pointer press shrinks to
+///   `GenieOrigin.scale` toward that press instead (`useGenieOrigin`); a keyboard-opened one keeps
+///   the neutral exit.
 ///   A side sheet slides in over `Duration.slow` and out over `Duration.normal` on `Ease.outExpo`.
 ///   Reduce Motion presents and dismisses at once (`motion-reduce:animate-none`); there is no
 ///   scale or offset to animate.
@@ -64,6 +67,11 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
     @State private var shown = false
     @State private var contentDisablesDismissal = false
     @State private var exitTask: Task<Void, Never>?
+    /// The press that opened the panel, in window coordinates (`useGenieOrigin`); nil when it was
+    /// opened from the keyboard.
+    @State private var genieOrigin: CGPoint?
+    /// The centred panel's frame in window coordinates, for the genie anchor.
+    @State private var panelFrame: CGRect = .zero
     @FocusState private var panelFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.visionFullEffects) private var fullEffects
@@ -106,7 +114,10 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
             .overlay { if mounted { layer } }
             .onChange(of: isPresented, initial: true) { _, presented in sync(presented) }
             .onChange(of: mounted, initial: true) { _, next in registerMounted(next) }
-            .onAppear { registerMounted(mounted) }
+            .onAppear {
+                registerMounted(mounted)
+                GenieOrigin.startMonitoring()
+            }
             .onDisappear { registerMounted(false) }
     }
 
@@ -156,11 +167,15 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
                 .modifier(modalTraits)
                 .offset(x: shown ? 0 : (metrics.sideEdge == .leading ? -size.width : size.width))
         case .dialog, .alert:
+            let genie = leaving && !reduceMotion ? GenieOrigin.anchor(genieOrigin, in: panelFrame) : nil
             VisionGlassDialog(metrics: metrics, available: size) { panelContent }
                 .modifier(modalTraits)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { panelFrame = $0 }
                 .opacity(shown ? 1 : 0)
-                .scaleEffect(shown ? 1 : (leaving ? exitScale : enterScale))
-                .offset(y: shown ? 0 : (leaving ? exitOffset : enterOffset))
+                .scaleEffect(
+                    shown ? 1 : (leaving ? (genie == nil ? exitScale : GenieOrigin.scale) : enterScale),
+                    anchor: genie ?? .center)
+                .offset(y: shown ? 0 : (leaving ? (genie == nil ? exitOffset : 0) : enterOffset))
         }
     }
 
@@ -194,6 +209,7 @@ struct VisionModalPresenter<Panel: View>: ViewModifier {
         exitTask?.cancel()
         exitTask = nil
         if presented {
+            if !mounted { genieOrigin = GenieOrigin.recentPress() }
             mounted = true
             if reduceMotion {
                 shown = true
@@ -302,5 +318,44 @@ struct VisionItemModal<Item: Identifiable, Panel: View>: ViewModifier {
                     if let current = item ?? retained { build(current) }
                 })
             .onChange(of: item?.id, initial: true) { _, _ in if let item { retained = item } }
+    }
+}
+
+/// `useGenieOrigin`: the last pointer press, if it is recent enough to be the click that opened a
+/// dialog, so the dialog can shrink toward it as it leaves.
+@MainActor enum GenieOrigin {
+    /// `--genie-scale`.
+    static let scale: CGFloat = 0.5
+    /// Presses older than this did not open the dialog (`RECENCY_MS`).
+    static let recency: TimeInterval = 1.5
+    private static var lastPress: (point: CGPoint, at: Date)?
+    // lint:allow explicit-any opaque AppKit event monitor token
+    private static var monitor: Any?
+
+    /// Starts recording presses (once per process).
+    static func startMonitoring() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
+            MainActor.assumeIsolated {
+                if let height = event.window?.contentView?.bounds.height {
+                    // AppKit window coordinates rise from the bottom; SwiftUI's global space falls from the top.
+                    lastPress = (CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y), Date())
+                }
+            }
+            return event
+        }
+    }
+
+    /// The press that just opened a dialog, or nil (keyboard, or too long ago).
+    static func recentPress(now: Date = Date()) -> CGPoint? {
+        startMonitoring()
+        guard let press = lastPress, now.timeIntervalSince(press.at) <= recency else { return nil }
+        return press.point
+    }
+
+    /// The press as a unit point of the panel, the scale's anchor; nil without a press or a frame.
+    nonisolated static func anchor(_ origin: CGPoint?, in frame: CGRect) -> UnitPoint? {
+        guard let origin, frame.width > 0, frame.height > 0 else { return nil }
+        return UnitPoint(x: (origin.x - frame.minX) / frame.width, y: (origin.y - frame.minY) / frame.height)
     }
 }

@@ -36,6 +36,13 @@ struct InsightsRaceTests {
         await loading.value
         #expect(!home.isFetching)
     }
+    /// Audit finding 20: the recent card is pending, not empty, until its own rows answer.
+    @Test func recentCardIsPendingUntilItsRowsAnswer() async {
+        let home = HomeModel(service: RaceHomeService())
+        #expect(home.isRecentPending)
+        await home.appear(settings: .defaults, route: .home)
+        #expect(!home.isRecentPending)
+    }
     @Test func yearlyCategoryBarsTakeMagnitudeAfterSignedMonthsAreBucketed() throws {
         var draft = CustomChartDraft()
         draft.categoryIds = [7]

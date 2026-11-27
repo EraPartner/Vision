@@ -150,8 +150,28 @@ struct ResearchChartBuilderChart: View {
                         onHover: { index in if selected != index { selected = index } },
                         onPress: { focused = true },
                         scrubbable: oscillator == nil)
+                    // The web chart's active dots on each line and its floating `ChartTooltip`, so
+                    // the controls under the chart never move while the pointer explores it.
+                    if let cursor, rows.indices.contains(cursor), let x = xPosition(rows[cursor], plot: plot) {
+                        let row = rows[cursor]
+                        let rings = marks.compactMap { mark -> ChartHoverRing? in
+                            guard mark.kind == .line || mark.kind == .area,
+                                let value = row[mark.id]?.decimalValue,
+                                let fraction = (mark.axis == .right ? right : left).fraction(
+                                    NSDecimalNumber(decimal: value).doubleValue)
+                            else { return nil }
+                            return ChartHoverRing(
+                                id: mark.id, point: CGPoint(x: x, y: plot.maxY - CGFloat(fraction) * plot.height),
+                                color: mark.color)
+                        }
+                        ChartHoverRings(rings: rings)
+                        ChartHoverTooltip(
+                            title: tooltipTitle(row), items: tooltipItems(row),
+                            anchor: CGPoint(x: x, y: rings.map(\.point.y).min() ?? plot.minY),
+                            bounds: geometry.size)
+                    }
                 }
-            }.frame(height: height).focusable().focused($focused).focusEffectDisabled()
+            }.frame(height: height).focusable().focused($focused).chartFocusRing(focused)
                 .onKeyPress(phases: .down) { press in
                     if oscillator != nil, press.modifiers.contains(.shift) { return .ignored }
                     return ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: rows.count)
@@ -172,7 +192,6 @@ struct ResearchChartBuilderChart: View {
                         strings, kind: oscillator == nil ? .composed : .line, categoryCount: rows.count,
                         seriesLabels: marks.map(\.label))
                 }
-            if scrub.range == nil, let selected, rows.indices.contains(selected) { tooltip(rows[selected]) }
         }
     }
     private func time(_ row: AnalysisRow?) -> Double? {
@@ -192,31 +211,23 @@ struct ResearchChartBuilderChart: View {
         Decimal(number).formatted(
             Decimal.FormatStyle(locale: shell.settings.numberFormat.locale).precision(.fractionLength(0...2)))
     }
-    private func tooltip(_ row: AnalysisRow) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if let milliseconds = row["time"]?.decimalValue {
-                Text(
-                    VisionFormat.appDate(
-                        ResearchMarketDisplay.date(milliseconds), format: shell.settings.dateFormat, timeZone: .current)
-                ).font(.caption.weight(.medium))
-            }
-            ForEach(marks) { mark in
-                if let value = row[mark.id]?.decimalValue {
-                    HStack {
-                        Circle().fill(mark.color).frame(width: 7, height: 7).accessibilityHidden(true)
-                        Text(mark.label)
-                        Spacer()
-                        Text(
-                            oscillator == nil
-                                ? value.formatted(
-                                    Decimal.FormatStyle(locale: shell.settings.numberFormat.locale).precision(
-                                        .fractionLength(0...2))) : ResearchCompareStyle.fixed(value, digits: 2)
-                        ).monospacedDigit()
-                    }.font(.caption)
-                }
-            }
-        }.padding(12).background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control)).overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
+    private func tooltipTitle(_ row: AnalysisRow) -> String? {
+        row["time"]?.decimalValue.map {
+            VisionFormat.appDate(
+                ResearchMarketDisplay.date($0), format: shell.settings.dateFormat, timeZone: .current)
+        }
+    }
+    private func tooltipItems(_ row: AnalysisRow) -> [ChartTooltipItem] {
+        marks.compactMap { mark in
+            guard let value = row[mark.id]?.decimalValue else { return nil }
+            return ChartTooltipItem(
+                id: mark.id, label: mark.label,
+                value: oscillator == nil
+                    ? value.formatted(
+                        Decimal.FormatStyle(locale: shell.settings.numberFormat.locale).precision(
+                            .fractionLength(0...2))) : ResearchCompareStyle.fixed(value, digits: 2),
+                color: mark.color)
+        }
     }
 }
 

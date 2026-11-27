@@ -85,9 +85,36 @@ struct ResearchCompareChartView: View {
                         },
                         onHover: { index in if selected != index { selected = index } },
                         onPress: { focused = true })
+                    // The web LineChart's active dots and floating `ChartTooltip`, so the layout
+                    // under the chart never moves while the pointer explores it.
+                    if scrub.range == nil, let selected, data.rows.indices.contains(selected),
+                        plot.times.indices.contains(selected),
+                        let frame = proxy.plotFrame.map({ geometry[$0] }),
+                        let x = proxy.position(forX: plot.times[selected])
+                    {
+                        let row = data.rows[selected]
+                        let rings = data.symbols.enumerated().compactMap { index, symbol -> ChartHoverRing? in
+                            guard let value = row.values[symbol],
+                                let y = proxy.position(forY: NSDecimalNumber(decimal: value).doubleValue)
+                            else { return nil }
+                            return ChartHoverRing(
+                                id: symbol, point: CGPoint(x: frame.minX + x, y: frame.minY + y),
+                                color: ResearchCompareStyle.color(index, palette: theme.palette))
+                        }
+                        ChartHoverRings(rings: rings)
+                        ChartHoverTooltip(
+                            title: rowTitle(selected),
+                            items: data.symbols.enumerated().map { index, symbol in
+                                ChartTooltipItem(
+                                    id: symbol, label: symbol, value: ResearchCompareStyle.fixed(row.values[symbol]),
+                                    color: ResearchCompareStyle.color(index, palette: theme.palette))
+                            },
+                            anchor: CGPoint(x: frame.minX + x, y: rings.map(\.point.y).min() ?? frame.minY),
+                            bounds: geometry.size)
+                    }
                 }
             }
-            .frame(height: 340).focusable().focused($focused).focusEffectDisabled()
+            .frame(height: 340).focusable().focused($focused).chartFocusRing(focused)
             .onKeyPress(phases: .down) { press in
                 ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: data.rows.count)
             }
@@ -103,23 +130,6 @@ struct ResearchCompareChartView: View {
             .chartAccessibilitySummary { strings in
                 ChartAccessibility.series(
                     strings, kind: .line, categoryCount: data.rows.count, seriesLabels: data.symbols)
-            }
-            if scrub.range == nil, let selected, data.rows.indices.contains(selected) {
-                VStack(alignment: .leading, spacing: 5) {
-                    let row = data.rows[selected]
-                    Text(rowTitle(selected)).font(.caption.weight(.medium))
-                    ForEach(Array(data.symbols.enumerated()), id: \.element) { index, symbol in
-                        HStack {
-                            Circle().fill(ResearchCompareStyle.color(index, palette: theme.palette)).frame(
-                                width: 7, height: 7
-                            ).accessibilityHidden(true)
-                            Text(symbol).font(.caption.monospaced())
-                            Spacer()
-                            Text(ResearchCompareStyle.fixed(row.values[symbol])).font(.caption).monospacedDigit()
-                        }
-                    }
-                }.padding(12).background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control)).overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
             }
         }
     }

@@ -309,3 +309,31 @@ struct ChartHoverRule<Key: Hashable>: View {
         }
     }
 }
+
+/// One line's active dot at the hovered point.
+struct ChartHoverRing: Identifiable {
+    let id: String
+    /// In the overlay's coordinates.
+    let point: CGPoint
+    let color: Color
+}
+
+/// The web `LineChart`'s active dots: a ring in each line's colour where the hovered x meets it
+/// (Forecast's rings, shared). Place it in the chart's overlay.
+struct ChartHoverRings: View {
+    let rings: [ChartHoverRing]
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(rings) { ring in
+                Circle().strokeBorder(ring.color, lineWidth: 2)
+                    .background(Circle().fill(theme.background))
+                    .frame(width: 9, height: 9)
+                    .position(ring.point)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}

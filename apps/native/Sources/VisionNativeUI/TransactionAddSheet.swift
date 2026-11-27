@@ -80,6 +80,8 @@ struct TransactionAddSheet: View {
                         placeholder: strings.t("addTxn.bankAccountPlaceholder"), invalid: errors[.account] != nil,
                         strings: strings
                     ) { name, id in form.pickAccount(name: name, id: id) }
+                    .focused($focused, equals: .account)
+                    .accessibilityHint(errorText(.account))
                 }
                 field("addTxn.toAccount", error: .toAccount) {
                     AccountPicker(
@@ -87,6 +89,8 @@ struct TransactionAddSheet: View {
                         placeholder: strings.t("addTxn.bankAccountPlaceholder"), invalid: errors[.toAccount] != nil,
                         strings: strings
                     ) { name, id in form.pickToAccount(name: name, id: id) }
+                    .focused($focused, equals: .toAccount)
+                    .accessibilityHint(errorText(.toAccount))
                 }
             } else {
                 field(form.recipientLabelKey, error: .recipient) {
@@ -95,6 +99,8 @@ struct TransactionAddSheet: View {
                         activeOnly: true, strings: strings,
                         onSelect: { id in Task { await form.selectRecipient(id) } },
                         onCreate: { name in Task { await model.createRecipientForAdd(named: name) } })
+                    .focused($focused, equals: .recipient)
+                    .accessibilityHint(errorText(.recipient))
                 }
                 field("addTxn.categoryOptional") {
                     CategoryPicker(pickers: pickers, value: draft.categoryId, strings: strings) { id in
@@ -116,6 +122,8 @@ struct TransactionAddSheet: View {
                         placeholder: strings.t("addTxn.bankAccountPlaceholder"), invalid: errors[.account] != nil,
                         strings: strings
                     ) { name, id in form.pickAccount(name: name, id: id) }
+                    .focused($focused, equals: .account)
+                    .accessibilityHint(errorText(.account))
                 }
             }
             dateField
@@ -234,6 +242,11 @@ struct TransactionAddSheet: View {
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                 .fill(theme.destructive.opacity(0.08)))
+    }
+
+    /// The field's visible error, read with its picker (`aria-describedby`).
+    private func errorText(_ field: AddTransactionField) -> String {
+        errors[field].map { strings.t($0) } ?? ""
     }
 
     private func field<Content: View>(

@@ -168,8 +168,20 @@ public struct NativeOnboardingView: View {
     }
     private var welcome: some View {
         VStack(spacing: 24) {
-            Image(systemName: "sparkles").font(.system(size: 64)).foregroundStyle(theme.primary).accessibilityHidden(
-                true)
+            // The web brand moment: the Vision mark on an 80 pt glass-regular tile over a soft
+            // primary-to-accent halo (OnboardingWizard's welcome step).
+            ZStack {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [theme.primary.opacity(0.15), theme.accent.opacity(0.10)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 112, height: 112)
+                    .blur(radius: 24)
+                VisionBrandMark().fill(theme.primary).frame(width: 40, height: 40)
+                    .frame(width: 80, height: 80)
+                    .background(VisionGlassSurface(material: .regular, cornerRadius: DesignTokens.Radius.card))
+            }
+            .accessibilityHidden(true)
             // The web `Badge variant="secondary"` row.
             HStack(spacing: 8) {
                 welcomeBadge(strings.t("onboarding.importCSV"), symbol: "square.and.arrow.up")

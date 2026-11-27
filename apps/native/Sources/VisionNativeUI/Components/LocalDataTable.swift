@@ -479,6 +479,11 @@ struct RowHoverBand<Content: View>: View {
     }
 }
 
+extension View {
+    /// `RowHoverBand` as a modifier.
+    func rowHoverBand() -> some View { RowHoverBand { self } }
+}
+
 private struct RowHoverFill: View {
     let flag: HoverFlag
     @Environment(\.visionTheme) private var theme
@@ -512,8 +517,12 @@ struct ColumnResizeHandle: View {
     let label: String
     @Binding var width: CGFloat
     @State private var dragStart: CGFloat?
+    @State private var hovering = false
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
+
+    /// The divider strengthens under the pointer, while dragging and on focus, like the web handle.
+    private var strong: Bool { focused || hovering || dragStart != nil }
 
     /// `width` clamps to the column's minimum and `MAX_COLUMN_WIDTH` itself.
     init(label: String, width: Binding<CGFloat>) {
@@ -523,11 +532,14 @@ struct ColumnResizeHandle: View {
 
     var body: some View {
         Rectangle()
-            .fill(focused ? theme.primary : theme.border)
-            .frame(width: focused ? 2 : 1, height: 16)
+            // `hover:bg-primary/50`, `focus-visible:bg-primary/70`, `active:bg-primary`.
+            .fill(dragStart != nil ? theme.primary : focused ? theme.primary.opacity(0.7) : hovering ? theme.primary.opacity(0.5) : theme.border)
+            .frame(width: strong ? 2 : 1, height: 16)
             .frame(width: 8, height: 28)
-            .contentShape(Rectangle())
+            // The web handle's 24 pt (`w-6`) grab area around the 8 pt slot it occupies.
+            .contentShape(Rectangle().inset(by: -8))
             .pointerStyle(.columnResize)
+            .onHover { inside in if hovering != inside { hovering = inside } }
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { drag in

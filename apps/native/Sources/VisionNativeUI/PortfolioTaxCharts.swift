@@ -98,6 +98,7 @@ private struct PortfolioTaxBarChart: View {
             }
             // lint:allow double-money chart coordinate, not a money value
             .chartXScale(domain: -0.5...(Double(max(rows.count, 1)) - 0.5))
+            .chartEntrance(.grow)
             .chartXAxis {
                 // lint:allow double-money chart coordinate, not a money value
                 AxisMarks(values: ChartAxisTicks.evenlySpaced(rows.indices.map(Double.init), count: 12)) { value in
@@ -137,7 +138,7 @@ private struct PortfolioTaxBarChart: View {
                             })
                 }
             }
-            .frame(height: 280).focusable().focused($focused).focusEffectDisabled()
+            .frame(height: 280).focusable().focused($focused).chartFocusRing(focused)
             .accessibilityLabel(title).onKeyPress(phases: .down, action: move)
             .accessibilityValue(
                 ChartAccessibility.series(

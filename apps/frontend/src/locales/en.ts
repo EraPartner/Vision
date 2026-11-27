@@ -1249,6 +1249,8 @@ const en: Record<string, string> = {
   'dashboard.widgetDescriptions.upcoming': 'Planned payments due in the next 7 days',
   'datePicker.inputLabel': 'Enter date ({format})',
   'datePicker.invalidFormat': 'Enter a valid date in {format} format.',
+  'datePicker.month': 'Month',
+  'datePicker.year': 'Year',
   'dbEditor.addRow': 'Add row',
   'dbEditor.applyFilters': 'Apply filters',
   'dbEditor.back': 'Back',

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -69,4 +70,25 @@ extension View {
     func visionFocusRing<RingShape: InsettableShape>(_ isFocused: Bool? = nil, in shape: RingShape) -> some View {
         modifier(VisionFocusRingModifier(isActive: isFocused, shape: shape))
     }
+}
+
+/// A chart's keyboard focus ring (`CartesianChartFrame`: a click focuses the chart, but only
+/// keyboard focus draws the ring, as `:focus-visible` does). Focus that arrives while a mouse
+/// button is down came from a press on the plot, so it draws no ring; Tab does.
+private struct ChartFocusRingModifier: ViewModifier {
+    let focused: Bool
+    @State private var byKeyboard = false
+
+    func body(content: Content) -> some View {
+        content
+            .visionFocusRing(focused && byKeyboard)
+            .onChange(of: focused, initial: true) { _, isFocused in
+                byKeyboard = isFocused && NSEvent.pressedMouseButtons == 0
+            }
+    }
+}
+
+extension View {
+    /// The quiet keyboard focus ring of a focusable chart; pointer focus stays ringless.
+    func chartFocusRing(_ focused: Bool) -> some View { modifier(ChartFocusRingModifier(focused: focused)) }
 }

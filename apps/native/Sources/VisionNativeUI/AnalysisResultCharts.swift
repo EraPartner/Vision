@@ -7,6 +7,8 @@ struct AnalysisResultCharts: View {
     let shell: NativeShellModel
     var labels: [String: String] = [:]
     @State private var selected: Int?
+    /// The scatter series under the pointer; nil reads every series of the selected row.
+    @State private var selectedSeries: Int?
     @State private var tableExpanded = false
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
@@ -84,7 +86,8 @@ struct AnalysisResultCharts: View {
                 .font(.caption).foregroundStyle(theme.secondaryLabel)
                 canvas
                 if let selected, points.indices.contains(selected) {
-                    Text(readout(points[selected])).font(.caption).monospacedDigit().textSelection(.enabled)
+                    Text(readout(points[selected], series: selectedSeries)).font(.caption).monospacedDigit()
+                        .textSelection(.enabled)
                         .accessibilityAddTraits(.updatesFrequently)
                 }
                 HStack(spacing: 18) {
@@ -109,7 +112,7 @@ struct AnalysisResultCharts: View {
                     }
                 }
             }
-        }.onChange(of: spec) { selected = nil }.onChange(of: result) { selected = nil }
+        }.onChange(of: spec) { clearSelection() }.onChange(of: result) { clearSelection() }
     }
     private var canvas: some View {
         GeometryReader { geometry in
@@ -183,10 +186,19 @@ struct AnalysisResultCharts: View {
             }.onContinuousHover { phase in
                 switch phase {
                 case .active(let position):
-                    selected =
-                        points.filter { kind != .scatter || $0.x != nil }
-                        .min { abs(model.x($0) - position.x) < abs(model.x($1) - position.x) }?.index
-                case .ended: selected = nil
+                    if kind == .scatter {
+                        // The web attaches a readout to each mark: hit-test both axes and the series,
+                        // and read nothing over empty plot space.
+                        let hit = AnalysisScatterHit.nearest(
+                            to: position, marks: scatterMarks(model), radius: AnalysisScatterHit.radius)
+                        selected = hit?.row
+                        selectedSeries = hit?.series
+                    } else {
+                        selectedSeries = nil
+                        selected =
+                            points.min { abs(model.x($0) - position.x) < abs(model.x($1) - position.x) }?.index
+                    }
+                case .ended: clearSelection()
                 }
             }.focusable().onKeyPress(phases: .down) { key in
                 if key.key == .leftArrow {
@@ -198,19 +210,40 @@ struct AnalysisResultCharts: View {
                 } else if key.characters == "\u{F72B}" {
                     selected = points.count - 1
                 } else if key.key == .escape {
-                    selected = nil
+                    clearSelection()
                 } else {
                     return .ignored
                 }
+                selectedSeries = nil
                 if let selected { AccessibilityNotification.Announcement(readout(points[selected])).post() }
                 return .handled
             }.accessibilityLabel(strings.t("analysis.ext.chart.\(kind.rawValue)"))
-                .accessibilityValue(selected.flatMap { points.indices.contains($0) ? readout(points[$0]) : nil } ?? "")
+                .accessibilityValue(
+                    selected.flatMap { points.indices.contains($0) ? readout(points[$0], series: selectedSeries) : nil }
+                        ?? "")
         }.frame(height: 330)
     }
-    private func readout(_ point: Point) -> String {
-        "\(formatted(point.raw[xID], id: xID)): "
-            + yIDs.map { "\(seriesLabel($0)) \(formatted(point.raw[$0], id: $0))" }.joined(separator: "; ")
+    private func clearSelection() {
+        selected = nil
+        selectedSeries = nil
+    }
+    /// Every drawn scatter mark, at the centre the canvas draws it.
+    private func scatterMarks(_ model: Drawing) -> [AnalysisScatterHit.Mark] {
+        points.flatMap { point -> [AnalysisScatterHit.Mark] in
+            guard point.x != nil else { return [] }
+            return point.values.enumerated().compactMap { series, value in
+                value.map {
+                    AnalysisScatterHit.Mark(
+                        row: point.index, series: series, center: CGPoint(x: model.x(point), y: model.y($0)))
+                }
+            }
+        }
+    }
+    /// A scatter mark reads its own series, as the web mark's title does; otherwise every series.
+    private func readout(_ point: Point, series: Int? = nil) -> String {
+        let ids = series.flatMap { yIDs.indices.contains($0) ? [yIDs[$0]] : nil } ?? yIDs
+        return "\(formatted(point.raw[xID], id: xID)): "
+            + ids.map { "\(seriesLabel($0)) \(formatted(point.raw[$0], id: $0))" }.joined(separator: "; ")
     }
     private func label(_ id: String) -> String { labels[id] ?? columns.first { $0.id == id }?.label ?? id }
     private func seriesLabel(_ id: String) -> String {
@@ -339,5 +372,30 @@ struct AnalysisResultCharts: View {
             kind == .scatter
                 ? left + ((point.x ?? xmin) - xmin) / xspan * (right - left) : left + step * (Double(point.index) + 0.5)
         }
+    }
+}
+
+/// Scatter pointer targeting: the mark nearest the pointer in both coordinates, within a radius
+/// a little larger than the drawn dot. Later marks are drawn on top, so they win ties.
+enum AnalysisScatterHit {
+    struct Mark: Equatable {
+        let row: Int
+        let series: Int
+        let center: CGPoint
+    }
+    /// The drawn dot has radius 4; 8 keeps it easy to acquire without reaching neighbours.
+    static let radius: CGFloat = 8
+
+    static func nearest(to point: CGPoint, marks: [Mark], radius: CGFloat) -> Mark? {
+        var best: Mark?
+        var bestDistance = radius
+        for mark in marks {
+            let distance = hypot(mark.center.x - point.x, mark.center.y - point.y)
+            if distance <= bestDistance {
+                best = mark
+                bestDistance = distance
+            }
+        }
+        return best
     }
 }

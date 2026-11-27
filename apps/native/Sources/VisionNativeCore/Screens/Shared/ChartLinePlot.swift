@@ -12,7 +12,7 @@ public struct ChartLinePlot: Sendable {
         public let close: Double
     }
 
-    public struct Bar: Sendable {
+    public struct Bar: Sendable, Equatable {
         public let offset: Int
         public let volume: Double
     }

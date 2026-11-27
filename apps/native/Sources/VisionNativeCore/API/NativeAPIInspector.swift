@@ -103,6 +103,12 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
         if selectedID != nil, log.isEmpty, inFlight.isEmpty { selectedID = nil }
     }
 
+    /// `BackgroundQueryIndicator`'s predicate: a GET is in flight for an endpoint that has answered
+    /// before, so its data is already on screen. A cold first load is left to the page.
+    public var isRefreshingShownData: Bool {
+        inFlight.contains { $0.method == .get && queries[$0.endpoint]?.lastUpdated != nil }
+    }
+
     /// One attempt index per correlation id, as `apiRequest` counts its attempts.
     func nextAttempt(for requestId: String) -> Int {
         let attempt = attempts[requestId] ?? 0

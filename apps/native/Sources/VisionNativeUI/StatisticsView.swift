@@ -103,7 +103,7 @@ public struct StatisticsView: View {
                     .accessibilityLabel(strings.t("statsPage.menu.label"))
                 }
                 if model.isLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(60)
+                    PageCardsSkeleton(loadingLabel: strings.t("common.loading"))
                 } else if let error = model.error, !model.hasData {
                     Text(strings.t("statsPage.error", ["msg": error])).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }

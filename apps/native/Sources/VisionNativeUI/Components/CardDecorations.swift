@@ -51,7 +51,8 @@ struct CardSheen: View {
     }
 }
 
-/// BackgroundQueryIndicator: while a read is in flight behind a shown screen, a 2 pt
+/// BackgroundQueryIndicator: while a read refreshes data already shown (an endpoint that has
+/// answered before; cold loads keep the page's own loading surface), a 2 pt
 /// primary/25 track with a primary → accent shimmer crossing it every 2.4 s (linear);
 /// Reduce Motion keeps the static track, as does an open modal (`fx-modal-open .animate-shimmer`:
 /// nothing re-renders under the frosted overlay).
@@ -62,7 +63,7 @@ struct BackgroundQueryIndicator: View {
     @State private var windowLive = true
 
     var body: some View {
-        if inspector.inFlight.contains(where: { $0.method == .get }) {
+        if inspector.isRefreshingShownData {
             ZStack(alignment: .leading) {
                 theme.primary.opacity(0.25)
                 if !reduceMotion && UserPresence.shared.permitsDecorativeMotion(

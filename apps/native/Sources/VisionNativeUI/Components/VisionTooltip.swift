@@ -244,10 +244,37 @@ private struct VisionTooltipModifier: ViewModifier {
     /// The pointer is over the view. The anchor is an AppKit view, and 70-odd controls carry a
     /// tooltip (one in every ledger row), so it exists only while its control is hovered.
     @State private var hovering = false
+    /// Shown for keyboard focus, as Radix's trigger opens on focus too; Escape or blur hides it.
+    @State private var focusShown = false
+    @FocusState private var focused: Bool
 
     func body(content: Content) -> some View {
         content
-            .background { if hovering { VisionTooltipAnchor(box: anchor) } }
+            .background { if hovering || focusShown { VisionTooltipAnchor(box: anchor) } }
+            .focused($focused)
+            .onChange(of: focused) { _, isFocused in
+                let owner = ObjectIdentifier(anchor)
+                // A click focuses too; only keyboard focus (no button down) opens the bubble.
+                let show = isFocused && !isEmpty && NSEvent.pressedMouseButtons == 0
+                focusShown = show
+                if show {
+                    // The anchor view mounts with `focusShown`; present on the next turn.
+                    Task { @MainActor in
+                        guard focusShown else { return }
+                        VisionTooltipPresenter.shared.enter(
+                            VisionTooltipRequest(text: text, locale: locale, theme: theme, edge: edge, anchor: anchor),
+                            owner: owner)
+                    }
+                } else if !hovering {
+                    VisionTooltipPresenter.shared.leave(owner: owner)
+                }
+            }
+            .onKeyPress(.escape) {
+                guard focusShown else { return .ignored }
+                focusShown = false
+                VisionTooltipPresenter.shared.leave(owner: ObjectIdentifier(anchor))
+                return .handled
+            }
             .onHover { inside in
                 let owner = ObjectIdentifier(anchor)
                 let show = inside && !isEmpty
@@ -256,7 +283,7 @@ private struct VisionTooltipModifier: ViewModifier {
                     VisionTooltipPresenter.shared.enter(
                         VisionTooltipRequest(text: text, locale: locale, theme: theme, edge: edge, anchor: anchor),
                         owner: owner)
-                } else {
+                } else if !focusShown {
                     VisionTooltipPresenter.shared.leave(owner: owner)
                 }
             }

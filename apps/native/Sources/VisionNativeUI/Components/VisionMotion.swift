@@ -38,18 +38,25 @@ enum DonutHoverMotion {
 /// PageTransition: each pathname enters with opacity 0 → 1 and y 14 → 0 over 0.52 s on the
 /// out-expo curve; enter-only, and none under Reduce Motion. The web's scale 0.995 → 1 is left
 /// out: an invisible half-percent, it made every layer of the page re-render each frame.
+/// The page always settles on appear; Reduce Motion only decides whether it animates there, so
+/// turning the preference off while the page stays mounted cannot hide it.
 struct PageEntrance: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var entered = false
 
+    static func shown(entered: Bool, reduceMotion: Bool) -> Bool { entered || reduceMotion }
+    /// The animation to settle with, or nil to settle at once.
+    static func settleAnimation(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : VisionMotion.outExpo(VisionMotion.page)
+    }
+
     func body(content: Content) -> some View {
-        let shown = entered || reduceMotion
+        let shown = Self.shown(entered: entered, reduceMotion: reduceMotion)
         content
             .opacity(shown ? 1 : 0)
             .offset(y: shown ? 0 : 14)
             .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(VisionMotion.outExpo(VisionMotion.page)) { entered = true }
+                withAnimation(Self.settleAnimation(reduceMotion: reduceMotion)) { entered = true }
             }
     }
 }
@@ -90,8 +97,13 @@ struct RollingNumber: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(value)
         .onAppear {
-            guard rolls else { return }
-            DispatchQueue.main.async { settled = true }
+            // Always settle, so reels drawn later (Reduce Motion turned off while mounted) show
+            // the value rather than zeros. Only a rolling figure waits a turn to roll from 0.
+            if rolls {
+                DispatchQueue.main.async { settled = true }
+            } else {
+                settled = true
+            }
         }
     }
 
@@ -164,4 +176,46 @@ private struct DigitReel: View {
             .clipped()
             .accessibilityHidden(true)
     }
+}
+
+/// The web charts' first-presentation entrance (`ChartReveal`, `BarChart`'s grow): lines and areas
+/// sweep in from the left over `durations.page`; bars grow up from the baseline over
+/// `durations.normal`. Only the plot area is masked, so the axes stay still. It plays once per
+/// appearance: hover and data refreshes never restart it. Printed pages and Reduce Motion show the
+/// final state at once, and the mask always settles, so turning Reduce Motion off mid-way cannot
+/// leave the plot hidden.
+struct ChartEntrance: ViewModifier {
+    enum Style { case sweep, grow }
+    /// nil: no entrance (a sparkline).
+    let style: Style?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.visionTheme) private var theme
+    @State private var progress: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        let shown = style == nil || reduceMotion || theme.isPrintReport ? 1 : progress
+        content
+            .chartPlotStyle { plot in
+                plot.mask {
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .frame(
+                                width: style == .sweep ? geometry.size.width * shown : geometry.size.width,
+                                height: style == .grow ? geometry.size.height * shown : geometry.size.height)
+                            .frame(
+                                maxWidth: .infinity, maxHeight: .infinity,
+                                alignment: style == .sweep ? .leading : .bottom)
+                    }
+                }
+            }
+            .onAppear {
+                let duration = style == .sweep ? VisionMotion.page : DesignTokens.Duration.normal
+                withAnimation(reduceMotion ? nil : VisionMotion.outExpo(duration)) { progress = 1 }
+            }
+    }
+}
+
+extension View {
+    /// The chart's one-time entrance; see `ChartEntrance`.
+    func chartEntrance(_ style: ChartEntrance.Style?) -> some View { modifier(ChartEntrance(style: style)) }
 }

@@ -70,7 +70,7 @@ public struct PortfolioOverviewView: View {
                     }
                 }
                 if model.isLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(60)
+                    PageCardsSkeleton(loadingLabel: strings.t("common.loading"))
                 } else if let error = model.error {
                     Text(strings.t("stocks.pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
