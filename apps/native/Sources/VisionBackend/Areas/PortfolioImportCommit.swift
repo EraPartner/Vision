@@ -8,8 +8,6 @@ import VisionNativeCore
 /// reconciliation apply half (`applyPortfolioImportReconciliation`).
 enum PortfolioImportCommitArea {
     /// `parseBatchIdParam` reuses the shared id guard the batches area holds.
-    typealias batchId = PortfolioImportBatchesArea.batchId
-
     /// `PORTFOLIO_ACCOUNT_TYPES` of `portfolioImportAccountService.ts`.
     static let portfolioAccountTypes: Set<String> = ["brokerage", "crypto_exchange", "wallet"]
 
@@ -294,7 +292,7 @@ extension PortfolioImportCommitArea {
             [.integer(Int64(batchId)), .integer(Int64(stagingRowId)), .integer(Int64(transactionId)),
              .text(action), .text(policy), .text(try snapshotJSON(before)), .text(try snapshotJSON(after))])
         guard let id = try rows.first?.optionalInt64("id") else {
-            throw RequiredValueError(message: "reconciliation receipt insert")
+            throw PortfolioImportReconciliationArea.RequiredValueError(message: "reconciliation receipt insert")
         }
         return Int(id)
     }
@@ -471,7 +469,7 @@ extension PortfolioImportCommitArea {
             """,
             [.integer(Int64(row.batchID.rawValue)), .integer(Int64(row.id.rawValue)),
              .integer(Int64(decision.transactionID.rawValue)), .text(decision.policy.rawValue),
-             .text(try cashEnvelope(amount, currency: currency, memo: memo, decision: decision, row: row, after: false)),
+             .text(try cashEnvelope(amount, currency: currency ?? decision.existing.currency.rawValue, memo: memo, decision: decision, row: row, after: false)),
              .text(try cashEnvelope(decision.after.amount, currency: decision.after.currency.rawValue, memo: memo, decision: decision, row: row, after: true))])
     }
 
@@ -609,7 +607,7 @@ extension PortfolioImportCommitArea {
             """,
             accountIds.map { .integer(Int64($0)) })
         let valid = try rows.filter { row in
-            (try row.optionalBool("is_active") ?? false)
+            try (try row.optionalBool("is_active") ?? false)
                 && portfolioAccountTypes.contains(try row.text("type"))
         }
         guard rows.count == accountIds.count, valid.count == rows.count else {
@@ -679,9 +677,9 @@ extension PortfolioImportCommitArea {
             guard let leg = legs.first(where: { $0.type == "transfer_out"  // lint:allow string-literal-compare the partition engine's leg kinds
                 && $0.id == eventTxn.id })
             else {
-                throw RequiredValueError(message: "the validated history holds the transfer_out leg")
+                throw PortfolioImportReconciliationArea.RequiredValueError(message: "the validated history holds the transfer_out leg")
             }
-            let lots = (leg.assetFeeLots ?? []).filter { try $0.units.gt(DecimalJS.zero) }
+            let lots = try (leg.assetFeeLots ?? []).filter { try $0.units.gt(DecimalJS.zero) }
             feeBasisAllocations[method] = .object([
                 "feeUnits": .string(event.feeUnits),
                 "lots": .array(lots.map { lot in
@@ -716,7 +714,7 @@ extension PortfolioImportCommitArea {
              .text(event.dedupFingerprint), .integer(Int64(event.dedupFingerprintVersion)),
              .text(allocationsJSON)])
         guard let id = try inserted.first?.optionalInt64("id") else {
-            throw RequiredValueError(message: "asset transfer insert returned no row")
+            throw PortfolioImportReconciliationArea.RequiredValueError(message: "asset transfer insert returned no row")
         }
         return (Int(id), false)
     }
@@ -732,8 +730,8 @@ extension PortfolioImportCommitArea {
             ("source", .int(event.sourceAccountID.rawValue)),
             ("destination", .int(event.destinationAccountID.rawValue)),
             ("date", .string(event.day)),
-            ("units", .string((try? DecimalJS.from(event.units).toFixed()) ?? event.units)),
-            ("feeUnits", .string((try? DecimalJS.from(event.feeUnits).toFixed()) ?? event.feeUnits)),
+            ("units", .string((try? DecimalJS.from(event.units).toFixed) ?? event.units)),
+            ("feeUnits", .string((try? DecimalJS.from(event.feeUnits).toFixed) ?? event.feeUnits)),
             ("adjustmentKind", .null),
             ("basisPolicy", .null),
             ("eligibleSourceHashes", .null),
@@ -869,7 +867,7 @@ extension PortfolioImportCommitArea {
                         || $0.type == "asset_fee")  // lint:allow string-literal-compare the partition engine's leg kinds
             })
             else {
-                throw RequiredValueError(message: "the validated history holds the adjustment leg")
+                throw PortfolioImportReconciliationArea.RequiredValueError(message: "the validated history holds the adjustment leg")
             }
             basisAllocations[method] = .object([
                 "units": .string(event.units),
@@ -910,7 +908,7 @@ extension PortfolioImportCommitArea {
              row.sourceRecordHash.map { SQLValue.text($0) } ?? .null,
              .text(event.dedupFingerprint), .integer(Int64(event.dedupFingerprintVersion))])
         guard let id = try inserted.first?.optionalInt64("id") else {
-            throw RequiredValueError(message: "asset adjustment insert returned no row")
+            throw PortfolioImportReconciliationArea.RequiredValueError(message: "asset adjustment insert returned no row")
         }
         for source in sources {
             _ = try session.rows(
@@ -919,7 +917,7 @@ extension PortfolioImportCommitArea {
                     adjustment_id, staging_row_id, source_record_hash
                 ) VALUES (?, ?, ?) RETURNING id
                 """,
-                [id, .integer(Int64(source.stagingRowId)), .text(source.hash)])
+                [.integer(Int64(id)), .integer(Int64(source.stagingRowId)), .text(source.hash)])
         }
         return (Int(id), false)
     }
@@ -936,7 +934,7 @@ extension PortfolioImportCommitArea {
             ("source", .null),
             ("destination", .null),
             ("date", .string(event.day)),
-            ("units", .string((try? DecimalJS.from(event.units).toFixed()) ?? event.units)),
+            ("units", .string((try? DecimalJS.from(event.units).toFixed) ?? event.units)),
             ("feeUnits", .null),
             ("adjustmentKind", .string(event.kind.rawValue)),
             ("basisPolicy", .string(event.basisPolicy.rawValue)),
@@ -1149,7 +1147,7 @@ extension PortfolioImportCommitArea {
                AND is_active = 1\(legacyClause)
             """,
             arguments)
-        return found.map { Int(try $0.int64("n")) } ?? 0
+        return try found.map { Int(try $0.int64("n")) } ?? 0
     }
 
     /// `canonicalTradeValues`: the repository normalization dedup compares against.
@@ -1205,7 +1203,7 @@ extension PortfolioImportCommitArea {
              units,
              batchAccountId.map { SQLValue.integer(Int64($0)) } ?? .null,
              .text(row.currency ?? row.investmentCurrency ?? "EUR")])
-        return found.map { Int(try $0.int64("n")) } ?? 0
+        return try found.map { Int(try $0.int64("n")) } ?? 0
     }
 
     /// `hasCanonicalFingerprint`: the modern identity probe against a destination table.
@@ -1409,9 +1407,10 @@ extension PortfolioImportCommitArea {
             matched.contains(where: { $0.route == StagingRoute.cash })
         {
             let brokerName = [batch?.accountInstitution, batch?.accountName]
-                .compactMap { value -> String? in
-                    value.map { JavaScriptWhitespace.trim($0) }.filter { !$0.isEmpty }
-                }.first
+                .compactMap { $0 }
+                .map { JavaScriptWhitespace.trim($0) }
+                .filter { !$0.isEmpty }
+                .first
             if let brokerName {
                 let (recipient, _) = try RecipientsArea.createOrGetId(
                     session,
@@ -1433,7 +1432,7 @@ extension PortfolioImportCommitArea {
             if let stored, let text = try stored.optionalText("value"),
                 let value = JSValue.parse(text)
             {
-                configured = Settings.revive(key: "brokerage_cash_category_ids", value).objectValue ?? JSObject()
+                configured = SettingsArea.revive(key: "brokerage_cash_category_ids", value).objectValue ?? JSObject()
             }
             let cashCategoryKinds = ["dividend", "interest", "fee", "tax"]
             var requestedIds = Set<Int>()
@@ -1556,7 +1555,7 @@ extension PortfolioImportCommitArea {
                         do {
                             let insertedId = try withRowSavepoint(session, { () throws -> Int? in
                                 let categoryId = row.kind.map { cashCategoryIds[$0.rawValue] } ?? nil
-                                let arguments: [SQLValue] = [
+                                var arguments: [SQLValue] = [
                                     .text(row.day ?? ""),
                                     .text(SQLArguments.javaScriptText(signedCashAmount(row))),
                                     .text(row.currency ?? "EUR"),
@@ -1922,9 +1921,9 @@ extension PortfolioImportCommitArea {
                 "Import needs repair: \(problems.count) source rows are incomplete or unresolved."
                     + " No new transactions were imported.",
                 details: .object([
-                    ("reason", .string("incomplete_source")),
-                    ("count", .int(problems.count)),
-                    ("row_ordinals", .array(problems.map { .int($0 + 1) })),
+                    "reason": .string("incomplete_source"),
+                    "count": .int(problems.count),
+                    "row_ordinals": .array(problems.map { .int($0 + 1) }),
                 ]))
         }
         if reconciliationPlanned { return }
@@ -1934,9 +1933,9 @@ extension PortfolioImportCommitArea {
                 "Import needs reconciliation: \(overlaps.count) source rows may already exist"
                     + " in portfolio history. No new transactions were imported.",
                 details: .object([
-                    ("reason", .string("existing_history_overlap")),
-                    ("count", .int(overlaps.count)),
-                    ("row_ordinals", .array(overlaps.map { .int($0 + 1) })),
+                    "reason": .string("existing_history_overlap"),
+                    "count": .int(overlaps.count),
+                    "row_ordinals": .array(overlaps.map { .int($0 + 1) }),
                 ]))
         }
     }
@@ -1946,9 +1945,9 @@ extension PortfolioImportCommitArea {
         .conflict(
             "Import failed its atomic commit. No history changes were retained.",
             details: .object([
-                ("reason", .string("atomic_import_failed")),
-                ("batch_id", .int(batchId)),
-                ("errors", .int(errors)),
+                "reason": .string("atomic_import_failed"),
+                "batch_id": .int(batchId),
+                "errors": .int(errors),
             ]))
     }
 
@@ -1962,11 +1961,11 @@ extension PortfolioImportCommitArea {
 
         var json: JSONValue {
             .object([
-                ("batch_id", .int(batchId)),
-                ("imported", .int(imported)),
-                ("duplicates", .int(duplicates)),
-                ("adopted", .int(adopted)),
-                ("errors", .int(errors)),
+                "batch_id": .int(batchId),
+                "imported": .int(imported),
+                "duplicates": .int(duplicates),
+                "adopted": .int(adopted),
+                "errors": .int(errors),
             ])
         }
     }
@@ -1980,11 +1979,11 @@ extension PortfolioImportCommitArea {
 
         var json: JSONValue {
             .object([
-                ("batches", .array(batches.map { $0.json })),
-                ("imported", .int(imported)),
-                ("duplicates", .int(duplicates)),
-                ("adopted", .int(adopted)),
-                ("errors", .int(0)),
+                "batches": .array(batches.map { $0.json }),
+                "imported": .int(imported),
+                "duplicates": .int(duplicates),
+                "adopted": .int(adopted),
+                "errors": .int(0),
             ])
         }
     }
@@ -2275,11 +2274,11 @@ extension PortfolioImportCommitArea {
             return try await database.run { session in
                 let result = try commitReviewedPortfolioImport(session, batchId, accountId)
                 return HandlerResult(status: 200, data: .object([
-                    ("batch_id", .int(batchId)),
-                    ("total", .int(result.imported + result.duplicates + result.errors)),
-                    ("imported", .int(result.imported)),
-                    ("duplicates", .int(result.duplicates)),
-                    ("errors", .int(result.errors)),
+                    "batch_id": .int(batchId),
+                    "total": .int(result.imported + result.duplicates + result.errors),
+                    "imported": .int(result.imported),
+                    "duplicates": .int(result.duplicates),
+                    "errors": .int(result.errors),
                 ]))
             }
         }
