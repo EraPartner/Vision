@@ -424,6 +424,33 @@
       "method": "POST",
       "path": "/api/splits",
       "body": {
+        "transaction_id": 3,
+        "recipient_id": 2,
+        "amount": "25.5",
+        "note": "fits"
+      },
+      "status": 201,
+      "response": {
+        "ok": true,
+        "data": {
+          "id": 8,
+          "transaction_id": 3,
+          "recipient_id": 2,
+          "recipient_name": "Alicia",
+          "amount": 25.5,
+          "amount_paid": 0,
+          "note": "fits",
+          "is_settled": false,
+          "created_at": "2026-11-27T15:08:37.440Z",
+          "updated_at": "2026-11-27T15:08:37.440Z"
+        }
+      }
+    },
+    {
+      "operationId": "createSplit",
+      "method": "POST",
+      "path": "/api/splits",
+      "body": {
         "transaction_id": 6,
         "recipient_id": 5,
         "amount": 100
@@ -579,7 +606,7 @@
         "data": {
           "items": [
             {
-              "id": 8,
+              "id": 9,
               "transaction_id": 1,
               "recipient_id": 5,
               "recipient_name": "Dora",
@@ -587,11 +614,11 @@
               "amount_paid": 0,
               "note": null,
               "is_settled": false,
-              "created_at": "2026-11-25T08:09:50.541Z",
-              "updated_at": "2026-11-25T08:09:50.541Z"
+              "created_at": "2026-11-27T15:08:37.477Z",
+              "updated_at": "2026-11-27T15:08:37.477Z"
             },
             {
-              "id": 9,
+              "id": 10,
               "transaction_id": 1,
               "recipient_id": 2,
               "recipient_name": "Alicia",
@@ -599,8 +626,8 @@
               "amount_paid": 0,
               "note": "batch part",
               "is_settled": false,
-              "created_at": "2026-11-25T08:09:50.541Z",
-              "updated_at": "2026-11-25T08:09:50.541Z"
+              "created_at": "2026-11-27T15:08:37.477Z",
+              "updated_at": "2026-11-27T15:08:37.477Z"
             }
           ],
           "total": 2
@@ -764,7 +791,7 @@
           "skipped_missing": 1,
           "items": [
             {
-              "id": 10,
+              "id": 11,
               "transaction_id": 7,
               "recipient_id": 5,
               "recipient_name": "Dora",
@@ -772,8 +799,8 @@
               "amount_paid": 0,
               "note": "bulk",
               "is_settled": false,
-              "created_at": "2026-11-25T08:09:50.578Z",
-              "updated_at": "2026-11-25T08:09:50.578Z"
+              "created_at": "2026-11-27T15:08:37.505Z",
+              "updated_at": "2026-11-27T15:08:37.505Z"
             }
           ]
         }
@@ -934,7 +961,7 @@
           "amount": 10,
           "paid_at": "{{today}}",
           "note": "cash",
-          "created_at": "2026-11-25T08:09:50.626Z"
+          "created_at": "2026-11-27T15:08:37.555Z"
         }
       }
     },
@@ -971,7 +998,7 @@
           "amount": 60,
           "paid_at": "2024-03-01",
           "note": null,
-          "created_at": "2026-11-25T08:09:50.641Z"
+          "created_at": "2026-11-27T15:08:37.571Z"
         }
       }
     },
@@ -1038,7 +1065,7 @@
               "amount": 10,
               "paid_at": "{{today}}",
               "note": "cash",
-              "created_at": "2026-11-25T08:09:50.626Z"
+              "created_at": "2026-11-27T15:08:37.555Z"
             }
           ],
           "total": 1
@@ -1090,7 +1117,7 @@
           "note": null,
           "is_settled": true,
           "created_at": "2025-03-01T09:00:00.000Z",
-          "updated_at": "2026-11-25T08:09:50.673Z"
+          "updated_at": "2026-11-27T15:08:37.608Z"
         }
       }
     },
@@ -1149,6 +1176,16 @@
         "data": {
           "items": [
             {
+              "recipient_id": 1,
+              "recipient_name": "Alice",
+              "total_owed": 85.45,
+              "total_paid": 10,
+              "remaining": 75.45,
+              "split_count": 4,
+              "unconverted_count": 0,
+              "unconverted_currencies": []
+            },
+            {
               "recipient_id": 5,
               "recipient_name": "Dora",
               "total_owed": 70,
@@ -1157,22 +1194,12 @@
               "split_count": 2,
               "unconverted_count": 0,
               "unconverted_currencies": []
-            },
-            {
-              "recipient_id": 1,
-              "recipient_name": "Alice",
-              "total_owed": 62.5,
-              "total_paid": 10,
-              "remaining": 52.5,
-              "split_count": 3,
-              "unconverted_count": 0,
-              "unconverted_currencies": []
             }
           ],
           "total": 2,
           "summary": {
             "currency": "EUR",
-            "remaining": 122.5,
+            "remaining": 145.45,
             "unconverted_count": 0,
             "unconverted_currencies": []
           }
@@ -1188,6 +1215,25 @@
         "ok": true,
         "data": {
           "items": [
+            {
+              "id": 8,
+              "transaction_id": 3,
+              "recipient_id": 2,
+              "recipient_name": null,
+              "amount": 25.5,
+              "amount_paid": 0,
+              "note": "fits",
+              "is_settled": false,
+              "created_at": "2026-11-27T15:08:37.440Z",
+              "updated_at": "2026-11-27T15:08:37.440Z",
+              "transaction_date": "2024-01-25",
+              "transaction_memo": "Hotel",
+              "transaction_amount": 250.5,
+              "transaction_currency": "USD",
+              "bank_account": "Travel",
+              "transaction_recipient_name": "Bob",
+              "remaining": 25.5
+            },
             {
               "id": 1,
               "transaction_id": 1,
@@ -1227,7 +1273,7 @@
               "remaining": 10
             },
             {
-              "id": 9,
+              "id": 10,
               "transaction_id": 1,
               "recipient_id": 2,
               "recipient_name": null,
@@ -1235,8 +1281,8 @@
               "amount_paid": 0,
               "note": "batch part",
               "is_settled": false,
-              "created_at": "2026-11-25T08:09:50.541Z",
-              "updated_at": "2026-11-25T08:09:50.541Z",
+              "created_at": "2026-11-27T15:08:37.477Z",
+              "updated_at": "2026-11-27T15:08:37.477Z",
               "transaction_date": "2024-01-05",
               "transaction_memo": "Groceries",
               "transaction_amount": 100,
@@ -1246,10 +1292,10 @@
               "remaining": 12.5
             }
           ],
-          "total": 3,
+          "total": 4,
           "summary": {
             "currency": "EUR",
-            "remaining": 52.5,
+            "remaining": 75.45,
             "unconverted_count": 0,
             "unconverted_currencies": []
           }

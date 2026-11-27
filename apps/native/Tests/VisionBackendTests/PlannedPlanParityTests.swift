@@ -6,10 +6,10 @@ import Testing
 /// Replays `parity/plans/planned.jsonl`: the planned-payment helpers
 /// (`lib/calculations/recurrence.ts` and `lib/plannedMatching.ts`) — the pattern grammar,
 /// its steppers, the horizon expansion, the monthly occurrence factor and the match
-/// tolerance — with what the TypeScript answered (`bun run native:parity-plans`).
+/// tolerance — and `parity/plans/loan-schedule.jsonl` (`lib/calculations/loanSchedule.ts`),
+/// with what the TypeScript answered (`bun run native:parity-plans`).
 @Suite struct PlannedPlanParityTests {
-    static let corpus = PortfolioImportPlanParityTests.corpus
-        .deletingLastPathComponent().appendingPathComponent("planned.jsonl")
+    static let plans = PortfolioImportPlanParityTests.corpus.deletingLastPathComponent()
 
     private struct UnknownOperation: Error { let name: String }
 
@@ -94,8 +94,11 @@ import Testing
         }
     }
 
-    @Test func everyRecordedAnswerIsReproduced() throws {
-        let lines = try String(contentsOf: Self.corpus, encoding: .utf8).split(separator: "\n")
+    /// Each corpus with the fewest lines it must hold, so a truncated recording fails.
+    @Test(arguments: [("planned.jsonl", 200), ("loan-schedule.jsonl", 150)])
+    func everyRecordedAnswerIsReproduced(_ corpus: String, _ minimum: Int) throws {
+        let lines = try String(contentsOf: Self.plans.appendingPathComponent(corpus), encoding: .utf8)
+            .split(separator: "\n")
         var failures: [String] = []
         var mismatches = 0
         for (index, line) in lines.enumerated() {
@@ -113,7 +116,7 @@ import Testing
             }
         }
         #expect(mismatches == 0, "\(mismatches) of \(lines.count)\n\(failures.joined(separator: "\n"))")
-        #expect(lines.count > 200)
+        #expect(lines.count > minimum)
     }
 }
 

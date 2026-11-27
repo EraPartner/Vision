@@ -298,7 +298,15 @@ import VisionNativeCore
                 body = rawSteps[index].objectValue?["body"].map { Data($0.jsonText.utf8) }
             }
             let request = APIRequest(method: method, url: url, headers: headers, body: body, timeout: 30)
-            let matched = try #require(backend.match(request), "\(label) is not ported")
+            guard let matched = backend.match(request) else {
+                // Express's own "Not Found" for a path no route template serves (an empty id):
+                // no handler answers it on either side, and the app's fallback carries it.
+                let recorded = rawSteps[index].objectValue?["response"]?.objectValue?["error"]?.objectValue
+                let expressNotFound = step.status == 404
+                    && (recorded?["message"]?.stringValue ?? "").hasPrefix("Not Found: ")
+                #expect(expressNotFound, "\(label) is not ported")
+                continue
+            }
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
             if response.status >= 500, step.status < 500 {
@@ -417,10 +425,15 @@ import VisionNativeCore
         try await Self.replay("importUploads")
     }
 
+    @Test func investments() async throws {
+        try await Self.replay("investments")
+    }
+
     /// The seeded mutations of each area's requests and provider answers (scripts/lib/nativeParityMutations.ts).
     @Test(arguments: [
         "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations", "categories-mutations",
         "recipients-mutations", "transactions-mutations", "planned-mutations", "importParsers-mutations",
+        "importBatches-mutations",
         "importReview-mutations", "importUploads-mutations", "investments-mutations",
         "portfolio-transactions-mutations", "prices-mutations", "exposure-mutations",
         "portfolio-parsers-mutations", "portfolio-batches-mutations",
@@ -428,6 +441,27 @@ import VisionNativeCore
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
+    }
+
+    /// Every recorded corpus in `parity/` is replayed by a test above, so a recording added
+    /// without its replay (as `importBatches-mutations` once was) fails here.
+    @Test func everyCorpusIsReplayed() throws {
+        let replayed: Set<String> = [
+            "tags", "settings", "accounts", "recipients", "planned", "splits", "attachments", "categories",
+            "transactions", "exchange-rates", "exchange-rates-empty", "importParsers", "importBatches",
+            "importReview", "importCommit", "info", "importUploads", "investments",
+            "tags-mutations", "settings-mutations", "exchange-rates-mutations", "accounts-mutations",
+            "categories-mutations", "recipients-mutations", "transactions-mutations", "planned-mutations",
+            "importParsers-mutations", "importBatches-mutations", "importReview-mutations",
+            "importUploads-mutations", "investments-mutations", "portfolio-transactions-mutations",
+            "prices-mutations", "exposure-mutations", "portfolio-parsers-mutations",
+            "portfolio-batches-mutations", "portfolio-overrides-mutations",
+            "portfolio-reconciliation-mutations",
+        ]
+        let recorded = Set(
+            try FileManager.default.contentsOfDirectory(atPath: Self.corpusDirectory.path)
+                .filter { $0.hasSuffix(".json") }.map { String($0.dropLast(5)) })
+        #expect(recorded.subtracting(replayed).isEmpty, "not replayed: \(recorded.subtracting(replayed).sorted())")
     }
 
     /// A stale list without `db_only` starts `warmCache` in the background, which the corpus
