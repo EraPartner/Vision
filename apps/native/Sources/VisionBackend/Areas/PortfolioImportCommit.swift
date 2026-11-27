@@ -895,3 +895,208 @@ extension PortfolioImportCommitArea {
             sourceRecordHash: row.sourceRecordHash)
     }
 }
+
+extension PortfolioImportCommitArea {
+    /// `getEligibleYieldSources`: the zero-basis acquisitions a reversal may consume, with
+    /// the staging row each hash settles through.
+    static func eligibleYieldSources(
+        _ session: BackendSession, investmentId: Int, accountId: Int?  // lint:allow raw-id the ids the repository query binds
+    ) throws -> [(hash: String, stagingRowId: Int)] {  // lint:allow raw-id the staged rows the reversal settles through
+        guard let accountId else { return [] }
+        let rows = try session.rows(
+            """
+            SELECT s.source_record_hash, CAST(min(s.id) AS TEXT) AS staging_row_id
+              FROM portfolio_import_staging_rows s
+              INNER JOIN portfolio_import_batches b ON b.id = s.batch_id
+             WHERE COALESCE(s.user_override_investment_id, s.resolved_investment_id) = ?
+               AND b.account_id = ?
+               AND s.type = 'gift'
+               AND s.asset_adjustment_details ->> 'kind' = 'yield_acquisition'
+               AND s.asset_adjustment_details ->> 'basisPolicy' = 'zero'
+               AND s.status IN ('matched', 'committed', 'duplicate')
+               AND s.source_record_hash IS NOT NULL
+             GROUP BY s.source_record_hash
+             ORDER BY s.source_record_hash
+            """,
+            [.integer(Int64(investmentId)), .integer(Int64(accountId))])
+        return try rows.map { row in
+            (hash: try row.text("source_record_hash"),
+             stagingRowId: Int(try row.text("staging_row_id")) ?? 0)  // lint:allow raw-id the BIGINT id the repository reads back as text
+        }
+    }
+
+    /// `commitPortfolioAssetAdjustment`: the canonical event with its consumed-lot basis
+    /// allocations. A matching fingerprint is a duplicate; a conflicting one is a 409.
+    static func commitAssetAdjustment(
+        _ session: BackendSession, row: ReconciliationSourceRow, batchId: Int,  // lint:allow raw-id business table ids of the TypeScript route and repository writes
+        scope: CustodyImportScope?
+    ) throws -> (id: Int, duplicate: Bool) {
+        let prepared = try PortfolioCustodyPreviews.assetAdjustment(row)
+        guard case .event(let event) = prepared else {
+            let message: String
+            if case .error(let block)? = prepared as? CustodyPreview<AssetAdjustmentEvent> {
+                message = "Asset adjustment requires repair: \(block.rawValue)"
+            } else {
+                message = "Asset adjustment requires repair"
+            }
+            throw BackendHTTPError.validation(message)
+        }
+        let account = try session.row(
+            """
+            SELECT a.is_active, a.type
+              FROM accounts a
+             WHERE a.id = ?
+            """,
+            [.integer(Int64(event.accountID.rawValue))])
+        let active = try account?.optionalBool("is_active") ?? false
+        let type = try account?.optionalText("type")
+        guard active, type.map({ portfolioAccountTypes.contains($0) }) == true else {
+            throw BackendHTTPError.conflict(
+                "Asset adjustment account must be active and support custody")
+        }
+        let existing = try session.row(
+            """
+            SELECT a.id, a.investment_id, a.account_id, to_char(a.date, 'YYYY-MM-DD') AS date,
+                   a.units, a.adjustment_kind, a.basis_policy
+              FROM portfolio_asset_adjustments a
+             WHERE a.dedup_fingerprint = ? AND a.dedup_fingerprint_version = ?
+            """,
+            [.text(event.dedupFingerprint), .integer(Int64(event.dedupFingerprintVersion))])
+        if let existing {
+            let storedInvestment = try existing.optionalInt64("investment_id").flatMap { Int(exactly: $0) }
+            let storedAccount = try existing.optionalInt64("account_id").flatMap { Int(exactly: $0) }
+            let storedDate = try existing.optionalText("date")
+            let storedUnits = try existing.optionalText("units")
+            let storedKind = try existing.optionalText("adjustment_kind")
+            let storedPolicy = try existing.optionalText("basis_policy")
+            guard storedInvestment == event.investmentID.rawValue,
+                storedAccount == event.accountID.rawValue,
+                storedDate == event.day,
+                try DecimalJS.from(storedUnits ?? "0").eq(try DecimalJS.from(event.units)),
+                storedKind == event.kind.rawValue,
+                storedPolicy == event.basisPolicy.rawValue
+            else {
+                throw BackendHTTPError.conflict(
+                    "Asset adjustment identity conflicts with existing unit history")
+            }
+            return (Int(try existing.int64("id")), true)
+        }
+        let sources = event.kind == .yieldReversal
+            ? try eligibleYieldSources(session, investmentId: event.investmentID.rawValue, accountId: event.accountID.rawValue)
+            : []
+        let eligibleHashes = sources.map(\.hash)
+        let signature = adjustmentSignature(row, event, batchId: batchId, hashes: eligibleHashes)
+        try custodyScopeCheck(scope, signature, "\(batchId):\(row.id.rawValue)")
+        var history = try PortfolioTransactionsArea.unitEvents(session, event.investmentID.rawValue)
+        if scope != nil {
+            history = history.filter { $0.date <= event.day }
+        }
+        let eventTxn = adjustmentTxn(row, event, batchId: batchId, hashes: eligibleHashes)
+        try validateCustodyHistory(history.map(\.txn) + [eventTxn])
+        var basisAllocations: [String: JSONValue] = [:]
+        for method in PortfolioCore.costBasisMethods {
+            let projected = try PortfolioCustody.projectAssetTransferPartitions(
+                history.map(\.txn) + [eventTxn], method: method)
+            let legs = projected.rows(of: Double(event.accountID.rawValue))
+            guard let leg = legs.first(where: {
+                $0.id == eventTxn.id
+                    && ($0.type == "unit_reversal"  // lint:allow string-literal-compare the partition engine's leg kinds
+                        || $0.type == "asset_fee")  // lint:allow string-literal-compare the partition engine's leg kinds
+            })
+            else {
+                throw RequiredValueError(message: "the validated history holds the adjustment leg")
+            }
+            basisAllocations[method] = .object([
+                "units": .string(event.units),
+                "lots": .array(leg.consumedLots.map { lot in
+                    .object([
+                        "acquisitionId": .int(Int(lot.acquisitionId)),
+                        "acquisitionDate": .string(lot.acquiredDate),
+                        "sourceRecordHash": lot.sourceRecordHash.map { JSONValue.string($0) } ?? .null,
+                        "currency": lot.currency.map { JSONValue.string($0) } ?? .null,
+                        "units": .string(lot.units.description),
+                        "nativeBasis": .string(lot.costBasis.description),
+                        "eurBasis": lot.costBasis.eq(DecimalJS.zero)
+                            ? .string("0")
+                            : (lot.fxResolved ? .string(lot.costBasisConv.description) : .null),
+                    ])
+                }),
+            ])
+        }
+        let allocationsJSON = String(
+            decoding: try JSONEncoder().encode(JSONValue.object(basisAllocations)), as: UTF8.self)
+        let hashesJSON = String(
+            decoding: try JSONEncoder().encode(JSONValue.array(eligibleHashes.map { JSONValue.string($0) })),
+            as: UTF8.self)
+        let inserted = try session.rows(
+            """
+            INSERT INTO portfolio_asset_adjustments (
+                investment_id, account_id, date, units, adjustment_kind, basis_policy,
+                basis_allocations, eligible_source_record_hashes, import_batch_id,
+                staging_row_id, source_record_hash, dedup_fingerprint, dedup_fingerprint_version
+            ) VALUES (?, ?, ?, ?, ?, ?, vision_jsonb(?), ?, ?, ?, ?, ?, ?) RETURNING id
+            """,
+            [.integer(Int64(event.investmentID.rawValue)),
+             .integer(Int64(event.accountID.rawValue)),
+             .text(event.day), .text(event.units),
+             .text(event.kind.rawValue), .text(event.basisPolicy.rawValue),
+             .text(allocationsJSON), .text(hashesJSON),
+             .integer(Int64(batchId)), .integer(Int64(row.id.rawValue)),
+             row.sourceRecordHash.map { SQLValue.text($0) } ?? .null,
+             .text(event.dedupFingerprint), .integer(Int64(event.dedupFingerprintVersion))])
+        guard let id = try inserted.first?.optionalInt64("id") else {
+            throw RequiredValueError(message: "asset adjustment insert returned no row")
+        }
+        for source in sources {
+            _ = try session.rows(
+                """
+                INSERT INTO portfolio_asset_adjustment_sources (
+                    adjustment_id, staging_row_id, source_record_hash
+                ) VALUES (?, ?, ?) RETURNING id
+                """,
+                [id, .integer(Int64(source.stagingRowId)), .text(source.hash)])
+        }
+        return (Int(id), false)
+    }
+
+    /// `signature(event)` for an adjustment, with its eligible source hashes.
+    static func adjustmentSignature(
+        _ row: ReconciliationSourceRow, _ event: AssetAdjustmentEvent, batchId: Int,  // lint:allow raw-id the ids the reviewed scope's signature carries
+        hashes: [String]
+    ) -> String {
+        let object: [(String, JSONValue)] = [
+            ("type", .string("asset_adjustment")),
+            ("investment", .int(event.investmentID.rawValue)),
+            ("account", .int(event.accountID.rawValue)),
+            ("source", .null),
+            ("destination", .null),
+            ("date", .string(event.day)),
+            ("units", .string((try? DecimalJS.from(event.units).toFixed()) ?? event.units)),
+            ("feeUnits", .null),
+            ("adjustmentKind", .string(event.kind.rawValue)),
+            ("basisPolicy", .string(event.basisPolicy.rawValue)),
+            ("eligibleSourceHashes", .array(hashes.sorted().map { JSONValue.string($0) })),
+            ("sourceRecordHash", row.sourceRecordHash.map { JSONValue.string($0) } ?? .null),
+            ("fingerprint", .string(event.dedupFingerprint)),
+            ("fingerprintVersion", .int(event.dedupFingerprintVersion)),
+        ]
+        return String(
+            decoding: (try? JSONEncoder().encode(
+                JSONValue.object(Dictionary(uniqueKeysWithValues: object)))) ?? Data(),
+            as: UTF8.self)
+    }
+
+    /// The adjustment event as the partition engine replays it.
+    static func adjustmentTxn(
+        _ row: ReconciliationSourceRow, _ event: AssetAdjustmentEvent, batchId: Int,  // lint:allow raw-id the ids the partition engine replays
+        hashes: [String]
+    ) -> PortfolioCore.Txn {
+        PortfolioCore.Txn(
+            id: Double(row.id.rawValue), type: "asset_adjustment", date: event.day,
+            units: .text(event.units), amount: .text("0"), fees: .text("0"), taxes: .text("0"),
+            accountId: Double(event.accountID.rawValue),
+            adjustmentKind: event.kind.rawValue, basisPolicy: event.basisPolicy.rawValue,
+            eligibleSourceRecordHashes: hashes,
+            sourceRecordHash: row.sourceRecordHash)
+    }
+}
