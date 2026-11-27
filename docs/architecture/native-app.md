@@ -487,7 +487,9 @@ and the launch error page shows `app.preMigrationBackupFailed` with the backend'
 
 ### Quit-time backup
 
-`ShellController.prepareForQuit` runs the backup before `RuntimeSupervisor.shutdown()` when the
+`ShellController.prepareForQuit` first drains pending writes: the debounced and in-flight settings
+saves (`NativeSettingsModel.flush()`), a tax profile edit inside its debounce, and the local values a
+reload also drains. It then runs the backup before `RuntimeSupervisor.shutdown()` when the
 effective settings enable it and the runtime is running. It writes a bundle without frontend state.
 A backup already in progress is awaited instead of starting a second one. The app delegate's
 45-second hard limit, Electron's will-quit timeout, covers the backup and the shutdown together.
@@ -1954,7 +1956,10 @@ completion uses the common settings writer. CSV review and backup restore reuse 
 `NativeReportModel` and `NativeReportSheet` provide the shared financial, portfolio and tax export form.
 The initial period remains rolling twelve months, including exports opened from a historical Tax page.
 The source section order, twelve currencies, date/year validation, all-selected empty section array,
-financial exclusion scope and submit-time theme are preserved. Closing and reopening on the same path
+financial exclusion scope and submit-time theme are preserved. A financial report resolves its exclusions
+at submit as Statistics does (`homeExclusions(scope: "statistics")`: the stored ids plus hidden categories,
+de-duplicated), after flushing pending settings writes; the web export sends the stored ids only. A
+failed resolution fails the report instead of sending a partial set. Closing and reopening on the same path
 retains the draft; leaving the page resets it. Canceling the native save panel keeps the dialog and
 produces no success notice. Closing removes only the current route's `export` parameter.
 

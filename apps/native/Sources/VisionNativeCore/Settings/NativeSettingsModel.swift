@@ -130,8 +130,11 @@ public final class NativeSettingsModel {
     }
     /// The exclusions a financial report sends: the hidden ids join the excluded ids, exactly the
     /// set `NativeReportPreferences.exclusionsApply` still keeps (everywhere/statistics).
+    /// An id both excluded and hidden counts once, like `useExcludedIds`' de-duplicated set.
     public var reportExcludedCategoryIds: [CategoryID] {
-        excludedCategoryIds + hiddenCategoryIds
+        let excluded = excludedCategoryIds
+        let known = Set(excluded)
+        return excluded + hiddenCategoryIds.filter { !known.contains($0) }
     }
     public var excludedRecipientIds: [RecipientID] {
         ids(dashboardRaw?["excludedRecipientIds"]).map(RecipientID.init(rawValue:))
@@ -375,17 +378,22 @@ public final class NativeSettingsModel {
         includeTransfers = false
         editRevision[.includeTransfers, default: 0] += 1
         show(.info, "settings.resetToDefaults")
+        // The reset writes the envelopes plus the standalone mirrors of the app defaults; the
+        // server-computed summaries read `cost_basis_method`, which without this write kept
+        // the value the reset had left behind on screen. Each mirror is written on its own, so a
+        // failed `includeTransfers` write cannot leave the cost basis behind.
+        // Source reset's server-only writes are deliberately non-fatal.
+        let transfers: Bool
         do {
-            // The reset writes the envelopes plus the standalone mirrors of the app defaults; the
-            // server-computed summaries read `cost_basis_method`, which without this write kept
-            // the value the reset had left behind on screen.
             _ = try await saveNow(.includeTransfers, value: .bool(false))
-            _ = try await saveNow(
-                .costBasisMethod, value: .string(CostBasisMethod.weightedAvg.rawValue))
-            await didResetPreferences?()
-        } catch {
-            // Source reset's server-only write is deliberately non-fatal.
-        }
+            transfers = true
+        } catch { transfers = false }
+        let costBasis: Bool
+        do {
+            _ = try await saveNow(.costBasisMethod, value: .string(CostBasisMethod.weightedAvg.rawValue))
+            costBasis = true
+        } catch { costBasis = false }
+        if transfers || costBasis { await didResetPreferences?() }
     }
     public func loadServices() async {
         guard !retired, !isSuspendedForRestore, let loadKeepServices, !servicesLoading else { return }
@@ -417,6 +425,9 @@ public final class NativeSettingsModel {
         let currentTimers = Array(timers.values)
         for timer in currentTimers { await timer.value }
         for task in Array(writes.values) { await task.value }
+        // Immediate saves (cost basis, transfers, cash categories, reset) are not debounced but
+        // can still be in flight when the app quits; quit waits for them too.
+        for task in Array(acceptedWrites.values) { _ = try? await task.value }
     }
     /// Restore alone pauses application-lifetime preference saves. Ordinary sheet dismissal never calls this.
     public func suspendForRestore() async {

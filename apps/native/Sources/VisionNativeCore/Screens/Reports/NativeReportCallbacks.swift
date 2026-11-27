@@ -2,6 +2,10 @@ import Foundation
 
 @MainActor public struct NativeReportCallbacks {
     public var preferences: @MainActor () -> NativeReportPreferences
+    /// The exclusions a financial report sends, resolved at submit exactly as Statistics resolves
+    /// them (`homeExclusions(scope: "statistics")`: stored ids plus hidden categories, fetched fresh).
+    /// Nil sends the ids `preferences` holds.
+    public var exclusions: (@MainActor () async throws -> InsightExclusions)?
     public var theme: @MainActor () async throws -> TaxValue
     /// Source-authoritative fields: taxProfile/precomputedPIT/household/precomputedHousehold.
     /// The host resolves the selected year's frozen/live data and localized bracket labels.
@@ -12,6 +16,7 @@ import Foundation
     public var notice: @MainActor (ScreenNotice) -> Void
     public init(
         preferences: @escaping @MainActor () -> NativeReportPreferences,
+        exclusions: (@MainActor () async throws -> InsightExclusions)? = nil,
         theme: @escaping @MainActor () async throws -> TaxValue,
         taxContext: @escaping @MainActor (Int) async throws -> TaxValue = { _ in .object([:]) },
         save: @escaping @MainActor (Data, String) async throws -> Bool,
@@ -20,6 +25,7 @@ import Foundation
         notice: @escaping @MainActor (ScreenNotice) -> Void
     ) {
         self.preferences = preferences
+        self.exclusions = exclusions
         self.theme = theme
         self.taxContext = taxContext
         self.save = save

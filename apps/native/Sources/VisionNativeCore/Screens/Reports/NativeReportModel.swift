@@ -126,19 +126,32 @@ import Observation
         }
         let selected = allSectionsSelected ? [] : sectionOrder
         let preferences = callbacks.preferences()
-        let filtered = preferences.exclusionsApply(type: reportType)
         var body: [String: TaxValue] = [
             "currency": .string(currency.rawValue), "period": period.value,
             "sections": .array(selected.map(TaxValue.string)),
-            "excludedCategoryIds": .array(
-                (filtered ? preferences.excludedCategoryIds : []).map { .number(Decimal($0.rawValue)) }),
-            "excludedRecipientIds": .array(
-                (filtered ? preferences.excludedRecipientIds : []).map { .number(Decimal($0.rawValue)) }),
         ]
         isSubmitting = true
         errorDetail = nil
         defer { if generation == visit { isSubmitting = false } }
         do {
+            // Financial figures leave out what Statistics leaves out. The resolver reads the stored
+            // exclusions and the hidden categories at submit, so a category hidden since the
+            // settings screen last loaded its tree is not missed.
+            var categoryIds: [CategoryID] = []
+            var recipientIds: [RecipientID] = []
+            if reportType == .financial, let resolve = callbacks.exclusions {
+                let resolved = try await resolve()
+                guard generation == visit else { return }
+                if resolved.applies {
+                    categoryIds = resolved.categoryIds
+                    recipientIds = resolved.recipientIds
+                }
+            } else if preferences.exclusionsApply(type: reportType) {
+                categoryIds = preferences.excludedCategoryIds
+                recipientIds = preferences.excludedRecipientIds
+            }
+            body["excludedCategoryIds"] = .array(categoryIds.map { .number(Decimal($0.rawValue)) })
+            body["excludedRecipientIds"] = .array(recipientIds.map { .number(Decimal($0.rawValue)) })
             // ExportDialog: annual figures need a full calendar year; other periods send none.
             if reportType == .tax, case .year = period {
                 guard let year = period.taxYear(today: today) else { throw APIError.invalidRequest("Report tax year") }

@@ -264,6 +264,56 @@ struct NativeSettingsModelTests {
         #expect(stored?["defaultPageSize"] == .number(25))
         #expect(!model.isSaving)
     }
+    /// The two standalone reset writes are independent: a refused `includeTransfers` write still
+    /// brings `cost_basis_method` back to the default the screen shows.
+    @Test func resetWritesTheCostBasisEvenWhenTheTransfersWriteFails() async throws {
+        let transport = NativeSettingsFixture(values: [
+            "cost_basis_method": .string("fifo"), "includeTransfers": .bool(true),
+        ])
+        let model = settingsModel(transport)
+        await model.load()
+        await transport.failNextWrite(status: 409)
+        await model.resetPreferences()
+        await model.flush()
+        #expect(await transport.value("includeTransfers") == .bool(true))
+        #expect(await transport.value("cost_basis_method") == .string("weighted_avg"))
+        #expect(model.costBasisMethod == .weightedAvg)
+    }
+    /// Quit drains immediate (not debounced) saves too: a transfers write still in flight
+    /// finishes before `flush()` returns.
+    @Test func flushWaitsForAnImmediateSaveStillInFlight() async throws {
+        let transport = NativeSettingsFixture(values: ["includeTransfers": .bool(false)])
+        let model = settingsModel(transport)
+        await model.load()
+        await transport.gateNextWrite()
+        let edit = Task { await model.setIncludeTransfers(true) }
+        await waitSettings { await transport.writeIsGated }
+        let flushed = FlushProbe()
+        let flushing = Task {
+            await model.flush()
+            flushed.done = true
+        }
+        for _ in 0..<50 { await Task.yield() }
+        #expect(!flushed.done)
+        await transport.releaseWrite()
+        await flushing.value
+        await edit.value
+        #expect(flushed.done)
+        #expect(await transport.value("includeTransfers") == .bool(true))
+    }
+    @Test func reportExclusionsCountAnExcludedHiddenCategoryOnce() async throws {
+        let transport = NativeSettingsFixture(values: [
+            "dashboard_settings": .object(["excludedCategoryIds": .array([.number(3), .number(5)])])
+        ])
+        let model = settingsModel(transport)
+        await model.load()
+        await transport.setCategory(
+            OpenAPI.CategoryNode(
+                id: CategoryID(rawValue: 3), name: "Hidden", pathIds: [], path: [], categoryName: "Hidden",
+                depth: 0, isActive: false, hierarchyOnly: true, legacyCompatible: true))
+        await model.loadCategories(force: true)
+        #expect(model.reportExcludedCategoryIds == [CategoryID(rawValue: 3), CategoryID(rawValue: 5)])
+    }
     @Test func largeDisplayOverrideNeverPersistsUntilCapIsDisabled() async throws {
         let transport = NativeSettingsFixture()
         let model = settingsModel(transport)
@@ -558,6 +608,7 @@ private func settingsClient(_ transport: NativeSettingsFixture) -> APIClient {
         baseURL: { URL(string: "http://fixture.invalid")! }, transport: transport,
         sleep: { _ in }, jitter: { 0 }, maxRetries: 2)
 }
+@MainActor private final class FlushProbe { var done = false }
 @MainActor private func settingsModel(_ transport: NativeSettingsFixture) -> NativeSettingsModel {
     .init(service: settingsClient(transport), debounce: .milliseconds(10))
 }
