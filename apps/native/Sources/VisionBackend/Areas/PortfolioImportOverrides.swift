@@ -48,8 +48,7 @@ enum PortfolioImportOverridesArea {
     }
 
     /// `req.body ?? {}` of the two routes: an absent or null body reads as the empty object.
-    static func body(_ request: InProcessRequest) throws -> JSValue {
-        let parsed = try RequestBody.parseJavaScript(request.body)
+    static func body(_ parsed: JSValue?) throws -> JSValue {
         if case .object(let object)? = parsed { return .object(object) }
         if parsed == nil || parsed == .null { return .object(JSObject()) }
         return parsed ?? .null
@@ -58,8 +57,8 @@ enum PortfolioImportOverridesArea {
     /// `bulkInvestmentOverrideSchema` through `parseInput(bareMessages(...))`: the field checks in
     /// shape order, then the exactly-one-of refine, then the investment_id transform. Every issue
     /// joins into one message with `"; "`.
-    static func bulkBody(_ request: InProcessRequest) throws -> BulkBody {
-        let body = try self.body(request)
+    static func bulkBody(_ parsed: JSValue?) throws -> BulkBody {
+        let body = try self.body(parsed)
         guard case .object(let object) = body else {
             throw BackendHTTPError.validation(
                 "Invalid input: expected object, received \(body.zodTypeName)")
@@ -524,17 +523,19 @@ enum PortfolioImportOverridesArea {
 
     static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
         backend.serve(OpenAPIOperations.PortfolioImportRowsInvestmentOverride.self) { request in
-            // express.json() rejects a malformed body before the route runs, so the
-            // body parses before the ids.
-            let body = try PortfolioImportOverridesArea.bulkBody(request)
+            // express.json() rejects a malformed body before the route runs; the
+            // route's batch-id check precedes the body's own validation.
+            let parsed = try RequestBody.parseJavaScript(request.body)
             let batchId = try PortfolioImportBatchesArea.batchId(request)
+            let body = try PortfolioImportOverridesArea.bulkBody(parsed)
             return try await database.run { session in
                 try PortfolioImportOverridesArea.resolveRows(session, batch: batchId, body)
             }
         }
         backend.serve(OpenAPIOperations.PortfolioImportRowInvestmentOverride.self) { request in
-            let body = try PortfolioImportOverridesArea.body(request)
+            let parsed = try RequestBody.parseJavaScript(request.body)
             let ids = try ImportReviewArea.batchRowIds(request)
+            let body = try PortfolioImportOverridesArea.body(parsed)
             return try await database.run { session in
                 try PortfolioImportOverridesArea.overrideRow(
                     session, batch: ids.batch, row: ids.row, body)
