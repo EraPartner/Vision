@@ -951,7 +951,7 @@ enum PortfolioImportReconciliationArea {
             }
             proposedActions.append((action, row))
         }
-        proposedActions.sort { left, right in
+        try proposedActions.sort { left, right in
             let leftDate = try matchedSourceDate(left.row)
             let rightDate = try matchedSourceDate(right.row)
             let byDate = leftDate.utf16Compare(rightDate)
