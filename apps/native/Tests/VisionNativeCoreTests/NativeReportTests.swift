@@ -60,9 +60,22 @@ actor ReportTestTransport: APITransport {
     var notices: [ScreenNotice] = []
     var duringTheme: (@MainActor () -> Void)?
     var duringSave: (@MainActor () -> Void)?
+    /// Non-nil wires the submit-time exclusions resolver (the host's Statistics resolution).
+    var resolved: InsightExclusions?
+    var resolveFailure: APIError?
+    var resolveCount = 0
     func callbacks() -> NativeReportCallbacks {
-        NativeReportCallbacks(
+        var resolver: (@MainActor () async throws -> InsightExclusions)?
+        if resolved != nil || resolveFailure != nil {
+            resolver = {
+                self.resolveCount += 1
+                if let failure = self.resolveFailure { throw failure }
+                return self.resolved ?? .init()
+            }
+        }
+        return NativeReportCallbacks(
             preferences: { self.preferences },
+            exclusions: resolver,
             theme: {
                 self.duringTheme?()
                 return self.theme
@@ -176,6 +189,55 @@ actor ReportTestTransport: APITransport {
         let body = try #require(await service.requests.first?.body)
         #expect(
             body["excludedCategoryIds"] == .array(["everywhere", "statistics"].contains(scope) ? [.number(3)] : []))
+    }
+    /// Financial reports send what Statistics excludes, resolved at submit: a category hidden
+    /// after the settings screen read its tree is in the set, the ids the settings model holds
+    /// are not consulted, and an excluded id that is also hidden is sent once.
+    @Test func financialSubmitSendsTheExclusionsResolvedAtSubmit() async throws {
+        let service = ReportTestService()
+        let recorder = ReportCallbackRecorder()
+        recorder.preferences.excludedCategoryIds = [3]
+        recorder.resolved = InsightExclusions(categoryIds: [11, 3, 3], recipientIds: [7, 9])
+        let model = model(service, recorder)
+        model.configure(type: .financial)
+        await model.submit()
+        let body = try #require(await service.requests.first?.body)
+        #expect(recorder.resolveCount == 1)
+        #expect(body["excludedCategoryIds"] == .array([.number(3), .number(11)]))
+        #expect(body["excludedRecipientIds"] == .array([.number(7), .number(9)]))
+    }
+    @Test func resolvedExclusionsOutsideTheirScopeSendNothing() async throws {
+        let service = ReportTestService()
+        let recorder = ReportCallbackRecorder()
+        recorder.resolved = InsightExclusions(categoryIds: [11], recipientIds: [9], applies: false)
+        let model = model(service, recorder)
+        model.configure(type: .financial)
+        await model.submit()
+        let body = try #require(await service.requests.first?.body)
+        #expect(body["excludedCategoryIds"] == .array([]) && body["excludedRecipientIds"] == .array([]))
+    }
+    /// A report whose exclusions cannot be resolved is not generated with a partial set.
+    @Test func unresolvedExclusionsFailTheReportInsteadOfSendingAPartialSet() async throws {
+        let service = ReportTestService()
+        let recorder = ReportCallbackRecorder()
+        recorder.resolveFailure = .invalidRequest("categories")
+        let model = model(service, recorder)
+        model.configure(type: .financial)
+        await model.submit()
+        #expect(await service.requests.isEmpty)
+        #expect(recorder.notices.map(\.key) == ["statsPage.report.downloadError"])
+        #expect(!model.isSubmitting && recorder.closes == 0)
+    }
+    @Test(arguments: [NativeReportType.portfolio, .tax])
+    func nonFinancialNeverResolvesExclusions(_ type: NativeReportType) async throws {
+        let service = ReportTestService()
+        let recorder = ReportCallbackRecorder()
+        recorder.resolved = InsightExclusions(categoryIds: [11])
+        let model = model(service, recorder)
+        model.configure(type: type)
+        await model.submit()
+        let body = try #require(await service.requests.first?.body)
+        #expect(recorder.resolveCount == 0 && body["excludedCategoryIds"] == .array([]))
     }
     @Test(arguments: [NativeReportType.portfolio, .tax])
     func nonFinancialIgnoresExclusions(_ type: NativeReportType) async throws {

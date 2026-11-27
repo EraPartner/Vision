@@ -61,6 +61,20 @@ struct VisionCalendarGridWeekStartTests {
         #expect(monday.count == 42 && calendar.component(.weekday, from: monday[0]) == 2)
     }
 
+    /// A grid built on a Sunday-first Mac calendar still starts on the Monday the setting picks:
+    /// the grid itself, not only its helpers, reads the setting's weekday.
+    @Test func aGridOnASundayFirstCalendarFollowsTheMondaySetting() throws {
+        var calendar = Self.gregorian
+        calendar.firstWeekday = 1
+        let grid = VisionCalendarGrid(
+            selected: PlannedDay(year: 2026, month: 3, day: 15), calendar: calendar,
+            firstWeekday: StartOfWeek.monday.firstWeekday, locale: Locale(identifier: "en_US"),
+            previousLabel: "Previous", nextLabel: "Next", onSelect: { _ in })
+        let first = try #require(grid.gridDays.first)
+        #expect(calendar.component(.weekday, from: first) == 2)
+        #expect(grid.weekdaySymbols.first == "Mo" && grid.weekdaySymbols.last == "Su")
+    }
+
     @Test func weekdayRowStartsOnTheChosenDay() {
         let symbols = Self.gregorian.shortWeekdaySymbols
         let sunday = VisionCalendarGrid.rotatedSymbols(symbols, firstWeekday: 1)

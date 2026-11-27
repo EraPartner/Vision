@@ -177,8 +177,8 @@ final class ShellController: NSObject, NSWindowDelegate {
             callbacks: NativeReportCallbacks(
                 preferences: { [weak nativeSettings] in
                     guard let nativeSettings else { return .init() }
-                    // Hidden-category exclusions need the category tree; the dialog's first read
-                    // (configure) kicks the 60-second cached fetch so the submit sees fresh ids.
+                    // The dialog's exclusion summary counts hidden categories from the settings
+                    // tree; its first read loads that tree. The submit resolves the ids afresh.
                     if nativeSettings.categories.isEmpty {
                         Task { await nativeSettings.loadCategories() }
                     }
@@ -187,6 +187,14 @@ final class ShellController: NSObject, NSWindowDelegate {
                         exclusionScope: nativeSettings.dashboardString("exclusionScope", fallback: "everywhere"),
                         excludedCategoryIds: nativeSettings.reportExcludedCategoryIds,
                         excludedRecipientIds: nativeSettings.excludedRecipientIds)
+                },
+                exclusions: { [weak self, weak nativeSettings] in
+                    guard let self, self.nativeSettingsGeneration == settingsGeneration else {
+                        throw CancellationError()
+                    }
+                    // A debounced exclusion edit reaches the store before the report reads it.
+                    await nativeSettings?.flush()
+                    return try await client.homeExclusions(scope: "statistics")
                 },
                 theme: { [weak self] in
                     guard let self, self.nativeSettingsGeneration == settingsGeneration else {
@@ -1167,14 +1175,19 @@ final class ShellController: NSObject, NSWindowDelegate {
     }
 
     /// Stops the debounced frame save and writes the current frame, drains the debounced
-    /// settings writes (so the last edit is not lost and the backup sees it) and then runs the
-    /// quit-time backup when it is enabled; the shutdown task awaits both before the runtime
-    /// stops, within the 45-second quit timeout.
+    /// settings writes, the tax profile and the local values (so the last edit is not lost and
+    /// the backup sees it) and then runs the quit-time backup when it is enabled; the shutdown
+    /// task awaits both before the runtime stops, within the 45-second quit timeout.
     func prepareForQuit() async {
         stopHealthWatchdog()
         frameSaveTask?.cancel()
         await saveFrame()
         await shellModel.nativeSettings?.flush()
+        // A tax profile edit still inside its 500 ms debounce, and the local values (palette
+        // recents, Home layout, chart layouts, dismissals) still being written, reach the store
+        // before the services stop, as they do before a reload.
+        _ = await shellModel.tax?.profile.flush()
+        await drainNativeLocalWrites(shellModel)
         switch await runQuitBackup() {
         case .saved?: await notifier.post(strings.t("backup.done", fallback: "Backup saved."), askIfNeeded: false)
         case .failed?:
