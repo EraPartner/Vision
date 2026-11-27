@@ -426,7 +426,9 @@ public struct ReconcileDraft: Equatable, Sendable {
 
     /// Set as opening balance: no statement anchor yet, and a reading or a stored statement.
     public var canBackfill: Bool {
-        let anchored = account.anchorDate != nil
+        // Per currency: a stamped EUR balance leaves the USD opening balance open (Astra report
+        // 1, finding 29). A backend without the list falls back to any stamp.
+        let anchored = account.anchoredCurrencies.map { $0.contains(selectedCurrency) } ?? (account.anchorDate != nil)
         let storedAvailable = reading.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedStatement != nil
         return !anchored && (canSaveReading || storedAvailable)
     }

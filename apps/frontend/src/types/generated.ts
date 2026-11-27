@@ -6589,6 +6589,8 @@ export interface components {
             anchor_date?: string;
             /** @description Active ledger entries after the anchor, or all active entries when unstamped — the "{n} entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list endpoint. */
             post_anchor_count?: number;
+            /** @description Currency codes (sorted) that have a stamped balance row on or before today, so a per-currency opening balance knows which partitions are already anchored; absent when nothing is stamped. Only returned by the list endpoint. */
+            anchored_currencies?: string[];
             /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
             has_transactions?: boolean;
             is_active: boolean;

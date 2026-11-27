@@ -197,6 +197,13 @@ enum AccountsArea {
                        ) s
                    ) AS statement_balances,
                    (
+                     SELECT json_group_array(t3.currency)
+                       FROM (
+                         SELECT DISTINCT currency FROM transactions
+                          WHERE account_id = a.id AND is_active = 1 AND balance IS NOT NULL AND date <= ?1
+                       ) t3
+                   ) AS anchored_currencies,
+                   (
                      SELECT 1 FROM transactions t2
                      WHERE t2.account_id = a.id AND t2.is_active = 1
                      ORDER BY t2.date DESC
@@ -240,6 +247,15 @@ enum AccountsArea {
                 throw SQLRowDecodingError(column: "post_anchor_count", problem: "\(count) is not an integer")
             }
             item["post_anchor_count"] = JSValue.number(parsed).envelopeValue
+        }
+        // The currencies with a stamped balance, so the opening balance of another currency
+        // stays available (Astra report 1, finding 29).
+        if let text = try row.optionalText("anchored_currencies"), case .array(let values)? = JSValue.parse(text) {
+            let codes = Set(values.map { storedCurrencyCode($0.stringValue) })
+            if !codes.isEmpty {
+                item["anchored_currencies"] = .array(
+                    codes.sorted { $0.utf16.lexicographicallyPrecedes($1.utf16) }.map(JSONValue.string))
+            }
         }
         item["has_transactions"] = .bool(try row.bool("has_transactions"))
 

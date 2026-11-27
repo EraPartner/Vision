@@ -41,6 +41,9 @@
       "drift": 1.5,
       "anchor_date": "2024-01-15",
       "post_anchor_count": 1,
+      "anchored_currencies": [
+        "EUR"
+      ],
       "has_transactions": true,
       "is_active": true,
       "closed_at": "2024-01-15T10:30:00.000Z",

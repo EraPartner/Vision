@@ -3,7 +3,7 @@ title: "Native parity inventory: Accounts, categories, payees and tags"
 type: reference
 status: active
 date: 2026-10-25
-updated: 2026-10-25
+updated: 2026-11-27
 tags:
   [
     reference,
@@ -139,7 +139,7 @@ Fields:
 | 4   | Card           | `accounts.reconcile.readingSubmit` "Save reading"               | click        | `PUT /api/accounts/:id/statement-balances/:currency` with `{balance, date}`, then toast `accounts.reconcile.readingSaved` and close. Disabled until both the reading and the date are valid                                                     | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:518` | native |
 | 5   | Resolutions    | `accounts.reconcile.acceptSubmit` "Accept computed balance"     | click        | If a reading was entered, PUTs it first and stops if the difference is now zero. Otherwise calls `POST /api/accounts/:id/reconcile` with mode `accept` and the currency. Toast `accounts.reconcile.acceptSaved`, or `accounts.reconcile.failed` | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:594` | native |
 | 6   | Resolutions    | `accounts.reconcile.adjustSubmit` "Add adjustment transaction"  | click        | Same flow with mode `adjustment`, which adds a balancing ledger row. Toast `accounts.reconcile.adjustSaved`                                                                                                                                     | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:612` | native |
-| 7   | Resolutions    | `accounts.reconcile.backfillSubmit` "Set as opening balance"    | click        | `POST /api/accounts/:id/opening-balance` with the reading (or the stored statement) as the anchor. Shown only when the account has no `anchor_date`. Toast `accounts.openingBalance.saved` or `accounts.openingBalance.failed`                  | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:636` | native |
+| 7   | Resolutions    | `accounts.reconcile.backfillSubmit` "Set as opening balance"    | click        | `POST /api/accounts/:id/opening-balance` with the reading (or the stored statement) as the anchor. Shown only when the account has no `anchor_date`; the Swift app checks the selected currency in `anchored_currencies` instead, so another currency's anchor does not hide it (Astra report 1, finding 29). Toast `accounts.openingBalance.saved` or `accounts.openingBalance.failed`                  | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:636` | native |
 | 8   | Alert / footer | `accounts.reconcile.showSince` "Show transactions since {date}" | click        | Closes the dialog and navigates to `/accounts/:id?since=<date>`. The button is emphasized inside the backdated alert and quiet otherwise                                                                                                        | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:355` | native |
 | 9   | Footer         | `common.cancel` "Cancel"                                        | click        | Closes the dialog                                                                                                                                                                                                                               | `apps/frontend/src/features/accounts/ReconcileDialog.tsx:655` | native |
 

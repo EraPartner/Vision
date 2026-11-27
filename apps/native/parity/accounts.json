@@ -144,6 +144,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-01-10",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "EUR"
+              ],
               "has_transactions": true,
               "statement_balances": [
                 {
@@ -191,6 +194,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-03-04",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "GBP"
+              ],
               "has_transactions": true,
               "statement_balances": [],
               "computed_balance": 394.33,
@@ -367,6 +373,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-01-10",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "EUR"
+              ],
               "has_transactions": true,
               "statement_balances": [
                 {
@@ -449,6 +458,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-03-04",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "GBP"
+              ],
               "has_transactions": true,
               "statement_balances": [],
               "computed_balance": 394.33,
@@ -657,6 +669,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-03-04",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "GBP"
+              ],
               "has_transactions": true,
               "statement_balances": [],
               "computed_balance": 394.33,
@@ -835,6 +850,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-01-10",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "EUR"
+              ],
               "has_transactions": true,
               "statement_balances": [
                 {
@@ -882,6 +900,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-03-04",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "GBP"
+              ],
               "has_transactions": true,
               "statement_balances": [],
               "computed_balance": 394.33,
@@ -3120,6 +3141,9 @@
               "updated_at": "2026-11-25T07:45:45.624Z",
               "anchor_date": "2024-04-01",
               "post_anchor_count": 1,
+              "anchored_currencies": [
+                "EUR"
+              ],
               "has_transactions": true,
               "statement_balances": [
                 {
@@ -3166,6 +3190,9 @@
               "updated_at": "2025-03-01T09:00:00.000Z",
               "anchor_date": "2024-01-10",
               "post_anchor_count": 4,
+              "anchored_currencies": [
+                "EUR"
+              ],
               "has_transactions": true,
               "statement_balances": [
                 {
@@ -3252,6 +3279,9 @@
               "updated_at": "2026-11-25T07:45:46.020Z",
               "anchor_date": "2024-03-04",
               "post_anchor_count": 6,
+              "anchored_currencies": [
+                "GBP"
+              ],
               "has_transactions": true,
               "statement_balances": [
                 {
