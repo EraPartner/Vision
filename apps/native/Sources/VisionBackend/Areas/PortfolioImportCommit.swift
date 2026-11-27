@@ -23,7 +23,7 @@ enum PortfolioImportCommitArea {
               FROM accounts a
              WHERE a.id = ?
             """,
-            [.integer(Int64(accountId))]
+            [.integer(Int64(accountId))])
         else {
             throw BackendHTTPError.notFound("Account not found")
         }
@@ -104,7 +104,7 @@ enum PortfolioImportCommitArea {
               FROM portfolio_import_batches b
              WHERE b.id = ?
             """,
-            [.integer(Int64(batchId))]
+            [.integer(Int64(batchId))])
         else { return nil }
         return LockedBatch(
             id: Int(try row.int64("id")),
@@ -115,6 +115,7 @@ enum PortfolioImportCommitArea {
                 .map(PortfolioImportReconciliationArea.storedConfig)
                 ?? .text(""),
             accountID: try row.optionalInt64("account_id").flatMap { Int(exactly: $0) }
+        )
     }
 
     /// `assertReviewable`: a missing batch is 404; a terminal batch is a 400 with its status.
@@ -546,8 +547,6 @@ extension PortfolioImportCommitArea {
                 "proof": proof,
             ])), as: UTF8.self)
     }
-}
-
 }
 
 // MARK: - Custody commits
