@@ -338,7 +338,7 @@ enum PortfolioImportReconciliationArea {
         let arguments = investmentIds.map { SQLValue.integer(Int64($0)) }
         let snapshotRows = try session.rows(
             """
-            SELECT \(try SchemaSQLFunctions.snapshotSQL(alias: "pt")) AS snapshot
+            SELECT \(try SchemaFunctions.snapshotSQL(alias: "pt")) AS snapshot
               FROM portfolio_transactions pt
              WHERE pt.investment_id IN (\(placeholders))
              ORDER BY pt.investment_id, pt.date, pt.id
@@ -514,7 +514,7 @@ enum PortfolioImportReconciliationArea {
             guard let format = try row.optionalText("format"),
                 let reference = try row.optionalText("source_transaction_id")
             else { continue }
-            let normalized = ImportUploadsArea.normalizeIdentityText(reference)
+            let normalized = ImportInterop.normalizeIdentityText(reference)
             if normalized.isEmpty { continue }
             keys[id, default: []].append("\(format)\u{0}\(normalized)")
         }
@@ -815,7 +815,7 @@ enum PortfolioImportReconciliationArea {
         for index in rows.indices
         where rows[index].assetAdjustmentDetails?["kind"]?.stringValue == "yield_reversal"  // lint:allow string-literal-compare the staged adjustment detail kinds
         {
-            guard let details = rows[index].assetAdjustmentDetails else {
+            guard var details = rows[index].assetAdjustmentDetails else {
                 throw RequiredValueError(
                     message: "the filter above selected rows with adjustment details")
             }
@@ -828,7 +828,7 @@ enum PortfolioImportReconciliationArea {
             }
             let hashes = try eligibleYieldSourceHashes(
                 session, investmentId: rows[index].investmentID?.rawValue ?? 0, accountId: accountId)
-            details["eligibleSourceRecordHashes"] = .array(hashes.map(JSValue.string))
+            details["eligibleSourceRecordHashes"] = .array(hashes.map(JSONValue.string))
             rows[index].assetAdjustmentDetails = details
         }
         var investmentIds: [Int] = []
@@ -958,7 +958,7 @@ enum PortfolioImportReconciliationArea {
             if byDate != 0 { return byDate < 0 }
             let byBatch = left.row.batchID.rawValue - right.row.batchID.rawValue
             if byBatch != 0 { return byBatch < 0 }
-            return left.row.rowIndex - right.row.rowIndex
+            return left.row.rowIndex < right.row.rowIndex
         }
         let base = Double(Int.max) - Double(proposedActions.count)
         for (index, proposed) in proposedActions.enumerated() {
@@ -1035,7 +1035,7 @@ enum PortfolioImportReconciliationArea {
         guard txns.contains(where: { PortfolioCustody.custodyEventTypes.contains($0.type) }) else {
             return
         }
-        guard PortfolioCustody.areLotsFullyAssigned(txns) else {
+        guard PortfolioCore.areLotsFullyAssigned(txns) else {
             throw BackendHTTPError.conflict(
                 "Asset custody events require the original acquisitions to be reconciled"
                 + " to their source accounts")
