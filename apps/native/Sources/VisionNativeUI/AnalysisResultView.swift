@@ -124,16 +124,6 @@ public struct AnalysisResultView: View {
         }.task(id: focusRequest) { if focusRequest > 0 { headingFocused = true } }
     }
     private func labels(_ result: AnalysisResult) -> [String: String] {
-        let datasets: [TaxValue] = model.datasets.map {
-            .object(["fields": .array($0.fields.map(\.raw)), "measures": .array($0.measures.map(\.raw))])
-        }
-        return Dictionary(
-            uniqueKeysWithValues: result.effectiveColumns.map {
-                (
-                    $0.id,
-                    AnalysisPresentation.columnLabel(
-                        result: result.raw, id: $0.id, datasets: datasets, strings: strings)
-                )
-            })
+        AnalysisPresentation.columnLabels(result: result, datasets: model.datasets, strings: strings)
     }
 }

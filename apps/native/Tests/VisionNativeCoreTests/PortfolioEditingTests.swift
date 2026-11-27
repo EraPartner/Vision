@@ -126,6 +126,17 @@ struct PortfolioEditingDraftTests {
         #expect(provider.id.isEmpty)
         #expect(provider.latestUrl == " https://example.org/quotes ")
     }
+    /// Astra report 1, finding 39: an edit clears an emptied quote ticker instead of omitting it.
+    @Test func anEditSendsAClearedProviderFieldAsNull() throws {
+        var edit = PortfolioInvestmentDraft(
+            investment: try editingInvestment(provider: "yahoo"), settings: .init(numberFormat: .us))
+        edit.provider.id = "  "
+        #expect(try edit.payload(format: .us).fields["price_provider_id"] == .null)
+        var provider = PortfolioProviderDraft()
+        provider.id = ""
+        #expect(provider.payload(clearingEmpty: true)["price_provider_id"] == .null)
+        #expect(provider.payload["price_provider_id"] == nil)
+    }
     @Test func goingBackToTheTypeStepIsClearedByChoosingAClass() {
         var draft = PortfolioInvestmentDraft(settings: .init(numberFormat: .us), today: "2026-10-13")
         #expect(draft.assetClass == nil)

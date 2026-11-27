@@ -701,6 +701,17 @@ enum AccountsFixture {
         #expect(!draft.canSaveReading)
     }
 
+    /// Astra report 1, finding 28: a reading that is not an amount blocks the resolutions
+    /// instead of falling back to the stored reading.
+    @Test func anInvalidReadingBlocksTheResolutions() {
+        var draft = ReconcileDraft(account: Self.drifting(), today: Self.today, numberFormat: .eu)
+        #expect(!draft.readingBlocksResolution)
+        draft.setReading("120x")
+        #expect(draft.readingBlocksResolution)
+        draft.setReading("120")
+        #expect(!draft.readingBlocksResolution)
+    }
+
     @Test func multiCurrencyAccountsPickAPartitionAndTheBackfillNeedsNoAnchor() {
         let account = AccountsFixture.account(
             7, "Multi", balance: 300, multiCurrencyCash: true,

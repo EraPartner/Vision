@@ -19,6 +19,15 @@ struct NetWorthTests {
         let offsets = await service.calls.map { $0.offset }
         #expect(offsets == [nil, 0, 2] || offsets == [0, nil, 2])
     }
+    /// Astra report 1, finding 44: a change from a zero start has no percentage.
+    @Test func aZeroStartHasNoAllTimePercentage() async throws {
+        let service = NetWorthFake()
+        await service.startAtZero()
+        let model = NetWorthModel(service: service)
+        await model.load(currency: "EUR", pageSize: 2, route: try #require(NativeRoute("/portfolio/net-worth")))
+        #expect(model.allTimeChange == 100)
+        #expect(model.allTimePercent == nil)
+    }
     @Test func emptyPrematurePageIsUnavailableRatherThanClaimingCompleteHistory() async throws {
         let service = NetWorthFake()
         await service.setEmptyPage()
@@ -233,6 +242,8 @@ private actor NetWorthFake: NetWorthService {
     private var releaseWaiter: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     func setEmptyPage() { emptyPage = true }
+    private var zeroStart = false
+    func startAtZero() { zeroStart = true }
     func failBreakdown() { failingBreakdown = true }
     func pauseEuroHistory() { pauseEuro = true }
     func waitForPause() async { if releaseWaiter == nil { await withCheckedContinuation { pauseWaiter = $0 } } }
@@ -253,7 +264,7 @@ private actor NetWorthFake: NetWorthService {
         let rows: [OpenAPI.NetWorthSnapshot]
         if limit == nil {
             rows = [
-                snapshot("2025-06-01", 1), snapshot("2025-06-02", 2), snapshot("2025-06-03", 3),
+                snapshot("2025-06-01", zeroStart ? 0 : 1), snapshot("2025-06-02", 2), snapshot("2025-06-03", 3),
                 snapshot("2025-06-04", 4),
             ]
         } else if emptyPage {

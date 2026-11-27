@@ -127,7 +127,10 @@ public struct PortfolioProviderDraft: Equatable, Sendable {
         provider = value
         id = ""
     }
-    public var payload: [String: PortfolioWriteValue] {
+    public var payload: [String: PortfolioWriteValue] { payload(clearingEmpty: false) }
+    /// The provider fields. An edit sends an emptied field as `null`, so clearing the quote
+    /// ticker clears the stored override instead of keeping it (Astra report 1, finding 39).
+    public func payload(clearingEmpty: Bool) -> [String: PortfolioWriteValue] {
         var fields: [String: PortfolioWriteValue] = ["price_provider": .string(provider.rawValue)]
         for (key, value) in [
             ("price_provider_id", id), ("price_provider_url", legacyUrl),
@@ -137,7 +140,11 @@ public struct PortfolioProviderDraft: Equatable, Sendable {
             ("price_provider_history_price_path", historyPricePath),
         ] {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { fields[key] = .string(trimmed) }
+            if !trimmed.isEmpty {
+                fields[key] = .string(trimmed)
+            } else if clearingEmpty {
+                fields[key] = .null
+            }
         }
         return fields
     }
@@ -226,7 +233,7 @@ public struct PortfolioInvestmentDraft: Equatable, Sendable {
         {
             throw PortfolioFormIssue("symbol", "invEdit.symbolRequired")
         }
-        var fields = provider.payload
+        var fields = provider.payload(clearingEmpty: isEditing)
         fields["name"] = .string(trimmed)
         fields["currency"] = .string(currency.rawValue)
         if !isEditing { fields["asset_class"] = .string(assetClass.rawValue) }

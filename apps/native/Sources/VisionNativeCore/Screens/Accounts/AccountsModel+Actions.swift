@@ -133,7 +133,7 @@ extension AccountsModel {
     /// Accept computed balance / Add adjustment transaction: a typed reading is saved first,
     /// and a reading that already matches the ledger is the resolution.
     public func resolve(_ mode: ReconcileMode) async {
-        guard let draft = reconcile, draft.pendingAction == nil, !draft.readingNeedsDate else { return }
+        guard let draft = reconcile, draft.pendingAction == nil, !draft.readingBlocksResolution else { return }
         reconcile?.pendingAction = .resolve(mode)
         do {
             if draft.canSaveReading, let balance = draft.parsedReading, let date = draft.readingDate {

@@ -67,7 +67,13 @@ enum ForecastEnsemble {
             return out
         }
         let sum = eligible.reduce(0) { $0 + (weight(weights, $1) ?? 0) }
-        for id in eligible { set(&out, id, sum > 0 ? (weight(weights, id) ?? 0) / sum : 0) }
+        // Stored weights that name none of the eligible methods share the forecast equally
+        // instead of zeroing it (Astra report 1, finding 42).
+        guard sum > 0 else {
+            for id in eligible { set(&out, id, 1 / Double(eligible.count)) }
+            return out
+        }
+        for id in eligible { set(&out, id, (weight(weights, id) ?? 0) / sum) }
         return out
     }
 

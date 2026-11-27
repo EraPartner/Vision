@@ -32,11 +32,12 @@
       "operationId": "refreshExchangeRates",
       "method": "POST",
       "path": "/api/info/exchange-rates/refresh",
-      "status": 200,
+      "status": 502,
       "response": {
-        "ok": true,
-        "data": {
-          "message": "Exchange rates refreshed from ECB"
+        "ok": false,
+        "error": {
+          "code": "BAD_GATEWAY",
+          "message": "No exchange-rate provider returned rates"
         }
       }
     },

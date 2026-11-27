@@ -45,4 +45,20 @@ import Testing
         #expect(all.reduce(Decimal(0), +) == 5)
         #expect((all.max() ?? 0) - (all.min() ?? 0) <= Decimal(string: "0.01")!)
     }
+
+    /// A Keychain item that exists but refuses to be read.
+    private struct LockedPassphraseStore: PassphraseStore {
+        func read() throws -> String? { throw KeychainError(status: -25_293) }
+        func write(_ passphrase: String) throws {}
+        func delete() throws {}
+        func contains() -> Bool { true }
+    }
+
+    /// Finding 24: a stored passphrase the Keychain will not return blocks an unencrypted backup.
+    @Test func anUnreadableStoredPassphraseIsNotTreatedAsNone() {
+        #expect(BackupPassphrase.isStoredButUnreadable(store: LockedPassphraseStore()))
+        #expect(!BackupPassphrase.isStoredButUnreadable(store: InMemoryPassphraseStore("stored")))
+        #expect(!BackupPassphrase.isStoredButUnreadable(store: InMemoryPassphraseStore()))
+        #expect(!BackupPassphrase.isStoredButUnreadable(store: nil))
+    }
 }

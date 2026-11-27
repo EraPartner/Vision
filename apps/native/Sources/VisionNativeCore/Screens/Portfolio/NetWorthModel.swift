@@ -72,7 +72,8 @@ public final class NetWorthModel {
     public var allTimeChange: Decimal? { data.map { $0.current.netWorth - (snapshots.first?.netWorth ?? 0) } }
     public var allTimePercent: Decimal? {
         guard let first = snapshots.first?.netWorth, let change = allTimeChange else { return nil }
-        return first == 0 ? 0 : change / abs(first) * 100
+        // From a zero start the change has no percentage (Astra report 1, finding 44).
+        return first == 0 ? nil : change / abs(first) * 100
     }
     public var assets: Decimal? { data.map { $0.current.liquid + $0.current.investments } }
     public var debt: Decimal? { data.map { abs($0.current.liabilities) } }

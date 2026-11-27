@@ -824,6 +824,14 @@ public final class AnalysisModel {
         guard canSave else { return }
         isSaving = true
         savedFeedback = nil
+        // An edited query is run before it is saved, so the saved columns are the new query's
+        // and not the last result's (Astra report 1, finding 31). A failed run shows its error.
+        if mode == .sql, queryOutdated {
+            guard await run(), !queryOutdated else {
+                isSaving = false
+                return
+            }
+        }
         let epoch = selectedEpoch
         let stamp = draftSignature
         let selected = selectedSaved

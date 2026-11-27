@@ -10,4 +10,13 @@ public protocol InProcessDatabaseHolder: Sendable {
     /// Allows work again; the connection opens `databasePath` on its next use, and serves
     /// attachments rooted at `attachmentsDirectory` (nil: none configured).
     func resume(databasePath: String, attachmentsDirectory: String?) async
+    /// `resume`, computing business dates in `timeZone`: the IANA zone the Bun backend runs
+    /// with as `APP_TIMEZONE`, so both writers agree on "today" (nil: keep the current zone).
+    func resume(databasePath: String, attachmentsDirectory: String?, timeZone: String?) async
+}
+
+extension InProcessDatabaseHolder {
+    public func resume(databasePath: String, attachmentsDirectory: String?, timeZone: String?) async {
+        await resume(databasePath: databasePath, attachmentsDirectory: attachmentsDirectory)
+    }
 }

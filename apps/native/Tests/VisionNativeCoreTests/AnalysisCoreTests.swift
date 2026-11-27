@@ -289,6 +289,34 @@ struct AnalysisCoreTests {
         await screens.didAppear()
         #expect(screens.workspace.sqlHistory == ["SELECT retained"])
     }
+    /// Astra report 1, finding 31: saving edited SQL runs it first, so the saved columns are
+    /// the edited query's.
+    @Test func savingEditedSqlRunsItBeforeSaving() async throws {
+        let service = AnalysisFixtureService()
+        let model = AnalysisModel(service: service)
+        model.setMode(.sql)
+        model.sql = "SELECT spent"
+        #expect(await model.run())
+        model.name = "Synthetic"
+        model.sql = "SELECT income"
+        #expect(model.queryOutdated)
+        await model.save()
+        #expect(await service.executes == 2)
+        #expect(!model.queryOutdated)
+        #expect(await service.lastSaveInput?["querySpec"]?["sql"] == .string("SELECT income"))
+    }
+    /// Astra report 1, finding 25: a result that repeats a column name still gets its labels.
+    @Test func repeatedResultColumnNamesKeepTheFirstLabel() throws {
+        var wire = analysisResultWire()
+        wire["columns"] = .array([
+            .object(["id": .string("a"), "type": .string("integer")]),
+            .object(["id": .string("a"), "type": .string("integer")]),
+        ])
+        let result = try wire.decode(AnalysisResult.self)
+        let labels = AnalysisPresentation.columnLabels(
+            result: result, datasets: [], strings: DictionaryStrings(language: .en, table: [:]))
+        #expect(labels == ["a": "a"])
+    }
     @Test func reloadDrainWaitsForAcceptedRunAndItsFutureSQLHistoryWrite() async throws {
         let service = AnalysisFixtureService()
         let store = AnalysisReloadTailHistoryStore()
@@ -444,6 +472,8 @@ private func analysisProposalWire(id: SavedAnalysisID = "saved-A") -> TaxValue {
     ])
 }
 private actor AnalysisFixtureService: AnalysisService {
+    var executes = 0
+    var lastSaveInput: TaxValue?
     var savedReads = 0
     var drillReads = 0
     var readsAfterSaveFailure = 0
@@ -500,6 +530,7 @@ private actor AnalysisFixtureService: AnalysisService {
     }
     func analysisExecute(_ input: TaxValue) async throws -> AnalysisResult {
         await wait("execute")
+        executes += 1
         if executeFails { throw APIError.network("Synthetic execution failure") }
         return try analysisResultWire(
             id: input["requestId"]?.stringValue,
@@ -530,6 +561,7 @@ private actor AnalysisFixtureService: AnalysisService {
     }
     func analysisSave(id: SavedAnalysisID?, input: TaxValue) async throws -> AnalysisSaved {
         await wait("save")
+        lastSaveInput = input
         if saveFails {
             hadSaveFailure = true
             throw APIError.network("Synthetic lost saved acknowledgement")

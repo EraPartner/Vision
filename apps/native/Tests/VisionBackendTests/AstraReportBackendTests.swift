@@ -284,4 +284,48 @@ import VisionNativeCore
                 } == 409)
         }
     }
+
+    /// Finding 15: a refresh is a success only when a rate was stored.
+    struct FixedFetcher: ProviderFetching {
+        let ecb: String
+        let erApi: String
+        func get(_ url: URL, timeout: TimeInterval) async throws -> ProviderResponse {
+            ProviderResponse(status: 200, body: Data((url.host == "www.ecb.europa.eu" ? ecb : erApi).utf8))
+        }
+    }
+
+    @Test func aRefreshThatStoresNoRateFails() async throws {
+        let database = try Self.database([])
+        let failing = FixedFetcher(ecb: "unavailable", erApi: "{not json")
+        #expect(await ExchangeRatesArea.refresh(database: database, fetcher: failing) == false)
+        let empty = FixedFetcher(ecb: "<Cube></Cube>", erApi: #"{"result":"success","rates":{}}"#)
+        #expect(await ExchangeRatesArea.refresh(database: database, fetcher: empty) == false)
+        let working = FixedFetcher(ecb: "<Cube currency='USD' rate='1.08'/>", erApi: "{not json")
+        #expect(await ExchangeRatesArea.refresh(database: database, fetcher: working))
+    }
+
+    /// Finding 22: the Swift backend computes "today" in the zone the Bun backend runs with.
+    @Test func theInProcessDatabaseFollowsTheBackendZone() async throws {
+        let brussels = try #require(TimeZone(identifier: "Europe/Brussels"))
+        let database = BackendDatabase(time: SQLTimestamps(timeZone: brussels))
+        await database.resume(databasePath: ":memory:", attachmentsDirectory: nil, timeZone: "Pacific/Kiritimati")
+        #expect(await database.timeZoneIdentifier == "Pacific/Kiritimati")
+        await database.resume(databasePath: ":memory:", attachmentsDirectory: nil, timeZone: "Not/AZone")
+        #expect(await database.timeZoneIdentifier == "Pacific/Kiritimati")
+        #expect(
+            ChildEnvironment.appTimeZone(runtimeEnvironment: ["APP_TIMEZONE": "Asia/Tokyo"], timeZone: "Europe/Helsinki")
+                == "Asia/Tokyo")
+        #expect(ChildEnvironment.appTimeZone(runtimeEnvironment: ["APP_TIMEZONE": ""], timeZone: "Europe/Helsinki") == "Europe/Helsinki")
+    }
+
+    /// Finding 42: weights that name only an unavailable method do not zero the forecast.
+    @Test func weightsForAnUnavailableMethodFallBackToEqualShares() {
+        let outputs = [
+            ForecastEnsemble.MethodOutput(
+                id: "simple_avg", series: [ForecastPoint(date: "2026-01-02", value: 125)], failed: false),
+            ForecastEnsemble.MethodOutput(id: "ewma", series: [], failed: true),
+        ]
+        let points = ForecastEnsemble.forecast(dates: ["2026-01-02"], outputs: outputs, weights: [("ewma", 1)])
+        #expect(points == [ForecastPoint(date: "2026-01-02", value: 125)])
+    }
 }

@@ -397,6 +397,11 @@ public struct ReconcileDraft: Equatable, Sendable {
     /// `readingNeedsDate`: blocks the resolutions.
     public var readingNeedsDate: Bool { hasReading && readingDate == nil }
 
+    /// A typed reading that is not an amount, or one without its date, blocks the
+    /// resolutions: they would otherwise fall back to the stored reading (Astra report 1,
+    /// finding 28).
+    public var readingBlocksResolution: Bool { readingInvalid || readingNeedsDate }
+
     /// The live Difference: the reading minus the base, else the stored difference.
     public var previewDrift: Decimal { parsedReading.map { $0 - base } ?? delta }
 

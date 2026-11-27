@@ -694,6 +694,16 @@ struct StatisticsDataTests {
         #expect(
             StatisticsWindow.all.queryItems(now: date, calendar: calendar, includeAllTime: true).first?.value == "true")
     }
+    /// Astra report 1, finding 43: a Buddhist-calendar Mac still asks for Gregorian days.
+    @Test func rollingWindowIsGregorianUnderAnotherCalendar() throws {
+        var calendar = Calendar(identifier: .buddhist)
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/Brussels"))
+        let date = try #require(Calendar(identifier: .gregorian).date(
+            from: DateComponents(timeZone: calendar.timeZone, year: 2026, month: 3, day: 15, hour: 12)))
+        let query = StatisticsWindow.rolling24.queryItems(now: date, calendar: calendar)
+        #expect(query.first { $0.name == "start_date" }?.value == "2024-04-01")
+        #expect(query.first { $0.name == "end_date" }?.value == "2026-03-15")
+    }
     @Test func mixedSignCategoriesKeepExplicitExpenseAndIncomeInsteadOfSignOfNet() throws {
         let snapshot = try statisticsSnapshotFixture()
         let periods: Set<String> = ["2026-09"]

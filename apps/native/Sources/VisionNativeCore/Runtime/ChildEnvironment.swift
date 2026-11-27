@@ -38,6 +38,13 @@ public enum ChildEnvironment {
         return identifier
     }
 
+    /// The backend's `APP_TIMEZONE`: an explicit runtime.env value wins over the Mac's zone.
+    public static func appTimeZone(
+        runtimeEnvironment: [String: String], timeZone: String? = systemTimeZone()
+    ) -> String? {
+        runtimeEnvironment["APP_TIMEZONE"].flatMap { $0.isEmpty ? nil : $0 } ?? timeZone
+    }
+
     /// `buildNativeBackendEnv` for the packaged backend. Vision Native never runs the
     /// synthetic smoke mode (`VISION_SYNTHETIC_SMOKE_OFFLINE` is always removed). The
     /// backend opens `VISION_DATABASE_PATH` and migrates it from
@@ -54,10 +61,8 @@ public enum ChildEnvironment {
         // `{ ...runtimeEnv, KEY: value }`: a later `undefined` (nil) replaces an earlier
         // value and is then skipped, so it removes that key from the overrides.
         var merged: [String: String?] = withoutRetired(runtimeEnvironment).mapValues { Optional($0) }
-        // An explicit APP_TIMEZONE in runtime.env still wins.
-        let explicitZone = runtimeEnvironment["APP_TIMEZONE"].flatMap { $0.isEmpty ? nil : $0 }
         let fixed: [(String, String?)] = [
-            ("APP_TIMEZONE", explicitZone ?? timeZone),
+            ("APP_TIMEZONE", appTimeZone(runtimeEnvironment: runtimeEnvironment, timeZone: timeZone)),
             ("SERVER_HOST", RuntimeConstants.loopbackHost),
             ("PORT", String(port)),
             ("NODE_ENV", "production"),
