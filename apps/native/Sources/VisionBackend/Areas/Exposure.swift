@@ -306,6 +306,17 @@ extension ExposureArea {
             throw invalidSource("The exposure source bundle is invalid", issues)
         }
 
+        // `z.array(...).max(n)`: an oversized array fails before its elements are parsed.
+        if rawClassifications.count > 5_000 {
+            issues.append(Issue(
+                code: "too_big", path: [.key("classifications")],
+                message: "Too big: expected array to have <=5000 items"))
+        }
+        if rawDocuments.count > 500 {
+            issues.append(Issue(
+                code: "too_big", path: [.key("fundDocuments")], message: "Too big: expected array to have <=500 items"))
+        }
+        guard issues.isEmpty else { throw invalidSource("The exposure source bundle is invalid", issues) }
         var classifications: [ClassificationInput] = []
         for (index, raw) in rawClassifications.enumerated() {
             let path: [Issue.Either] = [.key("classifications"), .index(index)]
@@ -395,13 +406,20 @@ extension ExposureArea {
         if !unknown.isEmpty {
             issues.append(Issue(code: "unrecognized_keys", path: path, message: "Unrecognized key: \"\(unknown.first ?? "")\"", keys: unknown))
         }
-        guard let investmentId = positiveInt(fields["investmentId"], at: path + [.key("investmentId")], issues: &issues, optional: false),
-            let shareClassIdentifier = identifier(
-                fields["shareClassIdentifier"], at: path + [.key("shareClassIdentifier")], issues: &issues),
-            let document = fields["document"]
+        // Every field is checked, so a missing share class or document is an issue (failing the
+        // whole bundle) instead of an entry dropped from an otherwise successful import.
+        let investmentId = positiveInt(fields["investmentId"], at: path + [.key("investmentId")], issues: &issues, optional: false)
+        let shareClassPath = path + [.key("shareClassIdentifier")]
+        if fields["shareClassIdentifier"] == nil {
+            issues.append(Issue(code: "invalid_type", path: shareClassPath, message: "Invalid input: expected object, received undefined"))
+        }
+        let shareClassIdentifier = identifier(fields["shareClassIdentifier"], at: shareClassPath, issues: &issues)
+        // `fundHoldingsDocumentSchema`: the holdings, weights, coverage, dates, provenance and
+        // staleness must be consistent before the document can back reported exposure.
+        let documentIssues = FundHoldingsContract.validate(fields["document"], at: path + [.key("document")])
+        issues += documentIssues
+        guard let investmentId, let shareClassIdentifier, let document = fields["document"], documentIssues.isEmpty
         else { return nil }
-        // The document contract (fund-holdings) validates structurally; the corpus replays its
-        // accepted shapes and the check answers of the sharing-level failures.
         var input = ClassificationInput(investmentId: investmentId, issuerId: "", issuerName: "")
         input.fundDocument = true
         input.document = document
@@ -440,6 +458,13 @@ extension ExposureArea {
             issues.append(Issue(code: "invalid_type", path: [.key("clear")], message: "Invalid input: expected array, received \((root["clear"] ?? .null).zodTypeName)"))
             throw invalidSource("The classification changes are invalid", issues)
         }
+        if rawSet.count > 5_000 {
+            issues.append(Issue(code: "too_big", path: [.key("set")], message: "Too big: expected array to have <=5000 items"))
+        }
+        if rawClear.count > 5_000 {
+            issues.append(Issue(code: "too_big", path: [.key("clear")], message: "Too big: expected array to have <=5000 items"))
+        }
+        guard issues.isEmpty else { throw invalidSource("The classification changes are invalid", issues) }
         for (index, raw) in rawSet.enumerated() {
             let path: [Issue.Either] = [.key("set"), .index(index)]
             guard let fields = raw.objectValue else {
@@ -473,13 +498,10 @@ extension ExposureArea {
             changes.clear.append(id)
         }
         // `superRefine`'s duplicate check, over the set ids then the clear ids.
-        var seen: [Int] = []
-        for id in changes.set.map({ $0.investmentId }) + changes.clear {
-            if seen.contains(id) {
-                issues.append(Issue(code: "custom", message: "Each investment may appear only once per request"))
-                break
-            }
-            seen.append(id)
+        var seen: Set<Int> = []
+        for id in changes.set.map({ $0.investmentId }) + changes.clear where !seen.insert(id).inserted {
+            issues.append(Issue(code: "custom", message: "Each investment may appear only once per request"))
+            break
         }
         guard issues.isEmpty else { throw invalidSource("The classification changes are invalid", issues) }
         return changes
@@ -871,6 +893,12 @@ extension ExposureArea {
         return "name:\(key)".prefix(128).description
     }
 
+    /// `a.localeCompare(b, "en")` as a sort predicate: the menus order mixed-case and accented
+    /// names as the TypeScript route does, not by code point.
+    static func englishPrecedes(_ a: String, _ b: String) -> Bool {
+        a.compare(b, locale: Locale(identifier: "en")) == .orderedAscending
+    }
+
     /// `getExposureClassifications`: the classifiable holdings, the issuers and sectors in use.
     static func classifications(_ session: BackendSession) throws -> [String: JSONValue] {
         let investments = try classifiableInvestments(session)
@@ -915,10 +943,10 @@ extension ExposureArea {
                     } ?? .null,
                 ])
             }),
-            "issuers": .array(issuers.sorted { $0.1 < $1.1 }.map { value -> JSONValue in
+            "issuers": .array(issuers.sorted { englishPrecedes($0.1, $1.1) }.map { value -> JSONValue in
                 .object(["issuerId": .string(value.issuerId), "issuerName": .string(value.issuerName)])
             }),
-            "sectors": .array(sectors.sorted { $0 < $1 }.map { .string($0) }),
+            "sectors": .array(sectors.sorted { englishPrecedes($0, $1) }.map { .string($0) }),
         ]
     }
 
@@ -1114,7 +1142,8 @@ extension ExposureArea {
             let asOfDate = sourceBlock["asOfDate"]?.stringValue ?? ""
             let staleness = document["staleness"]?.objectValue ?? JSObject()
             let coverage = document["coverage"]?.objectValue ?? JSObject()
-            let maximumAgeDays = Int(staleness["maximumAgeDays"]?.javaScriptNumber ?? 0)
+            // Saturating: a stored document with an unvalidated number must not trap here.
+            let maximumAgeDays = JavaScriptInteger.saturating(staleness["maximumAgeDays"]?.javaScriptNumber ?? 0)
             let ageDays = Int(max(0, PortfolioCore.daysBetweenYmd(asOfDate, evaluationDate).rounded(.down)))
             let stale = ageDays > maximumAgeDays
             fundSources.append(.object([

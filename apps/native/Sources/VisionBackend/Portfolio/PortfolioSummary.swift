@@ -61,10 +61,20 @@ enum PortfolioSummaryService {
         return "0"
     }
 
-    /// The row mapping of `portfolioMathTxRowSchema` (the driver's conversions).
+    /// An id column the driver returns as text: an INTEGER as its digits, TEXT as is, NULL and
+    /// empty text as nil. `optionalText` alone rejects the INTEGER the account ids are stored as.
+    private static func optionalIdText(_ row: SQLRow, _ column: String) -> String? {
+        if let number = try? row.optionalInt64(column) { return String(number) }
+        guard let text = try? row.optionalText(column), !text.isEmpty else { return nil }
+        return text
+    }
+
+    /// The row mapping of `portfolioMathTxRowSchema` (the driver's conversions). The union's
+    /// column names are the first select's aliases, `id::bigint` and
+    /// `eligible_source_record_hashes::json` included.
     static func mathRow(_ row: SQLRow) -> MathRow {
         var out = MathRow(investmentId: (try? row.integerId("investment_id")) ?? 0, type: (try? row.text("type")) ?? "")
-        out.id = numberText(row, "id")
+        out.id = numberText(row, "id::bigint")
         out.type = (try? row.text("type")) ?? ""
         out.date = (try? row.text("date")) ?? ""
         out.amount = numberText(row, "amount")
@@ -73,13 +83,13 @@ enum PortfolioSummaryService {
         out.taxes = numberText(row, "taxes")
         out.currency = (try? row.optionalText("currency")) ?? "EUR"
         out.fxRateToEur = try? row.optionalText("fx_rate_to_eur")
-        out.accountId = (try? row.optionalText("account_id")).flatMap { $0.isEmpty ? nil : $0 }
-        out.sourceAccountId = (try? row.optionalText("source_account_id")).flatMap { $0.isEmpty ? nil : $0 }
-        out.destinationAccountId = (try? row.optionalText("destination_account_id")).flatMap { $0.isEmpty ? nil : $0 }
+        out.accountId = optionalIdText(row, "account_id")
+        out.sourceAccountId = optionalIdText(row, "source_account_id")
+        out.destinationAccountId = optionalIdText(row, "destination_account_id")
         out.feeUnits = numberText(row, "fee_units")
         out.adjustmentKind = try? row.optionalText("adjustment_kind")
         out.basisPolicy = try? row.optionalText("basis_policy")
-        if let hashes = try? row.optionalText("eligible_source_record_hashes"), !hashes.isEmpty,
+        if let hashes = try? row.optionalText("eligible_source_record_hashes::json"), !hashes.isEmpty,
             case .array(let items)? = JSValue.parse(Data(hashes.utf8))
         {
             out.eligibleSourceRecordHashes = items.map { item -> String? in
