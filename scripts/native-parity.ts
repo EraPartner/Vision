@@ -32,6 +32,7 @@ import { isEntrypoint } from "./lib/isEntrypoint.ts";
 import { REPO_ROOT, repoPath } from "./lib/nativeCodegen.ts";
 import {
   Random,
+  mutate,
   mutatedSteps,
   randomEcbXml,
   randomErApi,
@@ -910,6 +911,23 @@ const portfolioBatchesDelete = (id: string): ParityStep => ({
   operationId: "deletePortfolioImportBatch",
   method: "DELETE",
   path: `/api/portfolio/import/batches/${id}`,
+});
+// P18 review resolution: the single-row and bulk investment overrides.
+const portfolioOverrideRow = (
+  id: string,
+  rowId: string,
+  body?: unknown,
+): ParityStep => ({
+  operationId: "portfolioImportRowInvestmentOverride",
+  method: "POST",
+  path: `/api/portfolio/import/batches/${id}/rows/${rowId}/investment-override`,
+  ...(body === undefined ? {} : { body }),
+});
+const portfolioOverrideRows = (id: string, body?: unknown): ParityStep => ({
+  operationId: "portfolioImportRowsInvestmentOverride",
+  method: "POST",
+  path: `/api/portfolio/import/batches/${id}/rows/investment-override`,
+  ...(body === undefined ? {} : { body }),
 });
 const PARSER_CONFIG = {
   dateColumn: "Date",
@@ -6553,6 +6571,324 @@ function mutationAreas(): Record<string, ParityArea> {
         portfolioBatchesDelete("0"),
         portfolioBatches(),
       ],
+    },
+    "portfolio-overrides-mutations": {
+      router: {
+        module: "portfolioImportRoutes.ts",
+        mountPath: "/api/portfolio/import",
+      },
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+           closed_at, created_at, updated_at, import_identity) VALUES
+          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+           '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bb01')`,
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+           is_active, price_provider, notes, created_at, updated_at) VALUES
+          (1, 'ACME Corp', 'ACME', 'stock', 'USD', vision_numeric('150.50', 18, 6), NULL,
+           1, 'manual', 'usd stock', '${SEED_TIME}', '${SEED_TIME}'),
+          (2, 'Euro Fund', 'EFUND', 'etf', 'EUR', vision_numeric('12', 18, 6), NULL,
+           1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+        `INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,
+           default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,
+           error_summary, started_at, completed_at, account_id, is_brokerage, custom_config) VALUES
+          (1, 'Keytrade custom', 'keytrade.csv', 312, 'stock', 'buy', 'awaiting_review', 5, 0, 0, 1, NULL,
+           '2026-10-05T10:00:00.000000Z', NULL, 1, 1, NULL),
+          (2, 'Bolero adapter', 'bolero.csv', 208, 'stock', 'buy', 'complete_with_errors', 4, 0, 0, 3, NULL,
+           '2026-09-05T10:00:00.000000Z', NULL, 1, 1, NULL),
+          (3, 'Degiro', 'degiro.csv', 10, 'etf', 'buy', 'complete', 1, 1, 0, 0, NULL,
+           '2026-09-05T10:00:00.000000Z', '2026-09-05T10:00:05.000000Z', 1, 1, NULL),
+          (4, 'No class', 'noclass.csv', 4, NULL, 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
+           '2026-10-06T10:00:00.000000Z', NULL, 1, 1, NULL),
+          (5, 'Kinesis', 'kinesis.csv', 6, 'stock', 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
+           '2026-10-07T10:00:00.000000Z', NULL, 1, 1,
+           vision_jsonb('{"format":"kinesis_transaction_history"}')),
+          (6, 'Odd rows', 'odd.csv', 6, 'stock', 'buy', 'awaiting_review', 3, 0, 0, 0, NULL,
+           '2026-10-08T10:00:00.000000Z', NULL, 1, 1, NULL),
+          (7, 'Stamps', 'stamps.csv', 2, 'stock', 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
+           '2026-10-09T10:00:00.000000Z', NULL, 1, 1, NULL),
+          (8, 'Currencies', 'currencies.csv', 4, 'stock', 'buy', 'awaiting_review', 2, 0, 0, 0, NULL,
+           '2026-10-10T10:00:00.000000Z', NULL, 1, 1, NULL)`,
+        `INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type,
+           type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note,
+           match_source, error_message, resolved_investment_id, route, user_override_investment_id,
+           created_at, updated_at) VALUES
+          (1, 1, 1, 'matched', '2026-10-01', 'buy', 'BUY', 'ACME', NULL, vision_numeric('10', 18, 8),
+           vision_numeric('100', 18, 6), vision_numeric('1000', 18, 4), vision_numeric('1.5', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', 'first buy', 'symbol', NULL, 1, 'portfolio', NULL,
+           '2026-10-05T10:00:01.000000Z', '2026-10-05T10:00:01.000000Z'),
+          (2, 1, 2, 'matched', '2026-10-02', 'dividend', 'DIV', NULL, 'Euro Fund', NULL, NULL,
+           vision_numeric('12.25', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           'quarterly dividend', 'name_exact', NULL, 2, 'portfolio', NULL,
+           '2026-10-05T10:00:02.000000Z', '2026-10-05T10:00:02.000000Z'),
+          (3, 1, 3, 'matched', '2026-10-03', 'interest', 'INT', NULL, NULL, NULL, NULL,
+           vision_numeric('50', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           'cash interest', NULL, NULL, NULL, 'cash', NULL,
+           '2026-10-05T10:00:03.000000Z', '2026-10-05T10:00:03.000000Z'),
+          (4, 1, 4, 'duplicate', '2026-10-04', 'sell', 'SELL', 'ACME', NULL, vision_numeric('2', 18, 8),
+           vision_numeric('150', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', 'seen before', 'symbol', NULL, 1, 'portfolio', NULL,
+           '2026-10-05T10:00:04.000000Z', '2026-10-05T10:00:04.000000Z'),
+          (5, 1, 5, 'error', '2026-10-05', 'buy', 'BUY', 'BROKE', 'Broken AG', vision_numeric('1', 18, 8),
+           vision_numeric('7', 18, 6), vision_numeric('7', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', NULL, NULL, 'row failed its amount check', NULL, 'portfolio',
+           NULL, '2026-10-05T10:00:05.000000Z', '2026-10-05T10:00:05.000000Z'),
+          (6, 2, 1, 'error', '2026-09-01', 'buy', 'BUY', 'NOBODY', 'Nobody AG', vision_numeric('1', 18, 8),
+           vision_numeric('42', 18, 6), vision_numeric('42', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', NULL, NULL, 'unresolved instrument — pick or create a holding',
+           NULL, 'portfolio', NULL,
+           '2026-09-05T10:00:01.000000Z', '2026-09-05T10:00:01.000000Z'),
+          (7, 2, 2, 'matched', '2026-09-02', 'dividend', 'DIV', NULL, 'Euro Fund', NULL, NULL,
+           vision_numeric('3.5', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           'quarterly dividend', 'name_exact', NULL, 2, 'portfolio', NULL,
+           '2026-09-05T10:00:02.000000Z', '2026-09-05T10:00:02.000000Z'),
+          (8, 3, 1, 'matched', '2026-09-03', 'buy', 'BUY', 'DONE', 'Done Fund', vision_numeric('4', 18, 8),
+           vision_numeric('5', 18, 6), vision_numeric('20', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', NULL, 'symbol', NULL, 1, 'portfolio', NULL,
+           '2026-09-05T10:00:03.000000Z', '2026-09-05T10:00:03.000000Z'),
+          (9, 4, 1, 'matched', '2026-10-06', 'buy', 'BUY', 'NOPRICE', 'No Price Ltd', vision_numeric('1', 18, 8),
+           NULL, vision_numeric('1', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           NULL, 'symbol', NULL, NULL, 'portfolio', NULL,
+           '2026-10-06T10:00:01.000000Z', '2026-10-06T10:00:01.000000Z'),
+          (10, 5, 1, 'matched', '2026-10-07', 'buy', 'BUY', 'kau', 'Kinesis Gold', vision_numeric('2', 18, 8),
+           vision_numeric('60', 18, 6), vision_numeric('120', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'gbp', NULL, 'symbol', NULL, NULL, 'portfolio', NULL,
+           '2026-10-07T10:00:01.000000Z', '2026-10-07T10:00:01.000000Z'),
+          (11, 6, 1, 'matched', '2026-10-08', 'interest', 'INT', '', ' ', NULL, NULL,
+           vision_numeric('9', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+           'blank identity', NULL, NULL, NULL, 'portfolio', NULL,
+           '2026-10-08T10:00:01.000000Z', '2026-10-08T10:00:01.000000Z'),
+          (12, 6, 2, 'matched', '2026-10-08', 'buy', 'BUY', ' acme ', 'ACME duplicate',
+           vision_numeric('1', 18, 8), vision_numeric('3', 18, 6), vision_numeric('3', 18, 4),
+           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, 'symbol', NULL, NULL,
+           'portfolio', NULL, '2026-10-08T10:00:02.000000Z', '2026-10-08T10:00:02.000000Z'),
+          (13, 6, 3, 'matched', '2026-10-08', 'buy', 'BUY', 'PRESET', 'Preset Holding',
+           vision_numeric('1', 18, 8), vision_numeric('2', 18, 6), vision_numeric('2', 18, 4),
+           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, 'symbol', NULL, NULL,
+           'portfolio', 2, '2026-10-08T10:00:03.000000Z', '2026-10-08T10:00:03.000000Z'),
+          (14, 7, 1, 'matched', '2026-10-09', 'buy', 'BUY', 'STAMP', 'Stamps', vision_numeric('1', 18, 8),
+           vision_numeric('4', 18, 6), vision_numeric('4', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', NULL, 'symbol', NULL, NULL, 'portfolio', NULL,
+           '2026-10-09T10:00:01.000000Z', '2026-10-09T10:00:01.000000Z'),
+          (15, 8, 1, 'matched', '2026-10-10', 'buy', 'BUY', 'BRANDNEW', 'Brand New Co',
+           vision_numeric('1', 18, 8), vision_numeric('8', 18, 6), vision_numeric('8', 18, 4),
+           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'eu', NULL, 'symbol', NULL, NULL,
+           'portfolio', NULL, '2026-10-10T10:00:01.000000Z', '2026-10-10T10:00:01.000000Z'),
+          (16, 8, 2, 'matched', '2026-10-10', 'buy', 'BUY', '', 'Usd Co', vision_numeric('2', 18, 8),
+           vision_numeric('6', 18, 6), vision_numeric('12', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'Usd', NULL, 'name_exact', NULL, NULL, 'portfolio', NULL,
+           '2026-10-10T10:00:02.000000Z', '2026-10-10T10:00:02.000000Z'),
+          (17, 2, 3, 'error', '2026-09-03', 'buy', 'BUY', 'LONE', 'Lone Wolf AG', vision_numeric('1', 18, 8),
+           vision_numeric('11', 18, 6), vision_numeric('11', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', NULL, NULL, 'unresolved instrument — pick or create a holding',
+           NULL, 'portfolio', NULL,
+           '2026-09-05T10:00:03.000000Z', '2026-09-05T10:00:03.000000Z'),
+          (18, 2, 4, 'error', '2026-09-04', 'buy', 'BUY', 'LONE2', 'Lone Wolf Two AG',
+           vision_numeric('1', 18, 8), vision_numeric('13', 18, 6), vision_numeric('13', 18, 4),
+           vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', NULL, NULL,
+           'unresolved instrument — pick or create a holding', NULL, 'portfolio', NULL,
+           '2026-09-05T10:00:04.000000Z', '2026-09-05T10:00:04.000000Z')`,
+      ],
+      steps: asRecorded([
+        portfolioOverrideRows("1", { row_ids: [1], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [2], investment_id: 2 }),
+        portfolioBatchesPreview("1"),
+        portfolioOverrideRows("1", { row_ids: [3], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [4], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [5], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [1, 999], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [1], investment_id: 999 }),
+        portfolioOverrideRows("3", { row_ids: [8], investment_id: 1 }),
+        portfolioOverrideRows("999", { row_ids: [1], investment_id: 1 }),
+        portfolioOverrideRows("1", {}),
+        portfolioOverrideRows("1", { row_ids: [] }),
+        portfolioOverrideRows("1", { row_ids: "1", investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [1, "abc"], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [1, 1], investment_id: 1 }),
+        portfolioOverrideRows("1", { row_ids: [1] }),
+        portfolioOverrideRows("1", {
+          row_ids: [1],
+          investment_id: 1,
+          create_new: true,
+        }),
+        portfolioOverrideRows("1", { row_ids: [1], create_new: false }),
+        portfolioOverrideRows("1", { row_ids: [1], investment_id: "abc" }),
+        portfolioOverrideRows("1", { row_ids: [1], investment_id: 0 }),
+        portfolioOverrideRows("1", { row_ids: [1], investment_id: null }),
+        portfolioOverrideRows("1", {
+          row_ids: [1],
+          investment_id: 1,
+          extra: "kept",
+        }),
+        portfolioOverrideRows("1", {
+          row_ids: Array.from({ length: 5001 }, (_, index) => index + 1),
+          investment_id: 1,
+        }),
+        portfolioOverrideRows("1", { row_ids: [], create_new: false }),
+        portfolioOverrideRows("abc", { row_ids: [1], investment_id: 1 }),
+        portfolioOverrideRows("2", { row_ids: [6], create_new: true }),
+        portfolioBatchesPreview("2"),
+        portfolioOverrideRows("2", { row_ids: [6], create_new: true }),
+        portfolioOverrideRows("2", { row_ids: [7], investment_id: 1 }),
+        portfolioOverrideRows("4", { row_ids: [9], create_new: true }),
+        portfolioOverrideRows("5", { row_ids: [10], create_new: true }),
+        portfolioOverrideRows("6", { row_ids: [11], create_new: true }),
+        portfolioOverrideRows("6", { row_ids: [12], create_new: true }),
+        portfolioOverrideRows("7", { row_ids: [14], create_new: true }),
+        portfolioOverrideRows("8", { row_ids: [15], create_new: true }),
+        portfolioOverrideRows("8", { row_ids: [16], create_new: true }),
+        portfolioBatchesPreview("8"),
+        portfolioOverrideRow("1", "1", { investment_id: 2 }),
+        portfolioOverrideRow("1", "1", {}),
+        portfolioOverrideRow("1", "1", { investment_id: null }),
+        portfolioOverrideRow("1", "1", { investment_id: "abc" }),
+        portfolioOverrideRow("1", "1", { investment_id: 0 }),
+        portfolioOverrideRow("2", "7", { investment_id: 2 }),
+        portfolioOverrideRow("2", "17", { investment_id: 1 }),
+        portfolioOverrideRow("2", "18", { create_new: true }),
+        portfolioBatch("2"),
+        portfolioOverrideRow("999", "1", { investment_id: 1 }),
+        portfolioOverrideRow("1", "999", { investment_id: 1 }),
+        portfolioOverrideRow("1", "3", { investment_id: 1 }),
+        portfolioOverrideRow("4", "9", { create_new: true }),
+        portfolioOverrideRow("6", "12", { create_new: true }),
+        portfolioOverrideRow("6", "13", { create_new: true }),
+        portfolioOverrideRow("2", "7", { create_new: "true" }),
+        portfolioOverrideRow("2", "7", { create_new: 1 }),
+        portfolioOverrideRow("1", "1", { create_new: true, investment_id: 5 }),
+        portfolioOverrideRow("2", "6", {}),
+        portfolioBatchesPreview("2"),
+        portfolioOverrideRow("abc", "1", { investment_id: 1 }),
+        portfolioOverrideRow("1", "1.5", { investment_id: 1 }),
+        portfolioOverrideRow("1", "1", "x"),
+        portfolioOverrideRow("1", "1", [1]),
+        portfolioOverrideRow("1", "1", 5),
+        portfolioOverrideRow("1", "1", true),
+        portfolioOverrideRows("1", 5),
+        portfolioOverrideRows("1", [1]),
+        portfolioOverrideRows("1", "x"),
+        portfolioBatches(),
+        ...(() => {
+          const random = new Random(0x8a15);
+          const steps: ParityStep[] = [];
+          const batchIds = [
+            "1",
+            "2",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "999",
+            "0",
+            "-3",
+            "abc",
+            "1e3",
+            "2.5",
+            "0001",
+          ];
+          const rowIds = [
+            "1",
+            "2",
+            "3",
+            "6",
+            "7",
+            "17",
+            "18",
+            "999",
+            "0",
+            "-1",
+            "abc",
+            "2.5",
+            "0002",
+            "9007199254740991",
+            "9007199254740992",
+          ];
+          const investmentIds: unknown[] = [
+            null,
+            1,
+            2,
+            3,
+            999,
+            0,
+            -1,
+            "1",
+            "abc",
+            [],
+            {},
+            true,
+            false,
+            3.5,
+            1e15,
+            2147483648,
+          ];
+          // A sentinel for "the key is absent": Random.pick cannot hand out undefined.
+          const createNews: unknown[] = [
+            true,
+            false,
+            null,
+            "true",
+            1,
+            "__absent__",
+          ];
+          const rowIdSets: unknown[] = [
+            [],
+            [1],
+            [2, 7],
+            [6, "x"],
+            [999],
+            [0],
+            "1",
+            1,
+            [1, 1],
+            [1, 2, 3.5],
+            [null],
+            [true],
+          ];
+          for (let i = 0; i < 330; i++) {
+            const roll = random.next();
+            const id = random.pick(batchIds);
+            if (roll < 0.4) {
+              const rowIdSet = random.pick(rowIdSets);
+              const createNew = random.pick(createNews);
+              const body: Record<string, unknown> = { row_ids: rowIdSet };
+              if (createNew === "__absent__") {
+                body.investment_id = random.pick(investmentIds);
+              } else {
+                body.create_new = createNew;
+              }
+              steps.push(
+                portfolioOverrideRows(
+                  id,
+                  random.chance(0.15) ? mutate(random, body) : body,
+                ),
+              );
+            } else if (roll < 0.85) {
+              const rowId = random.pick(rowIds);
+              const body: Record<string, unknown> = {};
+              if (random.chance(0.5)) {
+                body.investment_id = random.pick(investmentIds);
+              }
+              const createNew = random.pick(createNews);
+              if (random.chance(0.3) && createNew !== "__absent__") {
+                body.create_new = createNew;
+              }
+              steps.push(
+                portfolioOverrideRow(
+                  id,
+                  rowId,
+                  random.chance(0.15) ? mutate(random, body) : body,
+                ),
+              );
+            } else {
+              steps.push(portfolioBatchesPreview(random.pick(batchIds)));
+            }
+            if (random.chance(0.08)) steps.push(portfolioBatch("2"));
+          }
+          steps.push(portfolioBatchesPreview("2"));
+          return steps;
+        })(),
+      ]),
     },
     "prices-mutations": {
       router: { module: "investments.ts", mountPath: "/api/investments" },
