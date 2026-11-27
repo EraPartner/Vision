@@ -936,6 +936,19 @@ const portfolioReconciliationPreview = (body?: unknown): ParityStep => ({
   path: "/api/portfolio/import/reconciliation/preview",
   ...(body === undefined ? {} : { body }),
 });
+// P18 commit: the reviewed batch commit and the reviewed-scope commit.
+const portfolioBatchCommit = (id: string, body?: unknown): ParityStep => ({
+  operationId: "commitPortfolioImportBatch",
+  method: "POST",
+  path: `/api/portfolio/import/batches/${id}/commit`,
+  ...(body === undefined ? {} : { body }),
+});
+const portfolioReconciliationCommit = (body?: unknown): ParityStep => ({
+  operationId: "commitReviewedPortfolioImports",
+  method: "POST",
+  path: "/api/portfolio/import/reconciliation/commit",
+  ...(body === undefined ? {} : { body }),
+});
 const PARSER_CONFIG = {
   dateColumn: "Date",
   recipientColumn: "Name",
@@ -4758,6 +4771,86 @@ const asRecorded = (steps: ParityStep[]): ParityStep[] =>
   JSON.parse(JSON.stringify(steps)) as ParityStep[];
 
 /** A seeded run of mutated requests per area (scripts/lib/nativeParityMutations.ts). */
+// The P18 reconciliation and commit corpora share one seeded scope.
+const portfolioReconciliationSeed = [
+  `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bc01'),
+        (2, 'Second Broker', 'Second brokerage', 'Second', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bc02')`,
+  `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
+        (1, 'Cash Recipient', 'cash recipient', '${SEED_TIME}', '${SEED_TIME}')`,
+  `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'Recon Asset', 'RECONTEST', 'stock', 'EUR', vision_numeric('100', 18, 6), NULL,
+         1, 'manual', 'reconciliation asset', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'Other Asset', 'OTHER', 'stock', 'EUR', vision_numeric('20', 18, 6), NULL,
+         1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}')`,
+  `INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,
+         default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,
+         error_summary, started_at, completed_at, account_id, is_brokerage, custom_config) VALUES
+        (1, 'generic_csv', 'generic.csv', 200, 'stock', 'buy', 'awaiting_review', 6, 0, 0, 0, NULL,
+         '2026-01-20T10:00:00.000000Z', NULL, 1, 1, NULL),
+        (2, 'nexo_pro_spot_history', 'nexo.csv', 100, 'crypto', 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
+         '2026-01-20T10:00:00.000000Z', NULL, 1, 1,
+         vision_jsonb('{"format":"nexo_pro_spot_history"}')),
+        (3, 'nexo_pro_spot_history', 'nexo-old.csv', 100, 'crypto', 'buy', 'complete', 2, 2, 0, 0, NULL,
+         '2026-01-02T10:00:00.000000Z', '2026-01-02T10:00:05.000000Z', 1, 1,
+         vision_jsonb('{"format":"nexo_pro_spot_history"}')),
+        (4, 'saxo_transaction_history', 'saxo.csv', 120, 'stock', 'buy', 'complete', 2, 1, 1, 0, NULL,
+         '2026-01-03T10:00:00.000000Z', '2026-01-03T10:00:05.000000Z', 1, 1,
+         vision_jsonb('{"format":"saxo_transaction_history"}')),
+        (5, 'generic_csv', 'custody.csv', 80, 'stock', 'buy', 'awaiting_review', 2, 0, 0, 0, NULL,
+         '2026-01-20T10:00:00.000000Z', NULL, 1, 1,
+         vision_jsonb('{"transfer_destination_account_id":2,"yield_basis_policy":"zero"}')),
+        (9, 'generic_csv', 'custody-old.csv', 80, 'stock', 'buy', 'complete', 2, 2, 0, 0, NULL,
+         '2026-01-14T10:00:00.000000Z', '2026-01-14T10:00:05.000000Z', 1, 1, NULL)`,
+  `INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type, type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note, raw_data, match_source, resolved_investment_id, route, source_transaction_id, source_record_hash, dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence, asset_transfer_details, asset_adjustment_details, committed_txn_id, created_at, updated_at) VALUES\n          (1, 1, 1, 'matched', '2026-01-11', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('5', 18, 8), vision_numeric('100', 18, 6), vision_numeric('499.9', 18, 4), vision_numeric('0.1', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'nearby buy', 'synthetic row 1', 'symbol', 1, 'portfolio', 'GEN-1', '${"1".repeat(64)}', '${"2".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:01.000000Z', '2026-01-20T10:00:01.000000Z'),\n          (2, 1, 2, 'matched', '2026-01-05', 'buy', 'BUY', 'RECONTEST', NULL, vision_numeric('2', 18, 8), vision_numeric('100', 18, 6), vision_numeric('200', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'already committed', 'synthetic row 2', 'symbol', 1, 'portfolio', 'GEN-2', '${"3".repeat(64)}', '${"a".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:02.000000Z', '2026-01-20T10:00:02.000000Z'),\n          (3, 1, 3, 'matched', '2026-01-12', 'interest', 'INT', NULL, NULL, NULL, NULL, vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'cash interest', 'synthetic row 3', NULL, NULL, 'cash', 'GEN-3', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-20T10:00:03.000000Z', '2026-01-20T10:00:03.000000Z'),\n          (4, 1, 4, 'matched', '2026-01-06', 'interest', 'INT', NULL, NULL, NULL, NULL, vision_numeric('50', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'cash already in ledger', 'synthetic row 4', NULL, NULL, 'cash', 'GEN-4', NULL, '${"d".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:04.000000Z', '2026-01-20T10:00:04.000000Z'),\n          (5, 1, 5, 'matched', '2026-02-01', 'buy', 'BUY', 'RECONTEST', NULL, vision_numeric('1', 18, 8), vision_numeric('10', 18, 6), vision_numeric('10', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'fresh buy', 'synthetic row 5', 'symbol', 1, 'portfolio', 'GEN-5', '${"4".repeat(64)}', '${"5".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:05.000000Z', '2026-01-20T10:00:05.000000Z'),\n          (6, 1, 6, 'matched', '2026-01-04', 'buy', 'BUY', 'RECONTEST', NULL, vision_numeric('1', 18, 8), vision_numeric('100', 18, 6), vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'saxo repeat', 'synthetic row 6', 'symbol', 1, 'portfolio', 'SAXO-3', '${"6".repeat(64)}', '${"6".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:06.000000Z', '2026-01-20T10:00:06.000000Z'),\n          (7, 2, 1, 'matched', '2026-01-03', 'buy', 'BUY', 'BTC', 'Bitcoin', vision_numeric('3', 18, 8), vision_numeric('100', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'pro spot', 'pro synthetic row 7', 'symbol', 1, 'portfolio', 'nexo-pro:spot:order:1', '${"7".repeat(64)}', '${"7".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:07.000000Z', '2026-01-20T10:00:07.000000Z'),\n          (8, 3, 1, 'committed', '2026-01-01', 'buy', 'BUY', 'BTC', 'Bitcoin', vision_numeric('1', 18, 8), vision_numeric('100', 18, 6), vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'old pro buy', 'old pro row 8', 'symbol', 1, 'portfolio', 'nexo-pro:spot:order:0', '${"8".repeat(64)}', '${"8".repeat(64)}', 1, 1, NULL, NULL, '8', '2026-01-20T10:00:08.000000Z', '2026-01-20T10:00:08.000000Z'),\n          (9, 3, 2, 'committed', '2026-01-02', 'sell', 'SELL', 'BTC', 'Bitcoin', vision_numeric('1', 18, 8), vision_numeric('110', 18, 6), vision_numeric('110', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'old pro sell', 'old pro row 9', 'symbol', 1, 'portfolio', 'nexo-pro:spot:order:0s', '${"9".repeat(64)}', '${"9".repeat(64)}', 1, 1, NULL, NULL, '9', '2026-01-20T10:00:09.000000Z', '2026-01-20T10:00:09.000000Z'),\n          (10, 4, 1, 'committed', '2026-01-04', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('1', 18, 8), vision_numeric('100', 18, 6), vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'saxo committed', 'saxo row 10', 'symbol', 1, 'portfolio', 'SAXO-3', '${"c".repeat(64)}', '${"c".repeat(64)}', 1, 1, NULL, NULL, '3', '2026-01-20T10:00:10.000000Z', '2026-01-20T10:00:10.000000Z'),\n          (11, 4, 2, 'duplicate', '2026-01-05', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('2', 18, 8), vision_numeric('100', 18, 6), vision_numeric('200', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'saxo settled elsewhere', 'saxo row 11', 'symbol', 1, 'portfolio', 'SAXO-4', '${"b".repeat(64)}', '${"b".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:11.000000Z', '2026-01-20T10:00:11.000000Z'),\n          (51, 5, 1, 'matched', '2026-02-01', NULL, 'TRANSFER OUT', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'custody transfer', 'custody row 51', 'symbol', 2, 'asset_transfer', 'CUSTODY-51', '${"5".repeat(64)}', '${"0".repeat(64)}', 1, 1, '{"direction":"out","feeUnits":"0.00000000","receivedUnits":"1.00000000"}', NULL, NULL, '2026-01-20T10:00:51.000000Z', '2026-01-20T10:00:51.000000Z'),\n          (52, 5, 2, 'matched', '2026-02-02', NULL, 'YIELD REVERSAL', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'yield reversal', 'custody row 52', 'symbol', 2, 'asset_adjustment', 'CUSTODY-52', '${"2".repeat(64)}', '${"3".repeat(64)}', 1, 1, NULL, '{"kind":"yield_reversal","basisPolicy":"zero_yield_only","accountId":2}', NULL, '2026-01-20T10:00:52.000000Z', '2026-01-20T10:00:52.000000Z'),\n          (90, 9, 1, 'committed', '2026-01-15', NULL, 'TRANSFER OUT', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'old custody transfer', 'old custody row 90', 'symbol', 2, 'asset_transfer', 'CUSTODY-90', '${"f".repeat(64)}', '${"f".repeat(64)}', 1, 1, '{"direction":"out","feeUnits":"0.00000000","receivedUnits":"1.00000000"}', NULL, '100', '2026-01-14T10:00:30.000000Z', '2026-01-14T10:00:30.000000Z'),\n          (91, 9, 2, 'committed', '2026-01-16', NULL, 'YIELD REVERSAL', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'old yield reversal', 'old custody row 91', 'symbol', 2, 'asset_adjustment', 'CUSTODY-91', '${"e".repeat(64)}', '${"e".repeat(64)}', 1, 1, NULL, '{"kind":"yield_reversal","basisPolicy":"zero_yield_only","accountId":2}', '200', '2026-01-14T10:00:31.000000Z', '2026-01-14T10:00:31.000000Z')`,
+  `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,
+         source_record_hash, dedup_fingerprint, dedup_fingerprint_version, created_at, updated_at) VALUES
+        (1, 1, 'buy', '2026-01-10', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'Original manual note', NULL, NULL, 'unknown', NULL, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 1, 'buy', '2026-01-05', vision_numeric('200', 18, 4), vision_numeric('2', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'committed earlier', 1, 4, 'unknown', NULL, '${"a".repeat(64)}', 1,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 1, 'buy', '2026-01-04', vision_numeric('100', 18, 4), vision_numeric('1', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'saxo committed', 1, 4, 'unknown', '${"c".repeat(64)}', '${"c".repeat(64)}', 1,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 2, 'buy', '2026-01-02', vision_numeric('200', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('20', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'custody base', 1, NULL, 'unknown', NULL, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+  `INSERT INTO portfolio_asset_transfers (id, investment_id, source_account_id, destination_account_id,
+         date, units, fee_units, fee_basis_allocations, import_batch_id, staging_row_id, source_record_hash,
+         dedup_fingerprint, dedup_fingerprint_version, created_at) VALUES
+        (100, 2, 1, 2, '2026-01-15', vision_numeric('1', 18, 8), vision_numeric('0', 18, 8),
+         vision_jsonb('{}'), 9, 90, '${"f".repeat(64)}', '${"f".repeat(64)}', 1, '${SEED_TIME}')`,
+  `INSERT INTO portfolio_asset_adjustments (id, investment_id, account_id, date, units, adjustment_kind,
+         basis_policy, basis_allocations, import_batch_id, staging_row_id, source_record_hash,
+         dedup_fingerprint, dedup_fingerprint_version, created_at) VALUES
+        (200, 2, 2, '2026-01-16', vision_numeric('1', 18, 8), 'yield_reversal', 'zero_yield_only',
+         vision_jsonb('{}'), 9, 91, '${"e".repeat(64)}', '${"e".repeat(64)}', 1, '${SEED_TIME}')`,
+  `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         dedup_fingerprint, dedup_fingerprint_version, created_at, updated_at) VALUES
+        (30, '2026-01-12', vision_numeric('100', 18, 4), 'EUR', 'manual cash', 1, 1, 1, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (31, '2026-01-06', vision_numeric('50', 18, 4), 'EUR', 'imported cash', 1, 1, 1,
+         '${"d".repeat(64)}', 1, '${SEED_TIME}', '${SEED_TIME}')`,
+  `INSERT INTO portfolio_import_reconciliation_journal (id, batch_id, staging_row_id, transaction_id,
+         "action", policy, before_data, after_data, created_at) VALUES
+        (1, 4, 10, 3, 'adopt', 'exact',
+         vision_jsonb('{"snapshot":{"dedup_fingerprint":"${"c".repeat(64)}","dedup_fingerprint_version":1}}'),
+         vision_jsonb('{"ledgerKind":"cash","proof":{"original":{"batchId":4}}}'),
+         '${SEED_TIME}')`,
+];
+
 function mutationAreas(): Record<string, ParityArea> {
   const tags = AREAS.tags;
   const settings = AREAS.settings;
@@ -6902,84 +6995,7 @@ function mutationAreas(): Record<string, ParityArea> {
         module: "portfolioImportRoutes.ts",
         mountPath: "/api/portfolio/import",
       },
-      seed: [
-        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
-           in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
-           closed_at, created_at, updated_at, import_identity) VALUES
-          (1, 'Bolero', 'Bolero brokerage', 'Bolero', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
-           '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bc01'),
-          (2, 'Second Broker', 'Second brokerage', 'Second', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
-           '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bc02')`,
-        `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
-          (1, 'Cash Recipient', 'cash recipient', '${SEED_TIME}', '${SEED_TIME}')`,
-        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
-           is_active, price_provider, notes, created_at, updated_at) VALUES
-          (1, 'Recon Asset', 'RECONTEST', 'stock', 'EUR', vision_numeric('100', 18, 6), NULL,
-           1, 'manual', 'reconciliation asset', '${SEED_TIME}', '${SEED_TIME}'),
-          (2, 'Other Asset', 'OTHER', 'stock', 'EUR', vision_numeric('20', 18, 6), NULL,
-           1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}')`,
-        `INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,
-           default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,
-           error_summary, started_at, completed_at, account_id, is_brokerage, custom_config) VALUES
-          (1, 'generic_csv', 'generic.csv', 200, 'stock', 'buy', 'awaiting_review', 6, 0, 0, 0, NULL,
-           '2026-01-20T10:00:00.000000Z', NULL, 1, 1, NULL),
-          (2, 'nexo_pro_spot_history', 'nexo.csv', 100, 'crypto', 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
-           '2026-01-20T10:00:00.000000Z', NULL, 1, 1,
-           vision_jsonb('{"format":"nexo_pro_spot_history"}')),
-          (3, 'nexo_pro_spot_history', 'nexo-old.csv', 100, 'crypto', 'buy', 'complete', 2, 2, 0, 0, NULL,
-           '2026-01-02T10:00:00.000000Z', '2026-01-02T10:00:05.000000Z', 1, 1,
-           vision_jsonb('{"format":"nexo_pro_spot_history"}')),
-          (4, 'saxo_transaction_history', 'saxo.csv', 120, 'stock', 'buy', 'complete', 2, 1, 1, 0, NULL,
-           '2026-01-03T10:00:00.000000Z', '2026-01-03T10:00:05.000000Z', 1, 1,
-           vision_jsonb('{"format":"saxo_transaction_history"}')),
-          (5, 'generic_csv', 'custody.csv', 80, 'stock', 'buy', 'awaiting_review', 2, 0, 0, 0, NULL,
-           '2026-01-20T10:00:00.000000Z', NULL, 1, 1,
-           vision_jsonb('{"transfer_destination_account_id":2,"yield_basis_policy":"zero"}')),
-          (9, 'generic_csv', 'custody-old.csv', 80, 'stock', 'buy', 'complete', 2, 2, 0, 0, NULL,
-           '2026-01-14T10:00:00.000000Z', '2026-01-14T10:00:05.000000Z', 1, 1, NULL)`,
-        `INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type, type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note, raw_data, match_source, resolved_investment_id, route, source_transaction_id, source_record_hash, dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence, asset_transfer_details, asset_adjustment_details, committed_txn_id, created_at, updated_at) VALUES\n          (1, 1, 1, 'matched', '2026-01-11', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('5', 18, 8), vision_numeric('100', 18, 6), vision_numeric('499.9', 18, 4), vision_numeric('0.1', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'nearby buy', 'synthetic row 1', 'symbol', 1, 'portfolio', 'GEN-1', '${"1".repeat(64)}', '${"2".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:01.000000Z', '2026-01-20T10:00:01.000000Z'),\n          (2, 1, 2, 'matched', '2026-01-05', 'buy', 'BUY', 'RECONTEST', NULL, vision_numeric('2', 18, 8), vision_numeric('100', 18, 6), vision_numeric('200', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'already committed', 'synthetic row 2', 'symbol', 1, 'portfolio', 'GEN-2', '${"3".repeat(64)}', '${"a".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:02.000000Z', '2026-01-20T10:00:02.000000Z'),\n          (3, 1, 3, 'matched', '2026-01-12', 'interest', 'INT', NULL, NULL, NULL, NULL, vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'cash interest', 'synthetic row 3', NULL, NULL, 'cash', 'GEN-3', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-20T10:00:03.000000Z', '2026-01-20T10:00:03.000000Z'),\n          (4, 1, 4, 'matched', '2026-01-06', 'interest', 'INT', NULL, NULL, NULL, NULL, vision_numeric('50', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'cash already in ledger', 'synthetic row 4', NULL, NULL, 'cash', 'GEN-4', NULL, '${"d".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:04.000000Z', '2026-01-20T10:00:04.000000Z'),\n          (5, 1, 5, 'matched', '2026-02-01', 'buy', 'BUY', 'RECONTEST', NULL, vision_numeric('1', 18, 8), vision_numeric('10', 18, 6), vision_numeric('10', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'fresh buy', 'synthetic row 5', 'symbol', 1, 'portfolio', 'GEN-5', '${"4".repeat(64)}', '${"5".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:05.000000Z', '2026-01-20T10:00:05.000000Z'),\n          (6, 1, 6, 'matched', '2026-01-04', 'buy', 'BUY', 'RECONTEST', NULL, vision_numeric('1', 18, 8), vision_numeric('100', 18, 6), vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'saxo repeat', 'synthetic row 6', 'symbol', 1, 'portfolio', 'SAXO-3', '${"6".repeat(64)}', '${"6".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:06.000000Z', '2026-01-20T10:00:06.000000Z'),\n          (7, 2, 1, 'matched', '2026-01-03', 'buy', 'BUY', 'BTC', 'Bitcoin', vision_numeric('3', 18, 8), vision_numeric('100', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'pro spot', 'pro synthetic row 7', 'symbol', 1, 'portfolio', 'nexo-pro:spot:order:1', '${"7".repeat(64)}', '${"7".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:07.000000Z', '2026-01-20T10:00:07.000000Z'),\n          (8, 3, 1, 'committed', '2026-01-01', 'buy', 'BUY', 'BTC', 'Bitcoin', vision_numeric('1', 18, 8), vision_numeric('100', 18, 6), vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'old pro buy', 'old pro row 8', 'symbol', 1, 'portfolio', 'nexo-pro:spot:order:0', '${"8".repeat(64)}', '${"8".repeat(64)}', 1, 1, NULL, NULL, '8', '2026-01-20T10:00:08.000000Z', '2026-01-20T10:00:08.000000Z'),\n          (9, 3, 2, 'committed', '2026-01-02', 'sell', 'SELL', 'BTC', 'Bitcoin', vision_numeric('1', 18, 8), vision_numeric('110', 18, 6), vision_numeric('110', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'old pro sell', 'old pro row 9', 'symbol', 1, 'portfolio', 'nexo-pro:spot:order:0s', '${"9".repeat(64)}', '${"9".repeat(64)}', 1, 1, NULL, NULL, '9', '2026-01-20T10:00:09.000000Z', '2026-01-20T10:00:09.000000Z'),\n          (10, 4, 1, 'committed', '2026-01-04', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('1', 18, 8), vision_numeric('100', 18, 6), vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'saxo committed', 'saxo row 10', 'symbol', 1, 'portfolio', 'SAXO-3', '${"c".repeat(64)}', '${"c".repeat(64)}', 1, 1, NULL, NULL, '3', '2026-01-20T10:00:10.000000Z', '2026-01-20T10:00:10.000000Z'),\n          (11, 4, 2, 'duplicate', '2026-01-05', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('2', 18, 8), vision_numeric('100', 18, 6), vision_numeric('200', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'saxo settled elsewhere', 'saxo row 11', 'symbol', 1, 'portfolio', 'SAXO-4', '${"b".repeat(64)}', '${"b".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:11.000000Z', '2026-01-20T10:00:11.000000Z'),\n          (51, 5, 1, 'matched', '2026-02-01', NULL, 'TRANSFER OUT', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'custody transfer', 'custody row 51', 'symbol', 2, 'asset_transfer', 'CUSTODY-51', '${"5".repeat(64)}', '${"0".repeat(64)}', 1, 1, '{"direction":"out","feeUnits":"0.00000000","receivedUnits":"1.00000000"}', NULL, NULL, '2026-01-20T10:00:51.000000Z', '2026-01-20T10:00:51.000000Z'),\n          (52, 5, 2, 'matched', '2026-02-02', NULL, 'YIELD REVERSAL', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'yield reversal', 'custody row 52', 'symbol', 2, 'asset_adjustment', 'CUSTODY-52', '${"2".repeat(64)}', '${"3".repeat(64)}', 1, 1, NULL, '{"kind":"yield_reversal","basisPolicy":"zero_yield_only","accountId":2}', NULL, '2026-01-20T10:00:52.000000Z', '2026-01-20T10:00:52.000000Z'),\n          (90, 9, 1, 'committed', '2026-01-15', NULL, 'TRANSFER OUT', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'old custody transfer', 'old custody row 90', 'symbol', 2, 'asset_transfer', 'CUSTODY-90', '${"f".repeat(64)}', '${"f".repeat(64)}', 1, 1, '{"direction":"out","feeUnits":"0.00000000","receivedUnits":"1.00000000"}', NULL, '100', '2026-01-14T10:00:30.000000Z', '2026-01-14T10:00:30.000000Z'),\n          (91, 9, 2, 'committed', '2026-01-16', NULL, 'YIELD REVERSAL', 'OTHER', 'Other Asset', vision_numeric('1', 18, 8), NULL, NULL, NULL, NULL, 'EUR', 'old yield reversal', 'old custody row 91', 'symbol', 2, 'asset_adjustment', 'CUSTODY-91', '${"e".repeat(64)}', '${"e".repeat(64)}', 1, 1, NULL, '{"kind":"yield_reversal","basisPolicy":"zero_yield_only","accountId":2}', '200', '2026-01-14T10:00:31.000000Z', '2026-01-14T10:00:31.000000Z')`,
-        `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
-           fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,
-           source_record_hash, dedup_fingerprint, dedup_fingerprint_version, created_at, updated_at) VALUES
-          (1, 1, 'buy', '2026-01-10', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),
-           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
-           'Original manual note', NULL, NULL, 'unknown', NULL, NULL, NULL,
-           '${SEED_TIME}', '${SEED_TIME}'),
-          (2, 1, 'buy', '2026-01-05', vision_numeric('200', 18, 4), vision_numeric('2', 18, 8),
-           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
-           'committed earlier', 1, 4, 'unknown', NULL, '${"a".repeat(64)}', 1,
-           '${SEED_TIME}', '${SEED_TIME}'),
-          (3, 1, 'buy', '2026-01-04', vision_numeric('100', 18, 4), vision_numeric('1', 18, 8),
-           vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
-           'saxo committed', 1, 4, 'unknown', '${"c".repeat(64)}', '${"c".repeat(64)}', 1,
-           '${SEED_TIME}', '${SEED_TIME}'),
-          (4, 2, 'buy', '2026-01-02', vision_numeric('200', 18, 4), vision_numeric('10', 18, 8),
-           vision_numeric('20', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
-           'custody base', 1, NULL, 'unknown', NULL, NULL, NULL,
-           '${SEED_TIME}', '${SEED_TIME}')`,
-        `INSERT INTO portfolio_asset_transfers (id, investment_id, source_account_id, destination_account_id,
-           date, units, fee_units, fee_basis_allocations, import_batch_id, staging_row_id, source_record_hash,
-           dedup_fingerprint, dedup_fingerprint_version, created_at) VALUES
-          (100, 2, 1, 2, '2026-01-15', vision_numeric('1', 18, 8), vision_numeric('0', 18, 8),
-           vision_jsonb('{}'), 9, 90, '${"f".repeat(64)}', '${"f".repeat(64)}', 1, '${SEED_TIME}')`,
-        `INSERT INTO portfolio_asset_adjustments (id, investment_id, account_id, date, units, adjustment_kind,
-           basis_policy, basis_allocations, import_batch_id, staging_row_id, source_record_hash,
-           dedup_fingerprint, dedup_fingerprint_version, created_at) VALUES
-          (200, 2, 2, '2026-01-16', vision_numeric('1', 18, 8), 'yield_reversal', 'zero_yield_only',
-           vision_jsonb('{}'), 9, 91, '${"e".repeat(64)}', '${"e".repeat(64)}', 1, '${SEED_TIME}')`,
-        `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
-           dedup_fingerprint, dedup_fingerprint_version, created_at, updated_at) VALUES
-          (30, '2026-01-12', vision_numeric('100', 18, 4), 'EUR', 'manual cash', 1, 1, 1, NULL, NULL,
-           '${SEED_TIME}', '${SEED_TIME}'),
-          (31, '2026-01-06', vision_numeric('50', 18, 4), 'EUR', 'imported cash', 1, 1, 1,
-           '${"d".repeat(64)}', 1, '${SEED_TIME}', '${SEED_TIME}')`,
-        `INSERT INTO portfolio_import_reconciliation_journal (id, batch_id, staging_row_id, transaction_id,
-           "action", policy, before_data, after_data, created_at) VALUES
-          (1, 4, 10, 3, 'adopt', 'exact',
-           vision_jsonb('{"snapshot":{"dedup_fingerprint":"${"c".repeat(64)}","dedup_fingerprint_version":1}}'),
-           vision_jsonb('{"ledgerKind":"cash","proof":{"original":{"batchId":4}}}'),
-           '${SEED_TIME}')`,
-      ],
+      seed: portfolioReconciliationSeed,
       steps: asRecorded([
         portfolioReconciliationPreview({ batch_ids: [1] }),
         portfolioReconciliationPreview({
@@ -7120,6 +7136,104 @@ function mutationAreas(): Record<string, ParityArea> {
           steps.push(portfolioReconciliationPreview({ batch_ids: [1, 2, 5] }));
           return steps;
         })(),
+      ]),
+    },
+    "portfolio-commit-mutations": {
+      router: {
+        module: "portfolioImportRoutes.ts",
+        mountPath: "/api/portfolio/import",
+      },
+      // Commits write their own timestamps; the area records on the fixed clock
+      // the replay runs on.
+      now: "2026-11-20T12:00:00.000Z",
+      seed: [
+        ...portfolioReconciliationSeed,
+        `INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,
+           default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,
+           error_summary, started_at, completed_at, account_id, is_brokerage, custom_config) VALUES
+          (6, 'saxo_transaction_history', 'broken.csv', 40, 'stock', 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
+           '2026-01-21T10:00:00.000000Z', NULL, 1, 1, NULL),
+          (7, 'generic_csv', 'clean.csv', 30, 'stock', 'buy', 'awaiting_review', 1, 0, 0, 0, NULL,
+           '2026-01-22T10:00:00.000000Z', NULL, 1, 1, NULL)`,
+        `INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type,
+           type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note,
+           raw_data, match_source, error_message, resolved_investment_id, route, source_transaction_id,
+           source_record_hash, created_at, updated_at) VALUES
+          (60, 6, 1, 'error', '2026-01-18', 'buy', 'BUY', 'MYSTERY', 'Mystery AG', vision_numeric('1', 18, 8),
+           vision_numeric('7', 18, 6), vision_numeric('7', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', 'unresolved holding', 'commit synthetic row 60', NULL,
+           'unresolved instrument \u2014 pick or create a holding', NULL, 'portfolio', 'BROKEN-60',
+           '${"1".repeat(64)}', '2026-01-21T10:00:01.000000Z', '2026-01-21T10:00:01.000000Z'),
+          (70, 7, 1, 'matched', '2026-03-01', 'buy', 'BUY', 'RECONTEST', 'Recon Asset', vision_numeric('3', 18, 8),
+           vision_numeric('25', 18, 6), vision_numeric('75', 18, 4), vision_numeric('0', 18, 4),
+           vision_numeric('0', 18, 4), 'EUR', 'clean buy', 'commit synthetic row 70', 'symbol', NULL,
+           1, 'portfolio', 'CLEAN-70', '${"7".repeat(64)}',
+           '2026-01-22T10:00:01.000000Z', '2026-01-22T10:00:01.000000Z')`,
+      ],
+      steps: asRecorded([
+        // Rejections that leave the scope untouched.
+        portfolioBatchCommit("3"),
+        portfolioBatchCommit("9"),
+        portfolioBatchCommit("999"),
+        portfolioBatchCommit("abc"),
+        portfolioBatchCommit("0"),
+        portfolioBatchCommit("1", { account_id: 999 }),
+        portfolioBatchCommit("1", { account_id: "abc" }),
+        portfolioBatchCommit("1", { account_id: 0 }),
+        portfolioBatchCommit("1", { account_id: "1e3" }),
+        portfolioBatchCommit("3", 5),
+        portfolioBatchCommit("3", "x"),
+        portfolioBatchCommit("3", [1]),
+        portfolioBatchCommit("3", true),
+        // The generic batch through the canonical commit pipeline.
+        portfolioBatchCommit("1"),
+        portfolioBatchCommit("1"),
+        portfolioBatch("1"),
+        portfolioBatchesPreview("1"),
+        // The maintained adapter batch, switched to another account first.
+        portfolioBatchCommit("2", { account_id: 2 }),
+        portfolioBatchCommit("2"),
+        portfolioBatch("2"),
+        // The maintained batch with an unresolved row: repair, then commit.
+        portfolioBatchCommit("6"),
+        portfolioBatchCommit("6", { adopt_policy: "prefer_source" }),
+        portfolioOverrideRow("6", "60", { create_new: true }),
+        portfolioBatchCommit("6"),
+        portfolioBatch("6"),
+        // The custody-shaped batch through the pipeline route.
+        portfolioBatchCommit("5"),
+        portfolioBatchCommit("5"),
+        portfolioBatch("5"),
+        // The reviewed-scope commit of a clean batch, then its recommit.
+        portfolioReconciliationCommit({ batch_ids: [7] }),
+        portfolioReconciliationCommit({ batch_ids: [7] }),
+        portfolioBatch("7"),
+        // The reviewed-scope commit on the still-reviewable error batches.
+        portfolioReconciliationCommit({
+          batch_ids: [5],
+          batch_policies: [{ batch_id: 5, adopt_policy: "prefer_source" }],
+          row_choices: [{ batch_id: 5, row_id: 51, choice: "keep_both" }],
+        }),
+        portfolioReconciliationCommit({ batch_ids: [5] }),
+        portfolioBatch("5"),
+        portfolioReconciliationCommit({ batch_ids: [1] }),
+        portfolioReconciliationCommit({ batch_ids: [1, 5] }),
+        portfolioReconciliationCommit({ batch_ids: [4, 999] }),
+        portfolioReconciliationCommit({ batch_ids: [1, 4] }),
+        portfolioReconciliationCommit({ batch_ids: [] }),
+        portfolioReconciliationCommit({ batch_ids: [0] }),
+        portfolioReconciliationCommit({ batch_ids: [-1] }),
+        portfolioReconciliationCommit({ batch_ids: ["1"] }),
+        portfolioReconciliationCommit({ batch_ids: [1.5] }),
+        portfolioReconciliationCommit({ batch_ids: 1 }),
+        portfolioReconciliationCommit({ batch_ids: [1, 1] }),
+        portfolioReconciliationCommit({
+          batch_ids: Array.from({ length: 101 }, (_, index) => index + 1),
+        }),
+        portfolioReconciliationCommit(5),
+        portfolioReconciliationCommit("x"),
+        portfolioReconciliationCommit([1]),
+        portfolioReconciliationCommit(true),
       ]),
     },
     "prices-mutations": {
