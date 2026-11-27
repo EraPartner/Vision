@@ -197,4 +197,91 @@ import VisionNativeCore
         #expect(try epoch("true") && epoch("1"))
         #expect(try !epoch("false") && !epoch("0"))
     }
+
+    /// The HTTP status of the error a call throws, or nil when it returns.
+    static func status(_ call: () throws -> Void) -> Int? {
+        do {
+            try call()
+            return nil
+        } catch let error as BackendHTTPError {
+            return error.status
+        } catch {
+            return 500
+        }
+    }
+
+    /// Findings 14, 53 and 55: payee creation.
+    @Test func payeeCreationIsAtomicAndKeepsExistingNotes() async throws {
+        let database = try Self.database([
+            "UPDATE recipients SET notes = 'Keep me' WHERE id = 1"
+        ])
+        try await database.run { session in
+            // 55: the reserved name is a 400 with its reason.
+            #expect(Self.status { _ = try RecipientsArea.create(session, JSObject([("name", .string("system"))])) } == 400)
+            // 14: a stale category refuses the payee and leaves none behind.
+            #expect(
+                Self.status {
+                    _ = try RecipientsArea.create(
+                        session, JSObject([("name", .string("Fresh")), ("default_category_id", .number(987_654))]))
+                } == 400)
+            #expect(try session.row("SELECT id FROM recipients WHERE normalized_name = 'fresh'") == nil)
+            // 53: adding an existing payee does not overwrite its note.
+            let result = try RecipientsArea.create(
+                session, JSObject([("name", .string("Seeded")), ("notes", .string("Replaced"))]))
+            #expect(result.status == 200)
+            #expect(try session.row("SELECT notes FROM recipients WHERE id = 1")?.text("notes") == "Keep me")
+        }
+    }
+
+    /// Finding 13: merging two payees that each have a primary account keeps one primary.
+    @Test func mergingPayeesWithPrimaryAccountsSucceeds() async throws {
+        let database = try Self.database([
+            "INSERT INTO recipients (id, name, normalized_name, is_active, created_at, updated_at) VALUES"
+                + " (2, 'Other', 'other', 1, \(stamp), \(stamp))",
+            "INSERT INTO recipient_bank_accounts (recipient_id, account_number, is_primary) VALUES (1, 'BE01', 1)",
+            "INSERT INTO recipient_bank_accounts (recipient_id, account_number, is_primary) VALUES (2, 'BE02', 1)",
+        ])
+        try await database.run { session in
+            let result = try RecipientsArea.merge(session, RecipientID(rawValue: 1), [RecipientID(rawValue: 2)])
+            #expect(result.status == 200)
+            let primaries = try session.rows(
+                "SELECT account_number FROM recipient_bank_accounts WHERE recipient_id = 1 AND is_primary")
+            #expect(try primaries.map { try $0.text("account_number") } == ["BE01"])
+        }
+    }
+
+    /// Finding 67: submitting an active tag again is not a reactivation.
+    @Test func anActiveTagIsNotReactivated() async throws {
+        let database = try Self.database([])
+        try await database.run { session in
+            let first = try TagsArea.create(session, .init(slug: "groceries"))
+            let second = try TagsArea.create(session, .init(slug: "groceries"))
+            #expect(first.status == 201 && second.status == 200)
+            let body = second.data.objectValue
+            #expect(body?["reactivated"] == .bool(false) && body?["created"] == .bool(false))
+        }
+    }
+
+    /// Finding 52: a root cannot take a name another root's legacy redirect holds.
+    @Test func aRootCannotTakeAReservedName() async throws {
+        let database = try Self.database([])
+        try await database.run { session in
+            func create(_ name: String) throws -> CategoryID {
+                let result = try CategoriesArea.createNode(session, JSObject([("name", .string(name))]))
+                guard case .object(let node) = result.data, case .int(let id)? = node["id"] else {
+                    throw BackendHTTPError.notFound("no node id")
+                }
+                return CategoryID(rawValue: id)
+            }
+            let held = try create("Held")
+            let other = try create("Other")
+            _ = try session.rows(
+                "INSERT INTO category_root_aliases (general, target_category_id) VALUES ('ALPHA', ?)", [held.sqlValue])
+            #expect(
+                Self.status {
+                    _ = try CategoriesArea.updateNode(
+                        session, id: other, segment: "\(other.rawValue)", JSObject([("name", .string("Alpha"))]))
+                } == 409)
+        }
+    }
 }

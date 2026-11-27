@@ -376,6 +376,15 @@ enum CategoriesArea {
             let nextParent = parentPatch ?? existing.parentId
             let nextName = name.map { JavaScriptWhitespace.trim($0).uppercased() } ?? existing.name
             if let nextParent { try requireActiveParent(session, nextParent) }
+            // A root may not take a name another root's legacy redirect holds, or later legacy
+            // creations would land under it (Astra report 1, finding 52).
+            if nextParent == nil, nextName != existing.name,
+                try session.row(
+                    "SELECT 1 AS reserved FROM category_root_aliases WHERE general = ? AND target_category_id <> ? LIMIT 1",
+                    [.text(nextName), id.sqlValue]) != nil
+            {
+                throw conflict("This root name is reserved by a legacy category redirect")
+            }
             if isActive == false,
                 try session.row(
                     "SELECT id FROM categories WHERE parent_id = ? AND is_active = 1 LIMIT 1", [id.sqlValue]) != nil
