@@ -34,7 +34,7 @@ struct ChartPassParityTests {
         let visible = ChartHoverTooltip.visibleArea(
             bounds: CGSize(width: 600, height: 300), scrollVisible: CGRect(x: 0, y: -20, width: 600, height: 700))
         let below = ChartHoverTooltip.origin(anchor: CGPoint(x: 300, y: 30), size: size, visible: visible)
-        #expect(below.y == 30 + 12)
+        #expect(below.y == CGFloat(30 + 12))
         let tall = CGSize(width: 160, height: 900)
         let pinned = ChartHoverTooltip.origin(anchor: CGPoint(x: 300, y: 200), size: tall, visible: visible)
         #expect(pinned.y >= visible.minY)
