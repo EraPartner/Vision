@@ -198,12 +198,27 @@ public struct InProcessBackend: Sendable {
         path.split(separator: "/", omittingEmptySubsequences: false).dropFirst().map(String.init)
     }
 
+    /// Literal paths the Bun backend serves beside a ported `{id}` route of the same method
+    /// and depth. Express registers them first, so they win there; here they must not reach
+    /// the ID handler (Astra report 1, finding 16). `RoutingTests` checks this list against
+    /// `openapi.yaml`; drop an entry when its operation is ported.
+    static let bunStaticPaths: Set<String> = [
+        "GET /api/transactions/transfer-suggestions",
+        "GET /api/recipients/clusters",
+    ]
+
     /// The route and path parameters for a request, or nil when no ported operation matches.
+    /// A literal segment beats a `{name}` capture, left to right, as Express's order of
+    /// registration does for the TypeScript routes.
     func match(_ request: APIRequest) -> (Route, [String: String])? {
         guard let components = URLComponents(url: request.url, resolvingAgainstBaseURL: false) else { return nil }
         let path = Self.segments(components.percentEncodedPath)
+        let literalPath = "\(request.method.rawValue) /" + path.joined(separator: "/")
+        if Self.bunStaticPaths.contains(literalPath) { return nil }
+        var best: (route: Route, parameters: [String: String], literals: [Bool])?
         for route in routes where route.method == request.method && route.segments.count == path.count {
             var parameters: [String: String] = [:]
+            var literals: [Bool] = []
             var matched = true
             for (template, segment) in zip(route.segments, path) {
                 if template.hasPrefix("{"), template.hasSuffix("}") {
@@ -212,14 +227,25 @@ public struct InProcessBackend: Sendable {
                         break
                     }
                     parameters[String(template.dropFirst().dropLast())] = value
+                    literals.append(false)
                 } else if template != segment {
                     matched = false
                     break
+                } else {
+                    literals.append(true)
                 }
             }
-            if matched { return (route, parameters) }
+            guard matched else { continue }
+            if let current = best, !Self.isMoreSpecific(literals, than: current.literals) { continue }
+            best = (route, parameters, literals)
         }
-        return nil
+        return best.map { ($0.route, $0.parameters) }
+    }
+
+    /// The first segment where the two differ decides: a literal beats a capture.
+    static func isMoreSpecific(_ candidate: [Bool], than current: [Bool]) -> Bool {
+        for (a, b) in zip(candidate, current) where a != b { return a }
+        return false
     }
 }
 

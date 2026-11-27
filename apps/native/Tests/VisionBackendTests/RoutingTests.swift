@@ -46,6 +46,54 @@ import VisionNativeCore
             PortedOperations.ids.isSubset(of: Set(OpenAPIOperations.operationIds).union(Self.handWrittenUploadIds)))
     }
 
+    /// Finding 16: a literal path wins over a `{id}` capture, and the literal paths Bun still
+    /// serves beside a ported ID route go to Bun instead of the ID handler.
+    @Test func literalPathsAreNotMistakenForIDs() async throws {
+        let backend = InProcessBackend.live(database: BackendDatabase())
+        #expect(backend.match(try Self.request(.get, "/api/investments/providers"))?.0.operationId == "listInvestmentProviders")
+        #expect(backend.match(try Self.request(.get, "/api/investments/7"))?.0.operationId == "getInvestment")
+        #expect(backend.match(try Self.request(.get, "/api/transactions/transfer-suggestions")) == nil)
+        #expect(backend.match(try Self.request(.get, "/api/recipients/clusters")) == nil)
+
+        let bun = Recorder()
+        let database = BackendDatabase()
+        await database.resume(databasePath: ":memory:")
+        let transport = RoutingAPITransport(backend: .live(database: database), fallback: bun, streamFallback: bun)
+        let response = try await transport.send(try Self.request(.get, "/api/recipients/clusters"))
+        #expect(response.body == Data("bun".utf8))
+    }
+
+    /// Every literal path in `openapi.yaml` reaches its own operation: in-process when ported,
+    /// else Bun. Keeps `InProcessBackend.bunStaticPaths` complete as routes are ported.
+    @Test func everyLiteralSpecPathReachesItsOwnOperation() throws {
+        let spec = try String(
+            contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("openapi.yaml"), encoding: .utf8)
+        var path: String?
+        var method: HTTPMethod?
+        var checked = 0
+        let backend = InProcessBackend.live(database: BackendDatabase())
+        for line in spec.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.hasPrefix("  /"), !line.hasPrefix("   "), line.hasSuffix(":") {
+                path = String(line.dropFirst(2).dropLast())
+                method = nil
+            } else if line.hasPrefix("    "), !line.hasPrefix("     "), line.hasSuffix(":") {
+                method = HTTPMethod(rawValue: line.trimmingCharacters(in: .whitespaces).dropLast().uppercased())
+            } else if line.hasPrefix("      operationId: "), let currentPath = path, let currentMethod = method,
+                !currentPath.contains("{")
+            {
+                let id = line.dropFirst("      operationId: ".count).trimmingCharacters(in: .whitespaces)
+                let matched = backend.match(try Self.request(currentMethod, currentPath))?.0.operationId
+                #expect(
+                    matched == (PortedOperations.ids.contains(id) ? id : nil),
+                    "\(currentMethod.rawValue) \(currentPath) (\(id)) matched \(matched ?? "Bun")")
+                checked += 1
+            }
+        }
+        #expect(checked > 100)
+    }
+
     @Test func unportedOperationsGoToBun() async throws {
         let bun = Recorder()
         let database = BackendDatabase()
