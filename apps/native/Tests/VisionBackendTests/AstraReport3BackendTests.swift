@@ -293,7 +293,11 @@ import VisionNativeCore
         let inconsistent = Self.validDocument.replacingOccurrences(
             of: #""reportedWeightPercent":"95""#, with: #""reportedWeightPercent":"90""#)
         let issues = FundHoldingsContract.validate(try Self.json(inconsistent), at: [])
-        #expect(issues.map(\.message) == ["Reported weight must equal the sum of holding rows"])
+        // The TypeScript refinement reports both: 90 reported + 5 missing is not 100 either.
+        #expect(issues.map(\.message) == [
+            "Reported weight must equal the sum of holding rows",
+            "Reported and missing weight must total 100",
+        ])
         for body in [Self.bundle(document: inconsistent), Self.bundle(document: nil)] {
             #expect(throws: BackendHTTPError.self) {
                 _ = try ExposureArea.bundleBody(try Self.json(body))
