@@ -318,7 +318,7 @@ let researchPresentationGoldenJSON = #"""
           {
             "time": 3,
             "price": 220,
-            "price_o": 100,
+            "price_o": 180,
             "price_h": 240,
             "price_l": 180,
             "macro": 100,

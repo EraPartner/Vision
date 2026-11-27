@@ -346,6 +346,9 @@ struct ResearchChartBuilderTests {
         state.series = (0..<5).map { .init(id: "s\($0)", symbol: "S\($0)") }
         state.oscillatorSeriesId = "s0"
         model.state = state
+        // Astra report 1, finding 61: with five series there is no room for volume, so the
+        // preset is not offered.
+        #expect(!model.canApply(.priceVolume) && model.canApply(.sma))
         model.preset(.priceVolume)
         #expect(model.state == state)
         model.addIndicator(type: .ema)

@@ -306,9 +306,17 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
                         with: .color(color))
                 }
             }
+            // A line bridges the rows its series has no value on, so a monthly series beside a
+            // daily one stays a line, and a lone point still shows (Astra report 1, finding 60).
             for mark in marks.filter({ $0.kind == .line }) {
                 let axis = mark.axis == .right ? right : left
-                for segment in segments(mark.id, axis: axis, x: x, y: y) {
+                for segment in segments(mark.id, axis: axis, x: x, y: y, bridging: true) {
+                    if segment.count == 1, let point = segment.first {
+                        let radius = max(mark.width, 1.5)
+                        let dot = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
+                        context.fill(Path(ellipseIn: dot), with: .color(mark.color))
+                        continue
+                    }
                     context.stroke(
                         path(segment), with: .color(mark.color),
                         style: StrokeStyle(lineWidth: mark.width, dash: mark.dashed ? [4, 4] : []))
@@ -321,14 +329,14 @@ private struct ResearchChartBuilderMarkLayer: View, Equatable {
     }
     private func segments(
         _ key: String, axis: ResearchChartBuilderAxisGeometry, x: (AnalysisRow) -> CGFloat,
-        y: (Decimal?, ResearchChartBuilderAxisGeometry) -> CGFloat?
+        y: (Decimal?, ResearchChartBuilderAxisGeometry) -> CGFloat?, bridging: Bool = false
     ) -> [[CGPoint]] {
         var result: [[CGPoint]] = []
         var points: [CGPoint] = []
         for row in rows {
             if let position = y(row[key]?.decimalValue, axis) {
                 points.append(CGPoint(x: x(row), y: position))
-            } else if !points.isEmpty {
+            } else if !bridging, !points.isEmpty {
                 result.append(points)
                 points = []
             }

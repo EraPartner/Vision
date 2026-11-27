@@ -296,6 +296,18 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         state.indicators.removeAll { $0.id == id }
         self.state = state
     }
+    /// Whether a preset can apply: it needs a price series, and Price + Volume needs a
+    /// non-macro price series and room for the volume series within the five-series limit
+    /// (Astra report 1, finding 61).
+    public func canApply(_ preset: ResearchChartBuilderPreset) -> Bool {
+        let prices = state.series.filter { $0.field == .price }
+        guard !prices.isEmpty else { return false }
+        if preset == .priceVolume {
+            return prices.count < ResearchChartBuilderModel.seriesLimit && prices.contains { $0.macro == nil }
+        }
+        return true
+    }
+    static let seriesLimit = 5
     public func preset(_ preset: ResearchChartBuilderPreset) {
         guard let primary = state.series.first(where: { $0.field == .price }) else { return }
         var next = state

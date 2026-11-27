@@ -101,6 +101,9 @@ public final class ResearchCompareModel {
         guard let key = state.sort, let metric = ResearchCompareMetric.all.first(where: { $0.id == key }) else {
             return state.symbols
         }
+        // Amounts in different currencies cannot be ranked by their raw numbers (Astra report 1,
+        // finding 58): they keep the chosen order until every symbol shares one currency.
+        if metric.format == ResearchCompareMetric.moneyFormat, !moneyComparable { return state.symbols }
         return state.symbols.enumerated().sorted { a, b in
             let left = fundamentals[a.element]?.data?.fundamentals[key]?.decimalValue
             let right = fundamentals[b.element]?.data?.fundamentals[key]?.decimalValue
@@ -112,6 +115,17 @@ public final class ResearchCompareModel {
                 return l == r ? a.offset < b.offset : metric.higherIsBetter ? l > r : l < r
             }
         }.map(\.element)
+    }
+    /// The currency of a symbol's prices, from its chart; nil until the chart is read.
+    public func priceCurrency(_ symbol: String) -> String? {
+        guard let text = charts[symbol]?.data.currency else { return nil }
+        let code = text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return code.isEmpty ? nil : code
+    }
+    /// Whether the compared symbols' amounts share one known currency.
+    public var moneyComparable: Bool {
+        let codes = state.symbols.map(priceCurrency)
+        return Set(codes).count == 1 && !codes.contains(nil)
     }
     public func addSymbol(_ raw: String) -> NativeRoute {
         let next = state.adding(raw, to: route)
