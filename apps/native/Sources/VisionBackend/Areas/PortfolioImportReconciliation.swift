@@ -33,14 +33,8 @@ enum PortfolioImportReconciliationArea {
             } else {
                 for item in items {
                     if case .number(let number) = item {
-                        if number.rounded() != number {
-                            issues.append("Invalid input: expected int, received number")
-                        } else if number <= 0 {
-                            issues.append("Too small: expected number to be >0")
-                        } else if number > ImportBatchesArea.maxSafeId {
-                            issues.append("Too big: expected number to be <=9007199254740991")
-                        } else {
-                            batchIds.append(Int(number))
+                        if let id = scopeId(number, issues: &issues) {
+                            batchIds.append(id)
                         }
                     } else {
                         issues.append(
@@ -106,6 +100,31 @@ enum PortfolioImportReconciliationArea {
         return (batchIds, adoptPolicy, batchPolicies, rowChoices)
     }
 
+    /// `z.number().int().positive().max(Number.MAX_SAFE_INTEGER)`: the issues the number fails
+    /// with, in zod's order — a non-integer is a fatal format failure that stops the checks, an
+    /// out-of-range integer fails both the int and the number checks — and the id when valid.
+    static func scopeId(_ number: Double, issues: inout [String]) -> Int? {
+        guard number.isFinite, number == number.rounded() else {
+            issues.append("Invalid input: expected int, received number")
+            return nil
+        }
+        if number > ImportBatchesArea.maxSafeId {
+            issues.append("Too big: expected int to be <=9007199254740991")
+            issues.append("Too big: expected number to be <=9007199254740991")
+            return nil
+        }
+        if number < -ImportBatchesArea.maxSafeId {
+            issues.append("Too small: expected int to be >=-9007199254740991")
+            issues.append("Too small: expected number to be >0")
+            return nil
+        }
+        if number <= 0 {
+            issues.append("Too small: expected number to be >0")
+            return nil
+        }
+        return Int(number)
+    }
+
     /// One `batch_policies` item: a strict object of `batch_id` and `adopt_policy`.
     static func policyItem(_ value: JSValue, issues: inout [String]) -> BatchPolicyInput? {
         guard case .object(let object) = value else {
@@ -114,14 +133,8 @@ enum PortfolioImportReconciliationArea {
         }
         var batchId: PortfolioImportBatchNumericID?
         if case .number(let number)? = object["batch_id"] {
-            if number.rounded() != number {
-                issues.append("Invalid input: expected int, received number")
-            } else if number <= 0 {
-                issues.append("Too small: expected number to be >0")
-            } else if number > ImportBatchesArea.maxSafeId {
-                issues.append("Too big: expected number to be <=9007199254740991")
-            } else {
-                batchId = PortfolioImportBatchNumericID(Int(number))
+            if let id = scopeId(number, issues: &issues) {
+                batchId = PortfolioImportBatchNumericID(id)
             }
         } else {
             issues.append(
@@ -153,14 +166,8 @@ enum PortfolioImportReconciliationArea {
         }
         var batchId: PortfolioImportBatchNumericID?
         if case .number(let number)? = object["batch_id"] {
-            if number.rounded() != number {
-                issues.append("Invalid input: expected int, received number")
-            } else if number <= 0 {
-                issues.append("Too small: expected number to be >0")
-            } else if number > ImportBatchesArea.maxSafeId {
-                issues.append("Too big: expected number to be <=9007199254740991")
-            } else {
-                batchId = PortfolioImportBatchNumericID(Int(number))
+            if let id = scopeId(number, issues: &issues) {
+                batchId = PortfolioImportBatchNumericID(id)
             }
         } else {
             issues.append(
@@ -168,14 +175,8 @@ enum PortfolioImportReconciliationArea {
         }
         var rowId: PortfolioImportRowID?
         if case .number(let number)? = object["row_id"] {
-            if number.rounded() != number {
-                issues.append("Invalid input: expected int, received number")
-            } else if number <= 0 {
-                issues.append("Too small: expected number to be >0")
-            } else if number > ImportBatchesArea.maxSafeId {
-                issues.append("Too big: expected number to be <=9007199254740991")
-            } else {
-                rowId = PortfolioImportRowID(Int(number))
+            if let id = scopeId(number, issues: &issues) {
+                rowId = PortfolioImportRowID(id)
             }
         } else {
             issues.append(
@@ -382,8 +383,8 @@ enum PortfolioImportReconciliationArea {
                 isRecurring: nil,
                 recurrenceInterval: nil,
                 recurrenceEndDay: nil,
-                importBatchID: (try row.optionalText("import_batch_id"))
-                    .map(PortfolioImportBatchID.init(rawValue:)),
+                importBatchID: (try row.optionalInt64("import_batch_id"))
+                    .flatMap { Int(exactly: $0) }.map { PortfolioImportBatchID(rawValue: String($0)) },
                 sourceRecordHash: try row.optionalText("source_record_hash"),
                 dedupFingerprint: try row.optionalText("dedup_fingerprint"),
                 dedupFingerprintVersion: try row.optionalInt64("dedup_fingerprint_version")
@@ -426,8 +427,8 @@ enum PortfolioImportReconciliationArea {
                 isRecurring: nil,
                 recurrenceInterval: nil,
                 recurrenceEndDay: nil,
-                importBatchID: (try row.optionalText("import_batch_id"))
-                    .map(PortfolioImportBatchID.init(rawValue:)),
+                importBatchID: (try row.optionalInt64("import_batch_id"))
+                    .flatMap { Int(exactly: $0) }.map { PortfolioImportBatchID(rawValue: String($0)) },
                 sourceRecordHash: try row.optionalText("source_record_hash"),
                 dedupFingerprint: try row.optionalText("dedup_fingerprint"),
                 dedupFingerprintVersion: try row.optionalInt64("dedup_fingerprint_version")

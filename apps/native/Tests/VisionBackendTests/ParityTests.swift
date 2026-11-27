@@ -302,7 +302,7 @@ import VisionNativeCore
             #expect(matched.0.operationId == step.operationId, "\(label)")
             let response = try await transport.send(request)
             if response.status >= 500, step.status < 500 {
-                print("parity server-error body: \(String(decoding: response.body, as: UTF8.self))")
+                print("parity server-error body at \(label): \(String(decoding: response.body, as: UTF8.self))")
             }
             #expect(response.status == step.status, "\(label)")
             // Headers the route set itself, such as execute's `Idempotent-Replay`.
