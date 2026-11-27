@@ -170,7 +170,13 @@ struct ResearchForecastChart: View {
                 .onKeyPress(phases: .down) { press in
                     ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: points.count)
                 }
-                .onChange(of: focused) { _, focused in if !focused { scrub.clear() } }
+                .onChange(of: focused) { _, focused in
+                    // `useChartKeyboardNav`'s blur clears the highlight with the range.
+                    if !focused {
+                        selected = nil
+                        scrub.clear()
+                    }
+                }
                 .accessibilityLabel(shell.strings.t("research.forecast.chartTitle"))
                 .chartAccessibilitySummary { strings in
                     ChartAccessibility.series(

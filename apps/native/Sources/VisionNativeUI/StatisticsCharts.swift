@@ -42,13 +42,13 @@ struct InsightRankedChart: View {
             .padding(.vertical, 4)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowsWidth = $0 }
             .overlay(alignment: .topLeading) { tooltip(domainMax: domainMax) }
-            .focusable().focused($focused).focusEffectDisabled().onKeyPress(phases: .down) { press in
+            .focusable().focused($focused).chartFocusRing(focused).onKeyPress(phases: .down) { press in
                 guard !rows.isEmpty else { return .ignored }
-                let index = selection.flatMap { id in rows.firstIndex { $0.id == id } } ?? 0
+                let index = selection.flatMap { id in rows.firstIndex { $0.id == id } }
                 if press.key == .downArrow || press.key == .rightArrow {
-                    selection = rows[min(index + 1, rows.count - 1)].id
+                    selection = rows[ChartKeyboard.step(from: index, forward: true, count: rows.count)].id
                 } else if press.key == .upArrow || press.key == .leftArrow {
-                    selection = rows[max(0, index - 1)].id
+                    selection = rows[ChartKeyboard.step(from: index, forward: false, count: rows.count)].id
                 } else if press.characters == "\u{F729}" {
                     selection = rows.first?.id
                 } else if press.characters == "\u{F72B}" {
@@ -241,11 +241,11 @@ struct StatisticsCategoryDonut: View {
             .frame(height: 300).focusable().focused($focused)
             .onKeyPress(phases: .down) { press in
                 guard !rows.isEmpty else { return .ignored }
-                let index = selected.flatMap { id in rows.firstIndex { $0.id == id } } ?? 0
+                let index = selected.flatMap { id in rows.firstIndex { $0.id == id } }
                 if press.key == .rightArrow || press.key == .downArrow {
-                    selected = rows[min(index + 1, rows.count - 1)].id
+                    selected = rows[ChartKeyboard.step(from: index, forward: true, count: rows.count)].id
                 } else if press.key == .leftArrow || press.key == .upArrow {
-                    selected = rows[max(0, index - 1)].id
+                    selected = rows[ChartKeyboard.step(from: index, forward: false, count: rows.count)].id
                 } else if press.characters == "\u{F729}" {
                     selected = rows.first?.id
                 } else if press.characters == "\u{F72B}" {

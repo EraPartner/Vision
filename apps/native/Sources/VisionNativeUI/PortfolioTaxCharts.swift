@@ -137,7 +137,7 @@ private struct PortfolioTaxBarChart: View {
                             })
                 }
             }
-            .frame(height: 280).focusable().focused($focused).focusEffectDisabled()
+            .frame(height: 280).focusable().focused($focused).chartFocusRing(focused)
             .accessibilityLabel(title).onKeyPress(phases: .down, action: move)
             .accessibilityValue(
                 ChartAccessibility.series(

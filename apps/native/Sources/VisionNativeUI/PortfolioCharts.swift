@@ -121,10 +121,16 @@ struct PortfolioSeriesChart: View {
                                 hover.set(hovered.flatMap { keys.indices.contains($0) ? keys[$0] : nil })
                             },
                             onPress: { focused = true })
+                        PortfolioChartHoverOverlay(
+                            hover: hover, hidden: scrub.range != nil, plot: plotRect, bounds: geometry.size,
+                            series: series,
+                            x: { key in index[key].flatMap { proxy.position(forX: Double($0)) } },
+                            y: { proxy.position(forY: $0) },
+                            color: lineColor, dateLabel: { dateLabel($0) }, format: { format($0) })
                     }
                 }
             }
-            .frame(height: height).focusable().focused($focused).focusEffectDisabled()
+            .frame(height: height).focusable().focused($focused).chartFocusRing(focused)
             .accessibilityLabel(title)
             // Every portfolio chart is a web `AreaChart`, lines-only ones included.
             .accessibilityValue(
@@ -145,9 +151,6 @@ struct PortfolioSeriesChart: View {
                         id: line.id, label: line.label,
                         color: colors[line.id] ?? Color(token: palette[index % palette.count]), dashed: line.dashed)
                 })
-            PortfolioChartReadout(
-                hover: hover, hidden: scrub.range != nil, keys: keys, series: series,
-                dateLabel: { dateLabel($0) }, format: { format($0) })
         }
     }
     /// What the date and value strings of a point depend on besides the point.
@@ -233,35 +236,41 @@ struct PortfolioSeriesChart: View {
     }
 }
 
-/// The hovered point's date and the value of each line, under the chart. Its own view, so it
-/// alone re-renders as the pointer moves.
-private struct PortfolioChartReadout: View {
+/// The hovered point's active dots and floating `ChartTooltip` (the web AreaChart's), drawn in
+/// the overlay so the layout under the chart never moves. Its own view, so it alone re-renders as
+/// the pointer moves.
+private struct PortfolioChartHoverOverlay: View {
     let hover: ChartHover<String>
     let hidden: Bool
-    let keys: [String]
+    let plot: CGRect
+    let bounds: CGSize
     let series: [InsightChartSeries]
+    let x: (String) -> CGFloat?
+    let y: (Double) -> CGFloat?
+    let color: (InsightChartSeries) -> Color
     let dateLabel: (String) -> String
     let format: (Decimal) -> String
-    @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        if !hidden, let selected = hover.key, keys.contains(selected) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(dateLabel(selected)).font(.caption.weight(.medium))
-                ForEach(series) { line in
-                    if let value = line.points.first(where: { $0.key == selected })?.value {
-                        HStack {
-                            Text(line.label).foregroundStyle(theme.secondaryLabel)
-                            Spacer()
-                            Text(format(value)).monospacedDigit()
-                        }.font(.caption)
-                    }
+        if !hidden, let selected = hover.key, let px = x(selected) {
+            let values = series.compactMap { line -> (line: InsightChartSeries, value: Decimal)? in
+                line.points.first(where: { $0.key == selected }).map { (line, $0.value) }
+            }
+            let rings = values.compactMap { entry -> ChartHoverRing? in
+                y(NSDecimalNumber(decimal: entry.value).doubleValue).map {
+                    ChartHoverRing(
+                        id: entry.line.id, point: CGPoint(x: plot.minX + px, y: plot.minY + $0),
+                        color: color(entry.line))
                 }
-            }.padding(10)
-                .background(
-                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
-                )
-                .accessibilityElement(children: .combine)
+            }
+            ChartHoverRings(rings: rings)
+            ChartHoverTooltip(
+                title: dateLabel(selected),
+                items: values.map {
+                    ChartTooltipItem(
+                        id: $0.line.id, label: $0.line.label, value: format($0.value), color: color($0.line))
+                },
+                anchor: CGPoint(x: plot.minX + px, y: rings.map(\.point.y).min() ?? plot.minY), bounds: bounds)
         }
     }
 }

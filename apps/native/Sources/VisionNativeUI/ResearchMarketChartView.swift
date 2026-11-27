@@ -13,6 +13,8 @@ struct ResearchMarketChartView: View {
     /// Range compare (`scrubbable`): drag, or click, move, click.
     @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
+    /// The volume strip takes keyboard focus too, like the web's keyboard-enabled `BarChart`.
+    @FocusState private var volumeFocused: Bool
     @State private var plotCache = ChartLinePlotCache()
     /// The chart's width, for the web's date tick count.
     @State private var chartWidth: CGFloat = 0
@@ -91,11 +93,30 @@ struct ResearchMarketChartView: View {
                             if selected != position { selected = position }
                         },
                         onPress: { focused = true })
+                    // The web AreaChart's active dot and floating `ChartTooltip`, so the layout
+                    // under the chart never moves.
+                    if !selectsVolume, scrub.range == nil, let selected, plot.times.indices.contains(selected),
+                        data.points.indices.contains(selected), let close = data.points[selected].close,
+                        let frame = proxy.plotFrame.map({ geometry[$0] }),
+                        let x = proxy.position(forX: plot.times[selected]),
+                        let y = proxy.position(forY: NSDecimalNumber(decimal: close).doubleValue)
+                    {
+                        let point = CGPoint(x: frame.minX + x, y: frame.minY + y)
+                        ChartHoverRings(rings: [ChartHoverRing(id: "close", point: point, color: color)])
+                        ChartHoverTooltip(
+                            title: pointTitle(selected),
+                            items: [
+                                ChartTooltipItem(
+                                    id: "close", label: shell.strings.t("market.priceChart"), value: money(close),
+                                    color: color)
+                            ],
+                            anchor: point, bounds: geometry.size)
+                    }
                 }
             }
             .frame(height: 320)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { chartWidth = $0 }
-            .focusable().focused($focused).focusEffectDisabled()
+            .focusable().focused($focused).chartFocusRing(focused)
             .onKeyPress(phases: .down) { press in
                 ChartKeyboard.handle(press, scrub: &scrub, selected: &selected, count: plot.times.count)
             }
@@ -128,24 +149,42 @@ struct ResearchMarketChartView: View {
                     }
                 )
                 .equatable()
-            }
-            if scrub.range == nil, let selected, data.points.indices.contains(selected) {
-                let point = data.points[selected]
-                let date = ResearchMarketDisplay.date(point.time)
-                HStack {
-                    Text(
-                        VisionFormat.appDate(date, format: shell.settings.dateFormat, timeZone: .current) + " "
-                            + VisionFormat.time(date, locale: shell.settings.numberFormat.locale, timeZone: .current))
-                    Spacer()
-                    if selectsVolume, let volume = point.volume {
-                        Text(ResearchMarketDisplay.compact(volume, shell: shell)).monospacedDigit()
-                    } else if let close = point.close {
-                        Text(
-                            ResearchMarketDisplay.money(
-                                close, currency: data.currency ?? "USD", shell: shell, digits: 2)
-                        ).monospacedDigit()
+                // The hovered bar's floating `ChartTooltip`, over the strip so nothing below moves.
+                .overlay {
+                    GeometryReader { geometry in
+                        if selectsVolume, scrub.range == nil, let selected, data.points.indices.contains(selected),
+                            let volume = data.points[selected].volume, plot.times.count > 0
+                        {
+                            ChartHoverTooltip(
+                                title: pointTitle(selected),
+                                items: [
+                                    ChartTooltipItem(
+                                        id: "volume", label: shell.strings.t("market.volume"),
+                                        value: ResearchMarketDisplay.compact(volume, shell: shell),
+                                        color: theme.mutedForeground)
+                                ],
+                                anchor: CGPoint(
+                                    x: geometry.size.width * (CGFloat(selected) + 0.5) / CGFloat(plot.times.count), y: 0),
+                                bounds: geometry.size)
+                        }
                     }
-                }.font(.caption).padding(10).background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+                    .allowsHitTesting(false)
+                }
+                .focusable().focused($volumeFocused).chartFocusRing(volumeFocused)
+                .onKeyPress(phases: .down) { press in
+                    if press.key == .escape {
+                        guard selected != nil else { return .ignored }
+                        selected = nil
+                        return .handled
+                    }
+                    guard let key = press.chartKey,
+                        let next = ChartKeyboard.index(for: key, from: selected, count: plot.times.count)
+                    else { return .ignored }
+                    selectsVolume = true
+                    selected = next
+                    return .handled
+                }
+                .onChange(of: volumeFocused) { _, focused in if !focused { selected = nil } }
             }
         }
     }

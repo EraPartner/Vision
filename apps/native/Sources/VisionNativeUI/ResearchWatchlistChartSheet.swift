@@ -212,9 +212,30 @@ private struct ResearchWatchlistPriceChart: View {
                                 if selected != index { selected = index }
                             },
                             onPress: { focused = true })
+                        // The web AreaChart's active dot and floating `ChartTooltip`, so the sheet's
+                        // layout never moves while the pointer explores the chart.
+                        if scrub.range == nil, let selected, marks.indices.contains(selected),
+                            let close = points[marks[selected].offset].close,
+                            let frame = proxy.plotFrame.map({ geometry[$0] }),
+                            let x = proxy.position(forX: marks[selected].time),
+                            let y = proxy.position(forY: marks[selected].close)
+                        {
+                            let point = CGPoint(x: frame.minX + x, y: frame.minY + y)
+                            ChartHoverRings(rings: [ChartHoverRing(id: "close", point: point, color: theme.primary)])
+                            ChartHoverTooltip(
+                                title: VisionFormat.appDate(
+                                    marks[selected].time, format: shell.settings.dateFormat, timeZone: .current),
+                                items: [
+                                    ChartTooltipItem(
+                                        id: "close", label: shell.strings.t("watchlistChart.priceLabel"),
+                                        value: ResearchWatchlistUI.money(close, currency: item.currency, shell: shell),
+                                        color: theme.primary)
+                                ],
+                                anchor: point, bounds: geometry.size)
+                        }
                     }
                 }
-                .frame(height: 320).focusable().focused($focused).focusEffectDisabled()
+                .frame(height: 320).focusable().focused($focused).chartFocusRing(focused)
                 .accessibilityLabel(shell.strings.t("watchlist.openChart") + ": " + item.name)
                 .chartAccessibilitySummary { strings in
                     ChartAccessibility.series(
@@ -231,19 +252,13 @@ private struct ResearchWatchlistPriceChart: View {
                 }
                 .onChange(of: points) { _, _ in selected = nil }
                 .onChange(of: plot.scrubTimeline, initial: true) { _, timeline in scrub.sync(timeline: timeline) }
-                .onChange(of: focused) { _, focused in if !focused { scrub.clear() } }
-            if scrub.range == nil, let selected, plot.closeMarks.indices.contains(selected),
-                let close = points[plot.closeMarks[selected].offset].close
-            {
-                HStack {
-                    Text(
-                        VisionFormat.appDate(
-                            plot.closeMarks[selected].time, format: shell.settings.dateFormat, timeZone: .current))
-                    Spacer()
-                    Text(ResearchWatchlistUI.money(close, currency: item.currency, shell: shell)).monospacedDigit()
-                }.font(.caption).padding(10).background(
-                    theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
-            }
+                .onChange(of: focused) { _, focused in
+                    // `useChartKeyboardNav`'s blur clears the highlight with the range.
+                    if !focused {
+                        selected = nil
+                        scrub.clear()
+                    }
+                }
         }
     }
     /// The web AreaChart's `yDomain={[minPrice, maxPrice]}`, niced; without metrics the closes and the

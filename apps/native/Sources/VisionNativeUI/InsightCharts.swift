@@ -328,6 +328,24 @@ struct InsightTimelineChart: View {
                         },
                         onPress: { focused = true },
                         scrubbable: rangeComparison)
+                    // The web LineChart's active dots where the hovered x meets each drawn line
+                    // (bars and stacked areas have none).
+                    if !sparkline, scrub.range == nil, let selection, let position = index[selection],
+                        let frame = proxy.plotFrame.map({ geometry[$0] }),
+                        let x = proxy.position(forX: Double(position))
+                    {
+                        ChartHoverRings(
+                            rings: series.indices.compactMap { line -> ChartHoverRing? in
+                                let item = series[line]
+                                guard !(bars && !item.dashed), !(drawsArea(item) && stacksAreas),
+                                    let value = item.points.first(where: { $0.key == selection })?.value,
+                                    let y = proxy.position(forY: coordinate(value))
+                                else { return nil }
+                                return ChartHoverRing(
+                                    id: item.id, point: CGPoint(x: frame.minX + x, y: frame.minY + y),
+                                    color: seriesColor(at: line))
+                            })
+                    }
                     // `ChartTooltip`: the hovered category's values, floating at its tallest point.
                     if !sparkline, scrub.range == nil, let selection, let position = index[selection],
                         let frame = proxy.plotFrame.map({ geometry[$0] }),
@@ -341,7 +359,7 @@ struct InsightTimelineChart: View {
                 }
             }
             .frame(height: height)
-            .focusable().focused($focused).focusEffectDisabled()
+            .focusable().focused($focused).chartFocusRing(focused)
             .onKeyPress(phases: .down, action: handleKey)
             .onChange(of: focused) { _, value in
                 if !value {
@@ -533,10 +551,33 @@ struct HomeCategoryChart: View {
     let navigate: (String) -> Void
     @State private var selectedCount: Int?
     @State private var selectedId: String?  // lint:allow raw-id view selection key of chart series, not an API entity
+    @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var selected: HomeCategorySlice? { slices.first { $0.id == selectedId } }
+
+    /// The web's wedges are links: the arrow keys reach each one and Return opens it.
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        if press.key == .return {
+            guard let selected else { return .ignored }
+            navigate(selected.route.string)
+            return .handled
+        }
+        if press.key == .escape {
+            guard selectedId != nil else { return .ignored }
+            selectedId = nil
+            return .handled
+        }
+        let key: ChartScrub.ChartKey? =
+            press.key == .downArrow ? .right : press.key == .upArrow ? .left : press.chartKey
+        let current = selectedId.flatMap { id in slices.firstIndex { $0.id == id } }
+        guard let key, let next = ChartKeyboard.index(for: key, from: current, count: slices.count) else {
+            return .ignored
+        }
+        selectedId = slices[next].id
+        return .handled
+    }
 
     /// A category's colour follows its root name (`getCategoryChartColor`), never its rank.
     private func sliceColor(_ slice: HomeCategorySlice) -> Color {
@@ -582,6 +623,8 @@ struct HomeCategoryChart: View {
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
                         Rectangle().fill(.clear).contentShape(Rectangle())
+                            // A wedge under the pointer is a link, as the web's sector `<a>` is.
+                            .pointerStyle(selectedId != nil ? .link : nil)
                             .onContinuousHover { phase in
                                 switch phase {
                                 case .active(let location):
@@ -599,6 +642,9 @@ struct HomeCategoryChart: View {
                                 })
                     }
                 }
+                .focusable().focused($focused).chartFocusRing(focused)
+                .onKeyPress(phases: .down, action: handleKey)
+                .onChange(of: focused) { _, isFocused in if !isFocused { selectedId = nil } }
                 .onChange(of: selectedCount) { _, value in
                     guard let value else {
                         selectedId = nil

@@ -45,6 +45,9 @@ struct ChartRangeCompareLayer: View {
             if let view { band(view).offset(x: plot.minX, y: plot.minY).allowsHitTesting(false) }
             Rectangle().fill(.clear).contentShape(Rectangle())
                 .frame(width: max(plot.width, 0), height: max(plot.height, 0))
+                // The web's `cursor: crosshair` over a plot that can drag a range (`rectSelection`
+                // is the macOS crosshair).
+                .pointerStyle(scrubbable ? .rectSelection : nil)
                 .offset(x: plot.minX, y: plot.minY)
                 .onContinuousHover { phase in
                     switch phase {
@@ -207,6 +210,25 @@ extension KeyPress {
 
 /// `useChartKeyboardNav` for a chart that highlights points by index.
 enum ChartKeyboard {
+    /// `useChartKeyboardNav`'s entry rule: with nothing highlighted, forward starts at the first
+    /// item and backward at the last; otherwise one step, clamped at the ends.
+    static func step(from index: Int?, forward: Bool, count: Int) -> Int {
+        let last = max(count - 1, 0)
+        guard let index else { return forward ? 0 : last }
+        return forward ? min(last, index + 1) : max(0, index - 1)
+    }
+
+    /// A plain (non-range) chart's next highlighted index for a chart key; nil with no points.
+    static func index(for key: ChartScrub.ChartKey, from index: Int?, count: Int) -> Int? {
+        guard count > 0 else { return nil }
+        switch key {
+        case .left: return step(from: index, forward: false, count: count)
+        case .right: return step(from: index, forward: true, count: count)
+        case .home: return 0
+        case .end: return count - 1
+        }
+    }
+
     /// ←/→ step, Home/End jump, Shift+←/→ extends the range compare, Escape clears the highlight
     /// and range (and is left to an enclosing dialog when there is neither).
     static func handle(_ press: KeyPress, scrub: inout ChartScrub, selected: inout Int?, count: Int)

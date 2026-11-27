@@ -156,7 +156,7 @@ struct StatisticsRhythmCard: View {
         }
         .focusable(!isPrinting)
         .focused($focused)
-        .focusEffectDisabled()
+        .chartFocusRing(focused)
         .onKeyPress(phases: .down) { press in step(press, months: months) }
         .onChange(of: focused) { _, isFocused in
             if !isFocused { selection = nil }
