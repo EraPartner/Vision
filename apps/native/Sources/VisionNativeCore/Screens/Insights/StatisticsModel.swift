@@ -280,9 +280,11 @@ public final class StatisticsModel {
             metric: categoryMetric, year: pivotYear, excluded: graphExclusions["pivotTable"] != false,
             revision: snapshotRevision)
     }
-    /// The pivot for the current metric, year, exclusion and snapshot. The first build (and every
-    /// build of a print model) runs here; later ones run off the main actor while the previous
-    /// pivot stays on screen, and publish only if the inputs have not moved on since.
+    /// The pivot for the current metric, year, exclusion and snapshot. The first build of a
+    /// scope (metric, year, exclusion), and every build of a print model, runs here, so the
+    /// labels never show another metric's or year's money; a newer snapshot of the same scope
+    /// builds off the main actor while the previous one stays on screen, and publishes only if
+    /// the inputs have not moved on since.
     private var pivotPresentation: StatisticsPivotPresentation {
         let key = pivotKey
         let published = pivotPublished
@@ -291,7 +293,9 @@ public final class StatisticsModel {
         guard let snapshot = data(for: "pivotTable") else { return .empty }
         let metric = categoryMetric
         let periods = Set(pivotAllPeriods)
-        let shown = [published, pivotCache].compactMap { $0 }.max { $0.key.revision < $1.key.revision }
+        let shown = [published, pivotCache].compactMap { $0 }
+            .filter { $0.key.metric == key.metric && $0.key.year == key.year && $0.key.excluded == key.excluded }
+            .max { $0.key.revision < $1.key.revision }
         guard let shown, !buildsPivotOnMain else {
             let interval = NativePerformance.begin("Statistics.presentation")
             defer { NativePerformance.end("Statistics.presentation", interval) }

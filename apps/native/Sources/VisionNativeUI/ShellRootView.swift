@@ -436,13 +436,15 @@ struct NativeSidebar: View {
         }
         .task(id: model.route.path) { await model.sidebarBadges?.refresh() }
         // The automatic update check: at launch and then daily, on the same activity gate, and
-        // only while Settings › Privacy leaves it on and offline mode is off (ADR-271).
+        // only while Settings › Privacy leaves it on and offline mode is off (ADR-271). It waits
+        // for the stored settings: the defaults before the first load would check even when the
+        // saved choice is offline or manual.
         .task(
             id: scenePhase == .active && !UserPresence.shared.isAway
-                && model.settings.checksForUpdatesAutomatically
+                && model.settingsLoaded && model.settings.checksForUpdatesAutomatically
         ) {
             guard scenePhase == .active, !UserPresence.shared.isAway,
-                model.settings.checksForUpdatesAutomatically
+                model.settingsLoaded, model.settings.checksForUpdatesAutomatically
             else { return }
             await model.updates?.run()
         }

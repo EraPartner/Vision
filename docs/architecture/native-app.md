@@ -2129,9 +2129,11 @@ move or per composited frame.
   is over the control; `VisionTooltipPresenter` reads it when the tooltip opens.
 - **Cached presentations.** The Statistics pivot keeps its groups and column totals per metric,
   year and exclusion until the data changes. The Analysis pivot indexes each level's cells once
-  per result, configuration and expansion. After the first build, both rebuild off the main actor
-  (`StatisticsPivotPresentation`, `AnalysisPivotMatrixInputs`) while the previous pivot stays on
-  screen, and a build lands only if its inputs are still current. The Sankey caches stroked link paths and bounds per
+  per result, configuration and expansion. A new Statistics scope (metric, year, exclusion) or a
+  new Analysis result or configuration builds at once, so headers never sit over the previous
+  query's money. A newer snapshot of the same Statistics scope, or an Analysis expansion change,
+  rebuilds off the main actor (`StatisticsPivotPresentation`, `AnalysisPivotMatrixInputs`) while
+  the previous pivot stays on screen, and a build lands only if its inputs are still current. The Sankey caches stroked link paths and bounds per
   layout and rejects by bounding box before a stroke hit test. Import review is one lazy list of
   headers, controls and rows with stable ids.
 - **Bounded memory.** AI chat keeps at most 8 loaded conversations (8 MB encoded), with the
