@@ -135,7 +135,7 @@ struct PortfolioSeriesChart: View {
         _ plot: ChartSeriesPlot, index: [String: Int], proxy: ChartProxy, geometry: GeometryProxy
     ) -> some View {
         let keys = plot.layout.keys
-        let series = plot.scrubSeries(primary: primary)
+        let scrubbed = plot.scrubSeries(primary: primary)
         let plotRect = proxy.plotFrame.map { geometry[$0] } ?? .zero
         ZStack(alignment: .topLeading) {
             ChartHoverRule(
@@ -144,11 +144,11 @@ struct PortfolioSeriesChart: View {
                 color: theme.secondaryLabel.opacity(0.5), hidden: scrub.range != nil)
             ChartRangeCompareLayer(
                 scrub: $scrub, plot: plotRect,
-                view: ChartScrubView(scrub, count: keys.count, series: series),
+                view: ChartScrubView(scrub, count: keys.count, series: scrubbed),
                 indexAt: { position(at: $0, proxy: proxy) },
                 xOf: { proxy.position(forX: Double($0)) },
                 yOf: { _, value in proxy.position(forY: value) },
-                colorOf: { key in series.firstIndex { $0.key == key }.map { lineColor(self.series[$0]) } ?? theme.primary },
+                colorOf: { key in scrubbed.firstIndex { $0.key == key }.map { lineColor(series[$0]) } ?? theme.primary },
                 titleOf: { keys.indices.contains($0) ? dateLabel(keys[$0]) : "" },
                 deltaOf: { row in
                     ChartScrubDelta.text(
