@@ -46,42 +46,7 @@ struct PortfolioSeriesChart: View {
         let context = labelContext
         VStack(alignment: .leading, spacing: 10) {
             Chart {
-                ForEach(plot.drawn) { line in
-                    let color = lineColor(line)
-                    let marks = markLabels.marks(for: line, context: context) { point -> ChartMarkLabelCache.Mark in
-                        // Interpolation, not `+`: the concatenation timed out the type checker in this builder.
-                        let label = "\(line.label). \(pointDate(point.key))"
-                        return ChartMarkLabelCache.Mark(label: label, value: format(point.value))
-                    }
-                    ForEach(line.points.indices, id: \.self) { position in
-                        let point = line.points[position]
-                        if area && !line.dashed, let x = index[point.key] {
-                            AreaMark(
-                                x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
-                                yEnd: .value(line.label, coordinate(point.value)),
-                                series: .value(title, line.id)
-                            )
-                            .foregroundStyle(ChartFill.areaGradient(color))
-                            .interpolationMethod(.monotone)
-                            .accessibilityHidden(true)
-                        }
-                        if let x = index[point.key] {
-                            LineMark(
-                                x: .value(title, x), y: .value(line.label, coordinate(point.value)),
-                                series: .value(title, line.id)
-                            )
-                            .foregroundStyle(color)
-                            .lineStyle(
-                                StrokeStyle(
-                                    lineWidth: line.dashed ? 1.5 : 2.5, lineCap: .round, lineJoin: .round,
-                                    dash: line.dashed ? [4, 4] : [])
-                            )
-                            .interpolationMethod(.monotone)
-                            .accessibilityLabel(marks[position].label)
-                            .accessibilityValue(marks[position].value)
-                        }
-                    }
-                }
+                lineMarks(plot, index: index, domain: domain, context: context)
             }
             .chartXScale(domain: 0...max(keys.count - 1, 1))
             .chartEntrance(.sweep)
@@ -98,39 +63,7 @@ struct PortfolioSeriesChart: View {
             }
             .visionChartYAxis(domain: domain) { format(Decimal($0), axis: true) }
             .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    let series = plot.scrubSeries(primary: primary)
-                    let plotRect = proxy.plotFrame.map { geometry[$0] } ?? .zero
-                    ZStack(alignment: .topLeading) {
-                        ChartHoverRule(
-                            hover: hover, plot: plotRect,
-                            x: { key in index[key].flatMap { proxy.position(forX: Double($0)) } },
-                            color: theme.secondaryLabel.opacity(0.5), hidden: scrub.range != nil)
-                        ChartRangeCompareLayer(
-                            scrub: $scrub, plot: plotRect,
-                            view: ChartScrubView(scrub, count: keys.count, series: series),
-                            indexAt: { position(at: $0, proxy: proxy) },
-                            xOf: { proxy.position(forX: Double($0)) },
-                            yOf: { _, value in proxy.position(forY: value) },
-                            colorOf: { key in series.firstIndex { $0.key == key }.map { lineColor(self.series[$0]) } ?? theme.primary },
-                            titleOf: { keys.indices.contains($0) ? dateLabel(keys[$0]) : "" },
-                            deltaOf: { row in
-                                ChartScrubDelta.text(
-                                    start: row.start, end: row.end, formatValue: { format(Decimal($0)) },
-                                    formatPercent: percent ? nil : { scrubPercent($0) })
-                            },
-                            onHover: { hovered in
-                                hover.set(hovered.flatMap { keys.indices.contains($0) ? keys[$0] : nil })
-                            },
-                            onPress: { focused = true })
-                        PortfolioChartHoverOverlay(
-                            hover: hover, hidden: scrub.range != nil, plot: plotRect, bounds: geometry.size,
-                            series: series,
-                            x: { key in index[key].flatMap { proxy.position(forX: Double($0)) } },
-                            y: { proxy.position(forY: $0) },
-                            color: lineColor, dateLabel: { dateLabel($0) }, format: { format($0) })
-                    }
-                }
+                GeometryReader { geometry in hoverLayer(plot, index: index, proxy: proxy, geometry: geometry) }
             }
             .frame(height: height).focusable().focused($focused).chartFocusRing(focused)
             .accessibilityLabel(title)
@@ -153,6 +86,85 @@ struct PortfolioSeriesChart: View {
                         id: line.id, label: line.label,
                         color: colors[line.id] ?? Color(token: palette[index % palette.count]), dashed: line.dashed)
                 })
+        }
+    }
+    /// The lines and areas, built outside `body` so the type checker handles them on their own.
+    @ChartContentBuilder
+    private func lineMarks(
+        _ plot: ChartSeriesPlot, index: [String: Int], domain: ClosedRange<Double>, context: String
+    ) -> some ChartContent {
+        ForEach(plot.drawn) { line in
+            let color = lineColor(line)
+            let marks = markLabels.marks(for: line, context: context) { point -> ChartMarkLabelCache.Mark in
+                let label = "\(line.label). \(pointDate(point.key))"
+                return ChartMarkLabelCache.Mark(label: label, value: format(point.value))
+            }
+            ForEach(line.points.indices, id: \.self) { position in
+                let point = line.points[position]
+                if area && !line.dashed, let x = index[point.key] {
+                    AreaMark(
+                        x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
+                        yEnd: .value(line.label, coordinate(point.value)),
+                        series: .value(title, line.id)
+                    )
+                    .foregroundStyle(ChartFill.areaGradient(color))
+                    .interpolationMethod(.monotone)
+                    .accessibilityHidden(true)
+                }
+                if let x = index[point.key] {
+                    LineMark(
+                        x: .value(title, x), y: .value(line.label, coordinate(point.value)),
+                        series: .value(title, line.id)
+                    )
+                    .foregroundStyle(color)
+                    .lineStyle(
+                        StrokeStyle(
+                            lineWidth: line.dashed ? 1.5 : 2.5, lineCap: .round, lineJoin: .round,
+                            dash: line.dashed ? [4, 4] : [])
+                    )
+                    .interpolationMethod(.monotone)
+                    .accessibilityLabel(marks[position].label)
+                    .accessibilityValue(marks[position].value)
+                }
+            }
+        }
+    }
+    /// The hover rule, range compare and floating tooltip, built outside `body` for the type checker.
+    @ViewBuilder
+    private func hoverLayer(
+        _ plot: ChartSeriesPlot, index: [String: Int], proxy: ChartProxy, geometry: GeometryProxy
+    ) -> some View {
+        let keys = plot.layout.keys
+        let series = plot.scrubSeries(primary: primary)
+        let plotRect = proxy.plotFrame.map { geometry[$0] } ?? .zero
+        ZStack(alignment: .topLeading) {
+            ChartHoverRule(
+                hover: hover, plot: plotRect,
+                x: { key in index[key].flatMap { proxy.position(forX: Double($0)) } },
+                color: theme.secondaryLabel.opacity(0.5), hidden: scrub.range != nil)
+            ChartRangeCompareLayer(
+                scrub: $scrub, plot: plotRect,
+                view: ChartScrubView(scrub, count: keys.count, series: series),
+                indexAt: { position(at: $0, proxy: proxy) },
+                xOf: { proxy.position(forX: Double($0)) },
+                yOf: { _, value in proxy.position(forY: value) },
+                colorOf: { key in series.firstIndex { $0.key == key }.map { lineColor(self.series[$0]) } ?? theme.primary },
+                titleOf: { keys.indices.contains($0) ? dateLabel(keys[$0]) : "" },
+                deltaOf: { row in
+                    ChartScrubDelta.text(
+                        start: row.start, end: row.end, formatValue: { format(Decimal($0)) },
+                        formatPercent: percent ? nil : { scrubPercent($0) })
+                },
+                onHover: { hovered in
+                    hover.set(hovered.flatMap { keys.indices.contains($0) ? keys[$0] : nil })
+                },
+                onPress: { focused = true })
+            PortfolioChartHoverOverlay(
+                hover: hover, hidden: scrub.range != nil, plot: plotRect, bounds: geometry.size,
+                series: series,
+                x: { key in index[key].flatMap { proxy.position(forX: Double($0)) } },
+                y: { proxy.position(forY: $0) },
+                color: lineColor, dateLabel: { dateLabel($0) }, format: { format($0) })
         }
     }
     /// What the date and value strings of a point depend on besides the point.
