@@ -267,12 +267,16 @@ enum TransactionExportArea {
         var body2 = ""
         var rowCount = 0
         var runningBalances: [Int?: DecimalJS] = [:]
+        // Keyset cursor: each chunk continues strictly after the previous chunk's last row.
+        var cursorDate: String?
+        // lint:allow raw-id the keyset cursor rows are identified by their plain row id
+        var cursorId: Int?
         let csvHeader = includeBalance
             ? "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance"
             : "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags"
         if format == "csv" { body2 += "\(csvHeader)\n" }  // lint:allow string-literal-compare the export format name is a fixed literal
         while true {
-            let sql = """
+            var sql = """
                 SELECT t.id, t.date, acct.name AS bank_account, t.account_id, \
                 COALESCE(pr.name, r.name) AS recipient_name, t.memo, t.amount, t.currency, t.balance, \
                 CASE WHEN c.id IS NOT NULL THEN c.path_name \
@@ -284,9 +288,14 @@ enum TransactionExportArea {
                    WHERE tt.transaction_id = t.id AND tg.is_active = 1 ORDER BY tg.slug) tag_slugs) AS "tags::json"
                 \(BulkSelection.exportJoins)
                 WHERE t.id IN (SELECT value FROM json_each(?))
-                ORDER BY t.date ASC, t.id ASC LIMIT \(chunkSize)
                 """
-            let rows = try session.rows(sql, [.text(txText)]).map { try ExportRow($0) }
+            var arguments: [SQLValue] = [.text(txText)]
+            if let cursorDate, let cursorId {
+                sql += " AND (t.date, t.id) > (?, ?)"
+                arguments += [.text(cursorDate), .integer(Int64(cursorId))]
+            }
+            sql += " ORDER BY t.date ASC, t.id ASC LIMIT \(chunkSize)"
+            let rows = try session.rows(sql, arguments).map { try ExportRow($0) }
             guard let last = rows.last else { break }
             for row in rows {
                 if format == "csv" {
@@ -304,6 +313,8 @@ enum TransactionExportArea {
                 }
                 rowCount += 1
             }
+            cursorDate = last.date
+            cursorId = last.id
             if rows.count < chunkSize { break }
         }
         return HandlerResult.fileAnswer(Data(body2.utf8), headers: [

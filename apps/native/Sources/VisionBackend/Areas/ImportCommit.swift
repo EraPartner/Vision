@@ -129,7 +129,9 @@ enum ImportCommitArea {
     // MARK: - The route
 
     /// The route: the batch must exist and be reviewable, then `commitImport` runs.
-    static func commit(_ session: BackendSession, batch: Int) throws -> HandlerResult {
+    static func commit(
+        _ session: BackendSession, batch: Int, views: MaterializedViewRefresher? = nil
+    ) throws -> HandlerResult {
         guard let row = try session.row("SELECT status FROM import_batches WHERE id = ?", [.integer(Int64(batch))]),
             let status = try row.optionalText("status")
         else { throw BackendHTTPError.notFound("Import batch \(batch) not found") }
@@ -139,14 +141,15 @@ enum ImportCommitArea {
         }
 
         let result = try commitBatch(session, batch: batch)
-        // `commitImport`'s completion stamp; the reconcile, the cache clears and the
-        // materialized-view refresh that follow have no answer the corpus observes.
+        // `commitImport`'s completion stamp, then its tail: the corpus-wide transfer
+        // reconcile, the forecast cache clear and the materialized-view refresh.
         _ = try session.row(
             """
             UPDATE import_batches SET status = 'complete', completed_at = NOW()
              WHERE id = ? RETURNING id
             """,
             [.integer(Int64(batch))])
+        if let views { LedgerFollowUps.afterImportCommit(session, imported: result.imported, views: views) }
         return HandlerResult(
             data: .object([
                 "batch_id": .int(batch),
@@ -261,7 +264,8 @@ enum ImportCommitArea {
         // `autoLinkTransactions`: the inserted rows clear matching planned payments;
         // per-pair failures are skipped, never failing the import.
         if !insertedRows.isEmpty {
-            result.autoLinked = try autoLink(session, insertedRows)
+            // Optional work after durable rows: a failure leaves no links, never a failed import.
+            result.autoLinked = (try? autoLink(session, insertedRows)) ?? 0
         }
         return result
     }
@@ -329,7 +333,13 @@ enum ImportCommitArea {
         -> ChunkResult
     {
         if chunk.allSatisfy({ $0.dedupFingerprint != nil && $0.fingerprintVersion != nil }) {
-            if let bulk = try commitBulk(session, chunk, batch: batch) { return bulk }
+            // A failed bulk attempt (one row that fits staging but not the ledger) rolls back
+            // to its savepoint and the rows are retried one by one, as commit.ts does.
+            do {
+                if let bulk = try session.transaction({ try commitBulk(session, chunk, batch: batch) }) {
+                    return bulk
+                }
+            } catch {}
         }
         return try commitRowByRow(session, chunk, batch: batch)
     }
@@ -520,6 +530,7 @@ enum ImportCommitArea {
                         row.sourceRecordHash.map { SQLValue.text($0) } ?? .null,
                         row.dedupFingerprint.map { SQLValue.text($0) } ?? .null,
                         row.fingerprintVersion.map { SQLValue.integer(Int64($0)) } ?? .null,
+                        row.bankSequence.map { SQLValue.text($0) } ?? .null,
                     ])
                 guard let inserted, let id = try inserted.optionalInt64("id") else {
                     result.duplicates += 1
@@ -655,11 +666,13 @@ enum ImportCommitArea {
 
     // MARK: - Registration
 
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
         backend.serve(OpenAPIOperations.CommitImportBatch.self) { request in
             let batch = try ImportBatchesArea.batchId(request)
             return try await database.run { session in
-                try ImportCommitArea.commit(session, batch: batch)
+                try ImportCommitArea.commit(session, batch: batch, views: followUps.views)
             }
         }
     }

@@ -146,7 +146,8 @@ enum ImportParsersArea {
             skipRows = .nan
         }
         output["skipRows"] =
-            skipRows.isFinite && skipRows > 0 ? JSValue.int(Int(skipRows)) : JSValue.int(0)
+            skipRows.isFinite && skipRows > 0
+                ? (Int(exactly: skipRows).map(JSValue.int) ?? JSValue.number(skipRows)) : JSValue.int(0)
         return output
     }
 

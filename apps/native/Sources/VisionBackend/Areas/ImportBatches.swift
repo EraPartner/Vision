@@ -187,7 +187,9 @@ enum ImportBatchesArea {
 
     // MARK: - Registration
 
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
         backend.serve(OpenAPIOperations.GetImportBatches.self) { request in
             try await database.run { session in
                 try ImportBatchesArea.list(
@@ -198,7 +200,14 @@ enum ImportBatchesArea {
         }
         backend.serve(OpenAPIOperations.DeleteImportBatch.self) { request in
             let id = try ImportBatchesArea.batchId(request)
-            return try await database.run { session in try ImportBatchesArea.delete(session, id: id) }
+            return try await database.run { session in
+                let result = try ImportBatchesArea.delete(session, id: id)
+                // The rollback route's tail when rows or recipients went.
+                let changed = TransactionBulkArea.count(result, "deleted") > 0
+                    || TransactionBulkArea.count(result, "recipientsRemoved") > 0
+                LedgerFollowUps.afterImportRollback(session, changed: changed, views: followUps.views)
+                return result
+            }
         }
     }
 }

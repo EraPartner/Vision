@@ -416,8 +416,8 @@ enum SplitsArea {
         let page = page(request)
         let (all, summary) = try owedSummary(session, target: target)
         let items = page.map { page -> [[String: JSONValue]] in
-            let first = min(Int(page.offset.value), all.count)
-            let last = min(first + Int(page.limit.value), all.count)
+            let first = min(page.offset.intValue, all.count)
+            let last = first + min(page.limit.intValue, all.count - first)
             return Array(all[first..<last])
         } ?? all
         var body = listBody(items.map(JSONValue.object), total: all.count, page: page)

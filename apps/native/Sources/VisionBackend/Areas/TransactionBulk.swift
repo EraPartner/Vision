@@ -9,18 +9,37 @@ import VisionNativeCore
 enum TransactionBulkArea {
     // MARK: - Register
 
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
+        // Each write schedules the transfer reconcile as transactionBulkService.ts does: the
+        // tag always, the update and the delete when they changed a row.
         backend.serve(OpenAPIOperations.BulkTagTransactions.self) { request in
-            try await database.run { session in
+            let result = try await database.run { session in
                 try TransactionBulkArea.tag(session, request: request)
             }
+            followUps.scheduleReconcile()
+            return result
         }
         backend.serve(OpenAPIOperations.BulkUpdateTransactions.self) { request in
-            try await database.run { session in try TransactionBulkArea.update(session, request: request) }
+            let result = try await database.run { session in try TransactionBulkArea.update(session, request: request) }
+            if Self.count(result, "updated") > 0 { followUps.scheduleReconcile() }
+            return result
         }
         backend.serve(OpenAPIOperations.BulkDeleteTransactions.self) { request in
-            try await database.run { session in try TransactionBulkArea.delete(session, request: request) }
+            let root = await database.attachmentsDirectory
+            let result = try await database.run { session in
+                try TransactionBulkArea.delete(session, request: request, root: root)
+            }
+            if Self.count(result, "deleted") > 0 { followUps.scheduleReconcile() }
+            return result
         }
+    }
+
+    /// A count field of an answer's object body; 0 when absent.
+    static func count(_ result: HandlerResult, _ key: String) -> Int {
+        guard case .object(let body) = result.data, case .int(let value)? = body[key] else { return 0 }
+        return value
     }
 
     // MARK: - Request input
@@ -324,7 +343,7 @@ enum TransactionBulkArea {
 
     /// `bulkDeleteTransactions`: the planned-execution guard and the hard delete in one write
     /// transaction, with the attachment files removed best-effort after the commit.
-    static func delete(_ session: BackendSession, request: InProcessRequest) throws -> HandlerResult {
+    static func delete(_ session: BackendSession, request: InProcessRequest, root: String?) throws -> HandlerResult {
         let body = try bulkBody(request)
         let expected = try BulkSelection.expectedCount(body.expected, filter: body.filter)
         let txIds = try BulkSelection.resolve(
@@ -351,9 +370,7 @@ enum TransactionBulkArea {
                 "DELETE FROM transactions WHERE id IN (SELECT value FROM json_each(?)) RETURNING id",
                 [.text(txText)]).count
         }
-        for path in paths {
-            try? FileManager.default.removeItem(atPath: path)
-        }
+        AttachmentsArea.removeStoredFiles(paths, root: root)
         return HandlerResult(data: .object([
             "deleted": .int(deleted),
             "requested": .int(expected ?? txIds.count),

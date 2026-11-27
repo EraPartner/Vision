@@ -237,7 +237,7 @@ enum PlannedArea {
             let offset = JavaScriptInteger.clamped(request.query("offset"), min: 0, fallback: 0)
             return try await database.run { session in
                 let page = try PlannedArea.getAll(
-                    session, query, limit: Int(limit.value), offset: Int(offset.value))
+                    session, query, limit: limit.intValue, offset: offset.intValue)
                 return HandlerResult(
                     data: .object([
                         "items": .array(page.0.map(\.json)),
@@ -1841,10 +1841,16 @@ enum PlannedArea {
         }
         guard autoClear else { return nil }
 
+        // The stored row, as `autoLinkTransactions` reads it: the currency the insert
+        // defaulted and the amount the ledger rounded, not the request's raw fields.
         guard let recipientRow = try? session.row(
-            "SELECT recipient_id FROM transactions WHERE id = ?", [.integer(Int64(transaction.rawValue))]),
+            "SELECT recipient_id, amount, currency FROM transactions WHERE id = ?",
+            [.integer(Int64(transaction.rawValue))]),
             let recipient = try? recipientRow.optionalInt64("recipient_id")
         else { return nil }
+        let storedAmount: JSValue = (try? recipientRow.optionalText("amount")).map(JSValue.string) ?? .null
+        let storedCurrency: JSValue =
+            (try? recipientRow.optionalText("currency")).map(JSValue.string) ?? .null
         let active = try activeUnexecuted(session)
         guard !active.isEmpty else { return nil }
         let clusterRoot = try session.row(
@@ -1855,33 +1861,34 @@ enum PlannedArea {
         guard let cluster = try clusterRoot?.optionalInt64("cluster_root") else { return nil }
 
         guard let txDay = dayOrdinal(String(txDate.prefix(10))) else { return nil }
-        let txCurrency = (fields["currency"] ?? .null).javaScriptString.uppercased()
-        let txAmount = fields["amount"]?.javaScriptNumber ?? .nan
+        let txCurrency = storedCurrency.javaScriptString.uppercased()
+        let txAmount = storedAmount.javaScriptNumber
         let txSign = txAmount.isFinite && txAmount != 0 ? (txAmount < 0 ? -1 : 1) : 0
 
-        // The ±5-day window over the same cluster/currency/sign/day buckets. The batch is
-        // this one transaction, so a single match is mutually unambiguous on both sides.
+        // The ±5-day window over the same cluster/currency/sign/day buckets, each candidate
+        // kept only within the amount tolerance, as the TypeScript matcher filters before it
+        // counts. The batch is this one transaction, so a single match is mutually unambiguous.
         var matches: [MatchCandidate] = []
         for offset in stride(from: -5, through: 5, by: 1) {
             let key = "\(cluster):\(txCurrency):\(txSign):\(txDay + offset)"
-            for planned in active where bucketKey(planned) == key {
+            for planned in active where bucketKey(planned) == key
+                && PlannedMatching.matchesTolerance(
+                    PlannedMatchLike(
+                        recipientClusterId: .number(Double(cluster)),
+                        currency: planned.currency.map { .string($0) },
+                        amount: .string(planned.amount),
+                        plannedDate: .string(planned.plannedDate)),
+                    TxMatchLike(
+                        recipientClusterId: .number(Double(cluster)),
+                        currency: storedCurrency,
+                        amount: storedAmount,
+                        transactionDate: .string(String(txDate.prefix(10)))))
+            {
                 matches.append(planned)
             }
         }
         guard matches.count == 1 else { return nil }
         let planned = matches[0]
-        guard PlannedMatching.matchesTolerance(
-            PlannedMatchLike(
-                recipientClusterId: .number(Double(cluster)),
-                currency: planned.currency.map { .string($0) },
-                amount: .string(planned.amount),
-                plannedDate: .string(planned.plannedDate)),
-            TxMatchLike(
-                recipientClusterId: .number(Double(cluster)),
-                currency: fields["currency"],
-                amount: fields["amount"],
-                transactionDate: .string(String(txDate.prefix(10)))))
-        else { return nil }
 
         // The auto-clear runs `executePlanned` with the expected occurrence; any refusal is
         // caught by the caller and leaves the create successful with nothing linked.

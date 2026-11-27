@@ -22,19 +22,27 @@ enum ImportUploadsArea {
 
     /// The parsed form: the file part and the text fields (`req.body`) as a `JSObject`, a
     /// repeated field arriving as an array exactly as multer leaves it.
-    static func form(_ request: InProcessRequest) -> (file: UploadedFile?, fields: JSObject) {
+    static func form(_ request: InProcessRequest) throws -> (file: UploadedFile?, fields: JSObject) {
         let parts = MultipartParts.parse(headers: request.headers, body: request.body) ?? []
         var file: UploadedFile? = nil
         var fields = JSObject()
         for part in parts {
             if let filename = part.filename {
-                // `single("file")`: the first file part named `file` is the upload; the
-                // corpus never sends another file field.
-                if part.name == "file", file == nil {  // lint:allow string-literal-compare the upload form field name, as multer reads it
-                    file = UploadedFile(
-                        originalName: filename, mimetype: part.contentType,
-                        bytes: [UInt8](part.data))
+                // `csvUpload.single("file")` in stream order: a file part under another field
+                // name, or a second `file`, is multer's `LIMIT_UNEXPECTED_FILE`; then the
+                // fileFilter, then the 50 MiB `limits.fileSize` (`csvUploadErrorTranslator`).
+                guard part.name == "file", file == nil else {  // lint:allow string-literal-compare the upload form field name, as multer reads it
+                    throw BackendHTTPError.validation("Upload error: Unexpected field")
                 }
+                guard isLikelyCsvFile(name: filename, contentType: part.contentType) else {
+                    throw BackendHTTPError.validation("File must be a CSV")
+                }
+                guard part.data.count <= maxUploadBytes else {
+                    throw BackendHTTPError.validation("File size exceeds maximum of 50MB")
+                }
+                file = UploadedFile(
+                    originalName: filename, mimetype: part.contentType,
+                    bytes: [UInt8](part.data))
             } else {
                 let value = JSValue.string(String(decoding: part.data, as: UTF8.self))
                 if let existing = fields[part.name] {
@@ -51,6 +59,9 @@ enum ImportUploadsArea {
         }
         return (file, fields)
     }
+
+    /// `csvUpload`'s `limits.fileSize`: 50 MiB.
+    static let maxUploadBytes = 50 * 1024 * 1024
 
     /// `isLikelyCsvFile`: the `csvUpload` fileFilter reads the part's own name and type.
     static func isLikelyCsvFile(name: String, contentType: String) -> Bool {
@@ -177,7 +188,7 @@ enum ImportUploadsArea {
         if let value = fields["skip_rows"] {
             let parsed = JavaScriptInteger.parse(value.javaScriptString) ?? 0
             let zeroed = parsed.isNaN ? 0 : parsed
-            skipRows = Int(zeroed)
+            skipRows = JavaScriptInteger.saturating(zeroed)
         }
         if skipRows < 0 {
             issues.append("skip_rows must be zero or a positive integer")
@@ -276,7 +287,7 @@ enum ImportUploadsArea {
     /// `POST /recipients`: the file, the options, then `importRecipientsCSV`; the route
     /// answers `{...result, status}` with 201.
     static func recipients(_ session: BackendSession, request: InProcessRequest) throws -> HandlerResult {
-        let form = ImportUploadsArea.form(request)
+        let form = try ImportUploadsArea.form(request)
         let file = try requireFile(try csvUpload(form.file), stream: false)
         let options = try csvImportOptions(form.fields)
         let result = try importRecipientsCSV(
@@ -294,7 +305,7 @@ enum ImportUploadsArea {
 
     /// `POST /categories`: the same shape without the bank-account counter.
     static func categories(_ session: BackendSession, request: InProcessRequest) throws -> HandlerResult {
-        let form = ImportUploadsArea.form(request)
+        let form = try ImportUploadsArea.form(request)
         let file = try requireFile(try csvUpload(form.file), stream: false)
         let options = try csvImportOptions(form.fields)
         let result = try importCategoriesCSV(
@@ -337,8 +348,10 @@ enum ImportUploadsArea {
     /// `streamImport`: the SSE stream of one synchronous pipeline run. A validation
     /// failure writes an `error` frame; the SSE headers commit only after multer and the
     /// field checks passed, so those answer as envelopes.
-    static func stream(_ session: BackendSession, request: InProcessRequest) throws -> HandlerResult {
-        let form = ImportUploadsArea.form(request)
+    static func stream(
+        _ session: BackendSession, request: InProcessRequest, views: MaterializedViewRefresher? = nil
+    ) throws -> HandlerResult {
+        let form = try ImportUploadsArea.form(request)
         let file = try requireFile(try csvUpload(form.file), stream: true)
         let bankName = try bankName(form.fields, "Missing required parameter: bank_name")
         var frames: [(String, JSValue)] = []
@@ -347,16 +360,17 @@ enum ImportUploadsArea {
         do {
             result = try runPipeline(
                 session, file: file, adapterName: bankName, customConfig: nil,
-                filename: file.originalName, size: file.size, onProgress: { progress in
+                filename: file.originalName, size: file.size, views: views, onProgress: { progress in
                     let next = progressToPercent(progress)
                     percent = next.percent
                     frames.append(("progress", next.payload))
                 })
         } catch let error as BackendHTTPError {
-            return errorFrame(error)
+            return errorFrame(error, after: frames)
         } catch {
             return errorFrame(
-                BackendHTTPError(status: 500, code: "INTERNAL_SERVER_ERROR", message: "Import failed"))
+                BackendHTTPError(status: 500, code: "INTERNAL_SERVER_ERROR", message: "Import failed"),
+                after: frames)
         }
         if result.requiresReview {
             // `skipped` is undefined for the transaction pipeline, so it never serialises.
@@ -382,8 +396,8 @@ enum ImportUploadsArea {
     }
 
     /// `streamImport`'s error frame: a validation failure carries its message; anything
-    /// else stays generic.
-    static func errorFrame(_ error: BackendHTTPError) -> HandlerResult {
+    /// else stays generic. The progress frames the stream already wrote come first.
+    static func errorFrame(_ error: BackendHTTPError, after frames: [(String, JSValue)] = []) -> HandlerResult {
         let expected = error.status == 400 && error.code == "VALIDATION_ERROR"  // lint:allow string-literal-compare the typed ValidationError streamImport checks for
         let detail = expected ? error.message : "Import failed"
         let code = expected ? error.code : "INTERNAL_SERVER_ERROR"
@@ -392,7 +406,7 @@ enum ImportUploadsArea {
         fields["code"] = .string(code)
         let payload = JSValue.object(fields)
         return HandlerResult.fileAnswer(
-            Data(sseText([("error", payload)]).utf8),
+            Data(sseText(frames + [("error", payload)]).utf8),
             headers: ["Content-Type": "text/event-stream"])
     }
 
@@ -438,12 +452,12 @@ enum ImportUploadsArea {
     }
 
     /// `runImportPipeline`: create the batch, prepare it (stage + validate + match), then
-    /// auto-commit when every row resolved exactly. The transfer reconcile, the
-    /// forecast-cache clear and the materialized-view refresh that follow a commit have no
-    /// answer the corpus observes (`ImportCommitArea.commit`'s tail shares the decision).
+    /// auto-commit when every row resolved exactly, followed by `commitImport`'s tail (the
+    /// transfer reconcile, the forecast-cache clear and the materialized-view refresh).
     static func runPipeline(
         _ session: BackendSession, file: UploadedFile, adapterName: String,
         customConfig: CustomBankParserConfig?, filename: String, size: Int,
+        views: MaterializedViewRefresher? = nil,
         onProgress: ((PipelineProgress) -> Void)?
     ) throws -> PipelineResult {
         let batchId = try createBatch(
@@ -464,6 +478,9 @@ enum ImportUploadsArea {
             _ = try session.row(
                 "UPDATE import_batches SET status = 'complete', completed_at = NOW() WHERE id = ? RETURNING id",
                 [.integer(Int64(batchId))])
+            if let views {
+                LedgerFollowUps.afterImportCommit(session, imported: committed.imported, views: views)
+            }
             let totalErrors = prepared.validateErrors + committed.errors
             _ = try session.row(
                 "UPDATE import_batches SET rows_error = ? WHERE id = ? RETURNING id",
@@ -1554,10 +1571,12 @@ enum ImportUploadsArea {
 
     // MARK: - Registration
 
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, followUps: LedgerFollowUps
+    ) {
         backend.serve(NativeOnboardingImportRequest.self) { request in
             try await database.run { session in
-                let form = ImportUploadsArea.form(request)
+                let form = try ImportUploadsArea.form(request)
                 let file = try ImportUploadsArea.requireFile(
                     try ImportUploadsArea.csvUpload(form.file), stream: false)
                 let bankName = try ImportUploadsArea.bankName(
@@ -1565,14 +1584,14 @@ enum ImportUploadsArea {
                 return try ImportUploadsArea.pipelineAnswer {
                     let result = try ImportUploadsArea.runPipeline(
                         session, file: file, adapterName: bankName, customConfig: nil,
-                        filename: file.originalName, size: file.size, onProgress: nil)
+                        filename: file.originalName, size: file.size, views: followUps.views, onProgress: nil)
                     return try ImportUploadsArea.pipelineResult(result)
                 }
             }
         }
         backend.serve(ImportCsvCustomRequest.self) { request in
             try await database.run { session in
-                let form = ImportUploadsArea.form(request)
+                let form = try ImportUploadsArea.form(request)
                 let file = try ImportUploadsArea.requireFile(
                     try ImportUploadsArea.csvUpload(form.file), stream: false)
                 let built = try ImportUploadsArea.buildCustomCsvConfig(form.fields)
@@ -1580,7 +1599,7 @@ enum ImportUploadsArea {
                     let result = try ImportUploadsArea.runPipeline(
                         session, file: file, adapterName: built.adapterName,
                         customConfig: built.config,
-                        filename: file.originalName, size: file.size, onProgress: nil)
+                        filename: file.originalName, size: file.size, views: followUps.views, onProgress: nil)
                     return try ImportUploadsArea.pipelineResult(result)
                 }
             }
@@ -1597,7 +1616,7 @@ enum ImportUploadsArea {
         }
         backend.serve(ImportCsvStreamRequest.self) { request in
             try await database.run { session in
-                try ImportUploadsArea.stream(session, request: request)
+                try ImportUploadsArea.stream(session, request: request, views: followUps.views)
             }
         }
     }
@@ -1705,9 +1724,11 @@ enum ImportIdentity {
         return sign + digits + (fractionDigits.isEmpty ? "" : "." + fractionDigits)
     }
 
-    /// `canonicalTuple([values])`: `JSON.stringify` of the values, null for nil.
-    static func canonicalTuple(_ values: [String?]) -> String {
-        JSValue.array(values.map { $0.map(JSValue.string) ?? .null }).jsonText
+    /// `canonicalTuple([values])`: `JSON.stringify` of the values. The version and the
+    /// occurrence are JSON numbers, as in importIdentity.ts, so a row keeps the fingerprint the
+    /// TypeScript backend gave it.
+    static func canonicalTuple(_ values: [JSValue]) -> String {
+        JSValue.array(values).jsonText
     }
 
     /// `budgetingIdentityBase` of one row of the validate projection.
@@ -1718,17 +1739,20 @@ enum ImportIdentity {
         if currency.isEmpty { currency = "EUR" }
         if !sourceId.isEmpty {
             return (
-                canonicalTuple(["vision-import", "\(version)", "budgeting", bankAccount, currency, "source-id", sourceId]),
+                canonicalTuple([
+                    .string("vision-import"), .number(Double(version)), .string("budgeting"), .string(bankAccount), .string(currency),
+                    .string("source-id"), .string(sourceId),
+                ]),
                 sourceId
             )
         }
         return (
             canonicalTuple([
-                "vision-import", "\(version)", "budgeting", bankAccount, currency, "fields",
-                row.txDate ?? "", normalizeIdentityDecimal(amountText(row)),
-                normalizeIdentityText(row.recipientAccount ?? ""),
-                normalizeIdentityText(row.recipientRaw ?? ""),
-                normalizeIdentityText(row.memo ?? ""),
+                .string("vision-import"), .number(Double(version)), .string("budgeting"), .string(bankAccount), .string(currency),
+                .string("fields"), .string(row.txDate ?? ""), .string(normalizeIdentityDecimal(amountText(row))),
+                .string(normalizeIdentityText(row.recipientAccount ?? "")),
+                .string(normalizeIdentityText(row.recipientRaw ?? "")),
+                .string(normalizeIdentityText(row.memo ?? "")),
             ]),
             sourceId
         )
@@ -1756,7 +1780,7 @@ enum ImportIdentity {
             }
             return Value(
                 sourceRecordHash: row.rawData.map { sha256Hex($0) },
-                fingerprint: sha256Hex(canonicalTuple([base.base, "occurrence", String(occurrence)])),
+                fingerprint: sha256Hex(canonicalTuple([.string(base.base), .string("occurrence"), .number(Double(occurrence))])),
                 version: version,
                 occurrence: occurrence)
         }
