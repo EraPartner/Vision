@@ -58,13 +58,17 @@ struct PickerButton<Content: View>: View {
 }
 
 /// The popover body of a combobox (`Command`): a search field over a scrolling list with a
-/// check mark on the selected row, or the empty text.
+/// check mark on the selected row, or the empty text. Like cmdk, one row is active: the first
+/// after each search, moved by the arrow keys or the pointer, highlighted, and chosen by Return.
 struct PickerList: View {
     @Binding var search: String
     let searchPlaceholder: String
     let emptyText: String?
     let options: [PickerOption]
     @FocusState private var searchFocused: Bool
+    @State private var activeRow: String?
+    /// True while the pointer made the last active-row change, so hover never scrolls the list.
+    @State private var activeByPointer = false
     @Environment(\.visionTheme) var theme
 
     init(search: Binding<String>, searchPlaceholder: String, emptyText: String?, options: [PickerOption]) {
@@ -79,8 +83,10 @@ struct PickerList: View {
             TextField(searchPlaceholder, text: $search)
                 .textFieldStyle(.vision)
                 .focused($searchFocused)
+                .onKeyPress(.downArrow) { move(1) }
+                .onKeyPress(.upArrow) { move(-1) }
                 .onSubmit {
-                    options.first?.pick()
+                    options.first { $0.id == activeRow }?.pick()
                 }
             if options.isEmpty, let emptyText {
                 Text(emptyText)
@@ -89,20 +95,39 @@ struct PickerList: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        ForEach(options) { option in
-                            row(option)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 1) {
+                            ForEach(options) { option in
+                                row(option).id(option.id)
+                            }
                         }
                     }
+                    .frame(maxHeight: 280)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onChange(of: activeRow) { _, id in
+                        // Keyboard moves reveal the row with the least scroll (nil anchor).
+                        defer { activeByPointer = false }
+                        guard let id, !activeByPointer else { return }
+                        proxy.scrollTo(id)
+                    }
                 }
-                .frame(maxHeight: 280)
-                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(8)
         .frame(width: 280)
-        .onAppear { searchFocused = true }
+        .onAppear {
+            searchFocused = true
+            activeRow = options.first?.id
+        }
+        .onChange(of: search) { _, _ in activeRow = options.first?.id }
+        .onChange(of: options.map(\.id)) { _, ids in activeRow = PickerActiveRow.kept(activeRow, in: ids) }
+    }
+
+    private func move(_ delta: Int) -> KeyPress.Result {
+        guard !options.isEmpty else { return .ignored }
+        activeRow = PickerActiveRow.moved(activeRow, by: delta, in: options.map(\.id))
+        return .handled
     }
 
     private func row(_ option: PickerOption) -> some View {
@@ -131,10 +156,33 @@ struct PickerList: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // cmdk's `data-[selected=true]:bg-primary/10` marks the active row; the chosen value
+        // keeps its check mark.
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.chip)
-                .fill(option.isSelected ? theme.primary.opacity(0.08) : Color.clear))
+                .fill(option.id == activeRow ? theme.primary.opacity(0.10) : Color.clear))
+        .onHover { hovering in
+            guard hovering, activeRow != option.id else { return }
+            activeByPointer = true
+            activeRow = option.id
+        }
         .accessibilityAddTraits(option.isSelected ? .isSelected : [])
+    }
+}
+
+/// cmdk's active-item rules: the arrow keys step without wrapping (cmdk's `loop` is off), and a
+/// list change keeps the active row while it is still listed, else activates the first.
+enum PickerActiveRow {
+    static func moved(_ activeRow: String?, by delta: Int, in ids: [String]) -> String? {
+        guard !ids.isEmpty else { return nil }
+        guard let current = activeRow.flatMap({ ids.firstIndex(of: $0) }) else {
+            return delta > 0 ? ids.first : ids.last
+        }
+        return ids[min(max(current + delta, 0), ids.count - 1)]
+    }
+    static func kept(_ activeRow: String?, in ids: [String]) -> String? {
+        if let activeRow, ids.contains(activeRow) { return activeRow }
+        return ids.first
     }
 }
 

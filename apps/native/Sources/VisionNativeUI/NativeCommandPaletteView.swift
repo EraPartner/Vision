@@ -8,6 +8,9 @@ public struct NativeCommandPaletteView: View {
     let shell: NativeShellModel
     @State private var selectedID: String?  // lint:allow raw-id view selection key of mixed kinds, not an API entity
     @State private var selectionWasMoved = false
+    /// True while the pointer made the last selection change: hover highlights in place and never
+    /// scrolls the row away from the pointer.
+    @State private var selectedByPointer = false
     @FocusState private var searchFocused: Bool
     /// The list's natural height, so the panel fits its content up to `CommandList`'s `max-h-[320px]`.
     @State private var listContentHeight: CGFloat = 0
@@ -83,7 +86,11 @@ public struct NativeCommandPaletteView: View {
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listContentHeight = $0 }
                 }.frame(height: listContentHeight > 0 ? min(listContentHeight, 320) : 320)
                     .onChange(of: selectedID) { _, id in
-                        if let id { proxy.scrollTo(id, anchor: .center) }
+                        // Keyboard moves reveal the row with the least scroll (the web's
+                        // `scrollIntoView({ block: "nearest" })`); a nil anchor scrolls only if needed.
+                        defer { selectedByPointer = false }
+                        guard let id, !selectedByPointer else { return }
+                        proxy.scrollTo(id)
                     }
             }
         }.frame(maxWidth: .infinity)
@@ -132,8 +139,9 @@ public struct NativeCommandPaletteView: View {
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
             .onHover { hover in
-                if hover {
+                if hover, selectedID != entry.id {
                     selectionWasMoved = true
+                    selectedByPointer = true
                     selectedID = entry.id
                 }
             }

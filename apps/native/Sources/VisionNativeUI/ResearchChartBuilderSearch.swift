@@ -5,6 +5,8 @@ struct ResearchChartBuilderSearchView: View {
     @Bindable var model: ResearchChartBuilderModel
     let shell: NativeShellModel
     @State private var selected = -1
+    /// True while the pointer made the last selection change, so hover never scrolls the list.
+    @State private var selectedByPointer = false
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     private var count: Int { model.tickerResults.count + model.macroResults.count }
@@ -64,7 +66,7 @@ struct ResearchChartBuilderSearchView: View {
                                     Text(exchange).font(.caption).foregroundStyle(theme.secondaryLabel)
                                 }
                             }.padding(10).background(selected == index ? theme.primary.opacity(0.08) : .clear)
-                        }.buttonStyle(.plain).id(index).onHover { if $0 { selected = index } }.accessibilityAddTraits(
+                        }.buttonStyle(.plain).id(index).onHover { if $0 { point(at: index) } }.accessibilityAddTraits(
                             selected == index ? .isSelected : [])
                     }
                     if !model.macroResults.isEmpty { group("research.builder.groupEconomic") }
@@ -88,7 +90,7 @@ struct ResearchChartBuilderSearchView: View {
                                     Text(source).font(.caption).foregroundStyle(theme.secondaryLabel)
                                 }
                             }.padding(10).background(selected == row ? theme.primary.opacity(0.08) : .clear)
-                        }.buttonStyle(.plain).id(row).onHover { if $0 { selected = row } }.accessibilityAddTraits(
+                        }.buttonStyle(.plain).id(row).onHover { if $0 { point(at: row) } }.accessibilityAddTraits(
                             selected == row ? .isSelected : [])
                     }
                 }
@@ -99,7 +101,10 @@ struct ResearchChartBuilderSearchView: View {
                         + CGFloat(model.macroResults.isEmpty ? 12 : model.tickerResults.isEmpty ? 38 : 64))
             )
             .onChange(of: selected) { _, value in
-                if value >= 0 { withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(value, anchor: .center) } }
+                // Arrow keys reveal the row with the least scroll, unanimated, as the web's
+                // `scrollIntoView({ block: "nearest" })` does.
+                defer { selectedByPointer = false }
+                if value >= 0, !selectedByPointer { proxy.scrollTo(value) }
             }
         }.background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)).overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border)
@@ -109,6 +114,11 @@ struct ResearchChartBuilderSearchView: View {
         Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel).padding(.horizontal, 12).padding(
             .top, 9
         ).padding(.bottom, 4)
+    }
+    private func point(at row: Int) {
+        guard selected != row else { return }
+        selectedByPointer = true
+        selected = row
     }
     private func move(_ delta: Int) -> KeyPress.Result {
         guard model.isSearchOpen, count > 0 else { return .ignored }
