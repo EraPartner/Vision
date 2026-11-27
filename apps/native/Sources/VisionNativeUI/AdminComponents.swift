@@ -81,6 +81,42 @@ struct SkeletonBar: View {
     }
 }
 
+/// A cold page load's placeholder in the shape of the first cards (the web pages' skeleton
+/// cards): a hero card over a two-column grid, so the page does not jump from a short spinner to
+/// its full height. One accessible "loading" element, like Transactions' skeleton.
+struct PageCardsSkeleton: View {
+    let loadingLabel: String
+    var heroHeight: CGFloat = 180
+    var cardHeight: CGFloat = 240
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+            card(height: heroHeight)
+            HStack(alignment: .top, spacing: VisionPageLayout.spacing) {
+                card(height: cardHeight)
+                card(height: cardHeight)
+            }
+            HStack(alignment: .top, spacing: VisionPageLayout.spacing) {
+                card(height: cardHeight)
+                card(height: cardHeight)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(loadingLabel)
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    private func card(height: CGFloat) -> some View {
+        AdminCard {
+            VStack(alignment: .leading, spacing: 10) {
+                SkeletonBar(width: 140, height: 18)
+                SkeletonBar(width: 96, height: 12)
+                SkeletonBar(width: nil, height: max(0, height - 80))
+            }
+        }
+    }
+}
+
 /// `AdminErrorState`: the page's fallback title over the humanized error.
 struct AdminErrorBanner: View {
     let state: AdminErrorState

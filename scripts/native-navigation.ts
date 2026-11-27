@@ -55,7 +55,8 @@ export const SF_SYMBOLS: Readonly<Record<string, string>> = {
   ChartSpline: "chart.line.flattrend.xyaxis",
   Coins: "bitcoinsign.circle",
   Database: "cylinder.split.1x2",
-  Gem: "diamond",
+  // Swift-only: the metals page uses Vision's gold bar glyph (VisionSymbol.goldBar), as its asset tiles do.
+  Gem: "vision.goldbar",
   GitCompareArrows: "arrow.triangle.swap",
   Globe: "globe",
   HandCoins: "dollarsign.circle",

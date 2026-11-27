@@ -112,6 +112,11 @@ struct VisionControlMetrics: Equatable, Sendable {
     }
 
     /// `--duration-press` ease-out, the press feedback transform; none under Reduce Motion.
+    /// The press shrink; none under Reduce Motion, where the web drops the press transform too
+    /// (index.css) and only the pressed fill shows.
+    static func pressScale(_ pressed: Bool, reduceMotion: Bool) -> CGFloat {
+        pressed && !reduceMotion ? CGFloat(DesignTokens.Press.scale) : 1
+    }
     static func pressTransition(reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : .easeOut(duration: DesignTokens.Duration.press)
     }
@@ -151,7 +156,7 @@ struct VisionButtonChrome: View {
             .contentShape(shape)
             .visionFocusRing(cornerRadius: VisionControlMetrics.radius)
             .opacity(isEnabled ? 1 : VisionControlMetrics.disabledOpacity)
-            .scaleEffect(configuration.isPressed && isEnabled ? CGFloat(DesignTokens.Press.scale) : 1)
+            .scaleEffect(VisionControlMetrics.pressScale(configuration.isPressed && isEnabled, reduceMotion: reduceMotion))
             .animation(VisionControlMetrics.pressTransition(reduceMotion: reduceMotion), value: configuration.isPressed)
             .animation(VisionControlMetrics.fastTransition(reduceMotion: reduceMotion), value: hover)
             .onHover { hovering = $0 }

@@ -15,6 +15,8 @@ struct CSVDropzone: View {
     let unreadable: @MainActor @Sendable () -> Void
     let remove: () -> Void
     @State private var isTargeted = false
+    /// The pointer is over the zone (not a file drag): the faint rollover the web shows.
+    @State private var pointerOver = false
     @State private var isPickerPresented = false
     @Environment(\.visionTheme) var theme
 
@@ -71,13 +73,18 @@ struct CSVDropzone: View {
         .padding(compact ? 28 : 36)
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(isTargeted ? theme.primary.opacity(0.05) : Color.clear))
+                .fill(
+                    isTargeted
+                        ? theme.primary.opacity(0.05) : pointerOver ? theme.foreground.opacity(0.03) : Color.clear))
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                 .strokeBorder(
-                    isTargeted ? theme.primary : theme.border,
+                    // `hover:border-primary/50 hover:bg-foreground/[0.03]`; a file drag keeps the stronger tint.
+                    isTargeted ? theme.primary : pointerOver ? theme.primary.opacity(0.5) : theme.border,
                     style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
         .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+        .onHover { inside in if pointerOver != inside { pointerOver = inside } }
+        .pointerStyle(.link)
         .onTapGesture { isPickerPresented = true }
         .focusable()
         .onKeyPress(keys: [.return, .space]) { _ in

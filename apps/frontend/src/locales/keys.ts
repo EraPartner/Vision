@@ -1250,6 +1250,8 @@ export type TranslationKey =
   | "dashboard.widgetDescriptions.upcoming"
   | "datePicker.inputLabel"
   | "datePicker.invalidFormat"
+  | "datePicker.month"
+  | "datePicker.year"
   | "dbEditor.addRow"
   | "dbEditor.applyFilters"
   | "dbEditor.back"

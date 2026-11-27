@@ -27,6 +27,7 @@ struct NativeNoticeHost: View {
     let strings: any Localizing
     @Environment(\.visionTheme) private var theme
     @Environment(\.nativeNoticeAnnouncementsEnabled) private var announcementsEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -45,6 +46,10 @@ struct NativeNoticeHost: View {
                         Button(strings.t(key.rawValue)) { Task { await center.performAction(entry.id) } }
                             .buttonStyle(.visionOutline).controlSize(.small)
                     }
+                    // Sonner's close button.
+                    Button(strings.t("common.close"), systemImage: "xmark") { center.dismiss(entry.id) }
+                        .labelStyle(.iconOnly).buttonStyle(.vision(.ghost, size: .iconSm))
+                        .foregroundStyle(theme.secondaryLabel)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background { ToastSurface() }
@@ -54,13 +59,24 @@ struct NativeNoticeHost: View {
                 )
                 .frame(maxWidth: 560)
                 .accessibilityElement(children: .contain)
+                // Sonner's entry and exit: in from below, out with a fade.
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                            removal: .opacity.combined(with: .scale(scale: 0.96))))
                 .task(id: entry.revision) {
                     guard announcementsEnabled else { return }
-                    AccessibilityNotification.Announcement(title(entry.notice))
-                        .post()
+                    let spoken = Self.announcement(title(entry.notice), detail: entry.notice.detail)
+                    AccessibilityNotification.Announcement(spoken).post()
                 }
             }
         }
+        // The stack moves as notices arrive and leave (sonner's stack transition).
+        .animation(
+            reduceMotion ? nil : VisionMotion.outExpo(DesignTokens.Duration.normal),
+            value: center.visibleEntries.map(\.id))
         .padding(.bottom, 20)
         .focusable().focused($focused)
         .onChange(of: center.focusRevision) { _, _ in
@@ -76,6 +92,12 @@ struct NativeNoticeHost: View {
                     .disabled(!announcementsEnabled || center.visibleEntries.isEmpty)
             }.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
         }
+    }
+
+    /// Sonner announces the description with the title, so the error's reason is heard too.
+    static func announcement(_ title: String, detail: String?) -> String {
+        guard let detail, !detail.isEmpty else { return title }
+        return title + ". " + detail
     }
 
     private func undoShortcut() {

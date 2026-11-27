@@ -41,6 +41,11 @@ public final class HomeModel {
     public private(set) var dismissedUpcoming: Set<String> = []
     public private(set) var errors: [String: String] = [:]
     public private(set) var isLoading = true
+    /// Whether the rows the recent card reads have answered (success or failure) at least once.
+    /// The card keeps its own pending state, so it never reports "no recent transactions"
+    /// while its request is still out (the web gates the list on its own queries).
+    private var transactionsAnswered = false
+    private var filteredRecentAnswered = false
     public private(set) var isFetching = false
     public private(set) var forecast: InsightForecast?
     public private(set) var forecastError: String?
@@ -107,6 +112,8 @@ public final class HomeModel {
             netWorth = nil
             transactions = []
             filteredRecent = []
+            transactionsAnswered = false
+            filteredRecentAnswered = false
             accounts = []
             plannedTotals = nil
             accountTotals = nil
@@ -153,6 +160,7 @@ public final class HomeModel {
             if resolved != exclusions {
                 monthly = nil
                 filteredRecent = []
+                filteredRecentAnswered = false
                 isLoading = true
             }
             exclusions = resolved
@@ -198,6 +206,7 @@ public final class HomeModel {
         let firstPage = Task { try await service.homeTransactions(offset: 0, limit: 50) }
         defer { firstPage.cancel() }
         async let transactions = publishAnswer(token: token, load: { try await firstPage.value }) { answer in
+            self.transactionsAnswered = true
             switch answer {
             case .success(let page):
                 self.transactions = page.items
@@ -208,7 +217,10 @@ public final class HomeModel {
         async let recent = publishAnswer(token: token, load: {
             exclusions.isEmpty
                 ? [] : try await Self.recent(service: service, exclusions: exclusions, firstPage: firstPage.value)
-        }) { answer in self.assignList(answer, key: "recentTransactions", to: &self.filteredRecent) }
+        }) { answer in
+            self.filteredRecentAnswered = true
+            self.assignList(answer, key: "recentTransactions", to: &self.filteredRecent)
+        }
         async let accounts = publishAnswer(token: token, load: { try await service.homeAccounts() }) {
             answer in self.assignList(answer, key: "accounts", to: &self.accounts)
         }
@@ -332,10 +344,11 @@ public final class HomeModel {
         graphExclusions[graph] == false ? unfilteredMonthly : monthly
     }
     public func recentRows() -> [OpenAPI.Transaction] {
-        Array(
-            (hasExclusions && graphExclusions["recentTransactions"] != false
-                ? filteredRecent : transactions).prefix(5))
+        Array((readsFilteredRecent ? filteredRecent : transactions).prefix(5))
     }
+    /// True until the rows the recent card shows have answered once.
+    public var isRecentPending: Bool { readsFilteredRecent ? !filteredRecentAnswered : !transactionsAnswered }
+    private var readsFilteredRecent: Bool { hasExclusions && graphExclusions["recentTransactions"] != false }
     public func categorySlices(strings: any Localizing) -> [HomeCategorySlice] {
         let rows = transactions.filter {
             graphExclusions["categoryPie"] == false || exclusions.includes($0)

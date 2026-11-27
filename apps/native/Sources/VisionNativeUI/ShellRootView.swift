@@ -495,8 +495,8 @@ struct NativeSidebar: View {
                 if item.url != model.route.path { model.navigate(to: item.url) }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: item.symbol)
-                        .font(.system(size: 14))
+                    // VisionSymbol: a nav item may name one of Vision's own glyphs (the metals gold bar).
+                    VisionSymbol(item.symbol, size: 14)
                         .foregroundStyle(Color(token: theme.glass.icon))
                         .frame(width: 17, height: 17)
                     Text(title)

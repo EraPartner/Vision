@@ -16,6 +16,8 @@ struct TransactionsTableCard: View {
     @State private var suggestions = TransactionSearchSuggestions(thisYear: 2026)
     @FocusState private var searchFocused: Bool
     @FocusState private var focusedRow: TransactionID?
+    /// The header filter button holding keyboard focus; it shows, as a focused web header does.
+    @FocusState private var focusedFilter: String?
     @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
@@ -369,7 +371,8 @@ struct TransactionsTableCard: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(hasFilter ? theme.primary : theme.tertiaryLabel)
-        .opacity(hasFilter || hovered || openFilter == key ? 1 : 0)
+        .opacity(hasFilter || hovered || openFilter == key || focusedFilter == key ? 1 : 0)
+        .focused($focusedFilter, equals: key)
         .visionTooltip(label)
         .accessibilityLabel(label)
         .popover(
@@ -544,6 +547,9 @@ struct TransactionRowView: View, Equatable {
         // `rowHeight={compact ? 128 : 57}` (TransactionsTable.tsx).
         .frame(minHeight: compact ? 128 : 57)
         .background(isSelected ? theme.primary.opacity(0.1) : Color.clear)
+        // `TableRow`'s quiet hover band, under the selection fill so a hovered selected row reads
+        // a shade stronger than a selected one.
+        .rowHoverBand()
         .contentShape(Rectangle())
         .opacity(row.isActive ? 1 : 0.55)
         .onTapGesture(count: 2) {

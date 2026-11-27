@@ -130,6 +130,7 @@ private struct VisionSelectList<Value: Hashable>: View {
     @Environment(\.visionTheme) private var theme
     @FocusState private var focused: Int?
     @State private var contentHeight: CGFloat = 0
+    @State private var typed = SelectTypeahead()
 
     /// `min-w-[8rem]`.
     static var minWidth: CGFloat { 128 }
@@ -260,18 +261,46 @@ private struct VisionSelectList<Value: Hashable>: View {
         }
     }
 
-    /// Radix typeahead: the next enabled item whose title starts with the typed text.
-    private func typeahead(_ typed: String, from index: Int) -> KeyPress.Result {
-        let enabled = enabledIndices
-        let after = enabled.filter { $0 > index } + enabled.filter { $0 <= index }
-        for candidate in after {
-            if case .option(let option) = entries[candidate],
-                option.title.range(of: typed, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil
-            {
-                focused = candidate
-                return .handled
-            }
+    /// Radix typeahead: quick successive letters build a prefix, a pause starts over, and one
+    /// letter repeated cycles through the items starting with it.
+    private func typeahead(_ character: String, from index: Int) -> KeyPress.Result {
+        let search = typed.append(character, at: Date())
+        let candidates: [(index: Int, title: String)] = enabledIndices.compactMap { candidate in
+            if case .option(let option) = entries[candidate] { return (candidate, option.title) }
+            return nil
         }
-        return .ignored
+        guard let match = SelectTypeahead.match(search, in: candidates, current: index) else { return .ignored }
+        focused = match
+        return .handled
+    }
+}
+
+/// Radix Select's typeahead buffer and match rule (`useTypeaheadSearch`, `findNextItem`).
+struct SelectTypeahead {
+    /// Radix clears the search one second after the last key.
+    static let reset: TimeInterval = 1
+    private(set) var search = ""
+    private var last: Date?
+
+    /// Adds a typed character and returns the search to match.
+    mutating func append(_ character: String, at now: Date) -> String {
+        if let last, now.timeIntervalSince(last) > Self.reset { search = "" }
+        last = now
+        search += character
+        return search
+    }
+
+    /// The first item from the current one (after it, for a single or repeated letter) whose
+    /// title starts with the search, wrapping around.
+    static func match(_ search: String, in items: [(index: Int, title: String)], current: Int?) -> Int? {
+        guard let first = search.first else { return nil }
+        let repeated = search.allSatisfy { $0 == first }
+        let needle = repeated ? String(first) : search
+        let start = current.flatMap { current in items.firstIndex { $0.index == current } } ?? 0
+        var ordered = Array(items[start...] + items[..<start])
+        if needle.count == 1, let current { ordered.removeAll { $0.index == current } }
+        return ordered.first {
+            $0.title.range(of: needle, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil
+        }?.index
     }
 }

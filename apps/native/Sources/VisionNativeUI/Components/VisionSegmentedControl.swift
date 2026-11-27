@@ -238,7 +238,7 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
                 .contentShape(shape)
                 .visionFocusRing(cornerRadius: radius)
                 .opacity(isDimmed ? VisionControlMetrics.disabledOpacity : 1)
-                .scaleEffect(configuration.isPressed ? CGFloat(DesignTokens.Press.scale) : 1)
+                .scaleEffect(VisionControlMetrics.pressScale(configuration.isPressed, reduceMotion: reduceMotion))
                 .animation(VisionControlMetrics.pressTransition(reduceMotion: reduceMotion), value: configuration.isPressed)
                 .animation(VisionControlMetrics.fastTransition(reduceMotion: reduceMotion), value: hovering)
                 .onHover { hovering = $0 }

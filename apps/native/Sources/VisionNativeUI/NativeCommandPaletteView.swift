@@ -120,7 +120,7 @@ public struct NativeCommandPaletteView: View {
             model.activate(entry)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: entry.symbol).frame(width: 20).foregroundStyle(theme.secondaryLabel)
+                VisionSymbol(entry.symbol, size: 13).frame(width: 20).foregroundStyle(theme.secondaryLabel)
                     .accessibilityHidden(true)
                 Text(entry.title).lineLimit(1)
                 if let quote = entry.quote, let name = quote.name, !name.isEmpty {

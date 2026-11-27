@@ -122,6 +122,7 @@ struct VisionDatePopover: View {
                 selected: day, calendar: calendar, firstWeekday: settings.startOfWeek.firstWeekday,
                 locale: LanguageLocale.locale(strings.language),
                 previousLabel: strings.t("common.previous"), nextLabel: strings.t("common.next"),
+                monthLabel: strings.t("datePicker.month"), yearLabel: strings.t("datePicker.year"),
                 onSelect: select
             )
             .padding(12)
@@ -183,15 +184,19 @@ struct VisionCalendarGrid: View {
     let locale: Locale
     let previousLabel: String
     let nextLabel: String
+    var monthLabel = ""
+    var yearLabel = ""
     let onSelect: (PlannedDay) -> Void
     @State private var month: Date
     @Environment(\.visionTheme) private var theme
 
     init(
         selected: PlannedDay?, calendar: Calendar, firstWeekday: Int, locale: Locale,
-        previousLabel: String, nextLabel: String,
+        previousLabel: String, nextLabel: String, monthLabel: String = "", yearLabel: String = "",
         onSelect: @escaping (PlannedDay) -> Void
     ) {
+        self.monthLabel = monthLabel
+        self.yearLabel = yearLabel
         self.selected = selected
         self.calendar = calendar
         self.firstWeekday = VisionCalendarGrid.normalWeekday(firstWeekday, calendar: calendar)
@@ -211,7 +216,8 @@ struct VisionCalendarGrid: View {
         let today = PlannedDay(Date(), calendar: calendar)
         VStack(spacing: 6) {
             HStack {
-                Text(monthTitle).font(.body.weight(.semibold)).foregroundStyle(theme.foreground)
+                // react-day-picker's `captionLayout="dropdown"`: jump straight to a month and year.
+                monthYearPickers
                 Spacer()
                 stepButton("chevron.left", label: previousLabel, by: -1)
                 stepButton("chevron.right", label: nextLabel, by: 1)
@@ -278,8 +284,53 @@ struct VisionCalendarGrid: View {
         .accessibilityLabel(label)
     }
 
-    private var monthTitle: String {
-        month.formatted(Date.FormatStyle(locale: locale).month(.wide).year())
+    private var monthYearPickers: some View {
+        let components = calendar.dateComponents([.year, .month], from: month)
+        let shownYear = components.year ?? 2000
+        let years = Self.yearRange(
+            selectedYear: selected?.year, shownYear: shownYear,
+            currentYear: calendar.component(.year, from: Date()))
+        var names = calendar
+        names.locale = locale
+        let monthNames = names.standaloneMonthSymbols
+        return HStack(spacing: 4) {
+            Picker(
+                monthLabel,
+                selection: Binding(
+                    get: { components.month ?? 1 },
+                    set: { show(year: shownYear, month: $0) })
+            ) {
+                ForEach(Array(monthNames.enumerated()), id: \.offset) { index, name in
+                    Text(name.capitalized(with: locale)).tag(index + 1)
+                }
+            }
+            .accessibilityLabel(monthLabel)
+            Picker(
+                yearLabel,
+                selection: Binding(
+                    get: { shownYear },
+                    set: { show(year: $0, month: components.month ?? 1) })
+            ) {
+                ForEach(Array(years), id: \.self) { year in Text(verbatim: String(year)).tag(year) }
+            }
+            .accessibilityLabel(yearLabel)
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .fixedSize()
+        .font(.body.weight(.semibold))
+    }
+
+    private func show(year: Int, month number: Int) {
+        if let next = calendar.date(from: DateComponents(year: year, month: number, day: 1)) { month = next }
+    }
+
+    /// The web `DatePicker`'s dropdown range: 100 years back to 20 ahead, widened to the chosen
+    /// day's year and the year on screen.
+    static func yearRange(selectedYear: Int?, shownYear: Int, currentYear: Int) -> ClosedRange<Int> {
+        let start = min(currentYear - 100, selectedYear ?? currentYear, shownYear)
+        let end = max(currentYear + 20, selectedYear ?? currentYear, shownYear)
+        return start...end
     }
 
     var weekdaySymbols: [String] {

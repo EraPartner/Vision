@@ -35,7 +35,7 @@ public enum NavigationRegistry {
                 NavItem(titleKey: "nav.netWorth", url: "/portfolio/net-worth", symbol: "wallet.pass", shortcutKey: "n", badge: nil, exact: false),
                 NavItem(titleKey: "nav.stocksEtfs", url: "/portfolio/stocks", symbol: "chart.line.uptrend.xyaxis", shortcutKey: nil, badge: nil, exact: false),
                 NavItem(titleKey: "nav.crypto", url: "/portfolio/crypto", symbol: "bitcoinsign.circle", shortcutKey: nil, badge: nil, exact: false),
-                NavItem(titleKey: "nav.metals", url: "/portfolio/metals", symbol: "diamond", shortcutKey: nil, badge: nil, exact: false),
+                NavItem(titleKey: "nav.metals", url: "/portfolio/metals", symbol: "vision.goldbar", shortcutKey: nil, badge: nil, exact: false),
                 NavItem(titleKey: "nav.realEstate", url: "/portfolio/real-estate", symbol: "building", shortcutKey: nil, badge: nil, exact: false),
                 NavItem(titleKey: "nav.savingsBonds", url: "/portfolio/savings", symbol: "banknote", shortcutKey: nil, badge: nil, exact: false),
                 NavItem(titleKey: "nav.rebalance", url: "/portfolio/rebalance", symbol: "scalemass", shortcutKey: nil, badge: nil, exact: false),

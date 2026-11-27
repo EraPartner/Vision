@@ -45,6 +45,14 @@ struct PickerButton<Content: View>: View {
         }
         .buttonStyle(.visionOutline)
         .disabled(disabled)
+        // A tab stop like the web combobox trigger, so a form can move focus to an invalid
+        // picker; Space, Return or Down opens it (setting, not toggling, so a key the button
+        // also handles cannot close it again).
+        .focusable(!disabled)
+        .onKeyPress(keys: [.space, .return, .downArrow]) { _ in
+            isOpen = true
+            return .handled
+        }
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
                 .strokeBorder(invalid ? theme.destructive : Color.clear, lineWidth: 1)

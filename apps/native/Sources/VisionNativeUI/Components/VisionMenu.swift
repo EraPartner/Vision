@@ -43,14 +43,36 @@ struct VisionMenu<Content: View, MenuLabel: View>: View {
     }
 }
 
-/// `DropdownMenuContent`: `min-w-[8rem] p-1.5` on `glass-thick`.
+/// `DropdownMenuContent`: `min-w-[8rem] p-1.5` on `glass-thick`. Like Radix's menu it takes
+/// keyboard focus on open: ↑/↓ move a visible active row (skipping disabled items), Home/End
+/// jump, Return or Space chooses it, and the pointer moves the same active row.
 private struct VisionMenuPanel<Content: View>: View {
     let dismiss: () -> Void
     let content: () -> Content
+    @State private var navigator = VisionMenuNavigator()
+    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             content()
+        }
+        .coordinateSpace(.named(VisionMenuNavigator.space))
+        .environment(navigator)
+        .focusable()
+        .focused($focused)
+        .focusEffectDisabled()
+        .onAppear { focused = true }
+        .onKeyPress(phases: .down) { press in
+            switch press.key {
+            case .downArrow: navigator.move(1)
+            case .upArrow: navigator.move(-1)
+            case .home: navigator.jump(first: true)
+            case .end: navigator.jump(first: false)
+            case .return, .space:
+                guard navigator.triggerActive() else { return .ignored }
+            default: return .ignored
+            }
+            return .handled
         }
         .buttonStyle(VisionMenuItemStyle(dismiss: dismiss))
         .toggleStyle(VisionMenuToggleStyle())
@@ -76,17 +98,23 @@ private struct VisionMenuItemStyle: PrimitiveButtonStyle {
 private struct VisionMenuItem: View {
     let configuration: PrimitiveButtonStyleConfiguration
     let dismiss: () -> Void
-    @State private var hovering = false
+    @State private var id = UUID()
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.visionTheme) private var theme
+    @Environment(VisionMenuNavigator.self) private var navigator: VisionMenuNavigator?
+
+    private func choose() {
+        dismiss()
+        configuration.trigger()
+    }
 
     var body: some View {
         let destructive = configuration.role == .destructive
         let shape = RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card) - 6, style: .continuous)
         let highlight = destructive ? theme.destructive : theme.primary
+        let hovering = navigator?.active == id
         Button {
-            dismiss()
-            configuration.trigger()
+            choose()
         } label: {
             VStack(alignment: .leading, spacing: 1) { configuration.label }
                 .font(VisionControlMetrics.fieldFont)
@@ -101,8 +129,62 @@ private struct VisionMenuItem: View {
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : VisionControlMetrics.disabledOpacity)
         .onHover { inside in
-            if hovering != inside { hovering = inside }
+            if inside, isEnabled {
+                navigator?.active = id
+            } else if !inside, navigator?.active == id {
+                navigator?.active = nil
+            }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(VisionMenuNavigator.space)).minY } action: {
+            navigator?.register(id, top: $0, enabled: isEnabled, trigger: choose)
+        }
+        .onChange(of: isEnabled) { _, enabled in navigator?.setEnabled(id, enabled) }
+        .onDisappear { navigator?.remove(id) }
+    }
+}
+
+/// The active row of an open `VisionMenu`: its items register their vertical position, whether
+/// they are enabled and how to choose them, so the keyboard can walk them in order.
+@MainActor @Observable final class VisionMenuNavigator {
+    static let space = "visionMenu"
+    struct Item {
+        var top: CGFloat
+        var enabled: Bool
+        var trigger: () -> Void
+    }
+    var active: UUID?
+    @ObservationIgnored private var items: [UUID: Item] = [:]
+
+    func register(_ id: UUID, top: CGFloat, enabled: Bool, trigger: @escaping () -> Void) {
+        items[id] = Item(top: top, enabled: enabled, trigger: trigger)
+    }
+    func setEnabled(_ id: UUID, _ enabled: Bool) {
+        items[id]?.enabled = enabled
+        if !enabled, active == id { active = nil }
+    }
+    func remove(_ id: UUID) {
+        items[id] = nil
+        if active == id { active = nil }
+    }
+    /// The enabled items, top to bottom.
+    var order: [UUID] { items.filter { $0.value.enabled }.sorted { $0.value.top < $1.value.top }.map(\.key) }
+    /// Radix's arrow keys: the next enabled item, no wrap; from nothing, the first or the last.
+    func move(_ delta: Int) {
+        active = Self.step(active, by: delta, in: order)
+    }
+    func jump(first: Bool) { active = first ? order.first : order.last }
+    /// Chooses the active item; false when there is none.
+    func triggerActive() -> Bool {
+        guard let active, let item = items[active], item.enabled else { return false }
+        item.trigger()
+        return true
+    }
+    nonisolated static func step(_ active: UUID?, by delta: Int, in order: [UUID]) -> UUID? {
+        guard !order.isEmpty else { return nil }
+        guard let current = active.flatMap({ order.firstIndex(of: $0) }) else {
+            return delta > 0 ? order.first : order.last
+        }
+        return order[min(max(current + delta, 0), order.count - 1)]
     }
 }
 

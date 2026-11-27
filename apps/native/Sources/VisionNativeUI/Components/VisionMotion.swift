@@ -177,3 +177,45 @@ private struct DigitReel: View {
             .accessibilityHidden(true)
     }
 }
+
+/// The web charts' first-presentation entrance (`ChartReveal`, `BarChart`'s grow): lines and areas
+/// sweep in from the left over `durations.page`; bars grow up from the baseline over
+/// `durations.normal`. Only the plot area is masked, so the axes stay still. It plays once per
+/// appearance: hover and data refreshes never restart it. Printed pages and Reduce Motion show the
+/// final state at once, and the mask always settles, so turning Reduce Motion off mid-way cannot
+/// leave the plot hidden.
+struct ChartEntrance: ViewModifier {
+    enum Style { case sweep, grow }
+    /// nil: no entrance (a sparkline).
+    let style: Style?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.visionTheme) private var theme
+    @State private var progress: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        let shown = style == nil || reduceMotion || theme.isPrintReport ? 1 : progress
+        content
+            .chartPlotStyle { plot in
+                plot.mask {
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .frame(
+                                width: style == .sweep ? geometry.size.width * shown : geometry.size.width,
+                                height: style == .grow ? geometry.size.height * shown : geometry.size.height)
+                            .frame(
+                                maxWidth: .infinity, maxHeight: .infinity,
+                                alignment: style == .sweep ? .leading : .bottom)
+                    }
+                }
+            }
+            .onAppear {
+                let duration = style == .sweep ? VisionMotion.page : DesignTokens.Duration.normal
+                withAnimation(reduceMotion ? nil : VisionMotion.outExpo(duration)) { progress = 1 }
+            }
+    }
+}
+
+extension View {
+    /// The chart's one-time entrance; see `ChartEntrance`.
+    func chartEntrance(_ style: ChartEntrance.Style?) -> some View { modifier(ChartEntrance(style: style)) }
+}

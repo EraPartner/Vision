@@ -18,6 +18,19 @@ private struct ScriptedTransport: APITransport {
             attempt: attempt, phase: phase, durationMs: phase == .start ? nil : duration, status: status)
     }
 
+    /// Audit finding 23: the header cue shows for a refresh of shown data, not a cold first load.
+    @Test func refreshCueSkipsColdLoadsAndShowsForRefetches() {
+        let model = NativeAPIInspectorModel()
+        model.record(event("r1", .start))
+        #expect(!model.isRefreshingShownData)
+        model.record(event("r1", .success, duration: 5, status: 200))
+        model.record(event("r2", .start))
+        #expect(model.isRefreshingShownData)
+        model.record(event("r2", .success, duration: 5, status: 200))
+        model.record(event("w1", .start, method: .post, endpoint: "/api/a"))
+        #expect(!model.isRefreshingShownData)
+    }
+
     @Test func aCompletedAttemptLeavesInFlightAndTheLogIsNewestFirstAndCapped() {
         let model = NativeAPIInspectorModel()
         model.record(event("r1", .start))

@@ -83,6 +83,7 @@ struct PortfolioSeriesChart: View {
                 }
             }
             .chartXScale(domain: 0...max(keys.count - 1, 1))
+            .chartEntrance(.sweep)
             .chartLegend(.hidden)
             .chartXAxis {
                 AxisMarks(values: ChartAxisTicks.evenlySpaced(Array(keys.indices), count: 7)) { value in

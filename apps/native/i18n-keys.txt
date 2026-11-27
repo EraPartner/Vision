@@ -237,6 +237,8 @@ common.undo
 common.unknownDate
 datePicker.inputLabel
 datePicker.invalidFormat
+datePicker.month
+datePicker.year
 importPage.bankAccount
 importPage.endDate
 importPage.startDate

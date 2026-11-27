@@ -410,7 +410,13 @@ public struct PlannedPaymentsView: View {
     }
 
     /// A strip item: opens the sheet for the payment (`plannedPage.next7.itemTitle`).
+    /// `hover:bg-primary/10` and `group-hover/item:text-primary`: the payment under the pointer
+    /// tints at once, which tells apart two or three payments sharing a day.
     private func dayItem(_ payment: PlannedPayment) -> some View {
+        HoverTracking { hovered in dayItemButton(payment, hovered: hovered) }
+    }
+
+    private func dayItemButton(_ payment: PlannedPayment, hovered: Bool) -> some View {
         Button {
             model.openEditor(for: payment, settings: settings)
         } label: {
@@ -425,7 +431,8 @@ public struct PlannedPaymentsView: View {
                     Text(payment.name)
                         .font(.caption)
                         .strikethrough(payment.isExecuted)
-                        .foregroundStyle(payment.isExecuted ? theme.secondaryLabel : theme.foreground)
+                        .foregroundStyle(
+                            payment.isExecuted ? theme.secondaryLabel : hovered ? theme.primary : theme.foreground)
                         .multilineTextAlignment(.leading)
                 }
                 MoneyText(amount: payment.amount, currency: payment.currency, settings: settings)
@@ -434,6 +441,9 @@ public struct PlannedPaymentsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                    .fill(theme.primary.opacity(hovered ? 0.1 : 0)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

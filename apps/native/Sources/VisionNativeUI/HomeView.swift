@@ -9,6 +9,9 @@ public struct HomeView: View {
     @State private var customize = false
     @State private var diagnostics = false
     @State private var windowWidth = InsightsBreakpoint.initialWidth
+    /// The dashboard's arrival (rolling figures) plays once per session, like the web's
+    /// `DashboardPage`; a routine return shows the settled figures.
+    @State private var rollsFigures = !HomeArrival.played
     @Environment(\.visionTheme) private var theme
 
     public init(model: HomeModel, shell: NativeShellModel) {
@@ -48,7 +51,7 @@ public struct HomeView: View {
                     .buttonStyle(.visionPrimary)
                 }
                 if model.isLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(40)
+                    PageCardsSkeleton(loadingLabel: strings.t("common.loading"))
                 } else if model.isFullPageError {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(model.errors["settings"] ?? model.errors["monthly"] ?? "").foregroundStyle(
@@ -70,6 +73,7 @@ public struct HomeView: View {
         .insightsWindowWidth($windowWidth)
         .task(id: shell.route.string + currency.rawValue + String(shell.settingsRevision)) { await reload() }
         .onAppear {
+            HomeArrival.played = true
             shell.setLeaveGuard(
                 NativeLeaveGuard(
                     id: InsightsRoutes.home,
@@ -364,7 +368,7 @@ public struct HomeView: View {
             if let worth = model.netWorth, worth.hasData {
                 MoneyText(
                     amount: worth.current.netWorth, currency: currency, settings: settings, signed: false,
-                    colored: false, rolling: true
+                    colored: false, rolling: rollsFigures
                 ).font(Font.visionTitle1)
                 netWorthChange(change: worth.monthlyChange, percent: worth.monthlyChangePercent)
                     .font(.footnote).monospacedDigit()
@@ -471,10 +475,14 @@ public struct HomeView: View {
         let months = Array((model.monthly?.orderedMonths ?? []).filter { $0.transaction_count > 0 }.suffix(12))
         let selected = months.first { $0.id == netSelection.wrappedValue } ?? months.last
         let net = selected.map { $0.total_income - abs($0.total_spending) } ?? 0
-        return card("dashboard.statCards", hero: net >= 0 ? .gain : .loss) {
+        // The card's tint and curve keep the latest month's sign while a past month is hovered,
+        // as the web `NetSummaryCard` does; only the figure, date and dot follow the pointer.
+        let latestNet = months.last.map { $0.total_income - abs($0.total_spending) } ?? 0
+        return card("dashboard.statCards", hero: latestNet >= 0 ? .gain : .loss) {
             Text(strings.t("dashboard.stat.lastMonthNet")).font(.body.weight(.medium)).foregroundStyle(
                 theme.secondaryLabel)
-            MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.visionLargeTitle)
+            MoneyText(amount: net, currency: currency, settings: settings, rolling: rollsFigures).font(
+                .visionLargeTitle)
             Text(selected?.id ?? strings.t("dashboard.stat.mostRecentMonth")).foregroundStyle(
                 theme.secondaryLabel)
             if let latest = months.last, latest.total_income > 0 {
@@ -485,6 +493,9 @@ public struct HomeView: View {
                             100 * (latest.total_income - abs(latest.total_spending)) / latest.total_income,
                             fractionDigits: 1, locale: settings.numberFormat.locale) + "%")
             }
+            HomeIncomeSpendingBar(
+                income: max(months.last?.total_income ?? 0, 0), spending: max(abs(months.last?.total_spending ?? 0), 0),
+                currency: currency, settings: settings, strings: strings)
             InsightTimelineChart(
                 series: [
                     InsightChartSeries(
@@ -496,7 +507,7 @@ public struct HomeView: View {
                 currency: currency, settings: settings,
                 title: strings.t("dashboard.stat.netTrend", ["n": String(months.count)]),
                 areas: true, stackedAreas: false, height: 80,
-                customColors: ["net": net >= 0 ? theme.gain : theme.loss], sparkline: true,
+                customColors: ["net": latestNet >= 0 ? theme.gain : theme.loss], sparkline: true,
                 selection: netSelection, rangeStart: netRange)
             routeRow(
                 strings.t("dashboard.stat.lastMonthIncome"),
@@ -603,7 +614,15 @@ public struct HomeView: View {
             action: ("home.recent.seeAll", "/transactions"), exclusion: "recentTransactions"
         ) {
             InsightsInsetList {
-                if rows.isEmpty {
+                if rows.isEmpty && model.isRecentPending {
+                    // Pending, not empty: hold the rows' space until the list answers.
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(0..<5, id: \.self) { _ in SkeletonBar(width: nil, height: 36) }
+                    }
+                    .padding(12)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(strings.t("common.loading"))
+                } else if rows.isEmpty {
                     HomeInsetRow(title: strings.t("dashboard.recentTransactions.empty"), settings: settings) {
                         HomeInsetGlyph(symbol: "receipt")
                     }
@@ -1002,4 +1021,58 @@ private struct HomeWidgetsSheet: View {
         .frame(width: 448)
         .foregroundStyle(theme.foreground)
     }
+}
+
+/// The web `NetSummaryCard`'s income-versus-spending split: a two-colour proportional bar (half
+/// and half when both are zero), read as one image with both amounts and shares.
+struct HomeIncomeSpendingBar: View {
+    let income: Decimal
+    let spending: Decimal
+    let currency: CurrencyCode
+    let settings: NativeAppSettings
+    let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
+
+    /// The income share in percent; 50 when there is nothing to split.
+    static func incomeShare(income: Decimal, spending: Decimal) -> Decimal {
+        let total = income + spending
+        return total > 0 ? income / total * 100 : 50
+    }
+
+    var body: some View {
+        let incomeShare = Self.incomeShare(income: income, spending: spending)
+        let spendingShare = 100 - incomeShare
+        let fraction = CGFloat(NSDecimalNumber(decimal: incomeShare / 100).doubleValue)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t("dashboard.stat.incomeVsSpending")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    Rectangle().fill(theme.gain).frame(width: geometry.size.width * fraction)
+                    Rectangle().fill(theme.loss)
+                }
+            }
+            .frame(height: 10)
+            .background(theme.foreground.opacity(0.08))
+            .clipShape(Capsule())
+            .accessibilityElement()
+            .accessibilityAddTraits(.isImage)
+            .accessibilityLabel(
+                [
+                    "\(strings.t("dashboard.stat.income")): \(amount(income)) (\(percent(incomeShare)))",
+                    "\(strings.t("dashboard.stat.spending")): \(amount(spending)) (\(percent(spendingShare)))",
+                ].joined(separator: "; "))
+        }
+    }
+
+    private func amount(_ value: Decimal) -> String {
+        MoneyText.text(value, currency: currency, settings: settings, signed: false)
+    }
+    private func percent(_ value: Decimal) -> String {
+        VisionFormat.percent(value, digits: 1, locale: settings.numberFormat.locale)
+    }
+}
+
+/// Whether this session's first dashboard visit has played its arrival.
+@MainActor enum HomeArrival {
+    static var played = false
 }

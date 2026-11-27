@@ -13,6 +13,8 @@ struct ResearchForecastChart: View {
     /// Range compare (`scrubbable`), led by the median.
     @State private var scrub = ChartScrub()
     @FocusState private var focused: Bool
+    /// The points' dates, parsed once per series for the hover lookup.
+    @State private var dateCache = ForecastDateCache()
     @Environment(\.visionTheme) private var theme
     init(points: [ResearchForecastPoint], currency: CurrencyCode, shell: NativeShellModel, isLoading: Bool) {
         self.points = points
@@ -200,12 +202,11 @@ struct ResearchForecastChart: View {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
     private func fullDate(_ day: String) -> String { VisionFormat.appDate(day, format: shell.settings.dateFormat) }
-    /// The point nearest a date.
+    /// The point nearest a date: the dates are parsed once per series and searched by bisection
+    /// (a scan when they are not ascending).
     private func nearest(_ hovered: Date) -> Int? {
-        points.indices.min {
-            abs((date(points[$0].date) ?? .distantPast).timeIntervalSince(hovered))
-                < abs((date(points[$1].date) ?? .distantPast).timeIntervalSince(hovered))
-        }
+        let prepared = dateCache.dates(for: points) { date($0) ?? .distantPast }
+        return ChartLinePlot.nearest(in: prepared.dates, ascending: prepared.ascending, to: hovered)
     }
     /// Every line as a range-compare series; the median leads.
     private var scrubSeries: [ChartScrubSeries] {
@@ -218,5 +219,20 @@ struct ResearchForecastChart: View {
     }
     private var scrubTimeline: String {
         "\(points.count):\(points.first?.date ?? ""):\(points.last?.date ?? "")"
+    }
+}
+
+/// `ResearchForecastChart`'s parsed point dates, rebuilt only when the points change.
+final class ForecastDateCache {
+    private var source: [String]?
+    private var cached: (dates: [Date], ascending: Bool) = ([], true)
+
+    func dates(for points: [ResearchForecastPoint], parse: (String) -> Date) -> (dates: [Date], ascending: Bool) {
+        let days = points.map(\.date)
+        if let source, source == days { return cached }
+        source = days
+        let dates = days.map(parse)
+        cached = (dates, ChartLinePlot.isAscending(dates))
+        return cached
     }
 }

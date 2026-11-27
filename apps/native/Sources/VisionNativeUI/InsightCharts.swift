@@ -284,6 +284,7 @@ struct InsightTimelineChart: View {
                 }
             }
             .visionChartYAxis(domain: domain, hidden: sparkline, label: yLabel)
+            .chartEntrance(sparkline ? nil : bars || stackedBars ? .grow : .sweep)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     let scrubSeries = plot.scrubSeries(primary: primary)
