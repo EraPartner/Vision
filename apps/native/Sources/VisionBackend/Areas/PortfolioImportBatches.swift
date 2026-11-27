@@ -394,7 +394,7 @@ enum PortfolioImportBatchesArea {
             let bulkDeleted = try session.rows(
                 "DELETE FROM portfolio_transactions WHERE import_batch_id = ? RETURNING id",
                 [.integer(Int64(id))])
-            let bulkDeletedIds = Set(bulkDeleted.map { String(try $0.int64("id")) })
+            let bulkDeletedIds = Set(try bulkDeleted.map { String(try $0.int64("id")) })
             var deleted = bulkDeleted.count + deletedTransfers + deletedAdjustments
 
             // Cash rows route at the ledger, never the portfolio table (brokerage only).
