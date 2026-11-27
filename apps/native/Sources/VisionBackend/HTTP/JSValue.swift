@@ -485,8 +485,20 @@ extension RequestBody {
     static func parseJavaScript(_ data: Data?) throws -> JSValue? {
         guard let data, !data.isEmpty else { return nil }
         let first = data.first { ![0x20, 0x09, 0x0A, 0x0D].contains($0) }
-        guard first == UInt8(ascii: "{") || first == UInt8(ascii: "[") else { throw malformed }
+        guard first == UInt8(ascii: "{") || first == UInt8(ascii: "[") else {
+            throw BackendHTTPError.validation(strictViolationMessage(data))
+        }
         guard let value = JSValue.parse(data) else { throw malformed }
         return value
+    }
+
+    /// body-parser's strict violation reports the JavaScript engine's own parse error for
+    /// the body with its first non-whitespace character spliced into the message in place of
+    /// the offending token: `JSON Parse error: Unrecognized token '<c>'`.
+    static func strictViolationMessage(_ data: Data) -> String {
+        let text = String(decoding: data, as: UTF8.self)
+        guard let index = text.unicodeScalars.firstIndex(where: { !JavaScriptWhitespace.contains($0) })
+        else { return malformed.message }
+        return "JSON Parse error: Unrecognized token '\(text.unicodeScalars[index])'"
     }
 }
