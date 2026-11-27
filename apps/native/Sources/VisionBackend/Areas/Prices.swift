@@ -432,13 +432,14 @@ enum PricesArea {
             quotes[symbol] = quote
             resolved.insert(symbol)
         }
-        for symbol in ids.compactMap({ $0 }) where !resolved.contains(symbol) {
+        let unresolved = ids.compactMap({ $0 }).filter { !resolved.contains($0) }
+        let closes = await forEachConcurrent(unresolved) { symbol -> Found<String, PriceProviders.Quote>? in
             let payload = try? await service.yahoo.chart(
                 symbol: symbol, period1Ms: now - 5 * PriceHistory.dayMs, period2Ms: nil, nowMs: now)
-            if let close = PriceProviders.yahooLatestClose(payload), PriceHistory.isValid(close) {
-                quotes[symbol] = PriceProviders.Quote(price: close, currency: "USD", source: .close)
-            }
+            guard let close = PriceProviders.yahooLatestClose(payload), PriceHistory.isValid(close) else { return nil }
+            return Found(key: symbol, value: PriceProviders.Quote(price: close, currency: "USD", source: .close))
         }
+        for close in closes { quotes[close.key] = close.value }
         return quotes
     }
 
@@ -446,7 +447,7 @@ enum PricesArea {
     /// fallbacks, keyed by investment id. Every failure is swallowed to the registry's log.
     static func customQuotes(over bucket: [Investment], service: PricesService) async -> [Int: Double] {
         var prices: [Int: Double] = [:]  // lint:allow raw-id investment ids, as above
-        for investment in bucket {
+        let found = await forEachConcurrent(bucket) { investment -> Found<Int, Double>? in  // lint:allow raw-id as above
             let latest = PriceProviders.customLatest(investment.settings)
             let history = PriceProviders.customHistory(investment.settings)
             var price: Double?
@@ -473,10 +474,10 @@ enum PricesArea {
                     }
                 }
             }
-            if let price, PriceHistory.isValid(price) {
-                prices[investment.id] = price
-            }
+            guard let price, PriceHistory.isValid(price) else { return nil }
+            return Found(key: investment.id, value: price)
         }
+        for entry in found { prices[entry.key] = entry.value }
         return prices
     }
 
@@ -486,40 +487,74 @@ enum PricesArea {
         over bucket: [Investment], service: PricesService, database: BackendDatabase
     ) async -> [Int: PriceProviders.Quote] {  // lint:allow raw-id investment ids, as above
         var prices: [Int: PriceProviders.Quote] = [:]  // lint:allow raw-id as above
-        var latestRates: [String: DecimalJS]? = [:]
-        for investment in bucket {
+        let found = await forEachConcurrent(bucket) { investment -> Found<Int, PriceProviders.Quote>? in  // lint:allow raw-id as above
             let config = PriceProviders.kinesis(
                 investment.settings,
                 defaultTimeframe: kinesisDefaultTimeframe, defaultFromDate: kinesisDefaultFromDate)
             guard !config.symbol.isEmpty,
                 let url = URL(
                     string: "\(kinesisBase)?symbolIds=\(requestEncoded(config.symbol))&timeFrame=\(SQLArguments.javaScriptText(config.timeframe))&fromDate=\(config.fromDate)")
-            else { continue }
+            else { return nil }
             guard let response = try? await service.fetcher.get(url, timeout: timeouts.kinesis),
                 response.ok,
                 let payload = JSValue.parse(response.body)
-            else { continue }
+            else { return nil }
             guard let usdPrice = PriceProviders.kinesisLatest(payload, symbol: config.symbol),
                 PriceHistory.isValid(usdPrice)
-            else { continue }
+            else { return nil }
 
             let currency = AccountsArea.storedCurrencyCode(investment.currency)
             var price = usdPrice
             if config.needsUsdToEur && currency != "USD" {
-                if latestRates?.isEmpty ?? true {
-                    latestRates = (try? await database.run { session in
-                        try AccountsArea.latestRatesToEur(session)
-                    }) ?? [:]
-                }
-                guard let rates = latestRates, let converted = latestConvert(1, "USD", currency, rates)
-                else { continue }  // Without a stored rate the quote is skipped, never stored 1:1
+                // `loadLatestRatesToEur()` at the moment of conversion, as the TypeScript reads it.
+                let rates = (try? await database.run { session in
+                    try AccountsArea.latestRatesToEur(session)
+                }) ?? [:]
+                // The quote itself converts; without a stored rate it is skipped, never stored 1:1.
+                guard let converted = latestConvert(usdPrice, "USD", currency, rates) else { return nil }
                 price = converted
             }
-            if PriceHistory.isValid(price) {
-                prices[investment.id] = PriceProviders.Quote(price: price, currency: currency, source: .live)
-            }
+            guard PriceHistory.isValid(price) else { return nil }
+            return Found(key: investment.id, value: PriceProviders.Quote(price: price, currency: currency, source: .live))
         }
+        for entry in found { prices[entry.key] = entry.value }
         return prices
+    }
+
+    /// One provider answer, keyed by the investment id or symbol it prices.
+    struct Found<Key: Sendable, Value: Sendable>: Sendable {
+        let key: Key
+        let value: Value
+    }
+
+    /// `PROVIDER_FETCH_CONCURRENCY` of `priceProviderRegistry.ts`.
+    static let providerFetchConcurrency = 6
+
+    /// `forEachConcurrent(items, PROVIDER_FETCH_CONCURRENCY, ...)`: at most `limit` bodies run
+    /// at once, so one unreachable provider costs one timeout per slot, not per holding. The
+    /// answers come back in completion order; callers key them by id or symbol.
+    static func forEachConcurrent<Item: Sendable, Answer: Sendable>(
+        _ items: [Item], limit: Int = providerFetchConcurrency,
+        _ body: @escaping @Sendable (Item) async -> Answer?
+    ) async -> [Answer] {
+        await withTaskGroup(of: Answer?.self) { group in
+            var answers: [Answer] = []
+            var next = 0
+            while next < items.count && next < limit {
+                let item = items[next]
+                group.addTask { await body(item) }
+                next += 1
+            }
+            while let answer = await group.next() {
+                if let answer { answers.append(answer) }
+                if next < items.count {
+                    let item = items[next]
+                    group.addTask { await body(item) }
+                    next += 1
+                }
+            }
+            return answers
+        }
     }
 
     /// `convertCodeAtLatestRates(...).toNumber()` through the stored latest rates.
@@ -542,9 +577,10 @@ enum PricesArea {
         var current = url
         for hop in 0...3 {
             try await service.fetcher.preflight()
-            _ = try URLSafety.assertPublicHTTP(current, resolve: service.fetcher.resolve)
+            let fetcher = service.fetcher
+            _ = try URLSafety.assertPublicHTTP(current, resolve: { try fetcher.resolve($0) })
             guard let fetchURL = URL(string: current),
-                let response = try? await service.fetcher.get(fetchURL, timeout: timeouts.custom)
+                let response = try? await service.fetcher.getWithoutRedirects(fetchURL, timeout: timeouts.custom)
             else { throw UpstreamError(message: "fetch failed: \(current)") }
             if (300..<400).contains(response.status) {
                 guard let location = response.headers["location"] else {
@@ -886,10 +922,12 @@ enum PricesArea {
         return index
     }
 
-    /// `findRateOnOrBeforeInIndex`: the rate on or before `day`, nil when none exists.
+    /// `findRateOnOrBeforeInIndex`: the rate on or before `day`, nil when none exists. EUR is
+    /// the index's base and always 1, as `searchRateIndex` answers it.
     static func findRate(
         _ index: [String: [(day: String, rate: Double)]], _ currency: String, _ day: String
     ) -> Double? {
+        if currency == "EUR" { return 1 }  // lint:allow string-literal-compare the fixed base currency of the FX index
         guard let entries = index[currency] else { return nil }
         var lo = 0
         var hi = entries.count - 1
