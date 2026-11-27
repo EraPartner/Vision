@@ -202,6 +202,10 @@ enum PortfolioTaxDashboard {
         var brokerFees = 0.0
         var managementFees = 0.0
         var otherFees = 0.0
+        // The taxes on a tax row and the fees on a fee row count in the totals as well as the
+        // row's amount; the breakdown adds them after the loop (Astra report 1, finding 19).
+        var taxRowTaxes = 0.0
+        var feeRowFees = 0.0
         for investment in summaries {
             for transaction in try transactions(investment) where isYear(transaction, year) {
                 let currency = transaction.text("currency")
@@ -219,6 +223,7 @@ enum PortfolioTaxDashboard {
                     transactionTax += taxes
                 } else if isType(transaction, "tax") {
                     otherTaxes += convertBreakdowns(Self.number(transaction["amount"]), currency)
+                    if taxes > 0 { taxRowTaxes += taxes }
                 } else if taxes > 0 {
                     otherTaxes += taxes
                 }
@@ -227,11 +232,14 @@ enum PortfolioTaxDashboard {
                     brokerFees += fees
                 } else if isType(transaction, "fee") {
                     managementFees += convertBreakdowns(Self.number(transaction["amount"]), currency)
+                    if fees > 0 { feeRowFees += fees }
                 } else if fees > 0 {
                     otherFees += fees
                 }
             }
         }
+        otherTaxes += taxRowTaxes
+        managementFees += feeRowFees
 
         var assetClasses: [String] = []
         var byAsset: [String: (taxes: Double, fees: Double)] = [:]

@@ -457,6 +457,9 @@ public struct PortfolioCashFeeAccount: Codable, Equatable, Sendable {
 }
 
 public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
+    /// Whether any holding was ever sold. A total realized gain of 0 does not tell: a sale at
+    /// cost, or gains and losses that cancel, also sum to 0 (Astra report 1, finding 64).
+    public var hasSales: Bool { summaries.contains { $0.totalSellProceeds > 0 } }
     public let currency: CurrencyCode
     public let computedAt: String
     public let totals: PortfolioTotals
@@ -672,6 +675,13 @@ public struct PortfolioPerformanceBreakdown: Codable, Equatable, Sendable, Ident
 }
 
 public struct PortfolioPerformanceData: Codable, Equatable, Sendable {
+    /// Whether the metrics' inflation figures rest on inflation data: the latest snapshot has
+    /// an inflation-adjusted value. A measured 0% inflation is data too (Astra report 1,
+    /// finding 63); without data the server reports 0% and a -100% real return.
+    public var hasInflationData: Bool {
+        guard let last = snapshots.last else { return false }
+        return last.inflationAdjustedValue > 0 && last.value > 0
+    }
     public let currency: CurrencyCode
     public let startDate: String
     public let endDate: String

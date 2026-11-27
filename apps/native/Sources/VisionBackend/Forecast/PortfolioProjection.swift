@@ -38,6 +38,21 @@ enum PortfolioProjection {
     struct Snapshot: Equatable, Sendable {
         let value: Double
         let invested: Double
+        /// `snapshot_date`; when every snapshot has one, the returns are scaled from the
+        /// observed spacing to trading days (Astra report 1, finding 17).
+        var date: String? = nil
+    }
+
+    /// How many trading days one snapshot interval stands for: 1 on a trading-day history,
+    /// about 1.45 on a calendar-day one. 1 when the dates are missing or unreadable.
+    static func observationScale(_ snapshots: [Snapshot]) -> Double {
+        guard snapshots.count > 1, let first = snapshots.first?.date, let last = snapshots.last?.date,
+            snapshots.allSatisfy({ $0.date != nil }),
+            let start = try? CalendarDays.epochDay(first), let end = try? CalendarDays.epochDay(last), end > start
+        else { return 1 }
+        let perYear = Double(snapshots.count - 1) / Double(end - start) * 365.25
+        let scale = perYear / tradingDaysPerYear
+        return scale.isFinite && scale > 0 ? scale : 1
     }
 
     /// What the research providers answered for one symbol; nil where a provider had nothing.
@@ -211,8 +226,9 @@ enum PortfolioProjection {
                 ("historyDays", .number(Double(logReturns.count))),
             ])
         }
-        let historicalDailyDrift = mean(logReturns)
-        let dailyVolatility = standardDeviation(logReturns)
+        let scale = observationScale(snapshots)
+        let historicalDailyDrift = mean(logReturns) * scale
+        let dailyVolatility = standardDeviation(logReturns) * scale.squareRoot()
 
         var blendedDailyDrift = historicalDailyDrift
         var forwardHoldings: [Forward] = []
@@ -248,7 +264,7 @@ enum PortfolioProjection {
 
         let monthlyDrift = blendedDailyDrift * tradingDaysPerMonth
         let monthlyVolatility = dailyVolatility * tradingDaysPerMonth.squareRoot()
-        let residuals = method == "block_bootstrap" ? logReturns.map { $0 - historicalDailyDrift } : nil
+        let residuals = method == "block_bootstrap" ? logReturns.map { ($0 * scale - historicalDailyDrift) / scale.squareRoot() } : nil
 
         var random = ForecastRandom(.text(seed))
         var monthValues = [[Double]](repeating: [Double](repeating: 0, count: pathCount), count: horizon)

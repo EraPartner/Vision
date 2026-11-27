@@ -49,6 +49,7 @@ public final class PortfolioEditingModel {
     @ObservationIgnored private var investmentBaseline: PortfolioInvestmentDraft?
     @ObservationIgnored private var tradeBaseline: PortfolioTradeDraft?
     @ObservationIgnored private var createdInvestmentId: InvestmentID?
+    @ObservationIgnored private var abandonTask: Task<Void, Never>?
     @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored private var loadedProviders = false
     @ObservationIgnored private var retagKeys: [String: String] = [:]
@@ -100,7 +101,7 @@ public final class PortfolioEditingModel {
         guard !isSaving, !isMutating else { return }
         investmentDraft = .init(settings: settings, today: today, allowedAssetClasses: allowedAssetClasses)
         investmentBaseline = investmentDraft
-        createdInvestmentId = nil
+        abandonCreatedInvestment()
         open(.investment)
     }
     public func beginEditInvestment(investment: PortfolioInvestment) {
@@ -109,7 +110,7 @@ public final class PortfolioEditingModel {
             investmentDraft = .init(investment: investment, settings: settings)
             investmentBaseline = investmentDraft
         }
-        createdInvestmentId = nil
+        abandonCreatedInvestment()
         open(.investment)
     }
     public func beginAddTransaction(investment: PortfolioInvestment, bookingCurrency: CurrencyCode) {
@@ -134,7 +135,7 @@ public final class PortfolioEditingModel {
         if investmentDraft?.isEditing == false && presentation == .investment {
             investmentDraft = nil
             investmentBaseline = nil
-            createdInvestmentId = nil
+            abandonCreatedInvestment()
         }
         presentation = nil
         issue = nil
@@ -154,10 +155,25 @@ public final class PortfolioEditingModel {
         tradeDraft = nil
         investmentBaseline = nil
         tradeBaseline = nil
-        createdInvestmentId = nil
+        abandonCreatedInvestment()
         issue = nil
         error = nil
     }
+    /// A holding created for an initial purchase that was never recorded is removed when its
+    /// dialog closes, so a rejected purchase leaves no empty holding (Astra report 1, finding 8).
+    private func abandonCreatedInvestment() {
+        guard let id = createdInvestmentId else { return }
+        createdInvestmentId = nil
+        let previous = abandonTask
+        abandonTask = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            try? await service.portfolioDeleteInvestment(id: id)
+            await onChanged?()
+        }
+    }
+    /// Waits for the removal of an abandoned holding to finish.
+    func settleAbandonedInvestment() async { await abandonTask?.value }
     public func attachNotices(_ center: NativeNoticeCenter) {
         notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }

@@ -160,7 +160,15 @@ enum PriceProviders {
         guard case .array(let rows)? = read(data, config.historyPath) else { return [] }
         var points: [PricePoint] = []
         for row in rows {
-            let timestamp = read(row, config.timestampPath)?.javaScriptNumber ?? .nan
+            // Only a number or a numeric text is a date; `Number(null)`, `Number("")` and
+            // `Number(false)` are 0, which is 1 January 1970 (Astra report 1, finding 62).
+            let stamp = read(row, config.timestampPath)
+            let timestamp: Double
+            switch stamp {
+            case .number(let value)?: timestamp = value
+            case .string(let text)? where !BankImportText.trim(text).isEmpty: timestamp = stamp?.javaScriptNumber ?? .nan
+            default: timestamp = .nan
+            }
             let price = read(row, config.pricePath)?.javaScriptNumber ?? .nan
             if timestamp.isFinite, price.isFinite, price > 0 { points.append(PricePoint(timestampMs: timestamp, price: price)) }
         }
@@ -291,10 +299,23 @@ enum PriceProviders {
             if !text.isEmpty, parsed.isFinite, parsed > 0, symbol != "__proto__" { prices[Array(symbol.utf16)] = parsed }
         }
         return symbols.compactMap { symbol in
-            prices[Array(symbol.utf16)].map {
-                (symbol, Quote(price: $0, currency: symbol.utf16.suffix(3).elementsEqual("EUR".utf16) ? "EUR" : "USD", source: .live))
-            }
+            guard let price = prices[Array(symbol.utf16)], let currency = binanceQuoteCurrency(symbol) else { return nil }
+            return (symbol, Quote(price: price, currency: currency, source: .live))
         }
+    }
+
+    /// USD stablecoins a Binance pair can be quoted in, longest first.
+    private static let binanceDollarQuotes = ["FDUSD", "USDT", "USDC", "BUSD", "TUSD", "USDP", "USD"]
+    /// Fiat currencies a Binance pair can be quoted in.
+    private static let binanceFiatQuotes = [
+        "EUR", "GBP", "TRY", "BRL", "AUD", "JPY", "PLN", "RON", "ZAR", "MXN", "ARS", "UAH", "IDR", "CZK", "COP",
+    ]
+
+    /// The currency of a Binance pair's price: its fiat quote, USD for a dollar stablecoin, and
+    /// nil for a crypto quote such as `ETHBTC`, which is not a currency (Astra report 1, finding 37).
+    static func binanceQuoteCurrency(_ symbol: String) -> String? {
+        if binanceDollarQuotes.contains(where: { symbol.hasSuffix($0) && symbol.count > $0.count }) { return "USD" }
+        return binanceFiatQuotes.first { symbol.hasSuffix($0) && symbol.count > $0.count }
     }
 
     /// A `z.number()` leaf of the tolerant Yahoo schemas: a finite number, or absent.

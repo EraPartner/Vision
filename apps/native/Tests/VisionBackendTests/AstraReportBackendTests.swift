@@ -109,4 +109,92 @@ import VisionNativeCore
         // The €120 manual fee is ¥12,000.
         #expect(figure(try dashboard("JPY", gain: 0), "totals", "totalManualFees") == 12000)
     }
+
+    /// Finding 17: a 10% year on a calendar-day history annualizes to 10%, not about 6.8%.
+    @Test func calendarDayHistoriesAnnualizeOverTheYear() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let start = try #require(calendar.date(from: DateComponents(year: 2025, month: 1, day: 1)))
+        let snapshots = try (0...365).map { day -> PortfolioProjection.Snapshot in
+            let parts = calendar.dateComponents(
+                [.year, .month, .day], from: try #require(calendar.date(byAdding: .day, value: day, to: start)))
+            let text = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+            // A little noise keeps the volatility finite; the year still ends 10% up.
+            let wobble: Double = day == 0 || day == 365 ? 1 : (day.isMultiple(of: 2) ? 1.001 : 0.999)
+            return .init(value: 1000 * pow(1.1, Double(day) / 365) * wobble, invested: 1000, date: text)
+        }
+        let undated = snapshots.map { PortfolioProjection.Snapshot(value: $0.value, invested: $0.invested) }
+        #expect(abs(PortfolioProjection.observationScale(snapshots) - 365.25 / 252) < 0.0001)
+        #expect(PortfolioProjection.observationScale(undated) == 1)
+        let summary = PortfolioProjection.Summary(
+            totalPortfolioValue: snapshots.last!.value, totalInvested: 1000, holdings: [])
+        let result = try PortfolioProjection.run(
+            .init(horizonMonths: 12, paths: 100, seed: "astra"), summary: summary, snapshots: snapshots,
+            today: "2026-01-01")
+        let annual = result["historicalAnnualReturn"]?.javaScriptNumber ?? .nan
+        #expect(abs(annual - 0.1) < 0.002)
+    }
+
+    /// One IBKR Transaction History statement with the given data rows, in euros.
+    static func ibkr(_ rows: [String]) throws -> ParsedPortfolioRows {
+        let header =
+            "Transaction History,Header,Date,Account,Description,Transaction Type,Symbol,Quantity,Price,"
+            + "Price Currency,Gross Amount,Commission,Net Amount,Exchange Rate,Transaction Fees,Sub Type,Multiplier"
+        let text = (["Summary,Data,Base Currency,EUR", header] + rows.map { "Transaction History,Data," + $0 })
+            .joined(separator: "\n") + "\n"
+        var config = PortfolioParserConfig()
+        config.format = .ibkrTransactionHistory
+        return try PortfolioAdapters.parse(Array(text.utf8), config)
+    }
+
+    /// Finding 26: two contracts at 3 with a multiplier of 100 are a 600 principal.
+    @Test func ibkrContractsKeepTheirMultiplier() throws {
+        let rows = try Self.ibkr(["2026-01-02,U1,Option buy,Buy,OPT,2,3,EUR,-600,-1,-601,1,-,-,100"]).rows
+        #expect(rows.count == 1)
+        #expect(rows.first?.units == 200 && rows.first?.pricePerUnit == 3)
+    }
+
+    /// Finding 27: a euro commission on a yen trade without a rate is held, not relabelled yen.
+    @Test func ibkrCommissionWithoutARateIsHeld() throws {
+        let rows = try Self.ibkr(["2026-01-02,U1,Yen buy,Buy,JPX,1,1000,JPY,-,-2,-,-,-,-,1"]).rows
+        #expect(rows.count == 1)
+        #expect(rows.first?.typeRaw.hasPrefix("Unsupported IBKR event") == true)
+        #expect(rows.first?.fees == nil)
+    }
+
+    /// Finding 37: a pair quoted in another crypto asset has no currency, so it gets no quote.
+    @Test func binancePairsAreLabelledByTheirQuote() {
+        let payload = JSValue.array([
+            .object(JSObject([("symbol", .string("ETHBTC")), ("price", .string("0.05"))])),
+            .object(JSObject([("symbol", .string("ETHEUR")), ("price", .string("3000"))])),
+            .object(JSObject([("symbol", .string("ETHUSDC")), ("price", .string("3300"))])),
+            .object(JSObject([("symbol", .string("ETHGBP")), ("price", .string("2600"))])),
+        ])
+        let quotes = PriceProviders.binanceQuotes(payload, ids: ["ETHBTC", "ETHEUR", "ETHUSDC", "ETHGBP"])
+        #expect(quotes.map(\.symbol) == ["ETHEUR", "ETHUSDC", "ETHGBP"])
+        #expect(quotes.map(\.quote.currency) == ["EUR", "USD", "GBP"])
+    }
+
+    /// Finding 62: a row without a date is dropped, not dated 1 January 1970.
+    @Test func customHistoryRowsNeedADate() {
+        let data = JSValue.array([
+            .object(JSObject([("timestamp_ms", .null), ("price", .number(125))])),
+            .object(JSObject([("timestamp_ms", .string(" ")), ("price", .number(126))])),
+            .object(JSObject([("timestamp_ms", .number(1_767_225_600_000)), ("price", .number(130))])),
+        ])
+        let points = PriceProviders.customPoints(
+            data, .init(historyURL: "https://example.com", historyPath: "", timestampPath: "timestamp_ms", pricePath: "price"))
+        #expect(points.map(\.price) == [130])
+    }
+
+    /// Finding 38: `date1904="true"` is the 1904 date system, as `"1"` is.
+    @Test func workbookDateSystemReadsBooleanText() throws {
+        func epoch(_ flag: String) throws -> Bool {
+            try XLSXWorkbook.workbookInfo(
+                Array("<workbook><workbookPr date1904=\"\(flag)\"/><sheets/></workbook>".utf16)
+            ).epoch1904
+        }
+        #expect(try epoch("true") && epoch("1"))
+        #expect(try !epoch("false") && !epoch("0"))
+    }
 }

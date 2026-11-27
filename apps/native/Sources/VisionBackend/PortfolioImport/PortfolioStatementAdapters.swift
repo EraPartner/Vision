@@ -417,6 +417,17 @@ enum IbkrTransactionHistory {
             return row
         }
         let baseFees = (magnitude(record["Commission"]) ?? 0) + (magnitude(record["Transaction Fees"]) ?? 0)
+        if isTrade, baseFees > 0, !priceCurrency.isEmpty, !Text.same(priceCurrency, baseCurrency),
+            exportedRate == nil || exportedRate == 0
+        {
+            // A base-currency commission cannot be put in the trade's currency without a rate
+            // (Astra report 1, finding 27), so the row is held for review rather than relabelled.
+            row.typeRaw = "Unsupported IBKR event: \(originalType)"
+            row.amount = magnitude(record["Gross Amount"])
+            row.note =
+                "IBKR \(originalType) of \(clean(record["Quantity"])) @ \(clean(record["Price"])) has a \(baseCurrency) commission but no Exchange Rate to \(priceCurrency); add the rate before importing"
+            return row
+        }
         if isTrade, baseFees > 0, let exportedRate, exportedRate != 0 {
             // Both fee columns are base-currency amounts; a trade stores fees in its own currency.
             row.fees = baseFees / exportedRate
@@ -424,7 +435,12 @@ enum IbkrTransactionHistory {
             row.fees = baseFees
         }
         row.typeRaw = typeRaw
-        row.units = magnitude(record["Quantity"])
+        // A contract stands for Multiplier underlying units, so the units are quantity ×
+        // multiplier and units × price is the principal (Astra report 1, finding 26).
+        let multiplier = magnitude(record["Multiplier"]).flatMap { $0 > 0 ? $0 : nil } ?? 1
+        row.units = try magnitude(record["Quantity"]).map {
+            isTrade && multiplier != 1 ? try DecimalJS($0).times(try DecimalJS(multiplier)).toNumber : $0
+        }
         row.pricePerUnit = magnitude(record["Price"])
         // A trade's total is a base-currency value, so its amount is left to units × price.
         row.amount = isTrade ? nil : magnitude(record["Gross Amount"])

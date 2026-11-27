@@ -244,6 +244,22 @@ struct PortfolioEditingModelTests {
         #expect(await service.createdTradeInvestmentIds == [71, 71])
         #expect(model.presentation == nil)
     }
+    /// Astra report 1, finding 8: closing the dialog after a rejected purchase removes the holding.
+    @Test func aRejectedInitialPurchaseLeavesNoEmptyHolding() async {
+        let service = EditingFixtureService()
+        await service.failFirstTrade()
+        let model = PortfolioEditingModel(service: service)
+        model.configure(settings: .init(numberFormat: .us))
+        model.beginAddInvestment(allowedAssetClasses: [.stock])
+        model.investmentDraft?.name = "Synthetic holding"
+        model.investmentDraft?.initialAmount = "100"
+        model.investmentDraft?.initialUnits = "2"
+        #expect(await model.saveEditor(strings: strings) == false)
+        #expect(await service.deletedInvestmentIds.isEmpty)
+        model.cancelEditor()
+        await model.settleAbandonedInvestment()
+        #expect(await service.deletedInvestmentIds == [71])
+    }
     @Test func dirtyEditAndTradeDraftsSurviveDismissalAndPristineDraftsReseed() throws {
         let model = PortfolioEditingModel(service: EditingFixtureService())
         let raw = try editingInvestment()
@@ -497,6 +513,7 @@ private func editingBroker(id: Int, active: Bool = true) -> OpenAPI.Account {
 private actor EditingFixtureService: PortfolioEditingService {
     var createdInvestmentCalls = 0
     var createdTradeInvestmentIds: [InvestmentID] = []
+    var deletedInvestmentIds: [InvestmentID] = []
     var retags: [PortfolioEditingPayload] = []
     private var tradeFails = false
     private var retagFails = false
@@ -542,6 +559,7 @@ private actor EditingFixtureService: PortfolioEditingService {
     }
     func portfolioDeleteInvestment(id: InvestmentID) async throws {
         if deleteFails { throw APIError.backendUnavailable }
+        deletedInvestmentIds.append(id)
     }
     func portfolioCreateTransaction(investmentId: InvestmentID, payload: PortfolioEditingPayload) async throws
         -> PortfolioTransaction
