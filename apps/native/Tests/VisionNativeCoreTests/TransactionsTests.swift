@@ -743,16 +743,25 @@ extension TransactionPatch {
         #expect(model.actionIsUndo)
         let notice = try #require(model.notice)
         #expect(model.duration(of: notice) == TransactionsModel.undoDuration)
+        // Astra report 1, finding 1: the DELETE waits for the Undo window, so Undo puts the
+        // same row back (splits and attachments included) without recreating it.
+        #expect(await service.deleted.isEmpty)
         await model.performPendingAction()
-        #expect(await service.created.count == 1)
-        #expect(await service.created.first?.recipientId == 2)
+        #expect(await service.deleted.isEmpty)
+        #expect(await service.created.isEmpty)
         #expect(model.notice?.key == "transactions.restored")
-        #expect(model.rows?.count == 3)
+        #expect(model.rows?.map(\.id) == [1, 2, 3])
+        // Once flushed, the DELETE is sent.
+        model.requestDelete(try #require(model.row(2)))
+        await model.confirmDelete()
+        await model.flushDeferredDeletes()
+        #expect(await service.deleted == [2])
         // A failed delete puts the row back where it was.
         await service.failDeletes(true)
         let second = try #require(model.rows?[1])
         model.requestDelete(second)
         await model.confirmDelete()
+        await model.flushDeferredDeletes()
         #expect(model.rows?[1].id == second.id)
         #expect(model.notice?.key == "transactions.deleteFailedTitle")
     }
@@ -792,15 +801,19 @@ extension TransactionPatch {
         #expect(await service.queries.count == reads)
     }
 
-    @Test func aRowWithoutAnAccountIsDeletedWithoutUndo() async throws {
+    @Test func aRowWithoutAnAccountCanStillBeUndone() async throws {
         let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, accountId: nil)])
         let (model, shell) = try await TxFixture.opened(service)
         defer { withExtendedLifetime(shell) {} }
         model.requestDelete(try #require(model.row(1)))
         await model.confirmDelete()
         #expect(model.notice?.key == "transactions.deleted")
-        #expect(model.pendingAction == nil)
         #expect(model.emptyState == .noTransactions)
+        // The held delete makes Undo work even for a row the create contract cannot rebuild.
+        #expect(model.actionIsUndo)
+        await model.performPendingAction()
+        #expect(model.row(1) != nil)
+        #expect(await service.created.isEmpty)
     }
 
     @Test func theInspectorFollowsTheSelectionAndFocusReturns() async throws {

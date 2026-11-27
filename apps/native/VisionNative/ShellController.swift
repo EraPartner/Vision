@@ -2091,6 +2091,8 @@ final class ShellController: NSObject, NSWindowDelegate {
     }
 
     private func drainNativeLocalWrites(_ model: NativeShellModel) async {
+        // A transaction delete still held for its Undo window reaches the server.
+        await model.transactions.flushDeferredDeletes()
         await model.commandPalette?.flushRecents()
         await model.onboarding?.flushDraft()
         await model.shellNotifications?.flushStorage()
