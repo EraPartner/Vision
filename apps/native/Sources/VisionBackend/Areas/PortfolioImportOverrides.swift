@@ -524,15 +524,17 @@ enum PortfolioImportOverridesArea {
 
     static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
         backend.serve(OpenAPIOperations.PortfolioImportRowsInvestmentOverride.self) { request in
-            let batchId = try PortfolioImportBatchesArea.batchId(request)
+            // express.json() rejects a malformed body before the route runs, so the
+            // body parses before the ids.
             let body = try PortfolioImportOverridesArea.bulkBody(request)
+            let batchId = try PortfolioImportBatchesArea.batchId(request)
             return try await database.run { session in
                 try PortfolioImportOverridesArea.resolveRows(session, batch: batchId, body)
             }
         }
         backend.serve(OpenAPIOperations.PortfolioImportRowInvestmentOverride.self) { request in
-            let ids = try ImportReviewArea.batchRowIds(request)
             let body = try PortfolioImportOverridesArea.body(request)
+            let ids = try ImportReviewArea.batchRowIds(request)
             return try await database.run { session in
                 try PortfolioImportOverridesArea.overrideRow(
                     session, batch: ids.batch, row: ids.row, body)
