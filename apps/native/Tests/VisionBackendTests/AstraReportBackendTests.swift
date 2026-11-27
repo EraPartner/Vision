@@ -328,4 +328,31 @@ import VisionNativeCore
         let points = ForecastEnsemble.forecast(dates: ["2026-01-02"], outputs: outputs, weights: [("ewma", 1)])
         #expect(points == [ForecastPoint(date: "2026-01-02", value: 125)])
     }
+
+    /// Finding 20: an impossible bank date is no date instead of rolling into the next month.
+    @Test func anImpossibleBankDateIsRejected() {
+        #expect(BankImportText.flexibleDay("2026-02-30") == nil)
+        #expect(BankImportText.flexibleDay("2026-13-01") == nil)
+        #expect(BankImportText.flexibleDay("2024-02-29") != nil)
+    }
+
+    /// Finding 30: two numeric texts compare as numbers; other text keeps text order.
+    @Test func numericTextComparesAsNumbers() throws {
+        #expect(try FormulaSemantics.compare(.json(.string("10")), .greater, .json(.string("2"))) == true)
+        #expect(try FormulaSemantics.compare(.json(.string("2.0")), .equal, .json(.string("2"))) == true)
+        #expect(try FormulaSemantics.compare(.json(.string("b")), .greater, .json(.string("a"))) == true)
+    }
+
+    /// Finding 48: after selling €600 of €1,000 at cost, a flat €400 portfolio is measured
+    /// against its remaining €400 cost, not the €1,000 ever bought.
+    @Test func theForecastBaselineIsTheRemainingCostBasis() throws {
+        let snapshots = (0..<60).map { _ in PortfolioProjection.Snapshot(value: 400, invested: 400) }
+        let input = PortfolioProjection.Input(horizonMonths: 6, paths: 50, seed: "astra-48")
+        var summary = PortfolioProjection.Summary(totalPortfolioValue: 400, totalInvested: 1000, holdings: [])
+        let gross = try PortfolioProjection.run(input, summary: summary, snapshots: snapshots, today: "2026-01-01")
+        summary.totalUnrealizedGain = 0
+        let remaining = try PortfolioProjection.run(input, summary: summary, snapshots: snapshots, today: "2026-01-01")
+        #expect(gross["probBelowInvested"]?.javaScriptNumber == 1)
+        #expect(remaining["probBelowInvested"]?.javaScriptNumber == 0)
+    }
 }

@@ -33,6 +33,13 @@ enum PortfolioProjection {
         /// `Number(totals.totalInvested)`; NaN when absent.
         let totalInvested: Double
         let holdings: [Holding]
+        /// `Number(totals.totalUnrealizedGain)`; NaN when absent.
+        var totalUnrealizedGain: Double = .nan
+
+        /// What the holdings still cost: the value less the unrealized gain. Sales take their
+        /// share of the cost out, where `totalInvested` keeps every purchase (Astra report 1,
+        /// finding 48). NaN when the gain is absent.
+        var remainingCostBasis: Double { totalPortfolioValue - totalUnrealizedGain }
     }
 
     struct Snapshot: Equatable, Sendable {
@@ -216,7 +223,10 @@ enum PortfolioProjection {
 
         let startValue = summary.totalPortfolioValue.isNaN ? 0 : summary.totalPortfolioValue
         guard startValue > 0 else { return JSObject([("available", .bool(false)), ("reason", .string("no_holdings"))]) }
-        let startInvested = summary.totalInvested > 0 ? summary.totalInvested : startValue
+        let remaining = summary.remainingCostBasis
+        let startInvested =
+            remaining.isFinite && remaining > 0
+            ? remaining : summary.totalInvested > 0 ? summary.totalInvested : startValue
 
         let (logReturns, flowArtifactDays) = flowAdjustedLogReturns(
             snapshots.map(\.value), invested: snapshots.map(\.invested))
