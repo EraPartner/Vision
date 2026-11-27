@@ -40,6 +40,7 @@ public enum PortedOperations {
         "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch",
         "previewPortfolioImportBatch",
         "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride",
+        "previewPortfolioImportReconciliation",
     ]
 }
 
@@ -177,6 +178,7 @@ public struct InProcessBackend: Sendable {
         ImportParsersArea.registerPortfolio(&backend, database: database)
         PortfolioImportBatchesArea.register(&backend, database: database)
         PortfolioImportOverridesArea.register(&backend, database: database)
+        PortfolioImportReconciliationArea.register(&backend, database: database)
         return backend
     }
 

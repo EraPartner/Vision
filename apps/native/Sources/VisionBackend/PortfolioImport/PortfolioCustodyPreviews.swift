@@ -42,6 +42,8 @@ enum ReconciliationBlockReason: String, Sendable, Hashable {
     case unresolvedAdjustmentBasis = "unresolved_adjustment_basis"
     case incompleteAdjustment = "incomplete_adjustment"
     case missingAdjustmentIdentity = "missing_adjustment_identity"
+    // Preview's projected-history guard
+    case projectedHistoryConflict = "projected_history_conflict"
 }
 
 /// A custody preview: the event a staged row would write, or why it cannot.
