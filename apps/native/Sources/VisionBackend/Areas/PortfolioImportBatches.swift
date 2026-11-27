@@ -317,9 +317,9 @@ enum PortfolioImportBatchesArea {
     }
 
     /// `rollbackBatch`'s sequence. The PostgreSQL locks became the single SQLite writer
-    /// (ADR-263), so only the reads and writes with an answer remain; the adoption and
-    /// duplicate-repair journals are only read here — a batch that still holds receipts of
-    /// those kinds refuses until their restore paths are ported (no corpus replays them yet).
+    /// (ADR-263), so only the reads and writes with an answer remain; the adoption receipts
+    /// validate and restore through `PortfolioImportRollbackArea`, while a batch that still
+    /// holds duplicate-repair receipts refuses — that legacy restore has no corpus yet.
     static func rollback(_ session: BackendSession, _ id: Int) throws -> Int {
         let repairReceipts = try session.rows(
             """
@@ -329,17 +329,10 @@ enum PortfolioImportBatchesArea {
                                 WHERE r.previous_entry_id = a.id)
             """,
             [.integer(Int64(id))]).count
-        let adoptionReceipts = try session.rows(
-            """
-            SELECT a.id FROM portfolio_import_reconciliation_journal a
-             WHERE a.batch_id = ? AND a.action = 'adopt'
-               AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal r
-                                WHERE r.previous_entry_id = a.id)
-            """,
-            [.integer(Int64(id))]).count
-        guard repairReceipts == 0 && adoptionReceipts == 0 else {
+        guard repairReceipts == 0 else {
             throw UnportedReceipts(batchId: id)
         }
+        let adoptionReceipts = try PortfolioImportRollbackArea.activeAdoptionReceipts(session, id)
         // `guardOriginalIbkrCashRollback`: a later IBKR funding correction owns the cash.
         let ownedElsewhere = try session.rows(
             """
@@ -387,6 +380,23 @@ enum PortfolioImportBatchesArea {
                 """,
                 [.integer(Int64(id))])
 
+            // `validatePortfolioImportAdoptionRollback`: every receipt the batch
+            // owns is approved before any row is deleted. `portfolioRows` names
+            // the trade ids the route deletes (cash rows only on a non-brokerage batch).
+            let portfolioRows = committed
+                .filter { !isBrokerage || (try? $0.optionalText("route")) ?? "" != "cash" }  // lint:allow string-literal-compare the staging-row route values
+                .map { row -> (id: Int, investmentID: Int?) in  // lint:allow raw-id business table ids of the TypeScript route and repository reads
+                    (Int(try row.int64("id")),
+                     (try row.optionalInt64("investment_id")).flatMap { Int(exactly: $0) })
+                }
+            let validatedAdoptions = adoptionReceipts.isEmpty
+                ? []
+                : try PortfolioImportRollbackArea.validateAdoptionRollback(session, id, portfolioRows)
+
+            // `restorePairedPortfolioIncomeForBatch` closes the paired income receipts
+            // before the rows they name are removed.
+            try PortfolioImportRollbackArea.restorePairedPortfolioIncome(session, id)
+
             // The batch's custody events: transfer and adjustment rollbacks count first.
             let deletedTransfers = try session.rows(
                 "DELETE FROM portfolio_asset_transfers WHERE import_batch_id = ? RETURNING id",
@@ -402,12 +412,18 @@ enum PortfolioImportBatchesArea {
             let bulkDeletedIds = Set(try bulkDeleted.map { String(try $0.int64("id")) })
             var deleted = bulkDeleted.count + deletedTransfers + deletedAdjustments
 
-            // Cash rows route at the ledger, never the portfolio table (brokerage only).
-            let cashIds = isBrokerage
+            // Cash rows route at the ledger, never the portfolio table (brokerage only);
+            // `readOwnedKinesisCashFeeIds` adds the fee components a cash-only commit owns.
+            var cashIds: [Int64] = isBrokerage
                 ? try committed.filter { (try? $0.optionalText("route")) ?? "" == "cash" }  // lint:allow string-literal-compare the staging-row route values
                     .compactMap { try? $0.int64("id") } : []
-            if !cashIds.isEmpty {
-                let idsJSON = "[\(cashIds.map(String.init).joined(separator: ","))]"
+            if isBrokerage {
+                cashIds.append(contentsOf: try PortfolioImportRollbackArea.ownedKinesisCashFeeIds(session, id)
+                    .map(Int64.init))
+            }
+            let uniqueCashIds = Array(Set(cashIds)).sorted()
+            if !uniqueCashIds.isEmpty {
+                let idsJSON = "[\(uniqueCashIds.map(String.init).joined(separator: ","))]"
                 let ledger = try session.rows(
                     """
                     DELETE FROM transactions WHERE id IN (SELECT value FROM json_each(?)) RETURNING id
@@ -415,14 +431,16 @@ enum PortfolioImportBatchesArea {
                     [.text(idsJSON)])
                 deleted += ledger.count
             }
-            for row in committed where !bulkDeletedIds.contains(String(try row.int64("id"))) {
+            for row in portfolioRows where !bulkDeletedIds.contains(String(row.id)) {
                 if try session.row(
                     "DELETE FROM portfolio_transactions WHERE id = ? RETURNING id",
-                    [.integer(try row.int64("id"))]) != nil
+                    [.integer(Int64(row.id))]) != nil
                 {
                     deleted += 1
                 }
             }
+
+            try PortfolioImportRollbackArea.restorePortfolioImportAdoptions(session, validatedAdoptions)
 
             try session.rows(
                 """
