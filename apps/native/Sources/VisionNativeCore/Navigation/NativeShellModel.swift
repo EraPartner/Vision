@@ -683,7 +683,7 @@ public final class NativeShellModel {
         case .accountDetail:
             await accounts.load(force: true)
         case .tax:
-            _ = await tax?.loadRoute(route: currentRoute, currency: currentSettings.defaultCurrency, force: true)
+            _ = await tax?.loadRoute(route: currentRoute, currency: TaxScreens.currency, force: true)
         case .researchForecast:
             researchForecast?.configure(settings: currentSettings)
             await researchForecast?.load(force: true)

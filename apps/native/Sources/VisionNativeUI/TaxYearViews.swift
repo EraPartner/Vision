@@ -395,7 +395,7 @@ struct TaxHistorySheet: View {
         }
     }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false)
+        MoneyText.text(value, currency: TaxScreens.currency, settings: shell.settings, signed: false)
     }
     private func describe(_ value: TaxValue) -> String {
         switch value {

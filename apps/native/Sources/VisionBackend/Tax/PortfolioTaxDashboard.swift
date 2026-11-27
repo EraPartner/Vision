@@ -81,22 +81,24 @@ enum PortfolioTaxDashboard {
 
     /// `statutoryTob(params, txn, convert)`.
     private static func statutoryExchangeTax(
-        _ parameters: BelgianTaxTable.RateAndCap, _ transaction: JSObject, _ convert: Converted
+        _ parameters: BelgianTaxTable.RateAndCap, _ transaction: JSObject, _ convert: Converted, euro: Double
     ) throws -> DecimalJS {
         let amount = convert(number(transaction["amount"]).magnitude, transaction.text("currency"))
-        return DecimalJS.min(try DecimalJS(amount).times(DecimalJS(parameters.rate)), try DecimalJS(parameters.cap))
+        // The cap is a euro amount; `amount` is in the dashboard currency.
+        return DecimalJS.min(
+            try DecimalJS(amount).times(DecimalJS(parameters.rate)), try DecimalJS(parameters.cap * euro))
     }
 
     /// `recordedSellTob(inv, txn, taxTable, convert, cgtActive)`.
     private static func recordedSellExchangeTax(
         _ investment: JSObject, _ transaction: JSObject, _ table: BelgianTaxTable, _ convert: Converted,
-        gainsTaxActive: Bool
+        gainsTaxActive: Bool, euro: Double
     ) throws -> Double {
         guard isType(transaction, "sell"), let parameters = exchangeTaxRate(investment, table) else { return 0 }
         let taxes = convert(number(transaction["taxes"]), transaction.text("currency"))
         if taxes <= 0 { return 0 }
         if !gainsTaxActive { return taxes }
-        return DecimalJS.min(try DecimalJS(taxes), try statutoryExchangeTax(parameters, transaction, convert)).toNumber
+        return DecimalJS.min(try DecimalJS(taxes), try statutoryExchangeTax(parameters, transaction, convert, euro: euro)).toNumber
     }
 
     private static func entries(_ values: [(String, Double)]) -> JSValue {
@@ -133,6 +135,17 @@ enum PortfolioTaxDashboard {
             }
         }
         let convertCosts = converter("totals", "taxByAssetClass", "investmentBreakdown")
+        // Belgian thresholds and caps, and the manual adjustments, are euro amounts; every other
+        // figure here is in `currency`. One euro in `currency` scales them (Astra report 1,
+        // findings 5 and 34).
+        let euro: Double
+        if let rate = convert(1, "EUR") {
+            euro = rate
+        } else {
+            missing.currencies.insert("EUR")
+            missing.figures.formUnion(["estimates", "dividend", "totals"])
+            euro = 1
+        }
         let adjustments = adjustments?.objectValue ?? JSObject()
         let classifications = classifications?.objectValue ?? JSObject()
         let yearText = JavaScriptNumber.text(year)
@@ -156,8 +169,8 @@ enum PortfolioTaxDashboard {
         let costs = try summaries.map { investment -> Costs in
             let id = investment["id"]?.javaScriptString ?? "undefined"
             let manual = adjustments[yearText + ":" + id]?.objectValue ?? JSObject()
-            let manualTaxes = Self.number(manual["taxes"])
-            let manualFees = Self.number(manual["fees"])
+            let manualTaxes = Self.number(manual["taxes"]) * euro
+            let manualFees = Self.number(manual["fees"]) * euro
             let recordedTaxes = try recorded(investment, year, convertCosts, type: "tax", field: "taxes")
             let recordedFees = try recorded(investment, year, convertCosts, type: "fee", field: "fees")
             let taxes = try DecimalJS(recordedTaxes).plus(DecimalJS(manualTaxes)).toNumber
@@ -195,7 +208,7 @@ enum PortfolioTaxDashboard {
                 let taxes = convertBreakdowns(Self.number(transaction["taxes"]), currency)
                 if isType(transaction, "sell"), taxes > 0 {
                     let exchangeTax = try recordedSellExchangeTax(
-                        investment, transaction, table, convertBreakdowns, gainsTaxActive: gainsTaxActive)
+                        investment, transaction, table, convertBreakdowns, gainsTaxActive: gainsTaxActive, euro: euro)
                     if exchangeTax > 0 { transactionTax += exchangeTax }
                     if taxes - exchangeTax > 0 {
                         if gainsTaxActive { gainsTax += taxes - exchangeTax } else { otherTaxes += taxes - exchangeTax }
@@ -296,7 +309,7 @@ enum PortfolioTaxDashboard {
         let married = filingStatus == "married_joint"
         let withheld = try sum(withheldTerms)
         let grossBase = unknownConventions > 0 ? nil : try sum(grossTerms)
-        let dividendExemption = try DecimalJS(table.dividendExemption)
+        let dividendExemption = try DecimalJS(table.dividendExemption * euro)
         let exemption = married ? dividendExemption.times(DecimalJS(2)) : dividendExemption
         let withholdingRate = try DecimalJS(table.dividendWHTRate)
         let reclaim = grossBase.map { DecimalJS.min(withheld, DecimalJS.min($0, exemption).times(withholdingRate)) }
@@ -307,7 +320,7 @@ enum PortfolioTaxDashboard {
             ("dividendWhtRecorded", number(withheld.toNumber)), ("grossDividendBase", optional(grossBase)),
             ("grossDividendWht", number(withheld.toNumber)), ("dividendWhtReclaim", optional(reclaim)),
             ("dividendWhtNetCost", optional(netCost)), ("unknownDividendConventionCount", .int(unknownConventions)),
-            ("dividendExemption", number(table.dividendExemption)),
+            ("dividendExemption", number(table.dividendExemption * euro)),
         ])
 
         // Estimates
@@ -323,7 +336,7 @@ enum PortfolioTaxDashboard {
                 } else if isType(transaction, "sell") {
                     recordedTerms.append(
                         try recordedSellExchangeTax(
-                            investment, transaction, table, convertRecorded, gainsTaxActive: gainsTaxActive))
+                            investment, transaction, table, convertRecorded, gainsTaxActive: gainsTaxActive, euro: euro))
                 }
             }
         }
@@ -331,14 +344,14 @@ enum PortfolioTaxDashboard {
             guard let parameters = exchangeTaxRate(investment, table) else { continue }
             for transaction in try transactions(investment)
             where (isType(transaction, "buy") || isType(transaction, "sell")) && isYear(transaction, year) {
-                autoLegs.append(try statutoryExchangeTax(parameters, transaction, convertAuto))
+                autoLegs.append(try statutoryExchangeTax(parameters, transaction, convertAuto, euro: euro))
             }
         }
         let convertAccount = converter("estimates.tacrEstimate")
         let accountValue = try sum(
             summaries.map { convertAccount(Self.number($0["currentValue"]), $0.text("currency")) })
         let accountTax =
-            accountValue.lt(try DecimalJS(table.securitiesAccountTaxThreshold))
+            accountValue.lt(try DecimalJS(table.securitiesAccountTaxThreshold * euro))
             ? 0 : accountValue.times(try DecimalJS(table.securitiesAccountTaxRate)).toNumber
         var reyndersEstimate = 0.0
         if TaxMath.isNonZero(table.reyndersTaxRate), split.reyndersInterest > 0 {
@@ -346,7 +359,7 @@ enum PortfolioTaxDashboard {
         }
         var gainsEstimate = 0.0
         if gainsTaxActive, split.gains > 0 {
-            let exempt = married ? table.capitalGainsTaxExemptionMarried : table.capitalGainsTaxExemptionSingle
+            let exempt = (married ? table.capitalGainsTaxExemptionMarried : table.capitalGainsTaxExemptionSingle) * euro
             gainsEstimate =
                 DecimalJS.max(try DecimalJS(split.gains).minus(DecimalJS(exempt)), .zero)
                 .times(try DecimalJS(table.capitalGainsTaxRate)).toNumber
@@ -468,7 +481,7 @@ enum PortfolioTaxDashboard {
                     ("securitiesAccountTaxRate", number(table.securitiesAccountTaxRate)),
                     ("capitalGainsTaxRate", number(table.capitalGainsTaxRate)),
                     ("reyndersTaxRate", number(table.reyndersTaxRate)), ("dividendWHTRate", number(table.dividendWHTRate)),
-                    ("securitiesAccountTaxThreshold", number(table.securitiesAccountTaxThreshold)),
+                    ("securitiesAccountTaxThreshold", number(table.securitiesAccountTaxThreshold * euro)),
                     ("badgePercent", percent),
                 ])
             ),

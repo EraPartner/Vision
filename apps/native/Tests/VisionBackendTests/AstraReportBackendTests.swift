@@ -72,4 +72,41 @@ import VisionNativeCore
         let ids: [JSONValue] = Self.items(result).map { $0["id"] ?? .null }
         #expect(ids == [.int(1), .int(2)])
     }
+
+    /// Findings 5 and 34: euro thresholds and the (euro) manual adjustments scale into the
+    /// dashboard currency, so the estimate is the euro estimate converted, not a new tax.
+    @Test func portfolioTaxEstimatesFollowTheEuroThresholds() throws {
+        func dashboard(_ currency: String, gain: Double) throws -> JSValue {
+            let investment = JSObject([
+                ("id", .number(1)), ("name", .string("Fund")), ("assetClass", .string("stock")),
+                ("currency", .string("EUR")), ("realizedGain", .number(gain)), ("currentValue", .number(0)),
+                ("transactions", .array([])),
+            ])
+            let adjustments = JSValue.object(
+                JSObject([("2026:1", .object(JSObject([("taxes", .number(0)), ("fees", .number(120))])))]))
+            return try PortfolioTaxDashboard.build(
+                summaries: [investment], year: 2026, currency: currency, totalPIT: 0, filingStatus: "single",
+                hasProfile: true, adjustments: adjustments, classifications: nil
+            ) { amount, from in
+                switch from ?? "EUR" {
+                case "EUR": return currency == "JPY" ? amount * 100 : amount
+                case "JPY": return amount
+                default: return nil
+                }
+            }
+        }
+        func figure(_ value: JSValue, _ group: String, _ key: String) -> Double {
+            value.objectValue?[group]?.objectValue?[key]?.javaScriptNumber ?? .nan
+        }
+        // Below the exemption in euros stays untaxed in yen.
+        #expect(figure(try dashboard("EUR", gain: 5000), "estimates", "cgtEstimate") == 0)
+        #expect(figure(try dashboard("JPY", gain: 5000), "estimates", "cgtEstimate") == 0)
+        // Above it, the yen estimate is the euro estimate at 100 yen per euro.
+        let euro = figure(try dashboard("EUR", gain: 50000), "estimates", "cgtEstimate")
+        let yen = figure(try dashboard("JPY", gain: 50000), "estimates", "cgtEstimate")
+        #expect(euro > 0)
+        #expect(abs(yen - euro * 100) < 0.0001)
+        // The €120 manual fee is ¥12,000.
+        #expect(figure(try dashboard("JPY", gain: 0), "totals", "totalManualFees") == 12000)
+    }
 }

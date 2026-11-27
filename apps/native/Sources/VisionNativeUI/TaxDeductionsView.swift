@@ -32,7 +32,7 @@ struct SuggestedDeductionsView: View {
                             if let estimate = suggestion.estimate, estimate > 0 {
                                 Text(
                                     MoneyText.text(
-                                        estimate, currency: shell.settings.portfolioCurrency, settings: shell.settings)
+                                        estimate, currency: TaxScreens.currency, settings: shell.settings)
                                 )
                                 .font(.headline).monospacedDigit().foregroundStyle(theme.gain)
                             } else {

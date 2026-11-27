@@ -47,6 +47,8 @@ public final class RebalanceModel {
     @ObservationIgnored private var computeRevision = UUID()
     @ObservationIgnored private var computeTask: Task<Void, Never>?
     @ObservationIgnored private var notices = NoticeCounter()
+    /// Stored EUR rates, read only when a saved cap is in another currency than the screen's.
+    @ObservationIgnored private var ratesToEur: [CurrencyCode: Decimal] = [:]
 
     public init(service: any RebalanceService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -228,7 +230,8 @@ public final class RebalanceModel {
         let id = draft.planId ?? UUID().uuidString.lowercased()
         let cap = draft.capEnabled ? RebalanceForm.cap(draft.cap, available: availableCash, format: numberFormat) : nil
         let plan = RebalancePlan(
-            id: id, name: name, targetWeights: weights, cashCap: cap, preserving: previous?.storedValue)
+            id: id, name: name, targetWeights: weights, cashCap: cap, cashCapCurrency: currency,
+            preserving: previous?.storedValue)
         let next = previous == nil ? plans + [plan] : plans.map { $0.id == id ? plan : $0 }
         cancelPlansRead()
         isSaving = true
@@ -349,6 +352,11 @@ public final class RebalanceModel {
                 guard token == plansRevision, !Task.isCancelled else { return }
                 plans = try decodePlans(value.value)
                 setting = value
+                if plans.contains(where: { $0.cashCapCurrency.map { $0 != currency } ?? false }) {
+                    let rates = (try? await service.ratesToEur()) ?? [:]
+                    guard token == plansRevision, !Task.isCancelled else { return }
+                    ratesToEur = rates
+                }
                 plansError = nil
                 plansTime = now()
             } catch {
@@ -383,8 +391,19 @@ public final class RebalanceModel {
                 rows: RebalanceForm.rows(
                     plan.targetWeights.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }, format: numberFormat),
                 name: plan.name, capEnabled: plan.cashCap != nil,
-                cap: LocaleNumber.editable(plan.cashCap, format: numberFormat))
+                cap: LocaleNumber.editable(displayedCap(of: plan), format: numberFormat))
         }
+    }
+    /// The plan's cap in the screen currency. A cap saved in another currency is converted at the
+    /// stored rates, and left blank when a rate is missing rather than read as the wrong currency.
+    func displayedCap(of plan: RebalancePlan) -> Decimal? {
+        guard let cap = plan.cashCap else { return nil }
+        guard let saved = plan.cashCapCurrency, saved != currency else { return cap }
+        guard let from = ratesToEur[saved], let to = ratesToEur[currency], to > 0 else { return nil }
+        var converted = cap * from / to
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &converted, 2, .plain)
+        return rounded
     }
     private func decodePlans(_ value: JSONValue) throws -> [RebalancePlan] {
         guard value.arrayValue != nil else { return [] }
