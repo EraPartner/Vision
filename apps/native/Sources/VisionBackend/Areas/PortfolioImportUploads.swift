@@ -347,9 +347,9 @@ enum PortfolioImportUploadsArea {
         var scalars = Array(symbol.unicodeScalars)
         guard !scalars.isEmpty, scalars.count <= 30 else { return false }
         let first = scalars.removeFirst()
-        guard (48...57).contains(first) || (65...90).contains(first) else { return false }
+        guard (48...57).contains(first.value) || (65...90).contains(first.value) else { return false }
         return scalars.allSatisfy { scalar in
-            (48...57).contains(scalar) || (65...90).contains(scalar)
+            (48...57).contains(scalar.value) || (65...90).contains(scalar.value)
                 || scalar == "." || scalar == "_" || scalar == "-" // lint:allow string-literal-compare the pattern's symbol characters
         }
     }
@@ -552,7 +552,7 @@ enum PortfolioImportUploadsArea {
                SET custom_config = vision_jsonb(json_set(COALESCE(custom_config, '{}'), ?, ?))
              WHERE id = ?
             """,
-            [.text("$.\(key)"), .text(value.jsonText), .integer(Int64(batchId))])
+            [.text("$.\(key)"), .text(String(decoding: try JSONEncoder().encode(value), as: UTF8.self)), .integer(Int64(batchId))])
     }
 
     /// `applyPortfolioAssetScope`: the selected symbols' rows, their cash legs, and the
@@ -770,7 +770,7 @@ enum PortfolioImportUploadsArea {
             identityById[row.id] = ImportIdentity.Value(
                 sourceRecordHash: row.rawData.map { ImportIdentity.sha256Hex($0) },
                 fingerprint: ImportIdentity.sha256Hex(
-                    ImportIdentity.canonicalTuple([base.base, "occurrence", String(occurrence)])),
+                    ImportIdentity.canonicalTuple([.string(base.base), .string("occurrence"), .number(Double(occurrence))])),
                 version: ImportIdentity.version,
                 occurrence: occurrence)
         }
@@ -790,7 +790,7 @@ enum PortfolioImportUploadsArea {
                     isBrokerage: isBrokerage, today: today)
                 if let error = resolution.error {
                     errors += 1
-                    updates.append(.object([
+                    updates.append(.object(JSObject([
                         ("id", .int(Int(row.id))),
                         ("status", .string("error")),
                         ("type", .null),
@@ -801,10 +801,10 @@ enum PortfolioImportUploadsArea {
                         ("fingerprint_version", .null),
                         ("occurrence", .null),
                         ("error_message", .string(error)),
-                    ]))
+                    ])))
                     continue
                 }
-                updates.append(.object([
+                updates.append(.object(JSObject([
                     ("id", .int(Int(row.id))),
                     ("status", .string("validated")),
                     ("type", resolution.type.map { JSValue.string($0) } ?? .null),
@@ -815,7 +815,7 @@ enum PortfolioImportUploadsArea {
                     ("fingerprint_version", .int(identity.version)),
                     ("occurrence", .int(identity.occurrence)),
                     ("error_message", .null),
-                ]))
+                ])))
             }
             _ = try session.rows(
                 """
@@ -968,29 +968,29 @@ enum PortfolioImportUploadsArea {
         var currency = ImportIdentity.normalizeIdentityText(row.currency ?? "")
         if currency.isEmpty { currency = "EUR" }
         let account = ImportIdentity.normalizeIdentityText(row.sourceAccountIdentity ?? "")
-        let prefix: [String?] = [
-            "vision-import", "\(ImportIdentity.version)", "portfolio",
-            route.isEmpty ? "PORTFOLIO" : route,
-            account.isEmpty ? ImportIdentity.normalizeIdentityText(accountIdentity) : account,
-            currency,
+        let prefix: [JSValue] = [
+            .string("vision-import"), .number(Double(ImportIdentity.version)), .string("portfolio"),
+            .string(route.isEmpty ? "PORTFOLIO" : route),
+            .string(account.isEmpty ? ImportIdentity.normalizeIdentityText(accountIdentity) : account),
+            .string(currency),
         ]
         if !sourceId.isEmpty {
             return (
-                ImportIdentity.canonicalTuple(prefix + ["source-id", sourceId]),
+                ImportIdentity.canonicalTuple(prefix + [.string("source-id"), .string(sourceId)]),
                 sourceId)
         }
         return (
             ImportIdentity.canonicalTuple(prefix + [
-                "fields", row.txDate ?? "",
-                ImportIdentity.normalizeIdentityText(resolution.type),
-                ImportIdentity.normalizeIdentityText(row.symbolRaw),
-                ImportIdentity.normalizeIdentityText(row.nameRaw),
-                ImportIdentity.normalizeIdentityDecimal(row.units ?? ""),
-                ImportIdentity.normalizeIdentityDecimal(row.pricePerUnit ?? ""),
-                ImportIdentity.normalizeIdentityDecimal(row.amount ?? ""),
-                ImportIdentity.normalizeIdentityDecimal(row.fees ?? ""),
-                ImportIdentity.normalizeIdentityDecimal(row.taxes ?? ""),
-                ImportIdentity.normalizeIdentityText(row.note ?? ""),
+                .string("fields"), .string(row.txDate ?? ""),
+                .string(ImportIdentity.normalizeIdentityText(resolution.type ?? "")),
+                .string(ImportIdentity.normalizeIdentityText(row.symbolRaw ?? "")),
+                .string(ImportIdentity.normalizeIdentityText(row.nameRaw ?? "")),
+                .string(ImportIdentity.normalizeIdentityDecimal(row.units ?? "")),
+                .string(ImportIdentity.normalizeIdentityDecimal(row.pricePerUnit ?? "")),
+                .string(ImportIdentity.normalizeIdentityDecimal(row.amount ?? "")),
+                .string(ImportIdentity.normalizeIdentityDecimal(row.fees ?? "")),
+                .string(ImportIdentity.normalizeIdentityDecimal(row.taxes ?? "")),
+                .string(ImportIdentity.normalizeIdentityText(row.note ?? "")),
             ]),
             "")
     }
@@ -1141,11 +1141,11 @@ enum PortfolioImportUploadsArea {
                 cache[key] = match
             }
             let match = resolved ?? (nil, nil)
-            updates.append(.object([
+            updates.append(.object(JSObject([
                 ("id", .int(Int(row.id))),
                 ("investment_id", match.investmentId.map { JSValue.int($0) } ?? .null),
                 ("match_source", match.matchSource.map { JSValue.string($0) } ?? .null),
-            ]))
+            ])))
             counts[match.matchSource ?? "unresolved", default: 0] += 1
         }
         if !updates.isEmpty {
@@ -1198,10 +1198,10 @@ enum PortfolioImportUploadsArea {
                 let baseScalars = Array(base.unicodeScalars)
                 if baseScalars.count >= 2, baseScalars.count <= 10,
                     baseScalars.allSatisfy({
-                        (48...57).contains($0) || (65...90).contains($0)
+                        (48...57).contains($0.value) || (65...90).contains($0.value)
                     }),
                     Array(fiat.unicodeScalars).count == 3,
-                    Array(fiat.unicodeScalars).allSatisfy({ (65...90).contains($0) }),
+                    Array(fiat.unicodeScalars).allSatisfy({ (65...90).contains($0.value) }),
                     fiatQuoteCurrencies.contains(fiat)
                 {
                     return base.lowercased()
@@ -1352,7 +1352,7 @@ enum PortfolioImportUploadsArea {
     static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
         backend.serve(PortfolioImportCsvCustomRequest.self) { request in
             try await database.run { session in
-                let form = ImportUploadsArea.form(request)
+                let form = try ImportUploadsArea.form(request)
                 let file = try requireFile(try uploadedFile(form.file))
                 let built = try buildConfig(form.fields)
                 let brokerage = try guards(session, form.fields, built)
@@ -1380,7 +1380,7 @@ enum PortfolioImportUploadsArea {
         }
         backend.serve(PortfolioImportCsvStreamRequest.self) { request in
             try await database.run { session in
-                let form = ImportUploadsArea.form(request)
+                let form = try ImportUploadsArea.form(request)
                 let file = try requireFile(try uploadedFile(form.file))
                 let built = try buildConfig(form.fields)
                 let brokerage = try guards(session, form.fields, built)
