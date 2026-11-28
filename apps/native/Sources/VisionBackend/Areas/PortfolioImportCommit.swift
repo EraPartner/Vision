@@ -465,7 +465,7 @@ extension PortfolioImportCommitArea {
             """
             INSERT INTO portfolio_import_reconciliation_journal (
                 batch_id, staging_row_id, transaction_id, action, policy, before_data, after_data
-            ) VALUES (?, ?, ?, 'adopt', ?, ?, ?) RETURNING id
+            ) VALUES (?, ?, ?, 'adopt', ?, vision_jsonb(?), vision_jsonb(?)) RETURNING id
             """,
             [.integer(Int64(row.batchID.rawValue)), .integer(Int64(row.id.rawValue)),
              .integer(Int64(decision.transactionID.rawValue)), .text(decision.policy.rawValue),
