@@ -38,6 +38,8 @@ import VisionNativeCore
         ImportCsvStreamRequest.operationId,
         ImportRecipientsRequest.operationId,
         ImportCategoriesRequest.operationId,
+        PortfolioImportCsvCustomRequest.operationId,
+        PortfolioImportCsvStreamRequest.operationId,
     ]
 
     @Test func liveHandlersAreExactlyThePortedList() {
