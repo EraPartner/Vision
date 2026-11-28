@@ -124,6 +124,7 @@ enum PortfolioImportCommitArea {
         guard ["awaiting_review", "matching", "complete_with_errors"].contains(batch.status) else {
             throw BackendHTTPError.validation(
                 "Batch \(batchId) is not in a reviewable state (status: \(batch.status))")
+            print("\u{2718} debug assertReviewable \(batchId) status \(batch.status)")
         }
         return batch
     }

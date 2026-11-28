@@ -306,6 +306,7 @@ enum PortfolioImportBatchesArea {
             throw BackendHTTPError.notFound("Import batch \(id) not found")
         }
         let status = try advisory.text("status")
+        print("\u{2718} debug delete batch \(id) status \(status)")
         if status == "aborted" {  // lint:allow string-literal-compare the batch status values
             throw BackendHTTPError.validation("Batch is already aborted")
         }
