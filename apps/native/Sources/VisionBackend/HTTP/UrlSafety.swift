@@ -47,20 +47,33 @@ enum URLSafety {
     }
 
     /// `isBlockedIpv6` — loopback, unspecified, IPv4-mapped, ULA and link-local are blocked.
+    /// The rules apply to the parsed 16 bytes, so every spelling of one address (`::1`,
+    /// `0:0:0:0:0:0:0:1`, `::ffff:7f00:1`, upper case) gets the same answer. An address that
+    /// does not parse fails closed.
     static func isBlockedIPv6(_ ip: String) -> Bool {
-        let addr = ip.lowercased().split(separator: "%").first.map(String.init) ?? ""
-        if addr == "::1" || addr == "::" { return true }  // lint:allow string-literal-compare the blocked address literals, as TypeScript reads them
-        let mapped = addr.hasPrefix("::ffff:") ? addr.dropFirst(7) : ""
-        if !mapped.isEmpty,
-            mapped.allSatisfy({ (48...57).contains($0.utf8.first ?? 0) || $0 == "." })  // lint:allow string-literal-compare the dotted-quad characters, as TypeScript's regex reads them
+        let addr = ip.split(separator: "%", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        guard let bytes = ipv6Bytes(addr) else { return true }
+        let head = bytes[0..<10].allSatisfy { $0 == 0 }
+        // ::/128 unspecified and ::1/128 loopback.
+        if head && bytes[10] == 0 && bytes[11] == 0 && bytes[12] == 0 && bytes[13] == 0 && bytes[14] == 0
+            && bytes[15] <= 1
         {
-            return isBlockedIPv4(String(mapped))
-        }
-        if addr.hasPrefix("fc") || addr.hasPrefix("fd") { return true }
-        if addr.hasPrefix("fe8") || addr.hasPrefix("fe9") || addr.hasPrefix("fea") || addr.hasPrefix("feb") {
             return true
         }
+        // ::ffff:0:0/96 IPv4-mapped: the embedded IPv4 address decides.
+        if head && bytes[10] == 0xff && bytes[11] == 0xff {
+            return isBlockedIPv4("\(bytes[12]).\(bytes[13]).\(bytes[14]).\(bytes[15])")
+        }
+        if bytes[0] & 0xfe == 0xfc { return true }  // fc00::/7 ULA
+        if bytes[0] == 0xfe && bytes[1] & 0xc0 == 0x80 { return true }  // fe80::/10 link-local
         return false
+    }
+
+    /// `inet_pton(AF_INET6, ...)`: the address's 16 bytes, nil when it is not IPv6 text.
+    static func ipv6Bytes(_ text: String) -> [UInt8]? {
+        var address = in6_addr()
+        guard inet_pton(AF_INET6, text, &address) == 1 else { return nil }
+        return withUnsafeBytes(of: &address) { Array($0) }
     }
 
     /// `isBlockedAddress` for a literal: not a recognizable IP fails closed.

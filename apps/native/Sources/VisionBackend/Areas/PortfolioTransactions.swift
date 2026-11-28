@@ -229,11 +229,14 @@ enum PortfolioTransactionsArea {
         }
         out.hasIncomeRecognitionRole = object.has("income_recognition_role")
         out.present = Set(object.keys)
+        // `z.enum(...).optional()`: a present value of any other kind (a number, null) is
+        // the same invalid-option issue as an unknown string.
         if let type = object["type"] {
-            if case .string(let text) = type, !txnTypes.contains(text) {
+            if case .string(let text) = type, txnTypes.contains(text) {
+                out.type = text
+            } else {
                 issues.append(enumIssue("type", txnTypes))
             }
-            if case .string(let text) = type { out.type = text }
         }
         out.date = dateField(object["date"], "date", false, &issues)
         out.amount = numberField(object["amount"], "amount", 99_999_999_999_999, &issues)
@@ -242,12 +245,11 @@ enum PortfolioTransactionsArea {
         out.fees = numberField(object["fees"], "fees", 99_999_999_999_999, &issues)
         out.taxes = numberField(object["taxes"], "taxes", 99_999_999_999_999, &issues)
         if let convention = object["dividend_amount_convention"] {
-            if case .string(let text) = convention,
-                !["gross", "net", "unknown"].contains(text)
-            {
+            if case .string(let text) = convention, ["gross", "net", "unknown"].contains(text) {
+                out.dividendAmountConvention = text
+            } else {
                 issues.append(enumIssue("dividend_amount_convention", ["gross", "net", "unknown"]))
             }
-            if case .string(let text) = convention { out.dividendAmountConvention = text }
         }
         out.currency = currencyField(object["currency"], &issues)
         out.fxRateToEur = numberField(object["fx_rate_to_eur"], "fx_rate_to_eur", 9_999_999_999, &issues)
@@ -257,12 +259,14 @@ enum PortfolioTransactionsArea {
             }
             if case .string(let text) = note { out.note = text }
         }
-        if let recurring = object["is_recurring"], recurring != .null {
-            if case .bool(let flag) = recurring {} else {
+        // `z.boolean().optional()`: null is not a boolean.
+        if let recurring = object["is_recurring"] {
+            if case .bool(let flag) = recurring {
+                out.isRecurring = flag
+            } else {
                 issues.append(
                     "is_recurring: Invalid input: expected boolean, received \(received(recurring))")
             }
-            if case .bool(let flag) = recurring { out.isRecurring = flag }
         }
         out.recurrenceInterval = recurrenceField(object["recurrence_interval"], &issues)
         if object["recurrence_end_date"] != nil {
@@ -367,10 +371,19 @@ extension PortfolioTransactionsArea {
         var nextAmount = amount
         var nextUnits = units
         var nextPrice = pricePerUnit
-        if !hasAmount { nextAmount = roundMoney((nextUnits ?? 0) * (nextPrice ?? 0), 4) }
-        if !hasUnits { nextUnits = roundMoney((nextAmount ?? 0) / (nextPrice ?? 0), 8) }
-        if !hasPrice { nextPrice = roundMoney((nextAmount ?? 0) / (nextUnits ?? 0), 6) }
-        let expectedAmount = roundMoney((nextUnits ?? 0) * (nextPrice ?? 0), 4)
+        // `multiply` and `divide` are decimal operations: 0.35 units at 0.005 is exactly
+        // 0.00175, which rounds half-even to 0.0018, where the binary product rounds to 0.0017.
+        func product(_ a: Double?, _ b: Double?) -> Double {
+            decimal(a ?? 0).times(decimal(b ?? 0)).toDecimalPlaces(4, .halfEven).toNumber
+        }
+        func quotient(_ a: Double?, _ b: Double?, _ places: Int) -> Double {
+            guard let value = try? decimal(a ?? 0).dividedBy(decimal(b ?? 0)) else { return .nan }
+            return value.toDecimalPlaces(places, .halfEven).toNumber
+        }
+        if !hasAmount { nextAmount = product(nextUnits, nextPrice) }
+        if !hasUnits { nextUnits = quotient(nextAmount, nextPrice, 8) }
+        if !hasPrice { nextPrice = quotient(nextAmount, nextUnits, 6) }
+        let expectedAmount = product(nextUnits, nextPrice)
         let comparableAmount = roundMoney(nextAmount ?? 0, 4)
         let difference = decimal(expectedAmount).minus(decimal(comparableAmount)).abs
         if difference.gt(decimal(0.01)) {
@@ -831,7 +844,12 @@ extension PortfolioTransactionsArea {
     }
 
     /// `insert(payload)`: the write route's INSERT, with the column defaults the ORM applies.
-    static func insert(_ session: BackendSession, _ fields: WriteFields, _ txn: TxnBody, _ normalized: Normalized) throws {
+    /// `ON CONFLICT DO NOTHING` as the repository writes it: only a uniqueness conflict is
+    /// skipped (answering nil); a CHECK or NOT NULL violation throws, where `INSERT OR IGNORE`
+    /// would drop the row silently.
+    static func insert(
+        _ session: BackendSession, _ fields: WriteFields, _ txn: TxnBody, _ normalized: Normalized
+    ) throws -> PortfolioTxRow? {
         var arguments: [SQLValue] = []
         func bind(_ value: String?) { arguments.append(value.map(SQLValue.text) ?? .null) }
         func bindInteger(_ value: Int?) { arguments.append(value.map { SQLValue.integer(Int64($0)) } ?? .null) }
@@ -851,9 +869,9 @@ extension PortfolioTransactionsArea {
         bind(fields.fxRateToEur.map { SQLArguments.javaScriptText($0) })
         bindInteger(fields.accountId)
         bind(fields.dividendAmountConvention)
-        _ = try session.rows(
+        let rows = try session.rows(
             """
-            INSERT OR IGNORE INTO portfolio_transactions (
+            INSERT INTO portfolio_transactions (
                 amount, investment_id, type, date, units, price_per_unit, fees, taxes, currency,
                 note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur,
                 account_id, dividend_amount_convention
@@ -861,9 +879,10 @@ extension PortfolioTransactionsArea {
                 vision_numeric(?, 18, 4), ?, ?, ?, vision_numeric(?, 18, 8),
                 vision_numeric(?, 18, 6), vision_numeric(?, 18, 4), vision_numeric(?, 18, 4),
                 ?, ?, ?, ?, ?, vision_numeric(?, 20, 10), ?, ?
-            )
+            ) ON CONFLICT DO NOTHING RETURNING *
             """,
             arguments)
+        return try rows.first.map { try PortfolioTxRow($0) }
     }
 
     struct WriteFields {
@@ -883,8 +902,8 @@ extension PortfolioTransactionsArea {
 
 extension PortfolioTransactionsArea {
     /// `createTransaction`: the investment must exist, the body's vocabulary must validate,
-    /// and the service's rules and unit-history guards must accept the row. The TypeScript
-    /// answer carries the insert's null return; the row is written either way.
+    /// and the service's rules and unit-history guards must accept the row. The answer is the
+    /// inserted row (`returningAll`), or null when a uniqueness conflict skipped it.
     static func create(_ session: BackendSession, _ investmentId: Int, _ body: JSValue?) throws -> HandlerResult {  // lint:allow raw-id business table ids of the TypeScript route and repository reads
         guard let assetClass = try assetClass(session, investmentId) else {
             throw BackendHTTPError.notFound("Investment not found")
@@ -932,14 +951,14 @@ extension PortfolioTransactionsArea {
             throw BackendHTTPError.validation(
                 "recurrence_end_date must be on or after the transaction date")
         }
-        try session.transaction {
+        let inserted = try session.transaction { () -> PortfolioTxRow? in
             try validateUnitMutation(session, UnitMutation(
                 investmentId: investmentId, assetClass: assetClass, type: type, date: date,
                 units: normalized.units, accountId: fields.accountId.map(Double.init),
                 checkProjectedHistory: type == "split"))  // lint:allow string-literal-compare the stored wire value the TypeScript service dispatches on
-            try insert(session, fields, txn, normalized)
+            return try insert(session, fields, txn, normalized)
         }
-        return HandlerResult(status: 201, data: .null)
+        return HandlerResult(status: 201, data: inserted.map { .object($0.json) } ?? .null)
     }
 
     /// The body's parsed `recurrence_end_date`, kept beside its presence in the TxnBody.
@@ -1135,8 +1154,11 @@ extension PortfolioTransactionsArea {
         // `is_recurring: false` clears the window with the service's own rules; the date or
         // the end date moving may not leave the window inverted.
         if txn.isRecurring == false {
-            for (index, clause) in clauses.enumerated() where clause.column == "recurrence_interval" {  // lint:allow string-literal-compare the stored wire value the TypeScript service dispatches on
+            // Both columns are cleared whether or not the patch names them.
+            if let index = clauses.firstIndex(where: { $0.column == "recurrence_interval" }) {  // lint:allow string-literal-compare the stored wire value the TypeScript service dispatches on
                 clauses[index].value = .null
+            } else {
+                clauses.append(UpdateClause("recurrence_interval", .null))
             }
             if let index = clauses.firstIndex(where: { $0.column == "recurrence_end_date" }) {  // lint:allow string-literal-compare the stored wire value the TypeScript service dispatches on
                 clauses[index].value = .null
@@ -1405,6 +1427,9 @@ extension PortfolioTransactionsArea {
         if ids.count < 1, !issues.contains(where: { $0.hasPrefix("transaction_ids") }) {
             issues.append("transaction_ids: Too small: expected array to have >=1 items")
         }
+        if case .array(let items)? = object["transaction_ids"], items.count > 500 {
+            issues.append("transaction_ids: Too big: expected array to have <=500 items")
+        }
         if Set(ids).count != ids.count, !issues.contains(where: { $0.contains("range") }) {
             issues.append("transaction_ids: transaction_ids must be distinct")
         }
@@ -1429,12 +1454,20 @@ extension PortfolioTransactionsArea {
         let to = account("to_account_id")
         var key: String?
         switch object["idempotency_key"] {
-        case .string(let text)?: key = text
+        case .string(let text)?:
+            if isZodUUID(text) { key = text } else { issues.append("idempotency_key: Invalid UUID") }
         case .some(let value):
             issues.append(
                 "idempotency_key: Invalid input: expected string, received \(received(value))")
         default:
             issues.append("idempotency_key: Invalid input: expected string, received undefined")
+        }
+        // `z.strictObject`: any other key is refused before anything is written.
+        let known: Set<String> = ["transaction_ids", "from_account_id", "to_account_id", "idempotency_key"]
+        let unknown = object.keys.filter { !known.contains($0) }
+        if !unknown.isEmpty {
+            let quoted = unknown.map { "\"\($0)\"" }.joined(separator: ", ")
+            issues.append(unknown.count == 1 ? "Unrecognized key: \(quoted)" : "Unrecognized keys: \(quoted)")
         }
         if !issues.isEmpty { throw BackendHTTPError.validation(issues.joined(separator: "; ")) }
         guard let key else {
@@ -1446,6 +1479,26 @@ extension PortfolioTransactionsArea {
 }
 
 extension PortfolioTransactionsArea {
+    /// zod 4's `z.uuid()`: an RFC 9562 UUID (versions 1–8, variant 10xx) or the nil and max
+    /// UUIDs, either case.
+    static func isZodUUID(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        if lower == "00000000-0000-0000-0000-000000000000" || lower == "ffffffff-ffff-ffff-ffff-ffffffffffff" {  // lint:allow string-literal-compare the nil and max UUIDs zod accepts
+            return true
+        }
+        let bytes = Array(lower.utf8)
+        guard bytes.count == 36 else { return false }
+        for (index, byte) in bytes.enumerated() {
+            if [8, 13, 18, 23].contains(index) {
+                if byte != UInt8(ascii: "-") { return false }
+            } else if !((byte >= 0x30 && byte <= 0x39) || (byte >= 0x61 && byte <= 0x66)) {
+                return false
+            }
+        }
+        guard (UInt8(ascii: "1")...UInt8(ascii: "8")).contains(bytes[14]) else { return false }
+        return [UInt8(ascii: "8"), UInt8(ascii: "9"), UInt8(ascii: "a"), UInt8(ascii: "b")].contains(bytes[19])
+    }
+
     /// `retagPortfolioTransactions`: the compare-and-set write with both history guards.
     static func retag(_ session: BackendSession, _ body: JSValue?) throws -> HandlerResult {
         let request = try parseRetagBody(body)

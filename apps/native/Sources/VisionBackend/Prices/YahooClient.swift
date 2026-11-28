@@ -14,9 +14,10 @@ struct YahooError: Error, Sendable {
 /// order, `URLSearchParams` encoding, `Math.floor(date/1000)` periods) and the result shapes
 /// (`{ meta, quotes }` and the quote array), so an answer served for the composed URL under
 /// the TypeScript backend replays identically against this client. The lib's cookie jar and
-/// consent-redirect crumb chase are reduced to their error behaviour: any fetch failure fails
-/// the call exactly as an unreachable host fails the TypeScript one, and the quote batch needs
-/// its crumb first, so a corpus that does not stub crumb URLs keeps the per-symbol chart
+/// consent-redirect crumb chase are reduced to the page visit (cookies stay in the ephemeral
+/// session), the `getcrumb` read and the `crumb` parameter: any fetch failure fails the call
+/// exactly as an unreachable host fails the TypeScript one, and the quote batch needs its
+/// crumb first, so a corpus that does not stub crumb URLs keeps the per-symbol chart
 /// fallback the batch failure triggers there.
 struct YahooClient: Sendable {
     /// `YF_QUERY_HOST`.
@@ -108,7 +109,10 @@ struct YahooClient: Sendable {
             var bar = JSObject()
             bar["date"] = .number(timestamp.javaScriptNumber * 1000)
             for field in ["high", "volume", "open", "low", "close"] {
-                bar[field] = indicator?[field]?.arrayValue?[index] ?? .null
+                // A column shorter than the timestamps reads `undefined` past its end, as the
+                // module's `quote[field][i]` does, instead of trapping.
+                let column = indicator?[field]?.arrayValue ?? []
+                bar[field] = column.indices.contains(index) ? column[index] : .null
             }
             quotes.append(.object(bar))
         }
@@ -124,8 +128,18 @@ struct YahooClient: Sendable {
         guard let crumbURL = URL(string: "https://finance.yahoo.com/quote/AAPL") else {
             throw YahooError("the crumb URL is not a URL")
         }
+        let crumb: String
         do {
+            // The page sets the session's consent cookies; `getcrumb` answers the crumb for
+            // them as plain text, and the quote request must carry it.
             _ = try await fetcher.get(crumbURL, timeout: Self.fetchTimeout)
+            guard let getCrumbURL = URL(string: "https://\(Self.queryHost)/v1/test/getcrumb") else {
+                throw YahooError("the crumb URL is not a URL")
+            }
+            let answer = try await fetcher.get(getCrumbURL, timeout: Self.fetchTimeout)
+            let text = answer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard answer.ok, !text.isEmpty, !text.contains("<") else { throw YahooError("Could not get crumb") }
+            crumb = text
         } catch let error as YahooError {
             throw error
         } catch {
@@ -134,6 +148,7 @@ struct YahooClient: Sendable {
         }
         guard let url = URL(
             string: "https://\(Self.queryHost)/v7/finance/quote?symbols=\(Self.formEncoded(symbols.joined(separator: ",")))"
+                + "&crumb=\(Self.formEncoded(crumb))"
         ), let response = try? await fetcher.get(url, timeout: Self.fetchTimeout)
         else { throw YahooError("quote fetch failed") }
         guard let body = JSValue.parse(response.body)?.objectValue else {

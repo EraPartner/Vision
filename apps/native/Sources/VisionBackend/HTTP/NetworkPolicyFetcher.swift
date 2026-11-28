@@ -36,6 +36,16 @@ public struct NetworkPolicyFetcher: ProviderFetching {
         return try await base.get(url, timeout: timeout)
     }
 
+    public func getWithoutRedirects(_ url: URL, timeout: TimeInterval) async throws -> ProviderResponse {
+        if !Self.isLoopback(url) { try await preflight() }
+        return try await base.getWithoutRedirects(url, timeout: timeout)
+    }
+
+    /// The wrapped fetcher's resolver, so a test fetcher's recorded answer survives the gate.
+    public func resolve(_ host: String) throws -> [String] {
+        try base.resolve(host)
+    }
+
     /// `isLoopbackHost`: localhost, 127.0.0.0/8 and ::1.
     static func isLoopback(_ url: URL) -> Bool {
         guard let host = url.host(percentEncoded: false)?.lowercased() else { return false }
@@ -45,16 +55,27 @@ public struct NetworkPolicyFetcher: ProviderFetching {
 }
 
 extension NetworkPolicy {
-    /// The policy stored in `app_settings`, or the defaults when it cannot be read (no database
-    /// yet, a busy file): the defaults are today's behaviour, as `getNetworkPolicy` before the
-    /// first read.
+    /// The policy stored in `app_settings`; the defaults when nothing is stored. A read that
+    /// fails (a busy or unreadable file) fails closed as offline mode, so a database hiccup can
+    /// never send a request the saved privacy choice forbids.
     static func stored(in database: BackendDatabase) async -> NetworkPolicy {
-        let value = try? await database.run { session -> JSValue? in
-            guard let row = try session.row("SELECT value FROM user_settings WHERE key = ?", [.text("app_settings")])
-            else { return nil }
-            return SettingsArea.revive(key: "app_settings", try SettingsArea.stored(row))
+        do {
+            let value = try await database.run { session -> JSValue? in
+                guard let row = try session.row("SELECT value FROM user_settings WHERE key = ?", [.text("app_settings")])
+                else { return nil }
+                return SettingsArea.revive(key: "app_settings", try SettingsArea.stored(row))
+            }
+            return from(appSettings: value)
+        } catch {
+            return unreadable
         }
-        return from(appSettings: value ?? nil)
+    }
+
+    /// The policy while the stored one cannot be read: nothing leaves the Mac.
+    static var unreadable: NetworkPolicy {
+        var policy = NetworkPolicy.defaults
+        policy.offlineMode = true
+        return policy
     }
 
     static func from(appSettings value: JSValue?) -> NetworkPolicy {

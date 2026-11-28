@@ -213,15 +213,24 @@ struct AnalysisResultPivot: View {
         /// The inputs of the off-main build in flight.
         var pending: AnalysisPivotMatrixInputs?
     }
-    /// The matrix for the current result, configuration and expansion. The first one is built here;
-    /// later ones are built off the main actor while the previous matrix stays on screen, and land
-    /// only if they are still for the inputs last asked for (the version check).
+    /// The matrix for the current result, configuration and expansion. A new result or
+    /// configuration is built here, so the grid never shows (or drills into) cells of the
+    /// previous query under the new headers; an expansion change of the same query is built off
+    /// the main actor while the previous matrix stays on screen, and lands only if it is still
+    /// for the inputs last asked for (the version check).
     private var presentation: PivotMatrixPresentation {
         // An off-main build bumps this when it lands, which re-renders the matrix.
         _ = matrixRevision
         let inputs = matrixInputs
-        if let entry = matrixCache.entry, entry.inputs == inputs { return entry.value }
-        guard let shown = matrixCache.entry else {
+        if let entry = matrixCache.entry, entry.inputs == inputs {
+            // Back at the shown inputs (a row expanded then collapsed again): the build for the
+            // expansion must not land and reopen the row.
+            matrixCache.pending = nil
+            return entry.value
+        }
+        let sameQuery = matrixCache.entry.map { $0.inputs.result == inputs.result && $0.inputs.config == inputs.config }
+        guard let shown = matrixCache.entry, sameQuery == true else {
+            matrixCache.pending = nil
             let interval = NativePerformance.begin("Analysis.pivot")
             defer { NativePerformance.end("Analysis.pivot", interval) }
             let value = inputs.build()

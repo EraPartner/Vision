@@ -810,9 +810,9 @@ struct StatisticsModelTests {
         #expect(model.pivotGroups.first?.total == 400)
         #expect(model.pivotColumnTotals["2026-09"] == 400)
         #expect(model.pivotGrandTotal == 400)
-        // Later builds run off the main actor; the previous pivot shows until one lands.
+        // A new metric is built at once: the income label never shows the expense total.
         model.categoryMetric = .income
-        #expect(model.pivotGrandTotal == 400)
+        #expect(model.pivotGrandTotal == 500)
         await model.pivotSettled()
         #expect(model.pivotColumnTotals["2026-09"] == 500)
         #expect(model.pivotGrandTotal == 500)
