@@ -605,9 +605,30 @@ enum PlannedArea {
     static func occurrencesBetween(_ row: Commitment, _ fromYmd: String, _ toYmd: String) throws -> [String] {
         let remaining = remainingOccurrences(row)
         if remaining == 0 { return [] }
+        guard row.maxOccurrences == nil, row.plannedDate < fromYmd, row.isRecurring,
+            let pattern = row.recurrencePattern, Recurrence.parseStep(.string(pattern)) != nil
+        else {
+            return try Recurrence.expandOccurrences(
+                row: (row.plannedDate, row.isRecurring, row.recurrencePattern), horizonYmd: toYmd,
+                maxOccurrences: remaining
+            ).filter { date in
+                date >= fromYmd && (row.recurrenceEndDate == nil || date <= row.recurrenceEndDate ?? date)
+            }
+        }
+        // An unlimited plan that is overdue: the 500-occurrence allowance counts from the
+        // window's start, not from the stored date, so years of overdue dates do not use it
+        // up before the window (Astra report 4, finding 8). Swift only.
+        var current = row.plannedDate
+        var steps = 0
+        while current < fromYmd {
+            guard let next = try Recurrence.nextOccurrenceYmd(current, pattern), next > current else { return [] }
+            current = next
+            steps += 1
+            // About 270 years of daily dates: a stored date older than that projects nothing.
+            if steps > 100_000 { return [] }
+        }
         return try Recurrence.expandOccurrences(
-            row: (row.plannedDate, row.isRecurring, row.recurrencePattern), horizonYmd: toYmd,
-            maxOccurrences: remaining
+            row: (current, true, pattern), horizonYmd: toYmd, maxOccurrences: remaining
         ).filter { date in
             date >= fromYmd && (row.recurrenceEndDate == nil || date <= row.recurrenceEndDate ?? date)
         }
@@ -1097,7 +1118,9 @@ enum PlannedArea {
             if let firstDueDate = generated.firstDueDate {
                 data["loan_first_payment_date"] = .string(firstDueDate)
             }
-            data["amount"] = .number(-abs(generated.regularPaymentAmount))
+            // The planned amount is the first installment's whole payment (principal plus
+            // interest), not the regular principal figure (Astra report 4, finding 5). Swift only.
+            data["amount"] = .number(-abs(generated.schedule.first?.paymentAmount ?? generated.regularPaymentAmount))
             if let firstDueDate = generated.firstDueDate { data["planned_date"] = .string(firstDueDate) }
             data["is_recurring"] = .bool(true)
             data["recurrence_pattern"] = .string("monthly")
@@ -1462,9 +1485,10 @@ enum PlannedArea {
                 if let patched, patched != .null { return patched }
                 return existingValue
             }
-            // `existing.loan_start_date` is `dbDate` — a local-midnight `Date` object, whose
-            // `looseString` never matches the y-m-d shape, so a PATCH that relies on the
-            // stored date always answers the loan-configuration error, as TypeScript does.
+            // A PATCH that omits the start date regenerates the schedule from the stored one
+            // (Astra report 4, finding 7). Swift only: the TypeScript reads `dbDate`, a
+            // local-midnight `Date` whose string never matches the y-m-d shape, and answers
+            // the loan-configuration error.
             let generated = try LoanSchedule.generate(.init(
                 loanType: loanValue("loan_type", existing.loanType.map { .string($0) }),
                 loanPrincipal: loanValue(
@@ -1474,17 +1498,21 @@ enum PlannedArea {
                 loanTermMonths: loanValue(
                     "loan_term_months", existing.loanTermMonths.map { .int($0) }),
                 loanStartDate: loanValue(
-                    "loan_start_date", existing.loanStartDate.map { _ in .object(JSObject()) }),
+                    "loan_start_date", existing.loanStartDate.map { .string(String($0.prefix(10))) }),
                 loanPaymentDay: loanValue(
                     "loan_payment_day", existing.loanPaymentDay.map { .int($0) })))
             fields["loan_regular_payment_amount"] = .number(generated.regularPaymentAmount)
             if let firstDueDate = generated.firstDueDate {
                 fields["loan_first_payment_date"] = .string(firstDueDate)
             }
-            fields["amount"] = .number(-abs(generated.regularPaymentAmount))
             if fields["planned_date"] == nil, let firstDueDate = generated.firstDueDate {
                 fields["planned_date"] = .string(firstDueDate)
             }
+            // The whole payment of the installment the plan now stands on: the first one due on
+            // or after its planned date (Astra report 4, finding 5). Swift only.
+            let plannedOn = fields["planned_date"]?.stringValue ?? existing.plannedDate
+            let current = generated.schedule.first { $0.dueDate >= plannedOn } ?? generated.schedule.first
+            fields["amount"] = .number(-abs(current?.paymentAmount ?? generated.regularPaymentAmount))
             if fields["is_recurring"] == nil { fields["is_recurring"] = .bool(true) }
             if fields["recurrence_pattern"] == nil { fields["recurrence_pattern"] = .string("monthly") }
             generatedSchedule = generated.schedule
@@ -1765,7 +1793,28 @@ enum PlannedArea {
                 ("last_executed_date", .text(execDate)),
                 ("is_executed", .integer(row.isRecurring ? 0 : 1)),
             ]
-            if row.isRecurring, let pattern = row.recurrencePattern,
+            // A loan follows its stored installment table: the next due date is the next
+            // installment's own date (anchored on the payment day, not on the shortened day of
+            // the previous installment), and the plan completes after the last installment
+            // (Astra report 4, findings 4 and 6). Swift only. A loan without a stored table
+            // keeps the recurrence below.
+            let installments = row.isLoan
+                ? try session.rows(
+                    """
+                    SELECT due_date, payment_amount FROM planned_transaction_loan_schedule \
+                    WHERE planned_transaction_id = ? ORDER BY installment_number
+                    """, [idValue(id)]).map { (due: try $0.text("due_date"), payment: try $0.text("payment_amount")) }
+                : []
+            if !installments.isEmpty {
+                if let next = installments.first(where: { $0.due > row.plannedDate }) {
+                    fields[1] = ("is_executed", .integer(0))
+                    fields.append(("planned_date", .text(next.due)))
+                    // The next installment's whole payment (finding 5).
+                    fields.append(("amount", .text(try DecimalJS.from(next.payment).abs.negated.description)))
+                } else {
+                    fields[1] = ("is_executed", .integer(1))
+                }
+            } else if row.isRecurring, let pattern = row.recurrencePattern,
                 let next = try Recurrence.nextOccurrenceYmd(row.plannedDate, pattern)
             {
                 let reachedMax = row.maxOccurrences.map { executionCount + 1 >= $0 } ?? false
@@ -1789,7 +1838,7 @@ enum PlannedArea {
                 """, [idValue(id), .integer(Int64(body.executedTransactionId.rawValue)), .text(execDate)])
             if inserted.isEmpty { return (true, try getById(session, id: id)) }
 
-            var updates = fields.map { "\($0.0) = ?" }
+            var updates = fields.map { $0.0 == "amount" ? "amount = vision_numeric(?, 18, 4)" : "\($0.0) = ?" }  // lint:allow string-literal-compare the column name
             updates.append("updated_at = now()")
             try session.rows(
                 "UPDATE planned_transactions SET \(updates.joined(separator: ", ")) WHERE id = ? RETURNING id",

@@ -1597,13 +1597,16 @@ export const AREAS: Record<string, ParityArea> = {
   },
   "exchange-rates": {
     router: { module: "info/rates.ts", mountPath: "/api/info" },
+    // Every latest rate is dated after any replay day: the Swift backend reports is_stale when
+    // any latest rate predates today (Astra report 4, finding 13), Bun only for the first
+    // currency, so only an all-fresh seed records the same is_stale and no background refresh.
     seed: [
       `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
         ${RATE_ROW("AUD", "0.61", "2099-01-01", 1, "2025-03-02T10:00:00.123456Z")},
-        ${RATE_ROW("USD", "0.9123456789", "2025-01-02", 1)},
+        ${RATE_ROW("USD", "0.9123456789", "2099-01-02", 1)},
         ${RATE_ROW("USD", "0.95", "2024-12-31", 0)},
-        ${RATE_ROW("GBP", "1.18", "2025-01-02", 1)},
-        ${RATE_ROW("XYZ", "123.4567", "2025-01-02", 1)}`,
+        ${RATE_ROW("GBP", "1.18", "2099-01-02", 1)},
+        ${RATE_ROW("XYZ", "123.4567", "2099-01-02", 1)}`,
     ],
     fetch: {
       [ECB_DAILY]: {

@@ -1,7 +1,7 @@
 {
   "generatedBy": "bun run native:parity",
   "seed": [
-    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('AUD', vision_numeric('0.61', 20, 10), '2099-01-01', 1, '2025-03-02T10:00:00.123456Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.9123456789', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.95', 20, 10), '2024-12-31', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.18', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('XYZ', vision_numeric('123.4567', 20, 10), '2025-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('AUD', vision_numeric('0.61', 20, 10), '2099-01-01', 1, '2025-03-02T10:00:00.123456Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.9123456789', 20, 10), '2099-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.95', 20, 10), '2024-12-31', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.18', 20, 10), '2099-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('XYZ', vision_numeric('123.4567', 20, 10), '2099-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
   ],
   "fetch": {
     "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml": {
@@ -33,19 +33,19 @@
             {
               "currency": "GBP",
               "rate_to_eur": 1.18,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "USD",
               "rate_to_eur": 0.9123456789,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],
@@ -74,19 +74,19 @@
             {
               "currency": "GBP",
               "rate_to_eur": 1.18,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "USD",
               "rate_to_eur": 0.9123456789,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],
@@ -115,19 +115,19 @@
             {
               "currency": "GBP",
               "rate_to_eur": 1.18,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "USD",
               "rate_to_eur": 0.9123456789,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],
@@ -156,19 +156,19 @@
             {
               "currency": "GBP",
               "rate_to_eur": 1.18,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "USD",
               "rate_to_eur": 0.9123456789,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],
@@ -197,19 +197,19 @@
             {
               "currency": "GBP",
               "rate_to_eur": 1.18,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "USD",
               "rate_to_eur": 0.9123456789,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],
@@ -238,19 +238,19 @@
             {
               "currency": "GBP",
               "rate_to_eur": 1.18,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "USD",
               "rate_to_eur": 0.9123456789,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             },
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],
@@ -333,7 +333,7 @@
             {
               "currency": "XYZ",
               "rate_to_eur": 123.4567,
-              "rate_date": "2025-01-02",
+              "rate_date": "2099-01-02",
               "fetched_at": "2025-03-01T09:00:00.000Z"
             }
           ],

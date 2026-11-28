@@ -379,8 +379,13 @@ extension PortfolioTransactionsArea {
                 "For buy/sell transactions, amount, units, and price_per_unit must be positive")
         }
         var nextAmount = amount
-        var nextUnits = units
-        var nextPrice = pricePerUnit
+        // Units and price are checked and multiplied in the form their NUMERIC(18,8) and
+        // NUMERIC(18,6) columns store, so a stored trade still passes this check when it is
+        // edited later (Astra report 4, finding 3). Swift only.
+        var nextUnits = units.map { roundMoney($0, 8) }
+        var nextPrice = pricePerUnit.map { roundMoney($0, 6) }
+        if let nextUnits, nextUnits <= 0 { throw positive() }
+        if let nextPrice, nextPrice <= 0 { throw positive() }
         // `multiply` and `divide` are decimal operations: 0.35 units at 0.005 is exactly
         // 0.00175, which rounds half-even to 0.0018, where the binary product rounds to 0.0017.
         func product(_ a: Double?, _ b: Double?) -> Double {
@@ -758,6 +763,16 @@ extension PortfolioTransactionsArea {
                         "change would create or worsen an oversold partition at \(label)")
                 }
             }
+            // Unassigned lots have no partitions, so the check above sees no deficit; the
+            // pooled history must not become more oversold either (Astra report 4, finding 1).
+            let beforeTxns = rows.map(\.txn)
+            if !PortfolioCore.areLotsFullyAssigned(beforeTxns) || !PortfolioCore.areLotsFullyAssigned(projectedTxns) {
+                let pooledBefore = PortfolioCore.pooledOversellDeficit(beforeTxns)
+                let pooledAfter = PortfolioCore.pooledOversellDeficit(projectedTxns)
+                if pooledAfter - pooledBefore > epsilon {
+                    throw BackendHTTPError.validation("change would create or worsen an oversold history")
+                }
+            }
         }
     }
 
@@ -1039,6 +1054,7 @@ extension PortfolioTransactionsArea {
         var recomputedFx: Double? = nil
         let recomputeFx = txn.fxRateToEur == nil
             && (txn.date != nil || (txn.currency != nil && txn.currency != .null))
+        var staleFx = false
         if recomputeFx, let existing = try byId(session, id) {
             let currency: String
             if case .string(let text)? = txn.currency {
@@ -1048,8 +1064,17 @@ extension PortfolioTransactionsArea {
             }
             let date = txn.date ?? existing.date
             recomputedFx = try storedRateToEur(session, currency, date)
+            // A rate stamped for the old currency is wrong for the new one: with no rate to
+            // replace it, it is cleared so valuation falls back to the historical quotes
+            // (Astra report 4, finding 2). Swift only: the TypeScript keeps the old rate.
+            staleFx = currency.uppercased() != existing.currency.uppercased()
+                && existing.fxRateToEur != nil
         }
-        if let rate = recomputedFx { txn.fxRateToEur = .number(rate) }
+        if let rate = recomputedFx {
+            txn.fxRateToEur = .number(rate)
+        } else if staleFx {
+            txn.fxRateToEur = .null
+        }
         let updated = try session.transaction { () -> PortfolioTxRow? in
             try updateUnlocked(session, id, txn, patchedAccountId)
         }

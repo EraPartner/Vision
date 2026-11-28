@@ -140,6 +140,13 @@ enum SplitsArea {
         )
     }
 
+    /// A split or payment amount in its stored form: `vision_numeric(?, 18, 4)` rounds half away
+    /// from zero, so the checks compare what the INSERT will write (Astra report 4, findings 9
+    /// and 10). Swift only: the TypeScript checks a half-even rounding.
+    static func storedAmount(_ value: Double) throws -> DecimalJS {
+        try DecimalJS.from(SQLArguments.javaScriptText(value)).toDecimalPlaces(4, .halfUp)
+    }
+
     /// `validateSplitAllocation` at the NUMERIC(18,4) storage precision.
     static func validateAllocation(new: DecimalJS, transactionTotal: DecimalJS, currentSplitTotal: DecimalJS) throws {
         guard new.gt(.zero) else { throw BackendHTTPError.validation("Split amount must be a positive number") }
@@ -253,10 +260,14 @@ enum SplitsArea {
         var projected: [(recipientId: RecipientID, fields: [String: JSONValue], remaining: Double)] = []
         for (offset, id) in order.enumerated() {
             let entry = recipients[offset]
-            let totalOwed = DecimalMoney.roundToCents(entry.owed.reduce(DecimalJS.zero) { $0.plus($1) }).toNumber
-            let totalPaid = DecimalMoney.roundToCents(entry.paid.reduce(DecimalJS.zero) { $0.plus($1) }).toNumber
-            let remaining = DecimalMoney.roundToCents(
-                try DecimalJS.from(SQLArguments.javaScriptText(max(0, totalOwed - totalPaid)))).toNumber
+            let exactOwed = entry.owed.reduce(DecimalJS.zero) { $0.plus($1) }
+            let exactPaid = entry.paid.reduce(DecimalJS.zero) { $0.plus($1) }
+            let totalOwed = DecimalMoney.roundToCents(exactOwed).toNumber
+            let totalPaid = DecimalMoney.roundToCents(exactPaid).toNumber
+            // Subtract the exact sums, then round once, as the recipient detail does: rounding
+            // each side first could hide a recipient who still owes a cent (Astra report 4,
+            // finding 11, Tor's choice). Swift only.
+            let remaining = DecimalMoney.roundToCents(DecimalJS.max(.zero, exactOwed.minus(exactPaid))).toNumber
             guard remaining > 0 else { continue }
             projected.append((
                 id,
@@ -606,7 +617,7 @@ enum SplitsArea {
                 throw BackendHTTPError.notFound("Transaction not found")
             }
             try validateAllocation(
-                new: try DecimalJS.from(SQLArguments.javaScriptText(input.amount)),
+                new: try storedAmount(input.amount),
                 transactionTotal: totals.total, currentSplitTotal: totals.splits)
             return try insertSplit(
                 session, transaction: input.transaction, recipient: input.recipient,
@@ -672,12 +683,12 @@ enum SplitsArea {
                 throw BackendHTTPError.notFound("Transaction not found")
             }
             for split in prepared {
-                guard split.amount > 0 else {
+                guard split.amount > 0, try storedAmount(split.amount).gt(.zero) else {
                     throw BackendHTTPError.validation("Split amount must be a positive number")
                 }
             }
             let sum = try prepared.reduce(DecimalJS.zero) {
-                $0.plus(try DecimalJS.from(SQLArguments.javaScriptText($1.amount)))
+                $0.plus(try storedAmount($1.amount))
             }
             try validateAllocation(new: sum, transactionTotal: totals.total, currentSplitTotal: totals.splits)
             var marks: [String] = []
@@ -834,7 +845,10 @@ enum SplitsArea {
             if try split.bool("is_settled") {
                 throw BackendHTTPError.validation("Split is already settled")
             }
-            let amount = try DecimalJS.from(SQLArguments.javaScriptText(input.amount)).toDecimalPlaces(4)
+            let amount = try storedAmount(input.amount)
+            guard amount.gt(.zero) else {
+                throw BackendHTTPError.validation("Payment amount must be a positive number")
+            }
             let paidRow = try session.row(
                 "SELECT COALESCE(dec_sum(amount), '0') AS paid FROM split_payments WHERE split_id = ?",
                 [.integer(Int64(id.rawValue))])

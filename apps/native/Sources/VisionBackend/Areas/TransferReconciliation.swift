@@ -91,10 +91,19 @@ enum TransferReconciliation {
                  AND p.is_active AND t.is_active
             )
             """
+        // Batches of 250 until none is left, so a bulk edit that invalidates more pairs than one
+        // batch holds releases all of them (Astra report 4, finding 14). Swift only: the
+        // TypeScript runs one batch. Each pass releases what it read, or the loop stops.
+        while try releaseInvalidBatch(session, invalid) {}
+    }
+
+    /// One batch of `releaseInvalid`: true when the batch was full and released rows, so
+    /// another may remain.
+    private static func releaseInvalidBatch(_ session: BackendSession, _ invalid: String) throws -> Bool {
         try session.transaction {
             let discovered = try session.rows(
                 "SELECT t.id, t.transfer_peer_id FROM transactions t WHERE \(invalid) ORDER BY t.id LIMIT 250")
-            guard !discovered.isEmpty else { return }
+            guard !discovered.isEmpty else { return false }
             var ids = Set<Int>()
             for row in discovered {
                 ids.insert(try row.integerId("id"))
@@ -104,7 +113,7 @@ enum TransferReconciliation {
                 "SELECT id FROM transactions WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id",
                 [.text(JSValue.array(ids.sorted().map { .int($0) }).jsonText)])
             let lockedIds = JSValue.array(try locked.map { .int(try $0.integerId("id")) }).jsonText
-            _ = try session.rows(
+            let released = try session.write(
                 """
                 UPDATE transactions AS t SET is_transfer = 0, transfer_peer_id = NULL, transfer_source = NULL
                  WHERE t.id IN (SELECT value FROM json_each(?))
@@ -112,6 +121,7 @@ enum TransferReconciliation {
                    AND \(invalid)
                 """,
                 [.text(lockedIds), .text(lockedIds)])
+            return discovered.count == 250 && released > 0
         }
     }
 
