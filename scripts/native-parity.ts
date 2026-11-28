@@ -7909,6 +7909,179 @@ function mutationAreas(): Record<string, ParityArea> {
         portfolioBatchesDelete("6"),
       ]),
     },
+    "portfolio-figures-mutations": {
+      router: { module: "info.ts", mountPath: "/api/info" },
+      // The summary's computed_at, the performance window's end date and the
+      // net-worth walk all stamp NOW()/today; the area records on the fixed
+      // clock the replay runs on.
+      now: "2026-06-15T09:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Figure Broker', 'Figure brokerage', 'Figure', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000c001'),
+        (2, 'Dollar Broker', 'Dollar brokerage', 'Dollar', 'USD', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000c002'),
+        (3, 'Coin Wallet', 'Coin wallet', 'Coin', 'EUR', 'wallet', 'liquid', 0, 1, 'none', 'me', 0, 0, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000c003')`,
+
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'Figure Stock', 'FIG', 'stock', 'EUR', vision_numeric('50', 18, 6), NULL,
+         1, 'manual', 'figures asset', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'Dollar Corp', 'DLC', 'stock', 'USD', vision_numeric('120', 18, 6), NULL,
+         1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('20', 18, 6), NULL,
+         0, 'manual', 'archived holding', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,
+         created_at, updated_at) VALUES
+        (1, 1, 'buy', '2026-01-02', vision_numeric('450', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('45', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'figure buy', 1, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 2, 'buy', '2026-01-03', vision_numeric('240', 18, 4), vision_numeric('2', 18, 8),
+         vision_numeric('120', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',
+         'dollar buy', 2, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 1, 'dividend', '2026-02-01', vision_numeric('5', 18, 4), NULL, NULL,
+         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'figure dividend', 1, NULL, 'net', '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 1, 'sell', '2026-03-01', vision_numeric('100', 18, 4), vision_numeric('2', 18, 8),
+         vision_numeric('50', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'figure sell', 1, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 3, 'buy', '2026-01-04', vision_numeric('200', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('20', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'archived buy', 1, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
+        (1, 'Opening Payee', 'opening payee', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         created_at, updated_at) VALUES
+        (30, '2026-01-05', vision_numeric('1000', 18, 4), 'EUR', 'opening cash', 1, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (31, '2026-01-05', vision_numeric('500', 18, 4), 'USD', 'opening dollars', 1, 2, 1,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+          ${RATE_ROW("USD", "0.9163", "2026-01-02", 1)}`,
+
+        `INSERT INTO portfolio_performance_snapshots (snapshot_date, invested, value,
+         stocks_etfs_value, crypto_value, metals_value, cash_value, gain_loss, return_pct,
+         inflation_adjusted_value, cumulative_inflation, real_return_pct, currency, computed_at,
+         stocks_etfs_invested, crypto_invested, metals_invested, value_fx_neutral) VALUES
+        ('2026-01-02', vision_numeric('450', 18, 6), vision_numeric('500', 18, 6),
+         vision_numeric('500', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('50', 18, 6), vision_numeric('11.1111', 10, 4),
+         vision_numeric('495', 18, 6), vision_numeric('1.0100', 10, 4), vision_numeric('10.0000', 10, 4),
+         'EUR', '2026-01-02T22:00:00.000000Z', vision_numeric('450', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('500.00', 18, 2)),
+        ('2026-02-02', vision_numeric('660', 18, 6), vision_numeric('720', 18, 6),
+         vision_numeric('720', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('60', 18, 6), vision_numeric('9.0909', 10, 4),
+         vision_numeric('700', 18, 6), vision_numeric('1.0200', 10, 4), vision_numeric('7.0000', 10, 4),
+         'EUR', '2026-02-02T22:00:00.000000Z', vision_numeric('660', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('720.00', 18, 2)),
+        ('2026-03-02', vision_numeric('660', 18, 6), vision_numeric('750', 18, 6),
+         vision_numeric('750', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('90', 18, 6), vision_numeric('13.6364', 10, 4),
+         vision_numeric('735', 18, 6), vision_numeric('1.0300', 10, 4), vision_numeric('11.0000', 10, 4),
+         'EUR', '2026-03-02T22:00:00.000000Z', vision_numeric('660', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('750.00', 18, 2))`,
+
+        `INSERT INTO portfolio_broker_snapshots (snapshot_date, currency, account_key, account_id,
+         account_name, value, invested, gain_loss, computed_at) VALUES
+        ('2026-01-02', 'EUR', 'account:1', 1, 'Figure Broker', vision_numeric('500', 18, 2),
+         vision_numeric('450', 18, 2), vision_numeric('50', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-01-02', 'EUR', 'account:2', 2, 'Dollar Broker', vision_numeric('220', 18, 2),
+         vision_numeric('220', 18, 2), vision_numeric('0', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-01-02', 'EUR', 'unassigned', NULL, 'Unassigned', vision_numeric('30', 18, 2),
+         vision_numeric('30', 18, 2), vision_numeric('0', 18, 2), '2026-01-02T22:00:00.000000Z')`,
+
+        `INSERT INTO portfolio_snapshot_accounts (snapshot_date, currency, account_key, value, computed_at) VALUES
+        ('2026-01-02', 'EUR', 'account:1', vision_numeric('500', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-01-02', 'EUR', 'account:2', vision_numeric('220', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-02-02', 'EUR', 'account:1', vision_numeric('720', 18, 2), '2026-02-02T22:00:00.000000Z')`,
+      ],
+      steps: asRecorded([
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary",
+        },
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary?active=false",
+        },
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary?target_currency=USD",
+        },
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary?target_currency=XYZ",
+        },
+        {
+          operationId: "getPortfolioPerformance",
+          method: "GET",
+          path: "/api/info/portfolio-performance",
+        },
+        {
+          operationId: "getPortfolioPerformance",
+          method: "GET",
+          path: "/api/info/portfolio-performance?period=1y",
+        },
+        {
+          operationId: "getPortfolioPerformance",
+          method: "GET",
+          path: "/api/info/portfolio-performance?period=bogus",
+        },
+        {
+          operationId: "getPortfolioPerformanceByBroker",
+          method: "GET",
+          path: "/api/info/portfolio-performance/by-broker",
+        },
+        {
+          operationId: "getPortfolioPerformanceByBroker",
+          method: "GET",
+          path: "/api/info/portfolio-performance/by-broker?from=2026-01-01&to=2026-02-01",
+        },
+        {
+          operationId: "getPortfolioPerformanceByBroker",
+          method: "GET",
+          path: "/api/info/portfolio-performance/by-broker?from=2026-02-31",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth?limit=2&offset=1",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth?limit=0",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth?target_currency=USD",
+        },
+        {
+          operationId: "getNetWorthByAccount",
+          method: "GET",
+          path: "/api/info/net-worth/by-account",
+        },
+      ]),
+    },
     "prices-mutations": {
       router: { module: "investments.ts", mountPath: "/api/investments" },
       now: "2026-11-26T12:00:00.000Z",
