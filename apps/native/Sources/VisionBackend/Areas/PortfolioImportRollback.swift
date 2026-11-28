@@ -272,6 +272,8 @@ enum PortfolioImportRollbackArea {
             case .object(let beforeSnapshot)? = beforeEnvelope["snapshot"],
             case .object(let afterSnapshot)? = afterEnvelope["snapshot"]
         else { throw cashReceiptChanged() }
+        // `compareAndSetIbkrCashImage(after, before)`: the row must still equal the
+        // receipt's after image, and it is set back to the before image.
         let afterImage = JSValue.object(afterSnapshot).jsonText
         let beforeImage = JSValue.object(beforeSnapshot).jsonText
         let updated = try session.rows(
@@ -286,8 +288,8 @@ enum PortfolioImportRollbackArea {
                AND \(ibkrCashSnapshotSQL(alias: "transactions")) = vision_jsonb(?)
             RETURNING id
             """,
-            [.text(afterImage), .text(afterImage), .text(afterImage), .text(afterImage),
-             .integer(Int64(receipt.transactionID)), .text(beforeImage)])
+            [.text(beforeImage), .text(beforeImage), .text(beforeImage), .text(beforeImage),
+             .integer(Int64(receipt.transactionID)), .text(afterImage)])
         guard updated.count == 1 else { throw cashReceiptChanged() }
         _ = try session.rows(
             """
