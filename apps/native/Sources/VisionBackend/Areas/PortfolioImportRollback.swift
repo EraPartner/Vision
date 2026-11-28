@@ -725,8 +725,8 @@ extension PortfolioImportRollbackArea {
                 case .array(let afterStaging)? = after["originalStaging"]
             else { throw repairConflict() }
             for (index, previous) in beforeStaging.enumerated() {
-                guard let current = afterStaging[index],
-                    try replaceRepairStaging(session, current, previous)
+                guard index < afterStaging.count,
+                    try replaceRepairStaging(session, afterStaging[index], previous)
                 else { throw repairConflict() }
                 guard case .object(let entry) = previous,
                     case .number(let id)? = entry["id"]
