@@ -439,6 +439,7 @@ import VisionNativeCore
         "portfolio-parsers-mutations", "portfolio-batches-mutations",
         "portfolio-overrides-mutations", "portfolio-reconciliation-mutations",
         "portfolio-commit-mutations", "portfolio-uploads-mutations",
+        "portfolio-rollback-mutations", "portfolio-repairs-mutations",
     ])
     func mutations(_ area: String) async throws {
         try await Self.replay(area)
@@ -459,6 +460,7 @@ import VisionNativeCore
             "portfolio-batches-mutations", "portfolio-overrides-mutations",
             "portfolio-reconciliation-mutations", "portfolio-commit-mutations",
             "portfolio-uploads-mutations", "portfolio-rollback-mutations",
+            "portfolio-repairs-mutations",
         ]
         let recorded = Set(
             try FileManager.default.contentsOfDirectory(atPath: Self.corpusDirectory.path)
