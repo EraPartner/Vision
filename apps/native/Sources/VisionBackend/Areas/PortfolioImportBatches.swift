@@ -383,7 +383,7 @@ enum PortfolioImportBatchesArea {
             // `validatePortfolioImportAdoptionRollback`: every receipt the batch
             // owns is approved before any row is deleted. `portfolioRows` names
             // the trade ids the route deletes (cash rows only on a non-brokerage batch).
-            let portfolioRows = committed
+            let portfolioRows = try committed
                 .filter { !isBrokerage || ((try? $0.optionalText("route")) ?? "") != "cash" }  // lint:allow string-literal-compare the staging-row route values
                 .map { row -> (id: Int, investmentID: Int?) in  // lint:allow raw-id business table ids of the TypeScript route and repository reads
                     (Int(try row.int64("id")),
