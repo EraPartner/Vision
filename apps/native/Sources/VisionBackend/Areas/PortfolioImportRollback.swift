@@ -294,7 +294,7 @@ enum PortfolioImportRollbackArea {
             INSERT INTO portfolio_import_reconciliation_journal (
                 batch_id, staging_row_id, transaction_id, action, policy,
                 previous_entry_id, before_data, after_data
-            ) VALUES (?, ?, ?, 'restore', ?, ?, ?, ?) RETURNING id
+            ) VALUES (?, ?, ?, 'restore', ?, ?, vision_jsonb(?), vision_jsonb(?)) RETURNING id
             """,
             [.integer(Int64(receipt.batchID)), .integer(Int64(receipt.stagingRowID)),
              .integer(Int64(receipt.transactionID)), .text(receipt.policy),
@@ -332,7 +332,7 @@ enum PortfolioImportRollbackArea {
                 INSERT INTO portfolio_import_reconciliation_journal (
                     batch_id, staging_row_id, transaction_id, action, policy,
                     previous_entry_id, before_data, after_data
-                ) VALUES (?, ?, ?, 'restore', ?, ?, ?, ?) RETURNING id
+                ) VALUES (?, ?, ?, 'restore', ?, ?, vision_jsonb(?), vision_jsonb(?)) RETURNING id
                 """,
                 [.integer(Int64(receipt.batchID)), .integer(Int64(receipt.stagingRowID)),
                  .integer(Int64(receipt.transactionID)), .text(receipt.policy),
