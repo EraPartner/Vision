@@ -20,6 +20,8 @@ for (const [name, area] of Object.entries(AREAS)) {
         status: _status,
         response: _response,
         headers: _headers,
+        // A step whose recorded answer was edited to the Swift one names why (ADR-270).
+        swift_divergence: _swiftDivergence,
         ...request
       }) => request,
     );

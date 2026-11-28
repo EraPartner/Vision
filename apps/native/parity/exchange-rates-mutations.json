@@ -1,6 +1,5 @@
 {
   "generatedBy": "bun run native:parity",
-  "swift_divergence": "Astra report 4, finding 13: Swift reports is_stale when any latest rate predates today, where Bun checked only the first currency alphabetically. The seed's 2025-01-02 latest rates (and their recorded rate_date) are dated 2099-01-02 instead, so every recorded is_stale holds under both rules and no list starts a background refresh mid-replay.",
   "seed": [
     "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n        ('AUD', vision_numeric('0.61', 20, 10), '2099-01-01', 1, '2025-03-02T10:00:00.123456Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.9123456789', 20, 10), '2099-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('USD', vision_numeric('0.95', 20, 10), '2024-12-31', 0, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('GBP', vision_numeric('1.18', 20, 10), '2099-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        ('XYZ', vision_numeric('123.4567', 20, 10), '2099-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')"
   ],
