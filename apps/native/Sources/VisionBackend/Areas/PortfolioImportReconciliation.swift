@@ -797,14 +797,24 @@ enum PortfolioImportReconciliationArea {
     }
     // MARK: - Preview
 
-    /// `previewPortfolioImportReconciliation`: the whole `loadPlan` plus the
-    /// projected-history guard, inside the read transaction the service wraps it in.
-    static func preview(
-        _ session: BackendSession, _ scope: (
-            batchIds: [Int], adoptPolicy: String?, batchPolicies: [BatchPolicyInput],
-            rowChoices: [RowChoiceInput]
-        )
-    ) throws -> HandlerResult {
+    /// The scope the preview and the commit share.
+    typealias Scope = (
+        batchIds: [Int], adoptPolicy: String?, batchPolicies: [BatchPolicyInput],
+        rowChoices: [RowChoiceInput]
+    )
+
+    /// `loadPlan`'s answer: the plan with the rows and history it was built from.
+    struct LoadedPlan {
+        var result: ReconciliationPlanResult
+        var rows: [ReconciliationSourceRow]
+        var history: [HistoryImage]
+    }
+
+    /// `loadPlan`: the reviewed scope's rows, history and plan. Both the preview and the
+    /// locked commit build their plan through these reads.
+    static func loadPlan(
+        _ session: BackendSession, _ scope: Scope
+    ) throws -> LoadedPlan {
         var ids = Array(Set(scope.batchIds))
         ids.sort()
         let batches = try readBatchScope(session, ids)
@@ -882,20 +892,27 @@ enum PortfolioImportReconciliationArea {
             batchPolicies: scope.batchPolicies, priorProAccounts: priorProAccounts,
             crossFormat: crossFormat, historySourceKeys: historySourceKeys,
             rowChoices: scope.rowChoices))
-        var plan = result.plan
+        return LoadedPlan(result: result, rows: rows, history: history)
+    }
+
+    /// `previewPortfolioImportReconciliation`: the whole `loadPlan` plus the
+    /// projected-history guard, inside the read transaction the service wraps it in.
+    static func preview(_ session: BackendSession, _ scope: Scope) throws -> HandlerResult {
+        let loaded = try loadPlan(session, scope)
+        var plan = loaded.result.plan
         if plan.ready {
-            let projected = try projectedHistory(result, rows: rows, history: history)
+            let projected = try projectedHistory(loaded.result, rows: loaded.rows, history: loaded.history)
             do {
-                try assertProjectedHistory(history, projected)
+                try assertProjectedHistory(loaded.history, projected)
             } catch let error as BackendHTTPError where error.status == 409 {
                 let row =
-                    rows.first {
+                    loaded.rows.first {
                         $0.route == StagingRoute.assetTransfer
                             || $0.route == StagingRoute.assetAdjustment
-                    } ?? rows.first
+                    } ?? loaded.rows.first
                 plan.blockers.append(PlanIssue(
                     batchID: row.map { $0.batchID }
-                        ?? PortfolioImportBatchNumericID(ids.first ?? 0),
+                        ?? PortfolioImportBatchNumericID(scope.batchIds.min() ?? 0),
                     rowID: row?.id ?? PortfolioImportRowID(0),
                     rowOrdinal: (row?.rowIndex ?? 0) + 1,
                     reason: ReconciliationBlockReason.projectedHistoryConflict,
@@ -903,6 +920,7 @@ enum PortfolioImportReconciliationArea {
                 plan.ready = false
             }
         }
+        return HandlerResult(data: plan.jsonValue.envelopeValue)
         return HandlerResult(data: plan.jsonValue.envelopeValue)
     }
 
