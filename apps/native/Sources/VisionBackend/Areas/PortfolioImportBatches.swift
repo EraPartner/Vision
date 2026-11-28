@@ -21,9 +21,6 @@ enum PortfolioImportBatchesArea {
     static let portfolioAccountTypes = ["brokerage", "crypto_exchange", "wallet"]
 
     /// A receipt journal the rollback cannot restore yet.
-    struct UnportedReceipts: Error, Sendable {
-        var batchId: Int  // lint:allow raw-id the BIGSERIAL batch id the routes coerce
-    }
 
     // MARK: - Params
 
@@ -317,21 +314,10 @@ enum PortfolioImportBatchesArea {
     }
 
     /// `rollbackBatch`'s sequence. The PostgreSQL locks became the single SQLite writer
-    /// (ADR-263), so only the reads and writes with an answer remain; the adoption receipts
-    /// validate and restore through `PortfolioImportRollbackArea`, while a batch that still
-    /// holds duplicate-repair receipts refuses — that legacy restore has no corpus yet.
+    /// (ADR-263), so only the reads and writes with an answer remain; the adoption and
+    /// duplicate-repair receipts validate and restore through `PortfolioImportRollbackArea`.
     static func rollback(_ session: BackendSession, _ id: Int) throws -> Int {
-        let repairReceipts = try session.rows(
-            """
-            SELECT a.id FROM portfolio_import_duplicate_repair_journal a
-             WHERE a.batch_id = ? AND a.action = 'repair'
-               AND NOT EXISTS (SELECT 1 FROM portfolio_import_duplicate_repair_journal r
-                                WHERE r.previous_entry_id = a.id)
-            """,
-            [.integer(Int64(id))]).count
-        guard repairReceipts == 0 else {
-            throw UnportedReceipts(batchId: id)
-        }
+        let repairReceipts = try PortfolioImportRollbackArea.activeDuplicateRepairReceipts(session, id)
         let adoptionReceipts = try PortfolioImportRollbackArea.activeAdoptionReceipts(session, id)
         // `guardOriginalIbkrCashRollback`: a later IBKR funding correction owns the cash.
         let ownedElsewhere = try session.rows(
@@ -392,6 +378,9 @@ enum PortfolioImportBatchesArea {
             let validatedAdoptions = adoptionReceipts.isEmpty
                 ? []
                 : try PortfolioImportRollbackArea.validateAdoptionRollback(session, id, portfolioRows)
+            if !repairReceipts.isEmpty {
+                try PortfolioImportRollbackArea.validateDuplicateRepairRollback(session, repairReceipts)
+            }
 
             // `restorePairedPortfolioIncomeForBatch` closes the paired income receipts
             // before the rows they name are removed.
@@ -441,6 +430,9 @@ enum PortfolioImportBatchesArea {
             }
 
             try PortfolioImportRollbackArea.restorePortfolioImportAdoptions(session, validatedAdoptions)
+            if !repairReceipts.isEmpty {
+                try PortfolioImportRollbackArea.restoreDuplicatePortfolioRepairs(session, repairReceipts)
+            }
 
             try session.rows(
                 """
