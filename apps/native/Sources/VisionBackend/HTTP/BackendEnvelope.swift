@@ -132,7 +132,7 @@ enum BackendEnvelope {
             if let details = error.details { fields["details"] = details }
         } else {
             status = 500
-            print("parity thrown-error body: \(String(describing: error))")
+            print("\u{2718} parity thrown-error body: \(String(describing: error))")
             fields = [
                 "code": .string("INTERNAL_SERVER_ERROR"),
                 "message": .string("An internal server error occurred. Please try again later."),
