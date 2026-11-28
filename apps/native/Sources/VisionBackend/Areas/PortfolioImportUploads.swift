@@ -27,6 +27,46 @@ enum PortfolioImportUploadsArea {
         return file
     }
 
+    /// `portfolioUpload.single("file")`: the parsed form carries the portfolio fileFilter
+    /// (`isLikelyStatement`) in stream order, so a workbook the portfolio boundary refuses
+    /// answers with the portfolio message before any route check.
+    static func form(_ request: InProcessRequest) throws -> (file: UploadedFile?, fields: JSObject) {
+        let parts = MultipartParts.parse(headers: request.headers, body: request.body) ?? []
+        var file: UploadedFile? = nil
+        var fields = JSObject()
+        for part in parts {
+            if let filename = part.filename {
+                guard part.name == "file", file == nil else {  // lint:allow string-literal-compare the upload form field name, as multer reads it
+                    throw BackendHTTPError.validation("Upload error: Unexpected field")
+                }
+                guard PortfolioUpload.isLikelyStatement(name: filename, mimeType: part.contentType)
+                else {
+                    throw BackendHTTPError.validation(
+                        "File must be a CSV, XLSX or supported XLS workbook")
+                }
+                guard part.data.count <= ImportUploadsArea.maxUploadBytes else {
+                    throw BackendHTTPError.validation("File size exceeds maximum of 50MB")
+                }
+                file = UploadedFile(
+                    originalName: filename, mimetype: part.contentType,
+                    bytes: [UInt8](part.data))
+            } else {
+                let value = JSValue.string(String(decoding: part.data, as: UTF8.self))
+                if let existing = fields[part.name] {
+                    if case .array(var items) = existing {
+                        items.append(value)
+                        fields[part.name] = .array(items)
+                    } else {
+                        fields[part.name] = .array([existing, value])
+                    }
+                } else {
+                    fields[part.name] = value
+                }
+            }
+        }
+        return (file, fields)
+    }
+
     // MARK: - The flattened request schema
 
     /// `parseTypeMapping`: an object passes through, a JSON string parses, else `{}`.
@@ -1350,7 +1390,7 @@ enum PortfolioImportUploadsArea {
     static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
         backend.serve(PortfolioImportCsvCustomRequest.self) { request in
             try await database.run { session in
-                let form = try ImportUploadsArea.form(request)
+                let form = try PortfolioImportUploadsArea.form(request)
                 let file = try requireFile(try uploadedFile(form.file))
                 let built = try buildConfig(form.fields)
                 let brokerage = try guards(session, form.fields, built)
@@ -1378,7 +1418,7 @@ enum PortfolioImportUploadsArea {
         }
         backend.serve(PortfolioImportCsvStreamRequest.self) { request in
             try await database.run { session in
-                let form = try ImportUploadsArea.form(request)
+                let form = try PortfolioImportUploadsArea.form(request)
                 let file = try requireFile(try uploadedFile(form.file))
                 let built = try buildConfig(form.fields)
                 let brokerage = try guards(session, form.fields, built)
