@@ -121,7 +121,7 @@ enum PortfolioImportRollbackArea {
             let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
             for row in try session.rows(
                 """
-                SELECT \(ibkrCashSnapshotSQL(alias: "t")) AS image
+                SELECT t.id, \(ibkrCashSnapshotSQL(alias: "t")) AS image
                   FROM transactions t
                  WHERE t.id IN (\(placeholders))
                  ORDER BY t.id
@@ -190,13 +190,12 @@ enum PortfolioImportRollbackArea {
         }
         for row in try session.rows(
             """
-            SELECT resolved_investment_id, isr.investment_id
+            SELECT COALESCE(isr.user_override_investment_id, isr.resolved_investment_id) AS investment_id
               FROM portfolio_import_staging_rows isr
              WHERE isr.batch_id = ?
             """,
             [.integer(Int64(batchId))]
         ) {
-            append((try row.optionalInt64("resolved_investment_id")).flatMap { Int(exactly: $0) })
             append((try row.optionalInt64("investment_id")).flatMap { Int(exactly: $0) })
         }
         for row in removalRows {
