@@ -1114,6 +1114,16 @@ enum AccountsArea {
             }
             let transactions = try repointed(
                 "UPDATE transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2))")
+            // A transfer whose two legs now sit in the survivor breaks the distinct-account
+            // rule: release both legs so neither stays excluded from income and spending
+            // (Astra report 4, finding 15). Swift only. System legs (anchors, adjustments,
+            // trade cash legs) keep their marks.
+            _ = try session.write(
+                """
+                UPDATE transactions SET is_transfer = 0, transfer_peer_id = NULL, transfer_source = NULL
+                 WHERE account_id = ?1 AND transfer_source IN ('auto', 'manual')
+                   AND transfer_peer_id IN (SELECT id FROM transactions WHERE account_id = ?1)
+                """, [.integer(Int64(target.rawValue))])
             let planned = try repointed(
                 "UPDATE planned_transactions SET account_id = ?1 WHERE account_id IN (SELECT value FROM json_each(?2))")
             let portfolio = try repointed(

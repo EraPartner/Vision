@@ -633,4 +633,31 @@ extension PortfolioCore {
         }
         return deficits
     }
+
+    /// The pooled counterpart of `partitionOversellDeficits` for a history whose lots are not
+    /// all assigned to a custody account: the excess units sold over the whole investment,
+    /// replayed in date-then-id order. `partitionOversellDeficits` answers no deficit there, so
+    /// without this a delete or edit could leave a sale with no purchase behind it (Astra
+    /// report 4, finding 1). Swift only: the TypeScript has no pooled check.
+    static func pooledOversellDeficit(_ txns: [Txn]) -> Double {
+        var heldUnits = DecimalJS.zero
+        var deficit = DecimalJS.zero
+        for row in stableDateIdSort(txns) {
+            let units = row.units.decimal
+            switch row.kind {
+            case .buy, .gift, .transferIn:
+                heldUnits = heldUnits.plus(units)
+            case .transferOut, .assetFee, .unitReversal:
+                heldUnits = DecimalJS.max(DecimalJS.zero, heldUnits.minus(units))
+            case .sell:
+                if units.gt(heldUnits) { deficit = deficit.plus(units.minus(heldUnits)) }
+                heldUnits = DecimalJS.max(DecimalJS.zero, heldUnits.minus(units))
+            case .split:
+                if heldUnits.gt(DecimalJS.zero), units.gt(DecimalJS.zero) { heldUnits = units }
+            default:
+                break
+            }
+        }
+        return jsNumber(deficit)
+    }
 }

@@ -11713,9 +11713,10 @@
         "ok": false,
         "error": {
           "code": "VALIDATION_ERROR",
-          "message": "Invalid loan configuration: loan_start_date must be in YYYY-MM-DD format"
+          "message": "Unsupported loan_type 'annuity'. Use amortizing, fixed_principal, or interest_only."
         }
-      }
+      },
+      "swift_divergence": "Astra report 4, finding 7: Swift regenerates the schedule from the stored loan_start_date, so it reaches the seed's unsupported loan type; Bun answered 'Invalid loan configuration: loan_start_date must be in YYYY-MM-DD format'."
     },
     {
       "operationId": "getPlannedTransactions",

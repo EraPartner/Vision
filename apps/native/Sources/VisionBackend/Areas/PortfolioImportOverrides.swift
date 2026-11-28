@@ -511,6 +511,18 @@ enum PortfolioImportOverridesArea {
                 throw BackendHTTPError.notFound(
                     "Row \(row) not found in batch \(batch) or not eligible for an investment override")
             }
+            // An eligible row's batch must still be reviewable, as the bulk override and the
+            // holding creation check: a rolled-back batch keeps rows reset to `matched` (Astra
+            // report 4, finding 12). Swift only.
+            if let locked = try session.row(
+                "SELECT status FROM portfolio_import_batches WHERE id = ?", [.integer(Int64(batch))])
+            {
+                let status = try locked.text("status")
+                if status != "awaiting_review" && status != "complete_with_errors" {  // lint:allow string-literal-compare the batch status values
+                    throw BackendHTTPError.validation(
+                        "Batch \(batch) is not in a reviewable state (status: \(status))")
+                }
+            }
             try overrideInvestment(session, batch: batch, row: row, investmentId: investmentId)
         }
         return HandlerResult(data: .object([
