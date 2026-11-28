@@ -268,7 +268,7 @@ extension PortfolioImportCommitArea {
                    normalize_portfolio_income_snapshot(?)
             RETURNING id
             """,
-            [SQLValue](repeating: .text(afterImage), count: 13)
+            [SQLValue](repeating: .text(afterImage), count: 14)
                 + [.integer(Int64(before.id.rawValue)), .text(beforeImage)])
         guard updated.count == 1 else { return nil }
         return try readTransactionSnapshot(session, before.id.rawValue)

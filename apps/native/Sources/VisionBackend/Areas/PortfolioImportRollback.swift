@@ -210,7 +210,7 @@ enum PortfolioImportRollbackArea {
                     details: .object(["reason": .string("adopted_transaction_changed")]))
             }
             let current = history.first { $0.id.rawValue == receipt.transactionID }
-            if !try sameSnapshot(current, after) {
+            if try !sameSnapshot(current, after) {
                 throw BackendHTTPError.conflict(
                     "An adopted portfolio transaction was changed. Rollback needs review.",
                     details: .object(["reason": .string("adopted_transaction_changed")]))
