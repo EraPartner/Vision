@@ -2,7 +2,7 @@
 title: Swift backend port handoff
 type: guide
 status: active
-date: 2026-11-27
+date: 2026-11-28
 tags: [guide, swift, native, backend, parity, handoff]
 description: State, method and next steps of the ADR-270 Swift backend port, for the agent that continues it on branch claude/project-thread-8yvcm0.
 ---
@@ -413,6 +413,10 @@ The pure cores for these are already on main (`BankImport`, `Workbook`, from #43
       `bulkRetagPortfolioTransactions`
 - [x] Prices: `refreshInvestmentPrices`, `listInvestmentProviders`, `getInvestmentPriceHistory`
       (Yahoo client, price cache, provider registry, backfill; the pure `Prices` core is on main).
+      The transaction-triggered quote refresh (`refreshQuotesForInvestment` of
+      `quoteBackfillService.ts`) is `Prices/QuoteBackfill.swift`: the portfolio transaction
+      create, update and delete routes start it without waiting. The service's scheduled
+      backfills belong to `startup/warmup.ts` below.
       Provider answers are stubbed with the corpus `fetch` map.
 - [x] Exposure: `getPortfolioExposure`, `upsertPortfolioExposureSources`,
       `getPortfolioExposureClassifications`, `savePortfolioExposureClassifications` (ADR-267: manual

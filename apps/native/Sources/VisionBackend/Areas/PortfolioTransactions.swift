@@ -14,26 +14,36 @@ import VisionNativeCore
 /// `returningAll()` on `INSERT .. ON CONFLICT DO NOTHING` yields no row there, and the
 /// route sends that null. The Swift port performs the same insert and mirrors the answer.
 enum PortfolioTransactionsArea {
-    static func register(_ backend: inout InProcessBackend, database: BackendDatabase) {
+    /// Each successful create, update and delete starts the investment's price-history
+    /// refresh (`refreshQuotesForInvestment`) without waiting for it, as the TypeScript route.
+    static func register(
+        _ backend: inout InProcessBackend, database: BackendDatabase, quotes: QuoteRefresher
+    ) {
         backend.serve(OpenAPIOperations.CreateInvestmentTransaction.self) { request in
             let id = try InvestmentsArea.pathId(request)
             let body = try RequestBody.parseJavaScript(request.body)
-            return try await database.run { session in
+            let result = try await database.run { session in
                 try Self.create(session, Int(id.rawValue), body)
             }
+            quotes.schedule(investment: Int(id.rawValue))
+            return result
         }
         backend.serve(OpenAPIOperations.UpdatePortfolioTransaction.self) { request in
             let txnId = try Self.txnPathId(request)
             let body = try RequestBody.parseJavaScript(request.body)
-            return try await database.run { session in
-                try Self.update(session, txnId, body)
+            let row = try await database.run { session in
+                try Self.updatedRow(session, txnId, body)
             }
+            quotes.schedule(investment: row.investmentId.rawValue)
+            return HandlerResult(data: .object(row.json))
         }
         backend.serve(OpenAPIOperations.DeletePortfolioTransaction.self) { request in
             let txnId = try Self.txnPathId(request)
-            return try await database.run { session in
-                try Self.remove(session, txnId)
+            let investment = try await database.run { session in
+                try Self.removeRow(session, txnId)
             }
+            quotes.schedule(investment: investment)
+            return HandlerResult(status: 204, data: .null)
         }
         backend.serve(OpenAPIOperations.BulkRetagPortfolioTransactions.self) { request in
             let body = try RequestBody.parseJavaScript(request.body)
@@ -995,6 +1005,14 @@ extension PortfolioTransactionsArea {
     static func update(
         _ session: BackendSession, _ id: Int, _ body: JSValue?
     ) throws -> HandlerResult {
+        let row = try updatedRow(session, id, body)
+        return HandlerResult(data: .object(row.json))
+    }
+
+    /// `update`'s row: the updated transaction, whose investment the route refreshes.
+    static func updatedRow(
+        _ session: BackendSession, _ id: Int, _ body: JSValue?
+    ) throws -> PortfolioTxRow {
         // The route's own pre-service guards.
         var txn = try parseBody(body ?? .null)
         if txn.hasIncomeRecognitionRole {
@@ -1038,7 +1056,7 @@ extension PortfolioTransactionsArea {
         guard let row = updated else {
             throw BackendHTTPError.notFound("Portfolio transaction not found")
         }
-        return HandlerResult(data: .object(row.json))
+        return row
     }
 
     /// `updateUnlocked`: the compare-and-patch body of the service.
@@ -1241,6 +1259,12 @@ extension PortfolioTransactionsArea {
     /// `deleteTransaction`: the row must exist and the remaining history must not become
     /// more oversold; the answer is the 204 of an empty body.
     static func remove(_ session: BackendSession, _ id: Int) throws -> HandlerResult {
+        _ = try removeRow(session, id)
+        return HandlerResult(status: 204, data: .null)
+    }
+
+    /// `remove`'s work: the deleted transaction's investment, which the route refreshes.
+    static func removeRow(_ session: BackendSession, _ id: Int) throws -> Int {
         guard let existing = try byId(session, id) else {
             throw BackendHTTPError.notFound("Portfolio transaction not found")
         }
@@ -1260,7 +1284,7 @@ extension PortfolioTransactionsArea {
         guard removed else {
             throw BackendHTTPError.notFound("Portfolio transaction not found")
         }
-        return HandlerResult(status: 204, data: .null)
+        return existing.investmentId.rawValue
     }
 }
 

@@ -173,9 +173,10 @@ public struct InProcessBackend: Sendable {
         ImportUploadsArea.register(&backend, database: database, followUps: followUps)
         InfoArea.register(&backend, database: database)
         InvestmentsArea.register(&backend, database: database)
-        PortfolioTransactionsArea.register(&backend, database: database)
-        PricesArea.register(
-            &backend, database: database, service: PricesService(fetcher: fetcher))
+        let prices = PricesArea.gatedService(fetcher: fetcher, database: database)
+        PortfolioTransactionsArea.register(
+            &backend, database: database, quotes: QuoteRefresher(database: database, service: prices))
+        PricesArea.register(&backend, database: database, service: prices)
         ExposureArea.register(&backend, database: database)
         ImportParsersArea.registerPortfolio(&backend, database: database)
         PortfolioImportBatchesArea.register(&backend, database: database)

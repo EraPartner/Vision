@@ -52,13 +52,18 @@ enum PricesArea {
     static let kinesisDefaultTimeframe = 60.0
     static let kinesisDefaultFromDate = "2019-01-01T08:47:55.843Z"
 
+    /// The area's service: Settings › Privacy (ADR-271) gates every provider request as market
+    /// data, refused while offline mode is on or market data is off. One instance serves the
+    /// prices routes and the transaction-triggered quote refresh, so they share the price cache
+    /// as the TypeScript's module-level one.
+    static func gatedService(fetcher: any ProviderFetching, database: BackendDatabase) -> PricesService {
+        PricesService(fetcher: NetworkPolicyFetcher(fetcher, source: .marketData, database: database))
+    }
+
+    /// `service` is the gated one of `gatedService`.
     static func register(
-        _ backend: inout InProcessBackend, database: BackendDatabase, service ungated: PricesService
+        _ backend: inout InProcessBackend, database: BackendDatabase, service: PricesService
     ) {
-        // Settings › Privacy (ADR-271): every provider request of the area is market data, refused
-        // while offline mode is on or market data is off.
-        let service = PricesService(
-            fetcher: NetworkPolicyFetcher(ungated.fetcher, source: .marketData, database: database))
         backend.serve(OpenAPIOperations.RefreshInvestmentPrices.self) { _ in
             try await refresh(database: database, service: service)
         }
