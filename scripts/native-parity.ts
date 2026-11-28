@@ -7823,6 +7823,265 @@ function mutationAreas(): Record<string, ParityArea> {
         portfolioReconciliationCommit({ batch_ids: [1] }),
       ]),
     },
+    "portfolio-repairs-mutations": {
+      router: {
+        module: "portfolioImportRoutes.ts",
+        mountPath: "/api/portfolio/import",
+      },
+      // The repair restore stamps NOW(); the area records on the fixed clock
+      // the replay runs on.
+      now: "2026-11-20T12:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Repair Broker', 'Repair brokerage', 'Repair', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000be01')`,
+
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'Repair Asset', 'REPAIRSTEST', 'stock', 'EUR', vision_numeric('60', 18, 6), NULL,
+         1, 'manual', 'repair asset', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        // The legacy manual buy a pre-ADR-236 repair kept (preserve_existing).
+        `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,
+         created_at, updated_at) VALUES
+        (10, 1, 'buy', '2026-03-01', vision_numeric('300', 18, 4), vision_numeric('5', 18, 8),
+         vision_numeric('60', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'legacy manual buy', 1, NULL, 'unknown',
+         '2026-01-06T09:00:00.000000Z', '2026-01-06T09:00:00.000000Z')`,
+
+        // The original import the repair settled: its staging row was reset to a
+        // duplicate with a cleared pointer, its counters moved to rows_duplicate.
+        `INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,
+         default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,
+         error_summary, started_at, completed_at, account_id, is_brokerage, custom_config) VALUES
+        (8, 'generic_csv', 'repair-original.csv', 60, 'stock', 'buy', 'complete', 1, 0, 1, 0, NULL,
+         '2026-01-08T10:00:00.000000Z', '2026-01-08T10:00:05.000000Z', 1, 1, NULL),
+        (9, 'generic_csv', 'repair-batch.csv', 60, 'stock', 'buy', 'complete', 1, 0, 1, 0, NULL,
+         '2026-01-09T11:00:00.000000Z', '2026-01-09T11:00:05.000000Z', 1, 1, NULL),
+        (6, 'generic_csv', 'repair-stale.csv', 60, 'stock', 'buy', 'complete', 1, 0, 1, 0, NULL,
+         '2026-01-07T12:00:00.000000Z', '2026-01-07T12:00:05.000000Z', 1, 1, NULL)`,
+
+        `INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type, type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note, raw_data, match_source, resolved_investment_id, route, source_transaction_id, source_record_hash, dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence, committed_txn_id, created_at, updated_at) VALUES
+          (80, 8, 1, 'duplicate', '2026-03-01', 'buy', 'BUY', 'REPAIRSTEST', 'Repair Asset', vision_numeric('5', 18, 8), vision_numeric('60', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'imported copy', 'repair row 80', 'symbol', 1, 'portfolio', 'REP-80', '${"e".repeat(64)}', '${"f".repeat(64)}', 1, 1, NULL, '2026-01-08T10:00:01.000000Z', '2026-01-08T10:00:01.000000Z'),
+          (91, 9, 1, 'duplicate', '2026-03-01', 'buy', 'BUY', 'REPAIRSTEST', 'Repair Asset', vision_numeric('5', 18, 8), vision_numeric('60', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'settled duplicate', 'repair row 91', 'symbol', 1, 'portfolio', 'REP-91', '${"1".repeat(64)}', '${"2".repeat(64)}', 1, 1, NULL, '2026-01-09T11:00:01.000000Z', '2026-01-09T11:00:01.000000Z'),
+          (61, 6, 1, 'duplicate', '2026-03-01', 'buy', 'BUY', 'REPAIRSTEST', 'Repair Asset', vision_numeric('5', 18, 8), vision_numeric('60', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'stale repair row', 'repair row 61', 'symbol', 1, 'portfolio', 'REP-61', '${"3".repeat(64)}', '${"4".repeat(64)}', 1, 1, NULL, '2026-01-07T12:00:01.000000Z', '2026-01-07T12:00:01.000000Z')`,
+
+        // The applied repair receipt: both images built with the SQL snapshot
+        // expressions the restore compares against, so validation passes.
+        `INSERT INTO portfolio_import_duplicate_repair_journal (id, batch_id, staging_row_id,
+         original_import_batch_id, legacy_transaction_id, imported_transaction_id, "action", policy,
+         before_data, after_data, created_at)
+         SELECT 20, 9, 91, 8, 10, 20, 'repair', 'preserve_existing',
+           vision_jsonb(json_object(
+             'legacy', json(json_set(portfolio_income_transaction_snapshot(t.id, t.investment_id, t.type, t.date, t.amount, t.units, t.price_per_unit, t.fees, t.taxes, t.currency, t.fx_rate_to_eur, t.account_id, t.note, t.dividend_amount_convention, t.is_recurring, t.recurrence_interval, t.recurrence_end_date, t.import_batch_id, t.source_record_hash, t.dedup_fingerprint, t.dedup_fingerprint_version, t.income_recognition_role), '$.created_at', t.created_at, '$.updated_at', t.updated_at)),
+             'imported', json('{"id":20,"investment_id":1,"type":"buy","date":"2026-03-01","amount":"300.0000","units":"5.00000000","price_per_unit":"60.000000","fees":"0.0000","taxes":"0.0000","currency":"EUR","fx_rate_to_eur":null,"account_id":1,"note":"imported copy","dividend_amount_convention":"unknown","is_recurring":false,"recurrence_interval":null,"recurrence_end_date":null,"import_batch_id":"8","source_record_hash":"${"e".repeat(64)}","dedup_fingerprint":"${"f".repeat(64)}","dedup_fingerprint_version":1,"income_recognition_role":"standard","created_at":"2026-01-08T10:00:04.000000Z","updated_at":"2026-01-08T10:00:04.000000Z"}'),
+             'originalBatch', (SELECT json(vision_jsonb(json_set(json_object('id', CAST(b.id AS TEXT), 'adapter_name', b.adapter_name, 'source_filename', b.source_filename, 'source_size_bytes', CAST(b.source_size_bytes AS TEXT), 'custom_config', json(b.custom_config), 'default_asset_class', b.default_asset_class, 'default_type', b.default_type, 'status', b.status, 'rows_total', b.rows_total, 'rows_imported', 1, 'rows_duplicate', 0, 'rows_error', b.rows_error, 'error_summary', b.error_summary, 'started_at', b.started_at, 'completed_at', b.completed_at, 'account_id', b.account_id, 'is_brokerage', json(iif(b.is_brokerage, 'true', 'false'))), '$.rows_imported', 1, '$.rows_duplicate', 0))) FROM portfolio_import_batches b WHERE b.id = 8),
+             'originalStaging', (SELECT json_group_array(json(vision_jsonb(json_set(json_object('id', CAST(s.id AS TEXT), 'batch_id', CAST(s.batch_id AS TEXT), 'row_index', s.row_index, 'status', s.status, 'tx_date', s.tx_date, 'type_raw', s.type_raw, 'type', s.type, 'symbol_raw', s.symbol_raw, 'name_raw', s.name_raw, 'units', s.units, 'price_per_unit', s.price_per_unit, 'amount', s.amount, 'fees', s.fees, 'taxes', s.taxes, 'currency', s.currency, 'fx_rate_to_eur', s.fx_rate_to_eur, 'note', s.note, 'raw_data', s.raw_data, 'resolved_investment_id', s.resolved_investment_id, 'user_override_investment_id', s.user_override_investment_id, 'match_source', s.match_source, 'match_similarity', CASE WHEN s.match_similarity = CAST(s.match_similarity AS INTEGER) THEN CAST(s.match_similarity AS INTEGER) ELSE s.match_similarity END, 'committed_txn_id', s.committed_txn_id, 'error_message', s.error_message, 'created_at', s.created_at, 'route', s.route, 'updated_at', s.updated_at, 'source_transaction_id', s.source_transaction_id, 'source_account_identity', s.source_account_identity, 'dedup_occurrence', s.dedup_occurrence, 'source_record_hash', s.source_record_hash, 'dedup_fingerprint', s.dedup_fingerprint, 'dedup_fingerprint_version', s.dedup_fingerprint_version, 'asset_transfer_details', json(s.asset_transfer_details), 'asset_adjustment_details', json(s.asset_adjustment_details)), '$.status', 'committed', '$.committed_txn_id', 20)))) FROM portfolio_import_staging_rows s WHERE s.id = 80)
+           )),
+           vision_jsonb(json_object(
+             'legacy', json(json_set(portfolio_income_transaction_snapshot(t.id, t.investment_id, t.type, t.date, t.amount, t.units, t.price_per_unit, t.fees, t.taxes, t.currency, t.fx_rate_to_eur, t.account_id, t.note, t.dividend_amount_convention, t.is_recurring, t.recurrence_interval, t.recurrence_end_date, t.import_batch_id, t.source_record_hash, t.dedup_fingerprint, t.dedup_fingerprint_version, t.income_recognition_role), '$.created_at', t.created_at, '$.updated_at', t.updated_at)),
+             'imported', json('null'),
+             'originalBatch', (SELECT json(vision_jsonb(json_object('id', CAST(b.id AS TEXT), 'adapter_name', b.adapter_name, 'source_filename', b.source_filename, 'source_size_bytes', CAST(b.source_size_bytes AS TEXT), 'custom_config', json(b.custom_config), 'default_asset_class', b.default_asset_class, 'default_type', b.default_type, 'status', b.status, 'rows_total', b.rows_total, 'rows_imported', b.rows_imported, 'rows_duplicate', b.rows_duplicate, 'rows_error', b.rows_error, 'error_summary', b.error_summary, 'started_at', b.started_at, 'completed_at', b.completed_at, 'account_id', b.account_id, 'is_brokerage', json(iif(b.is_brokerage, 'true', 'false'))))) FROM portfolio_import_batches b WHERE b.id = 8),
+             'originalStaging', (SELECT json_group_array(json(vision_jsonb(json_object('id', CAST(s.id AS TEXT), 'batch_id', CAST(s.batch_id AS TEXT), 'row_index', s.row_index, 'status', s.status, 'tx_date', s.tx_date, 'type_raw', s.type_raw, 'type', s.type, 'symbol_raw', s.symbol_raw, 'name_raw', s.name_raw, 'units', s.units, 'price_per_unit', s.price_per_unit, 'amount', s.amount, 'fees', s.fees, 'taxes', s.taxes, 'currency', s.currency, 'fx_rate_to_eur', s.fx_rate_to_eur, 'note', s.note, 'raw_data', s.raw_data, 'resolved_investment_id', s.resolved_investment_id, 'user_override_investment_id', s.user_override_investment_id, 'match_source', s.match_source, 'match_similarity', CASE WHEN s.match_similarity = CAST(s.match_similarity AS INTEGER) THEN CAST(s.match_similarity AS INTEGER) ELSE s.match_similarity END, 'committed_txn_id', s.committed_txn_id, 'error_message', s.error_message, 'created_at', s.created_at, 'route', s.route, 'updated_at', s.updated_at, 'source_transaction_id', s.source_transaction_id, 'source_account_identity', s.source_account_identity, 'dedup_occurrence', s.dedup_occurrence, 'source_record_hash', s.source_record_hash, 'dedup_fingerprint', s.dedup_fingerprint, 'dedup_fingerprint_version', s.dedup_fingerprint_version, 'asset_transfer_details', json(s.asset_transfer_details), 'asset_adjustment_details', json(s.asset_adjustment_details))))) FROM portfolio_import_staging_rows s WHERE s.id = 80)
+           )),
+           '${SEED_TIME}'
+           FROM portfolio_transactions t WHERE t.id = 10`,
+
+        // A stale repair receipt whose legacy after-image no longer matches the
+        // transaction: rollback must refuse with a review conflict.
+        `INSERT INTO portfolio_import_duplicate_repair_journal (id, batch_id, staging_row_id,
+         original_import_batch_id, legacy_transaction_id, imported_transaction_id, "action", policy,
+         before_data, after_data, created_at) VALUES
+        (21, 6, 61, 8, 10, 20, 'repair', 'preserve_existing',
+         vision_jsonb('{"legacy":{"id":10,"investment_id":1,"type":"buy","date":"2026-03-01","amount":"300.0000","units":"5.00000000","price_per_unit":"60.000000","fees":"0.0000","taxes":"0.0000","currency":"EUR","fx_rate_to_eur":null,"account_id":1,"note":"legacy manual buy","dividend_amount_convention":"unknown","is_recurring":false,"recurrence_interval":null,"recurrence_end_date":null,"import_batch_id":null,"source_record_hash":null,"dedup_fingerprint":null,"dedup_fingerprint_version":null,"income_recognition_role":"standard","created_at":"2026-01-06T09:00:00.000000Z","updated_at":"2026-01-06T09:00:00.000000Z"},"imported":{"id":20,"investment_id":1,"type":"buy","date":"2026-03-01","amount":"300.0000","units":"5.00000000","price_per_unit":"60.000000","fees":"0.0000","taxes":"0.0000","currency":"EUR","fx_rate_to_eur":null,"account_id":1,"note":"imported copy","dividend_amount_convention":"unknown","is_recurring":false,"recurrence_interval":null,"recurrence_end_date":null,"import_batch_id":"8","source_record_hash":null,"dedup_fingerprint":null,"dedup_fingerprint_version":null,"income_recognition_role":"standard","created_at":"2026-01-08T10:00:04.000000Z","updated_at":"2026-01-08T10:00:04.000000Z"},"originalBatch":{"id":"8"},"originalStaging":[]}'),
+         vision_jsonb('{"legacy":{"id":10,"investment_id":1,"type":"buy","date":"2026-03-01","amount":"300.0000","units":"5.00000000","price_per_unit":"60.000000","fees":"0.0000","taxes":"0.0000","currency":"EUR","fx_rate_to_eur":null,"account_id":1,"note":"changed legacy image","dividend_amount_convention":"unknown","is_recurring":false,"recurrence_interval":null,"recurrence_end_date":null,"import_batch_id":null,"source_record_hash":null,"dedup_fingerprint":null,"dedup_fingerprint_version":null,"income_recognition_role":"standard","created_at":"2026-01-06T09:00:00.000000Z","updated_at":"2026-01-06T09:00:00.000000Z"},"imported":null,"originalBatch":{"id":"8"},"originalStaging":[]}'),
+         '${SEED_TIME}')`,
+      ],
+      steps: asRecorded([
+        // The deep repair rollback: the imported copy returns, the staging row
+        // and its batch counters restore, the legacy row is rewritten.
+        portfolioBatchesDelete("9"),
+        portfolioBatchesDelete("9"),
+        // The stale receipt: rollback refuses until the import is reviewed again.
+        portfolioBatchesDelete("6"),
+      ]),
+    },
+    "portfolio-figures-mutations": {
+      router: { module: "info.ts", mountPath: "/api/info" },
+      // The summary's computed_at, the performance window's end date and the
+      // net-worth walk all stamp NOW()/today; the area records on the fixed
+      // clock the replay runs on.
+      now: "2026-06-15T09:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Figure Broker', 'Figure brokerage', 'Figure', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000c001'),
+        (2, 'Dollar Broker', 'Dollar brokerage', 'Dollar', 'USD', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000c002'),
+        (3, 'Coin Wallet', 'Coin wallet', 'Coin', 'EUR', 'wallet', 'liquid', 0, 1, 'none', 'me', 0, 0, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000c003')`,
+
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'Figure Stock', 'FIG', 'stock', 'EUR', vision_numeric('50', 18, 6), NULL,
+         1, 'manual', 'figures asset', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 'Dollar Corp', 'DLC', 'stock', 'USD', vision_numeric('120', 18, 6), NULL,
+         1, 'manual', NULL, '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('20', 18, 6), NULL,
+         0, 'manual', 'archived holding', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,
+         created_at, updated_at) VALUES
+        (1, 1, 'buy', '2026-01-02', vision_numeric('450', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('45', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'figure buy', 1, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}'),
+        (2, 2, 'buy', '2026-01-03', vision_numeric('240', 18, 4), vision_numeric('2', 18, 8),
+         vision_numeric('120', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',
+         'dollar buy', 2, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}'),
+        (3, 1, 'dividend', '2026-02-01', vision_numeric('5', 18, 4), NULL, NULL,
+         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'figure dividend', 1, NULL, 'net', '${SEED_TIME}', '${SEED_TIME}'),
+        (4, 1, 'sell', '2026-03-01', vision_numeric('100', 18, 4), vision_numeric('2', 18, 8),
+         vision_numeric('50', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'figure sell', 1, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 3, 'buy', '2026-01-04', vision_numeric('200', 18, 4), vision_numeric('10', 18, 8),
+         vision_numeric('20', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'archived buy', 1, NULL, 'unknown', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
+        (1, 'Opening Payee', 'opening payee', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         created_at, updated_at) VALUES
+        (30, '2026-01-05', vision_numeric('1000', 18, 4), 'EUR', 'opening cash', 1, 1, 1,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (31, '2026-01-05', vision_numeric('500', 18, 4), 'USD', 'opening dollars', 1, 2, 1,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES
+          ${RATE_ROW("USD", "0.9163", "2026-01-02", 1)}`,
+
+        `INSERT INTO portfolio_performance_snapshots (snapshot_date, invested, value,
+         stocks_etfs_value, crypto_value, metals_value, cash_value, gain_loss, return_pct,
+         inflation_adjusted_value, cumulative_inflation, real_return_pct, currency, computed_at,
+         stocks_etfs_invested, crypto_invested, metals_invested, value_fx_neutral) VALUES
+        ('2026-01-02', vision_numeric('450', 18, 6), vision_numeric('500', 18, 6),
+         vision_numeric('500', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('50', 18, 6), vision_numeric('11.1111', 10, 4),
+         vision_numeric('495', 18, 6), vision_numeric('1.0100', 10, 4), vision_numeric('10.0000', 10, 4),
+         'EUR', '2026-01-02T22:00:00.000000Z', vision_numeric('450', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('500.00', 18, 2)),
+        ('2026-02-02', vision_numeric('660', 18, 6), vision_numeric('720', 18, 6),
+         vision_numeric('720', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('60', 18, 6), vision_numeric('9.0909', 10, 4),
+         vision_numeric('700', 18, 6), vision_numeric('1.0200', 10, 4), vision_numeric('7.0000', 10, 4),
+         'EUR', '2026-02-02T22:00:00.000000Z', vision_numeric('660', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('720.00', 18, 2)),
+        ('2026-03-02', vision_numeric('660', 18, 6), vision_numeric('750', 18, 6),
+         vision_numeric('750', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('90', 18, 6), vision_numeric('13.6364', 10, 4),
+         vision_numeric('735', 18, 6), vision_numeric('1.0300', 10, 4), vision_numeric('11.0000', 10, 4),
+         'EUR', '2026-03-02T22:00:00.000000Z', vision_numeric('660', 18, 6),
+         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('750.00', 18, 2))`,
+
+        `INSERT INTO portfolio_broker_snapshots (snapshot_date, currency, account_key, account_id,
+         account_name, value, invested, gain_loss, computed_at) VALUES
+        ('2026-01-02', 'EUR', 'account:1', 1, 'Figure Broker', vision_numeric('500', 18, 2),
+         vision_numeric('450', 18, 2), vision_numeric('50', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-01-02', 'EUR', 'account:2', 2, 'Dollar Broker', vision_numeric('220', 18, 2),
+         vision_numeric('220', 18, 2), vision_numeric('0', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-01-02', 'EUR', 'unassigned', NULL, 'Unassigned', vision_numeric('30', 18, 2),
+         vision_numeric('30', 18, 2), vision_numeric('0', 18, 2), '2026-01-02T22:00:00.000000Z')`,
+
+        `INSERT INTO portfolio_snapshot_accounts (snapshot_date, currency, account_key, value, computed_at) VALUES
+        ('2026-01-02', 'EUR', 'account:1', vision_numeric('500', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-01-02', 'EUR', 'account:2', vision_numeric('220', 18, 2), '2026-01-02T22:00:00.000000Z'),
+        ('2026-02-02', 'EUR', 'account:1', vision_numeric('720', 18, 2), '2026-02-02T22:00:00.000000Z')`,
+      ],
+      steps: asRecorded([
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary",
+        },
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary?active=false",
+        },
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary?target_currency=USD",
+        },
+        {
+          operationId: "getPortfolioSummary",
+          method: "GET",
+          path: "/api/info/portfolio-summary?target_currency=XYZ",
+        },
+        {
+          operationId: "getPortfolioPerformance",
+          method: "GET",
+          path: "/api/info/portfolio-performance",
+        },
+        {
+          operationId: "getPortfolioPerformance",
+          method: "GET",
+          path: "/api/info/portfolio-performance?period=1y",
+        },
+        {
+          operationId: "getPortfolioPerformance",
+          method: "GET",
+          path: "/api/info/portfolio-performance?period=bogus",
+        },
+        {
+          operationId: "getPortfolioPerformanceByBroker",
+          method: "GET",
+          path: "/api/info/portfolio-performance/by-broker",
+        },
+        {
+          operationId: "getPortfolioPerformanceByBroker",
+          method: "GET",
+          path: "/api/info/portfolio-performance/by-broker?from=2026-01-01&to=2026-02-01",
+        },
+        {
+          operationId: "getPortfolioPerformanceByBroker",
+          method: "GET",
+          path: "/api/info/portfolio-performance/by-broker?from=2026-02-31",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth?limit=2&offset=1",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth?limit=0",
+        },
+        {
+          operationId: "getNetWorth",
+          method: "GET",
+          path: "/api/info/net-worth?target_currency=USD",
+        },
+        {
+          operationId: "getNetWorthByAccount",
+          method: "GET",
+          path: "/api/info/net-worth/by-account",
+        },
+      ]),
+    },
     "prices-mutations": {
       router: { module: "investments.ts", mountPath: "/api/investments" },
       now: "2026-11-26T12:00:00.000Z",
