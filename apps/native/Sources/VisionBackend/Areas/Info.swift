@@ -58,9 +58,10 @@ enum InfoArea {
         guard bytes.count == 10, bytes[4] == 45, bytes[7] == 45,
             [0, 1, 2, 3, 5, 6, 8, 9].allSatisfy({ (48...57).contains(bytes[$0]) })
         else { return false }
-        let year = (bytes[0] - 48) * 1000 + (bytes[1] - 48) * 100 + (bytes[2] - 48) * 10 + bytes[3] - 48
-        let month = (bytes[5] - 48) * 10 + bytes[6] - 48
-        let day = (bytes[8] - 48) * 10 + bytes[9] - 48
+        let year = 1000 * Int(bytes[0] - 48) + 100 * Int(bytes[1] - 48)
+            + 10 * Int(bytes[2] - 48) + Int(bytes[3] - 48)
+        let month = 10 * Int(bytes[5] - 48) + Int(bytes[6] - 48)
+        let day = 10 * Int(bytes[8] - 48) + Int(bytes[9] - 48)
         guard (1...12).contains(month), day >= 1 else { return false }
         let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
         let monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]

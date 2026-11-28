@@ -29,6 +29,7 @@ public enum PortedOperations {
         "getImportBatches", "deleteImportBatch",
         "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch",
         "uploadAttachment", "getSupportedAdapters", "getInfoBanks", "getRecurringPatterns",
+        "getPortfolioPerformanceByBroker",
         "importCsv", "importCsvCustom", "importCsvStream", "importRecipients", "importCategories",
         "getInvestments", "getInvestmentSummary", "getInvestmentTransactions",
         "getBulkPortfolioTransactions", "listInvestmentProviders",
