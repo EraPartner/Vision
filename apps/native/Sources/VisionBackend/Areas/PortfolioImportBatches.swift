@@ -202,21 +202,24 @@ enum PortfolioImportBatchesArea {
                 }
                 key = "raw:\(fallback.lowercased())"
             }
-            var group = byKey[key] ?? Group(key: key, json: [
-                "is_cash": .bool(route == "cash"),  // lint:allow string-literal-compare the staging-row route values
-                "investment_id": effective.map { .int($0) } ?? .null,
-                "investment_name": (try? row.optionalText("investment_name")).flatMap { $0 }
-                    .map { .string($0) } ?? .null,
-                "investment_symbol": (try? row.optionalText("investment_symbol")).flatMap { $0 }
-                    .map { .string($0) } ?? .null,
-                "investment_asset_class": (try? row.optionalText("investment_asset_class"))
-                    .flatMap { $0 }.map { .string($0) } ?? .null,
-                "raw_symbol": route == "cash" ? .null : symbol.map { .string($0) } ?? .null,  // lint:allow string-literal-compare the staging-row route values
-                "raw_name": route == "cash" ? .null : name.map { .string($0) } ?? .null,  // lint:allow string-literal-compare the staging-row route values
-            ])
-            if byKey[key] == nil { order.append(key) }
-            group.rows.append(rowJSON(row))
-            byKey[key] = group
+            // Append in place: copying the group out of the dictionary before the append
+            // would copy its growing row array on every row (Astra consolidated C14).
+            if byKey[key] == nil {
+                order.append(key)
+                byKey[key] = Group(key: key, json: [
+                    "is_cash": .bool(route == "cash"),  // lint:allow string-literal-compare the staging-row route values
+                    "investment_id": effective.map { .int($0) } ?? .null,
+                    "investment_name": (try? row.optionalText("investment_name")).flatMap { $0 }
+                        .map { .string($0) } ?? .null,
+                    "investment_symbol": (try? row.optionalText("investment_symbol")).flatMap { $0 }
+                        .map { .string($0) } ?? .null,
+                    "investment_asset_class": (try? row.optionalText("investment_asset_class"))
+                        .flatMap { $0 }.map { .string($0) } ?? .null,
+                    "raw_symbol": route == "cash" ? .null : symbol.map { .string($0) } ?? .null,  // lint:allow string-literal-compare the staging-row route values
+                    "raw_name": route == "cash" ? .null : name.map { .string($0) } ?? .null,  // lint:allow string-literal-compare the staging-row route values
+                ])
+            }
+            byKey[key]?.rows.append(rowJSON(row))
         }
         var out: [JSONValue] = []
         for key in order {
