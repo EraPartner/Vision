@@ -20,6 +20,9 @@ enum InfoArea {
         backend.serve(OpenAPIOperations.GetRecurringPatterns.self) { request in
             try await database.run { session in try InfoArea.recurringPatterns(session, request: request) }
         }
+        backend.serve(OpenAPIOperations.GetPortfolioPerformanceByBroker.self) { request in
+            try await database.run { session in try InfoArea.brokerPerformance(session, request: request) }
+        }
     }
 
     // MARK: - The routes
@@ -45,6 +48,109 @@ enum InfoArea {
             [.integer(1)])
         let items = try rows.map { JSONValue.string(try $0.text("bank_account")) }
         return HandlerResult(data: .object(["items": .array(items), "total": .int(items.count)]))
+    }
+
+    // MARK: - The broker performance series
+
+    /// `z.iso.date`: a strict `YYYY-MM-DD` calendar day (a real one — February 31st fails).
+    static func isCalendarYmd(_ text: String) -> Bool {
+        let bytes = Array(text.utf8)
+        guard bytes.count == 10, bytes[4] == 45, bytes[7] == 45,
+            [0, 1, 2, 3, 5, 6, 8, 9].allSatisfy({ (48...57).contains(bytes[$0]) })
+        else { return false }
+        let year = 1000 * Int(bytes[0] - 48) + 100 * Int(bytes[1] - 48)
+            + 10 * Int(bytes[2] - 48) + Int(bytes[3] - 48)
+        let month = 10 * Int(bytes[5] - 48) + Int(bytes[6] - 48)
+        let day = 10 * Int(bytes[8] - 48) + Int(bytes[9] - 48)
+        guard (1...12).contains(month), day >= 1 else { return false }
+        let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+        let monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        return day <= monthDays[month - 1]
+    }
+
+    /// `GET /portfolio-performance/by-broker`: the stored broker snapshot series.
+    static func brokerPerformance(_ session: BackendSession, request: InProcessRequest) throws -> HandlerResult {
+        func single(_ name: String, _ issues: inout [String]) -> String? {
+            let values = request.queryItems.filter { $0.name == name }.map { $0.value ?? "" }
+            if values.count > 1 {
+                issues.append("\(name) must be a single value")
+                return nil
+            }
+            return values.first
+        }
+        var issues: [String] = []
+        let currencyRaw = single("currency", &issues)
+        let targetRaw = single("target_currency", &issues)
+        let fromRaw = single("from", &issues)
+        let toRaw = single("to", &issues)
+        guard issues.isEmpty else {
+            throw BackendHTTPError.validation(issues[0])
+        }
+        // `normalizeTargetCurrency`: absent or empty is EUR; otherwise the trimmed
+        // uppercase text when it is a code, else EUR.
+        var target = "EUR"
+        if let raw = currencyRaw ?? targetRaw, !raw.isEmpty {
+            let text = raw.uppercased().trimmingCharacters(in: .whitespaces)
+            if let code = CurrencyCode(rawValue: text) { target = code.rawValue }
+        }
+        func dateParam(_ raw: String?, _ name: String) throws -> String? {
+            guard let raw, !raw.isEmpty else { return nil }
+            guard isCalendarYmd(raw) else {
+                throw BackendHTTPError.validation("\(name) must be a YYYY-MM-DD date")
+            }
+            return raw
+        }
+        let startDate = try dateParam(fromRaw, "from") ?? "2000-01-01"
+        let endDate = try dateParam(toRaw, "to") ?? session.today()
+        let rows = try session.rows(
+            """
+            SELECT snapshot_date, currency, account_key, account_id, account_name, value,
+                   invested, gain_loss, computed_at
+              FROM portfolio_broker_snapshots
+             WHERE currency = ? AND snapshot_date >= ? AND snapshot_date <= ?
+             ORDER BY snapshot_date ASC, account_key ASC
+            """,
+            [.text(target), .text(startDate), .text(endDate)])
+        var dates: [String] = []
+        var seriesKeys: [String] = []
+        var series: [(String, JSONValue)] = []
+        var mapped: [JSONValue] = []
+        for row in rows {
+            let date = String(try row.text("snapshot_date").prefix(10))
+            if !dates.contains(date) { dates.append(date) }
+            let accountKey = try row.text("account_key")
+            if !seriesKeys.contains(accountKey) {
+                seriesKeys.append(accountKey)
+                let accountId = (try row.optionalInt64("account_id")).flatMap { Int(exactly: $0) }
+                series.append((accountKey, .object([
+                    "accountKey": .string(accountKey),
+                    "accountId": accountId.map { JSONValue.int($0) } ?? .null,
+                    "accountName": .string(try row.text("account_name")),
+                    "assignment": .string(accountId == nil ? "unassigned" : "account"),
+                ])))
+            }
+            let accountId = (try row.optionalInt64("account_id")).flatMap { Int(exactly: $0) }
+            mapped.append(.object([
+                "date": .string(date),
+                "currency": .string(try row.text("currency")),
+                "accountKey": .string(accountKey),
+                "accountId": accountId.map { JSONValue.int($0) } ?? .null,
+                "accountName": .string(try row.text("account_name")),
+                "assignment": .string(accountId == nil ? "unassigned" : "account"),
+                "value": .double(JavaScriptNumber.fromString(try row.text("value"))),
+                "invested": .double(JavaScriptNumber.fromString(try row.text("invested"))),
+                "gainLoss": .double(JavaScriptNumber.fromString(try row.text("gain_loss"))),
+                "computedAt": .string(try row.text("computed_at")),
+            ]))
+        }
+        return HandlerResult(data: .object([
+            "currency": .string(target),
+            "startDate": .string(startDate),
+            "endDate": .string(endDate),
+            "dates": .array(dates.map { JSONValue.string($0) }),
+            "series": .array(series.map { $1 }),
+            "rows": .array(mapped),
+        ]))
     }
 
     // MARK: - The recurring-pattern detection

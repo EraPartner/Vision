@@ -1,0 +1,5238 @@
+{
+  "generatedBy": "bun run native:parity",
+  "seed": [
+    "INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,\n         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,\n         closed_at, created_at, updated_at, import_identity) VALUES\n        (1, 'Figure Broker', 'Figure brokerage', 'Figure', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000c001'),\n        (2, 'Dollar Broker', 'Dollar brokerage', 'Dollar', 'USD', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000c002'),\n        (3, 'Coin Wallet', 'Coin wallet', 'Coin', 'EUR', 'wallet', 'liquid', 0, 1, 'none', 'me', 0, 0, NULL, 1, NULL,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z', '00000000-0000-4000-8000-00000000c003')",
+    "INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,\n         is_active, price_provider, notes, created_at, updated_at) VALUES\n        (1, 'Figure Stock', 'FIG', 'stock', 'EUR', vision_numeric('50', 18, 6), NULL,\n         1, 'manual', 'figures asset', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 'Dollar Corp', 'DLC', 'stock', 'USD', vision_numeric('120', 18, 6), NULL,\n         1, 'manual', NULL, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 'Old Fund', 'OLDF', 'etf', 'EUR', vision_numeric('20', 18, 6), NULL,\n         0, 'manual', 'archived holding', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,\n         fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,\n         created_at, updated_at) VALUES\n        (1, 1, 'buy', '2026-01-02', vision_numeric('450', 18, 4), vision_numeric('10', 18, 8),\n         vision_numeric('45', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n         'figure buy', 1, NULL, 'unknown', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (2, 2, 'buy', '2026-01-03', vision_numeric('240', 18, 4), vision_numeric('2', 18, 8),\n         vision_numeric('120', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'USD',\n         'dollar buy', 2, NULL, 'unknown', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (3, 1, 'dividend', '2026-02-01', vision_numeric('5', 18, 4), NULL, NULL,\n         vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n         'figure dividend', 1, NULL, 'net', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (4, 1, 'sell', '2026-03-01', vision_numeric('100', 18, 4), vision_numeric('2', 18, 8),\n         vision_numeric('50', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n         'figure sell', 1, NULL, 'unknown', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (5, 3, 'buy', '2026-01-04', vision_numeric('200', 18, 4), vision_numeric('10', 18, 8),\n         vision_numeric('20', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',\n         'archived buy', 1, NULL, 'unknown', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES\n        (1, 'Opening Payee', 'opening payee', '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,\n         created_at, updated_at) VALUES\n        (30, '2026-01-05', vision_numeric('1000', 18, 4), 'EUR', 'opening cash', 1, 1, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z'),\n        (31, '2026-01-05', vision_numeric('500', 18, 4), 'USD', 'opening dollars', 1, 2, 1,\n         '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at) VALUES\n          ('USD', vision_numeric('0.9163', 20, 10), '2026-01-02', 1, '2025-03-01T09:00:00.000000Z', '2025-03-01T09:00:00.000000Z')",
+    "INSERT INTO portfolio_performance_snapshots (snapshot_date, invested, value,\n         stocks_etfs_value, crypto_value, metals_value, cash_value, gain_loss, return_pct,\n         inflation_adjusted_value, cumulative_inflation, real_return_pct, currency, computed_at,\n         stocks_etfs_invested, crypto_invested, metals_invested, value_fx_neutral) VALUES\n        ('2026-01-02', vision_numeric('450', 18, 6), vision_numeric('500', 18, 6),\n         vision_numeric('500', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),\n         vision_numeric('0', 18, 6), vision_numeric('50', 18, 6), vision_numeric('11.1111', 10, 4),\n         vision_numeric('495', 18, 6), vision_numeric('1.0100', 10, 4), vision_numeric('10.0000', 10, 4),\n         'EUR', '2026-01-02T22:00:00.000000Z', vision_numeric('450', 18, 6),\n         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('500.00', 18, 2)),\n        ('2026-02-02', vision_numeric('660', 18, 6), vision_numeric('720', 18, 6),\n         vision_numeric('720', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),\n         vision_numeric('0', 18, 6), vision_numeric('60', 18, 6), vision_numeric('9.0909', 10, 4),\n         vision_numeric('700', 18, 6), vision_numeric('1.0200', 10, 4), vision_numeric('7.0000', 10, 4),\n         'EUR', '2026-02-02T22:00:00.000000Z', vision_numeric('660', 18, 6),\n         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('720.00', 18, 2)),\n        ('2026-03-02', vision_numeric('660', 18, 6), vision_numeric('750', 18, 6),\n         vision_numeric('750', 18, 6), vision_numeric('0', 18, 6), vision_numeric('0', 18, 6),\n         vision_numeric('0', 18, 6), vision_numeric('90', 18, 6), vision_numeric('13.6364', 10, 4),\n         vision_numeric('735', 18, 6), vision_numeric('1.0300', 10, 4), vision_numeric('11.0000', 10, 4),\n         'EUR', '2026-03-02T22:00:00.000000Z', vision_numeric('660', 18, 6),\n         vision_numeric('0', 18, 6), vision_numeric('0', 18, 6), vision_numeric('750.00', 18, 2))",
+    "INSERT INTO portfolio_broker_snapshots (snapshot_date, currency, account_key, account_id,\n         account_name, value, invested, gain_loss, computed_at) VALUES\n        ('2026-01-02', 'EUR', 'account:1', 1, 'Figure Broker', vision_numeric('500', 18, 2),\n         vision_numeric('450', 18, 2), vision_numeric('50', 18, 2), '2026-01-02T22:00:00.000000Z'),\n        ('2026-01-02', 'EUR', 'account:2', 2, 'Dollar Broker', vision_numeric('220', 18, 2),\n         vision_numeric('220', 18, 2), vision_numeric('0', 18, 2), '2026-01-02T22:00:00.000000Z'),\n        ('2026-01-02', 'EUR', 'unassigned', NULL, 'Unassigned', vision_numeric('30', 18, 2),\n         vision_numeric('30', 18, 2), vision_numeric('0', 18, 2), '2026-01-02T22:00:00.000000Z')",
+    "INSERT INTO portfolio_snapshot_accounts (snapshot_date, currency, account_key, value, computed_at) VALUES\n        ('2026-01-02', 'EUR', 'account:1', vision_numeric('500', 18, 2), '2026-01-02T22:00:00.000000Z'),\n        ('2026-01-02', 'EUR', 'account:2', vision_numeric('220', 18, 2), '2026-01-02T22:00:00.000000Z'),\n        ('2026-02-02', 'EUR', 'account:1', vision_numeric('720', 18, 2), '2026-02-02T22:00:00.000000Z')"
+  ],
+  "now": "2026-06-15T09:00:00.000Z",
+  "steps": [
+    {
+      "operationId": "getPortfolioSummary",
+      "method": "GET",
+      "path": "/api/info/portfolio-summary",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "computed_at": "2026-06-15T09:00:00.000Z",
+          "firstInvestmentDate": "2026-01-02",
+          "totals": {
+            "totalPortfolioValue": 619.91,
+            "totalInvested": 669.91,
+            "totalGainLoss": 55,
+            "totalRealizedGain": 10,
+            "totalUnrealizedGain": 40,
+            "totalGain": 50,
+            "totalIncome": 5,
+            "totalDividends": 5,
+            "totalInKindIncome": 0,
+            "totalFees": 0,
+            "totalTaxes": 0,
+            "totalAssetGain": 55,
+            "totalFxGain": 0,
+            "totalReturnPct": 8.21,
+            "usedFallbackRate": false
+          },
+          "summaries": [
+            {
+              "id": 2,
+              "name": "Dollar Corp",
+              "symbol": "DLC",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "EUR",
+              "originalCurrency": "USD",
+              "nativeCurrentPrice": 120,
+              "nativeAvgCostBasis": 120,
+              "unrealizedGainPercent": 0,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 2,
+              "currentPrice": 109.96,
+              "current_price": 109.96,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 219.91,
+              "totalBuyCost": 219.91,
+              "totalSellProceeds": 0,
+              "currentValue": 219.91,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 0,
+              "totalIncome": 0,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 109.96,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "totalGain": 0,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 240,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 0,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 219.91,
+                  "totalInvested": 219.91,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 219.91,
+                  "totalInvested": 219.91,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "name": "Figure Stock",
+              "symbol": "FIG",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": "figures asset",
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "EUR",
+              "originalCurrency": "EUR",
+              "nativeCurrentPrice": 50,
+              "nativeAvgCostBasis": 45,
+              "unrealizedGainPercent": 11.11111111111111,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 8,
+              "currentPrice": 50,
+              "current_price": 50,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 360,
+              "totalBuyCost": 450,
+              "totalSellProceeds": 100,
+              "currentValue": 400,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 5,
+              "totalIncome": 5,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 45,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "totalGain": 50,
+              "gainLoss": 55,
+              "gainLossPercent": 12.22,
+              "assetGain": 55,
+              "fxGain": 0,
+              "nativeCurrentValue": 400,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 5,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 400,
+                  "totalInvested": 450,
+                  "realizedGain": 10,
+                  "unrealizedGain": 40,
+                  "gainLoss": 55
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 400,
+                  "totalInvested": 450,
+                  "realizedGain": 10,
+                  "unrealizedGain": 40,
+                  "gainLoss": 55
+                }
+              ]
+            }
+          ],
+          "byAccount": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 400,
+              "totalInvested": 450,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "gainLoss": 55
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 219.91,
+              "totalInvested": 219.91,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "accountTotals": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 400,
+              "totalInvested": 450,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "gainLoss": 55
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 219.91,
+              "totalInvested": 219.91,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "byAssetClass": [
+            {
+              "assetClass": "stock",
+              "holdingCount": 2,
+              "totalPortfolioValue": 619.91,
+              "totalInvested": 669.91,
+              "totalGainLoss": 55,
+              "totalRealizedGain": 10,
+              "totalUnrealizedGain": 40,
+              "totalIncome": 5,
+              "totalDividends": 5,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 50,
+              "netReturnWithDividends": 55,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "byAssetGroup": [
+            {
+              "group": "stocks_etfs",
+              "assetClasses": [
+                "stock",
+                "etf"
+              ],
+              "holdingCount": 2,
+              "totalPortfolioValue": 619.91,
+              "totalInvested": 669.91,
+              "totalGainLoss": 55,
+              "totalRealizedGain": 10,
+              "totalUnrealizedGain": 40,
+              "totalIncome": 5,
+              "totalDividends": 5,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 50,
+              "netReturnWithDividends": 55,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "crypto",
+              "assetClasses": [
+                "crypto"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "metals",
+              "assetClasses": [
+                "metals"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "real_estate",
+              "assetClasses": [
+                "real_estate"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "savings_bonds",
+              "assetClasses": [
+                "savings",
+                "bond"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "archivedInKindIncome": [],
+          "brokerageCashFees": {
+            "total": 0,
+            "gainAfterFees": 55,
+            "usedFallbackRate": false,
+            "byAccount": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioSummary",
+      "method": "GET",
+      "path": "/api/info/portfolio-summary?active=false",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "computed_at": "2026-06-15T09:00:00.000Z",
+          "firstInvestmentDate": "2026-01-02",
+          "totals": {
+            "totalPortfolioValue": 819.91,
+            "totalInvested": 869.91,
+            "totalGainLoss": 55,
+            "totalRealizedGain": 10,
+            "totalUnrealizedGain": 40,
+            "totalGain": 50,
+            "totalIncome": 5,
+            "totalDividends": 5,
+            "totalInKindIncome": 0,
+            "totalFees": 0,
+            "totalTaxes": 0,
+            "totalAssetGain": 55,
+            "totalFxGain": 0,
+            "totalReturnPct": 6.32,
+            "usedFallbackRate": false
+          },
+          "summaries": [
+            {
+              "id": 2,
+              "name": "Dollar Corp",
+              "symbol": "DLC",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "EUR",
+              "originalCurrency": "USD",
+              "nativeCurrentPrice": 120,
+              "nativeAvgCostBasis": 120,
+              "unrealizedGainPercent": 0,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 2,
+              "currentPrice": 109.96,
+              "current_price": 109.96,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 219.91,
+              "totalBuyCost": 219.91,
+              "totalSellProceeds": 0,
+              "currentValue": 219.91,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 0,
+              "totalIncome": 0,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 109.96,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "totalGain": 0,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 240,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 0,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 219.91,
+                  "totalInvested": 219.91,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 219.91,
+                  "totalInvested": 219.91,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "name": "Figure Stock",
+              "symbol": "FIG",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": "figures asset",
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "EUR",
+              "originalCurrency": "EUR",
+              "nativeCurrentPrice": 50,
+              "nativeAvgCostBasis": 45,
+              "unrealizedGainPercent": 11.11111111111111,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 8,
+              "currentPrice": 50,
+              "current_price": 50,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 360,
+              "totalBuyCost": 450,
+              "totalSellProceeds": 100,
+              "currentValue": 400,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 5,
+              "totalIncome": 5,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 45,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "totalGain": 50,
+              "gainLoss": 55,
+              "gainLossPercent": 12.22,
+              "assetGain": 55,
+              "fxGain": 0,
+              "nativeCurrentValue": 400,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 5,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 400,
+                  "totalInvested": 450,
+                  "realizedGain": 10,
+                  "unrealizedGain": 40,
+                  "gainLoss": 55
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 400,
+                  "totalInvested": 450,
+                  "realizedGain": 10,
+                  "unrealizedGain": 40,
+                  "gainLoss": 55
+                }
+              ]
+            },
+            {
+              "id": 3,
+              "name": "Old Fund",
+              "symbol": "OLDF",
+              "asset_class": "etf",
+              "assetClass": "etf",
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": "archived holding",
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "EUR",
+              "originalCurrency": "EUR",
+              "nativeCurrentPrice": 20,
+              "nativeAvgCostBasis": 20,
+              "unrealizedGainPercent": 0,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 10,
+              "currentPrice": 20,
+              "current_price": 20,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 200,
+              "totalBuyCost": 200,
+              "totalSellProceeds": 0,
+              "currentValue": 200,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 0,
+              "totalIncome": 0,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 20,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "totalGain": 0,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 200,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 0,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 200,
+                  "totalInvested": 200,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 200,
+                  "totalInvested": 200,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ]
+            }
+          ],
+          "byAccount": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 600,
+              "totalInvested": 650,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "gainLoss": 55
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 219.91,
+              "totalInvested": 219.91,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "accountTotals": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 600,
+              "totalInvested": 650,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "gainLoss": 55
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 219.91,
+              "totalInvested": 219.91,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "byAssetClass": [
+            {
+              "assetClass": "stock",
+              "holdingCount": 2,
+              "totalPortfolioValue": 619.91,
+              "totalInvested": 669.91,
+              "totalGainLoss": 55,
+              "totalRealizedGain": 10,
+              "totalUnrealizedGain": 40,
+              "totalIncome": 5,
+              "totalDividends": 5,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 50,
+              "netReturnWithDividends": 55,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "assetClass": "etf",
+              "holdingCount": 1,
+              "totalPortfolioValue": 200,
+              "totalInvested": 200,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "byAssetGroup": [
+            {
+              "group": "stocks_etfs",
+              "assetClasses": [
+                "stock",
+                "etf"
+              ],
+              "holdingCount": 3,
+              "totalPortfolioValue": 819.91,
+              "totalInvested": 869.91,
+              "totalGainLoss": 55,
+              "totalRealizedGain": 10,
+              "totalUnrealizedGain": 40,
+              "totalIncome": 5,
+              "totalDividends": 5,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 50,
+              "netReturnWithDividends": 55,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "crypto",
+              "assetClasses": [
+                "crypto"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "metals",
+              "assetClasses": [
+                "metals"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "real_estate",
+              "assetClasses": [
+                "real_estate"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "savings_bonds",
+              "assetClasses": [
+                "savings",
+                "bond"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "archivedInKindIncome": [
+            {
+              "id": 3,
+              "totalInKindIncome": 0
+            }
+          ],
+          "brokerageCashFees": {
+            "total": 0,
+            "gainAfterFees": 55,
+            "usedFallbackRate": false,
+            "byAccount": []
+          },
+          "archivedPresentation": [
+            {
+              "id": 3,
+              "name": "Old Fund",
+              "symbol": "OLDF",
+              "asset_class": "etf",
+              "assetClass": "etf",
+              "is_active": false,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": "archived holding",
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "EUR",
+              "originalCurrency": "EUR",
+              "nativeCurrentPrice": 20,
+              "nativeAvgCostBasis": 20,
+              "unrealizedGainPercent": 0,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 10,
+              "currentPrice": 20,
+              "current_price": 20,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 200,
+              "totalBuyCost": 200,
+              "totalSellProceeds": 0,
+              "currentValue": 200,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 0,
+              "totalIncome": 0,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 20,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "totalGain": 0,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 0,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 200,
+                  "totalInvested": 200,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 200,
+                  "totalInvested": 200,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "feeTransactions": 0,
+              "taxTransactions": 0,
+              "summarySource": "local",
+              "transactionCount": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioSummary",
+      "method": "GET",
+      "path": "/api/info/portfolio-summary?target_currency=USD",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "USD",
+          "computed_at": "2026-06-15T09:00:00.000Z",
+          "firstInvestmentDate": "2026-01-02",
+          "totals": {
+            "totalPortfolioValue": 676.54,
+            "totalInvested": 731.11,
+            "totalGainLoss": 60.02,
+            "totalRealizedGain": 10.91,
+            "totalUnrealizedGain": 43.66,
+            "totalGain": 54.57,
+            "totalIncome": 5.46,
+            "totalDividends": 5.46,
+            "totalInKindIncome": 0,
+            "totalFees": 0,
+            "totalTaxes": 0,
+            "totalAssetGain": 60.02,
+            "totalFxGain": 0,
+            "totalReturnPct": 8.21,
+            "usedFallbackRate": false
+          },
+          "summaries": [
+            {
+              "id": 2,
+              "name": "Dollar Corp",
+              "symbol": "DLC",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "USD",
+              "originalCurrency": "USD",
+              "nativeCurrentPrice": 120,
+              "nativeAvgCostBasis": 120,
+              "unrealizedGainPercent": 0,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 2,
+              "currentPrice": 120,
+              "current_price": 120,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 240,
+              "totalBuyCost": 240,
+              "totalSellProceeds": 0,
+              "currentValue": 240,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 0,
+              "totalIncome": 0,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 120,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "totalGain": 0,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 240,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 0,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 240,
+                  "totalInvested": 240,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 240,
+                  "totalInvested": 240,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "name": "Figure Stock",
+              "symbol": "FIG",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": "figures asset",
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "USD",
+              "originalCurrency": "EUR",
+              "nativeCurrentPrice": 50,
+              "nativeAvgCostBasis": 45,
+              "unrealizedGainPercent": 11.112807982081042,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 8,
+              "currentPrice": 54.57,
+              "current_price": 54.57,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 392.88,
+              "totalBuyCost": 491.11,
+              "totalSellProceeds": 109.13,
+              "currentValue": 436.54,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 5.46,
+              "totalIncome": 5.46,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 49.11,
+              "realizedGain": 10.91,
+              "unrealizedGain": 43.66,
+              "totalGain": 54.57,
+              "gainLoss": 60.02,
+              "gainLossPercent": 12.22,
+              "assetGain": 60.02,
+              "fxGain": 0,
+              "nativeCurrentValue": 400,
+              "usedFallbackRate": false,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 5.46,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 436.54,
+                  "totalInvested": 491.11,
+                  "realizedGain": 10.91,
+                  "unrealizedGain": 43.66,
+                  "gainLoss": 60.02
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 436.54,
+                  "totalInvested": 491.11,
+                  "realizedGain": 10.91,
+                  "unrealizedGain": 43.66,
+                  "gainLoss": 60.02
+                }
+              ]
+            }
+          ],
+          "byAccount": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 436.54,
+              "totalInvested": 491.11,
+              "realizedGain": 10.91,
+              "unrealizedGain": 43.66,
+              "gainLoss": 60.02
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 240,
+              "totalInvested": 240,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "accountTotals": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 436.54,
+              "totalInvested": 491.11,
+              "realizedGain": 10.91,
+              "unrealizedGain": 43.66,
+              "gainLoss": 60.02
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 240,
+              "totalInvested": 240,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "byAssetClass": [
+            {
+              "assetClass": "stock",
+              "holdingCount": 2,
+              "totalPortfolioValue": 676.54,
+              "totalInvested": 731.11,
+              "totalGainLoss": 60.02,
+              "totalRealizedGain": 10.91,
+              "totalUnrealizedGain": 43.66,
+              "totalIncome": 5.46,
+              "totalDividends": 5.46,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 54.56,
+              "netReturnWithDividends": 60.02,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5.46,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "byAssetGroup": [
+            {
+              "group": "stocks_etfs",
+              "assetClasses": [
+                "stock",
+                "etf"
+              ],
+              "holdingCount": 2,
+              "totalPortfolioValue": 676.54,
+              "totalInvested": 731.11,
+              "totalGainLoss": 60.02,
+              "totalRealizedGain": 10.91,
+              "totalUnrealizedGain": 43.66,
+              "totalIncome": 5.46,
+              "totalDividends": 5.46,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 54.56,
+              "netReturnWithDividends": 60.02,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5.46,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "crypto",
+              "assetClasses": [
+                "crypto"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "metals",
+              "assetClasses": [
+                "metals"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "real_estate",
+              "assetClasses": [
+                "real_estate"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "savings_bonds",
+              "assetClasses": [
+                "savings",
+                "bond"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "archivedInKindIncome": [],
+          "brokerageCashFees": {
+            "total": 0,
+            "gainAfterFees": 60.02,
+            "usedFallbackRate": false,
+            "byAccount": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioSummary",
+      "method": "GET",
+      "path": "/api/info/portfolio-summary?target_currency=XYZ",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "XYZ",
+          "computed_at": "2026-06-15T09:00:00.000Z",
+          "firstInvestmentDate": "2026-01-02",
+          "totals": {
+            "totalPortfolioValue": 640,
+            "totalInvested": 690,
+            "totalGainLoss": 55,
+            "totalRealizedGain": 10,
+            "totalUnrealizedGain": 40,
+            "totalGain": 50,
+            "totalIncome": 5,
+            "totalDividends": 5,
+            "totalInKindIncome": 0,
+            "totalFees": 0,
+            "totalTaxes": 0,
+            "totalAssetGain": 55,
+            "totalFxGain": 0,
+            "totalReturnPct": 7.97,
+            "usedFallbackRate": true
+          },
+          "summaries": [
+            {
+              "id": 2,
+              "name": "Dollar Corp",
+              "symbol": "DLC",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": null,
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "XYZ",
+              "originalCurrency": "USD",
+              "nativeCurrentPrice": 120,
+              "nativeAvgCostBasis": 120,
+              "unrealizedGainPercent": 0,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 2,
+              "currentPrice": 120,
+              "current_price": 120,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 240,
+              "totalBuyCost": 240,
+              "totalSellProceeds": 0,
+              "currentValue": 240,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 0,
+              "totalIncome": 0,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 120,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "totalGain": 0,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 240,
+              "usedFallbackRate": true,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 0,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 240,
+                  "totalInvested": 240,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 2,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 240,
+                  "totalInvested": 240,
+                  "realizedGain": 0,
+                  "unrealizedGain": 0,
+                  "gainLoss": 0
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "name": "Figure Stock",
+              "symbol": "FIG",
+              "asset_class": "stock",
+              "assetClass": "stock",
+              "is_active": true,
+              "created_at": "2025-03-01T09:00:00.000Z",
+              "updated_at": "2025-03-01T09:00:00.000Z",
+              "notes": "figures asset",
+              "location": null,
+              "municipality": null,
+              "cadastral_income": null,
+              "municipality_tax_rate": null,
+              "maturity_date": null,
+              "maturityDate": null,
+              "price_provider": "manual",
+              "price_provider_id": null,
+              "price_provider_url": null,
+              "price_provider_latest_url": null,
+              "price_provider_latest_path": null,
+              "price_provider_history_url": null,
+              "price_provider_history_path": null,
+              "price_provider_history_ts_path": null,
+              "price_provider_history_price_path": null,
+              "price_updated_at": null,
+              "currency": "XYZ",
+              "originalCurrency": "EUR",
+              "nativeCurrentPrice": 50,
+              "nativeAvgCostBasis": 45,
+              "unrealizedGainPercent": 11.11111111111111,
+              "estimatedMonthlyRent": 0,
+              "totalUnits": 8,
+              "currentPrice": 50,
+              "current_price": 50,
+              "interestRate": 0,
+              "interest_rate": 0,
+              "totalInvested": 360,
+              "totalBuyCost": 450,
+              "totalSellProceeds": 100,
+              "currentValue": 400,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalDividends": 5,
+              "totalIncome": 5,
+              "totalInKindIncome": 0,
+              "avgCostBasis": 45,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "totalGain": 50,
+              "gainLoss": 55,
+              "gainLossPercent": 12.22,
+              "assetGain": 55,
+              "fxGain": 0,
+              "nativeCurrentValue": 400,
+              "usedFallbackRate": true,
+              "accruedInterest": 0,
+              "projectedAnnualInterest": 0,
+              "totalAppreciation": 0,
+              "feesAndTaxes": 0,
+              "propertyReturn": 5,
+              "monthlyRent": 0,
+              "fullyAssigned": true,
+              "oversold": false,
+              "byAccount": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "contribution_kind": "position",
+                  "oversold": false,
+                  "currentValue": 400,
+                  "totalInvested": 450,
+                  "realizedGain": 10,
+                  "unrealizedGain": 40,
+                  "gainLoss": 55
+                }
+              ],
+              "accountTotals": [
+                {
+                  "account_id": 1,
+                  "assignment": "account",
+                  "oversold": false,
+                  "currentValue": 400,
+                  "totalInvested": 450,
+                  "realizedGain": 10,
+                  "unrealizedGain": 40,
+                  "gainLoss": 55
+                }
+              ]
+            }
+          ],
+          "byAccount": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 400,
+              "totalInvested": 450,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "gainLoss": 55
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "contribution_kind": "position",
+              "oversold": false,
+              "currentValue": 240,
+              "totalInvested": 240,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "accountTotals": [
+            {
+              "account_id": 1,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 400,
+              "totalInvested": 450,
+              "realizedGain": 10,
+              "unrealizedGain": 40,
+              "gainLoss": 55
+            },
+            {
+              "account_id": 2,
+              "assignment": "account",
+              "oversold": false,
+              "currentValue": 240,
+              "totalInvested": 240,
+              "realizedGain": 0,
+              "unrealizedGain": 0,
+              "gainLoss": 0
+            }
+          ],
+          "byAssetClass": [
+            {
+              "assetClass": "stock",
+              "holdingCount": 2,
+              "totalPortfolioValue": 640,
+              "totalInvested": 690,
+              "totalGainLoss": 55,
+              "totalRealizedGain": 10,
+              "totalUnrealizedGain": 40,
+              "totalIncome": 5,
+              "totalDividends": 5,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 50,
+              "netReturnWithDividends": 55,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": true
+            }
+          ],
+          "byAssetGroup": [
+            {
+              "group": "stocks_etfs",
+              "assetClasses": [
+                "stock",
+                "etf"
+              ],
+              "holdingCount": 2,
+              "totalPortfolioValue": 640,
+              "totalInvested": 690,
+              "totalGainLoss": 55,
+              "totalRealizedGain": 10,
+              "totalUnrealizedGain": 40,
+              "totalIncome": 5,
+              "totalDividends": 5,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 50,
+              "netReturnWithDividends": 55,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 5,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": true
+            },
+            {
+              "group": "crypto",
+              "assetClasses": [
+                "crypto"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "metals",
+              "assetClasses": [
+                "metals"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "real_estate",
+              "assetClasses": [
+                "real_estate"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            },
+            {
+              "group": "savings_bonds",
+              "assetClasses": [
+                "savings",
+                "bond"
+              ],
+              "holdingCount": 0,
+              "totalPortfolioValue": 0,
+              "totalInvested": 0,
+              "totalGainLoss": 0,
+              "totalRealizedGain": 0,
+              "totalUnrealizedGain": 0,
+              "totalIncome": 0,
+              "totalDividends": 0,
+              "totalInKindIncome": 0,
+              "totalFees": 0,
+              "totalTaxes": 0,
+              "totalFeesAndTaxes": 0,
+              "netReturnExcludingIncome": 0,
+              "netReturnWithDividends": 0,
+              "totalAppreciation": 0,
+              "totalPropertyReturn": 0,
+              "totalAccruedInterest": 0,
+              "totalProjectedAnnualInterest": 0,
+              "valueWeightedInterestRate": 0,
+              "estimatedMonthlyRent": 0,
+              "monthlyRentRateMissing": false,
+              "usedFallbackRate": false
+            }
+          ],
+          "archivedInKindIncome": [],
+          "brokerageCashFees": {
+            "total": 0,
+            "gainAfterFees": 55,
+            "usedFallbackRate": false,
+            "byAccount": []
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioPerformance",
+      "method": "GET",
+      "path": "/api/info/portfolio-performance",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "start_date": "2000-01-01",
+          "end_date": "{{today}}",
+          "snapshots": [
+            {
+              "date": "2026-01-02",
+              "invested": 450,
+              "value": 500,
+              "stocks_etfs_value": 500,
+              "crypto_value": 0,
+              "metals_value": 0,
+              "stocks_etfs_invested": 450,
+              "crypto_invested": 0,
+              "metals_invested": 0,
+              "inflation_adjusted_value": 495,
+              "gain_loss": 50,
+              "return_pct": 11.11111111111111,
+              "value_fx_neutral": 500,
+              "is_provisional": false
+            },
+            {
+              "date": "2026-02-02",
+              "invested": 660,
+              "value": 720,
+              "stocks_etfs_value": 720,
+              "crypto_value": 0,
+              "metals_value": 0,
+              "stocks_etfs_invested": 660,
+              "crypto_invested": 0,
+              "metals_invested": 0,
+              "inflation_adjusted_value": 700,
+              "gain_loss": 60,
+              "return_pct": 9.090909090909092,
+              "value_fx_neutral": 720,
+              "is_provisional": false
+            },
+            {
+              "date": "2026-03-02",
+              "invested": 660,
+              "value": 750,
+              "stocks_etfs_value": 750,
+              "crypto_value": 0,
+              "metals_value": 0,
+              "stocks_etfs_invested": 660,
+              "crypto_invested": 0,
+              "metals_invested": 0,
+              "inflation_adjusted_value": 735,
+              "gain_loss": 90,
+              "return_pct": 13.636363636363637,
+              "value_fx_neutral": 750,
+              "is_provisional": true
+            }
+          ],
+          "metrics": {
+            "currentValue": 619.91,
+            "totalInvested": 669.91,
+            "totalGainLoss": 55,
+            "totalReturnPct": 8.21,
+            "annualizedReturn": 120.64,
+            "realReturnPct": 11.36,
+            "cumulativeInflation": 2
+          },
+          "heatmap": {
+            "years": [
+              2026
+            ],
+            "data": {
+              "2026": [
+                null,
+                -1.82,
+                4.17,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "maxAbsPct": 4.17
+          },
+          "breakdownSummary": [
+            {
+              "id": 2,
+              "name": "Dollar Corp",
+              "symbol": "DLC",
+              "assetClass": "stock",
+              "currency": "USD",
+              "currentValue": 219.91,
+              "totalInvested": 219.91,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 240,
+              "usedFallbackRate": false
+            },
+            {
+              "id": 1,
+              "name": "Figure Stock",
+              "symbol": "FIG",
+              "assetClass": "stock",
+              "currency": "EUR",
+              "currentValue": 400,
+              "totalInvested": 360,
+              "gainLoss": 55,
+              "gainLossPercent": 12.22,
+              "assetGain": 55,
+              "fxGain": 0,
+              "nativeCurrentValue": 400,
+              "usedFallbackRate": false
+            }
+          ],
+          "totals": {
+            "totalPortfolioValue": 619.91,
+            "totalInvested": 669.91,
+            "totalGainLoss": 55,
+            "totalRealizedGain": 10,
+            "totalUnrealizedGain": 40,
+            "totalGain": 50,
+            "totalIncome": 5,
+            "totalDividends": 5,
+            "totalInKindIncome": 0,
+            "totalFees": 0,
+            "totalTaxes": 0,
+            "totalAssetGain": 55,
+            "totalFxGain": 0,
+            "totalReturnPct": 8.21,
+            "usedFallbackRate": false
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioPerformance",
+      "method": "GET",
+      "path": "/api/info/portfolio-performance?period=1y",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "start_date": "2000-01-01",
+          "end_date": "{{today}}",
+          "snapshots": [
+            {
+              "date": "2026-01-02",
+              "invested": 450,
+              "value": 500,
+              "stocks_etfs_value": 500,
+              "crypto_value": 0,
+              "metals_value": 0,
+              "stocks_etfs_invested": 450,
+              "crypto_invested": 0,
+              "metals_invested": 0,
+              "inflation_adjusted_value": 495,
+              "gain_loss": 50,
+              "return_pct": 11.11111111111111,
+              "value_fx_neutral": 500,
+              "is_provisional": false
+            },
+            {
+              "date": "2026-02-02",
+              "invested": 660,
+              "value": 720,
+              "stocks_etfs_value": 720,
+              "crypto_value": 0,
+              "metals_value": 0,
+              "stocks_etfs_invested": 660,
+              "crypto_invested": 0,
+              "metals_invested": 0,
+              "inflation_adjusted_value": 700,
+              "gain_loss": 60,
+              "return_pct": 9.090909090909092,
+              "value_fx_neutral": 720,
+              "is_provisional": false
+            },
+            {
+              "date": "2026-03-02",
+              "invested": 660,
+              "value": 750,
+              "stocks_etfs_value": 750,
+              "crypto_value": 0,
+              "metals_value": 0,
+              "stocks_etfs_invested": 660,
+              "crypto_invested": 0,
+              "metals_invested": 0,
+              "inflation_adjusted_value": 735,
+              "gain_loss": 90,
+              "return_pct": 13.636363636363637,
+              "value_fx_neutral": 750,
+              "is_provisional": true
+            }
+          ],
+          "metrics": {
+            "currentValue": 619.91,
+            "totalInvested": 669.91,
+            "totalGainLoss": 55,
+            "totalReturnPct": 8.21,
+            "annualizedReturn": 120.64,
+            "realReturnPct": 11.36,
+            "cumulativeInflation": 2
+          },
+          "heatmap": {
+            "years": [
+              2026
+            ],
+            "data": {
+              "2026": [
+                null,
+                -1.82,
+                4.17,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "maxAbsPct": 4.17
+          },
+          "breakdownSummary": [
+            {
+              "id": 2,
+              "name": "Dollar Corp",
+              "symbol": "DLC",
+              "assetClass": "stock",
+              "currency": "USD",
+              "currentValue": 219.91,
+              "totalInvested": 219.91,
+              "gainLoss": 0,
+              "gainLossPercent": 0,
+              "assetGain": 0,
+              "fxGain": 0,
+              "nativeCurrentValue": 240,
+              "usedFallbackRate": false
+            },
+            {
+              "id": 1,
+              "name": "Figure Stock",
+              "symbol": "FIG",
+              "assetClass": "stock",
+              "currency": "EUR",
+              "currentValue": 400,
+              "totalInvested": 360,
+              "gainLoss": 55,
+              "gainLossPercent": 12.22,
+              "assetGain": 55,
+              "fxGain": 0,
+              "nativeCurrentValue": 400,
+              "usedFallbackRate": false
+            }
+          ],
+          "totals": {
+            "totalPortfolioValue": 619.91,
+            "totalInvested": 669.91,
+            "totalGainLoss": 55,
+            "totalRealizedGain": 10,
+            "totalUnrealizedGain": 40,
+            "totalGain": 50,
+            "totalIncome": 5,
+            "totalDividends": 5,
+            "totalInKindIncome": 0,
+            "totalFees": 0,
+            "totalTaxes": 0,
+            "totalAssetGain": 55,
+            "totalFxGain": 0,
+            "totalReturnPct": 8.21,
+            "usedFallbackRate": false
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioPerformance",
+      "method": "GET",
+      "path": "/api/info/portfolio-performance?period=bogus",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "period must be one of 1m, 3m, 6m, 1y, 3y, all"
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioPerformanceByBroker",
+      "method": "GET",
+      "path": "/api/info/portfolio-performance/by-broker",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "startDate": "2000-01-01",
+          "endDate": "{{today}}",
+          "dates": [
+            "2026-01-02"
+          ],
+          "series": [
+            {
+              "accountKey": "account:1",
+              "accountId": 1,
+              "accountName": "Figure Broker",
+              "assignment": "account"
+            },
+            {
+              "accountKey": "account:2",
+              "accountId": 2,
+              "accountName": "Dollar Broker",
+              "assignment": "account"
+            },
+            {
+              "accountKey": "unassigned",
+              "accountId": null,
+              "accountName": "Unassigned",
+              "assignment": "unassigned"
+            }
+          ],
+          "rows": [
+            {
+              "date": "2026-01-02",
+              "currency": "EUR",
+              "accountKey": "account:1",
+              "accountId": 1,
+              "accountName": "Figure Broker",
+              "assignment": "account",
+              "value": 500,
+              "invested": 450,
+              "gainLoss": 50,
+              "computedAt": "2026-01-02T22:00:00.000Z"
+            },
+            {
+              "date": "2026-01-02",
+              "currency": "EUR",
+              "accountKey": "account:2",
+              "accountId": 2,
+              "accountName": "Dollar Broker",
+              "assignment": "account",
+              "value": 220,
+              "invested": 220,
+              "gainLoss": 0,
+              "computedAt": "2026-01-02T22:00:00.000Z"
+            },
+            {
+              "date": "2026-01-02",
+              "currency": "EUR",
+              "accountKey": "unassigned",
+              "accountId": null,
+              "accountName": "Unassigned",
+              "assignment": "unassigned",
+              "value": 30,
+              "invested": 30,
+              "gainLoss": 0,
+              "computedAt": "2026-01-02T22:00:00.000Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioPerformanceByBroker",
+      "method": "GET",
+      "path": "/api/info/portfolio-performance/by-broker?from=2026-01-01&to=2026-02-01",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "startDate": "2026-01-01",
+          "endDate": "2026-02-01",
+          "dates": [
+            "2026-01-02"
+          ],
+          "series": [
+            {
+              "accountKey": "account:1",
+              "accountId": 1,
+              "accountName": "Figure Broker",
+              "assignment": "account"
+            },
+            {
+              "accountKey": "account:2",
+              "accountId": 2,
+              "accountName": "Dollar Broker",
+              "assignment": "account"
+            },
+            {
+              "accountKey": "unassigned",
+              "accountId": null,
+              "accountName": "Unassigned",
+              "assignment": "unassigned"
+            }
+          ],
+          "rows": [
+            {
+              "date": "2026-01-02",
+              "currency": "EUR",
+              "accountKey": "account:1",
+              "accountId": 1,
+              "accountName": "Figure Broker",
+              "assignment": "account",
+              "value": 500,
+              "invested": 450,
+              "gainLoss": 50,
+              "computedAt": "2026-01-02T22:00:00.000Z"
+            },
+            {
+              "date": "2026-01-02",
+              "currency": "EUR",
+              "accountKey": "account:2",
+              "accountId": 2,
+              "accountName": "Dollar Broker",
+              "assignment": "account",
+              "value": 220,
+              "invested": 220,
+              "gainLoss": 0,
+              "computedAt": "2026-01-02T22:00:00.000Z"
+            },
+            {
+              "date": "2026-01-02",
+              "currency": "EUR",
+              "accountKey": "unassigned",
+              "accountId": null,
+              "accountName": "Unassigned",
+              "assignment": "unassigned",
+              "value": 30,
+              "invested": 30,
+              "gainLoss": 0,
+              "computedAt": "2026-01-02T22:00:00.000Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operationId": "getPortfolioPerformanceByBroker",
+      "method": "GET",
+      "path": "/api/info/portfolio-performance/by-broker?from=2026-02-31",
+      "status": 400,
+      "response": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "from must be a YYYY-MM-DD date"
+        }
+      }
+    },
+    {
+      "operationId": "getNetWorth",
+      "method": "GET",
+      "path": "/api/info/net-worth",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "current": {
+            "liquid": 1458.15,
+            "liabilities": 0,
+            "investments": 619.91,
+            "netWorth": 2078.06,
+            "currency": "EUR"
+          },
+          "monthlyChange": -130.09,
+          "monthlyChangePercent": -5.89,
+          "snapshots": [
+            {
+              "date": "2026-01-02",
+              "liquid": 0,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 500
+            },
+            {
+              "date": "2026-01-03",
+              "liquid": 0,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 500
+            },
+            {
+              "date": "2026-01-04",
+              "liquid": 0,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 500
+            },
+            {
+              "date": "2026-01-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-15",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-16",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-17",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-18",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-19",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-20",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-21",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-22",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-23",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-24",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-25",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-26",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-29",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-30",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-01-31",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-02-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 500,
+              "netWorth": 1958.15
+            },
+            {
+              "date": "2026-02-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-15",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-16",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-17",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-18",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-19",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-20",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-21",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-22",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-23",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-24",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-25",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-26",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-02-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-03-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 720,
+              "netWorth": 2178.15
+            },
+            {
+              "date": "2026-03-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-15",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-16",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-17",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-18",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-19",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-20",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-21",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-22",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-23",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-24",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-25",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-26",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-29",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-30",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-03-31",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-15",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-16",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-17",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-18",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-19",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-20",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-21",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-22",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-23",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-24",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-25",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-26",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-29",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-30",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-15",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-16",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-17",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-18",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-19",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-20",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-21",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-22",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-23",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-24",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-25",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-26",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-29",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-30",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-31",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "{{today}}",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 619.91,
+              "netWorth": 2078.06
+            }
+          ],
+          "unconvertedCurrencies": []
+        }
+      }
+    },
+    {
+      "operationId": "getNetWorth",
+      "method": "GET",
+      "path": "/api/info/net-worth?limit=2&offset=1",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "current": {
+            "liquid": 1458.15,
+            "liabilities": 0,
+            "investments": 619.91,
+            "netWorth": 2078.06,
+            "currency": "EUR"
+          },
+          "monthlyChange": -130.09,
+          "monthlyChangePercent": -5.89,
+          "snapshots": [
+            {
+              "date": "2026-06-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            }
+          ],
+          "unconvertedCurrencies": [],
+          "snapshotsTotal": 165,
+          "snapshotsLimit": 2,
+          "snapshotsOffset": 1
+        }
+      }
+    },
+    {
+      "operationId": "getNetWorth",
+      "method": "GET",
+      "path": "/api/info/net-worth?limit=0",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "current": {
+            "liquid": 1458.15,
+            "liabilities": 0,
+            "investments": 619.91,
+            "netWorth": 2078.06,
+            "currency": "EUR"
+          },
+          "monthlyChange": -130.09,
+          "monthlyChangePercent": -5.89,
+          "snapshots": [
+            {
+              "date": "{{today}}",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 619.91,
+              "netWorth": 2078.06
+            },
+            {
+              "date": "2026-06-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-06-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-31",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-30",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-29",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-26",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-25",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-24",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-23",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-22",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-21",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-20",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-19",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-18",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-17",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-16",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-15",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-14",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-13",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-12",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-11",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-10",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-09",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-08",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-07",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-06",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-05",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-04",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-03",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-02",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-05-01",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-30",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-29",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-28",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            },
+            {
+              "date": "2026-04-27",
+              "liquid": 1458.15,
+              "liabilities": 0,
+              "investments": 750,
+              "netWorth": 2208.15
+            }
+          ],
+          "unconvertedCurrencies": [],
+          "snapshotsTotal": 165,
+          "snapshotsLimit": 50,
+          "snapshotsOffset": 0
+        }
+      }
+    },
+    {
+      "operationId": "getNetWorth",
+      "method": "GET",
+      "path": "/api/info/net-worth?target_currency=USD",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "current": {
+            "liquid": 1591.35,
+            "liabilities": 0,
+            "investments": 676.54,
+            "netWorth": 2267.89,
+            "currency": "USD"
+          },
+          "monthlyChange": 676.54,
+          "monthlyChangePercent": 42.51,
+          "snapshots": [
+            {
+              "date": "2026-01-05",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-06",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-07",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-08",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-09",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-10",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-11",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-12",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-13",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-14",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-15",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-16",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-17",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-18",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-19",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-20",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-21",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-22",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-23",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-24",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-25",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-26",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-27",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-28",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-29",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-30",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-01-31",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-01",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-02",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-03",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-04",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-05",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-06",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-07",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-08",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-09",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-10",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-11",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-12",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-13",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-14",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-15",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-16",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-17",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-18",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-19",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-20",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-21",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-22",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-23",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-24",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-25",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-26",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-27",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-02-28",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-01",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-02",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-03",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-04",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-05",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-06",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-07",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-08",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-09",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-10",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-11",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-12",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-13",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-14",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-15",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-16",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-17",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-18",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-19",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-20",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-21",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-22",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-23",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-24",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-25",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-26",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-27",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-28",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-29",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-30",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-03-31",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-01",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-02",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-03",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-04",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-05",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-06",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-07",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-08",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-09",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-10",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-11",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-12",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-13",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-14",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-15",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-16",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-17",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-18",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-19",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-20",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-21",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-22",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-23",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-24",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-25",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-26",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-27",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-28",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-29",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-04-30",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-01",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-02",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-03",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-04",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-05",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-06",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-07",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-08",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-09",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-10",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-11",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-12",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-13",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-14",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-15",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-16",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-17",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-18",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-19",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-20",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-21",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-22",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-23",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-24",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-25",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-26",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-27",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-28",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-29",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-30",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-05-31",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-01",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-02",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-03",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-04",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-05",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-06",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-07",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-08",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-09",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-10",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-11",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-12",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-13",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "2026-06-14",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 0,
+              "netWorth": 1591.35
+            },
+            {
+              "date": "{{today}}",
+              "liquid": 1591.35,
+              "liabilities": 0,
+              "investments": 676.54,
+              "netWorth": 2267.89
+            }
+          ],
+          "unconvertedCurrencies": []
+        }
+      }
+    },
+    {
+      "operationId": "getNetWorthByAccount",
+      "method": "GET",
+      "path": "/api/info/net-worth/by-account",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "data": {
+          "currency": "EUR",
+          "rows": [
+            {
+              "accountId": 1,
+              "name": "Figure brokerage",
+              "type": "brokerage",
+              "cashCurrency": "EUR",
+              "cash": 1000,
+              "holdings": 400,
+              "total": 1400,
+              "unconverted": false
+            },
+            {
+              "accountId": 2,
+              "name": "Dollar brokerage",
+              "type": "brokerage",
+              "cashCurrency": "USD",
+              "cash": 458.15,
+              "holdings": 219.91,
+              "total": 678.06,
+              "unconverted": false
+            },
+            {
+              "accountId": 3,
+              "name": "Coin wallet",
+              "type": "wallet",
+              "cashCurrency": "EUR",
+              "cash": 0,
+              "holdings": 0,
+              "total": 0,
+              "unconverted": false
+            }
+          ],
+          "total": 2078.06,
+          "unconvertedAccountIds": []
+        }
+      }
+    }
+  ]
+}
