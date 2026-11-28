@@ -42,13 +42,13 @@ enum ExchangeRatesArea {
 
     // MARK: - GET /api/info/exchange-rates
 
-    /// The list body and whether the first currency's rate predates today.
+    /// The list body and whether any currency's latest rate predates today.
     struct Listed: Sendable {
         let body: JSValue
         let isStale: Bool
     }
 
-    /// The latest stored rate of each currency, by code, with the staleness of the first.
+    /// The latest stored rate of each currency, by code, stale when any of them predates today.
     static func list(_ session: BackendSession) throws -> Listed {
         let rows = try session.rows(
             """
@@ -56,12 +56,12 @@ enum ExchangeRatesArea {
             WHERE is_latest = 1 ORDER BY currency_code ASC
             """)
         var rates: [JSValue] = []
-        var firstDate: String?
+        var oldestDate: String?
         var lastFetched: Instant?
         for row in rows {
             let date = try row.text("rate_date")
             let fetched = try row.instant("fetched_at")
-            if firstDate == nil { firstDate = date }
+            if oldestDate.map({ date < $0 }) ?? true { oldestDate = date }
             if fetched.date.timeIntervalSince1970 > 0, lastFetched.map({ fetched > $0 }) ?? true { lastFetched = fetched }
             rates.append(
                 .object(
@@ -72,7 +72,10 @@ enum ExchangeRatesArea {
                         ("fetched_at", .string(fetched.text)),
                     ])))
         }
-        let isStale = firstDate.map { $0 < session.today() } ?? true
+        // One fresh currency may not hide stale ones: a provider that refreshes only some
+        // currencies leaves mixed dates (Astra report 4, finding 13). Swift only: the
+        // TypeScript checks the first currency alphabetically.
+        let isStale = oldestDate.map { $0 < session.today() } ?? true
         let body = JSObject([
             ("total_rates", .int(rates.count)),
             ("rates", .array(rates)),

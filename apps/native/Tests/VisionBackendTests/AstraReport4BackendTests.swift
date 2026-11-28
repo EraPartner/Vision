@@ -288,6 +288,22 @@ import VisionNativeCore
             == before)
     }
 
+    /// Finding 13: one fresh currency does not hide a stale one.
+    @Test func oneFreshRateDoesNotHideAStaleOne() async throws {
+        let live = try Live([
+            "INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest, fetched_at, updated_at)"
+                + " VALUES ('AUD', vision_numeric('0.61', 20, 10), '2099-01-01', 1, \(Self.stamp), \(Self.stamp)),"
+                + " ('USD', vision_numeric('0.9', 20, 10), '2020-01-02', 1, \(Self.stamp), \(Self.stamp))"
+        ])
+        let stale = try await live.database.run { session in try ExchangeRatesArea.list(session).isStale }
+        #expect(stale)
+        let fresh = try await live.database.run { session throws -> Bool in
+            _ = try session.rows("UPDATE exchange_rates SET rate_date = '2099-01-02' WHERE currency_code = 'USD'")
+            return try ExchangeRatesArea.list(session).isStale
+        }
+        #expect(!fresh)
+    }
+
     /// Finding 14: deactivating more outflows than one cleanup batch holds still releases every
     /// inflow, so none stays excluded from income.
     @Test func reconciliationReleasesEveryInvalidPair() async throws {
