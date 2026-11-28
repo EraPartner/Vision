@@ -171,14 +171,12 @@ enum PortfolioImportUploadsArea {
 
         var numberFormat: JSValue = .string("auto")
         if let value = fields["number_format"], !value.isFalsy {
-            guard case .string(let text) = value,
-                ["auto", "decimal_dot", "decimal_comma"].contains(text)
-            else {
+            if case .string(let text) = value,
+                ["auto", "decimal_dot", "decimal_comma"].contains(text) {
+                numberFormat = .string(text)
+            } else {
                 issues.append(
                     "Invalid option: expected one of \"auto\"|\"decimal_dot\"|\"decimal_comma\"")
-            }
-            if case .string(let text) = value {
-                numberFormat = .string(text)
             }
         }
 
