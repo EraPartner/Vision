@@ -124,7 +124,6 @@ enum PortfolioImportCommitArea {
         guard ["awaiting_review", "matching", "complete_with_errors"].contains(batch.status) else {
             throw BackendHTTPError.validation(
                 "Batch \(batchId) is not in a reviewable state (status: \(batch.status))")
-            print("\u{2718} debug assertReviewable \(batchId) status \(batch.status)")
         }
         return batch
     }
@@ -434,7 +433,6 @@ extension PortfolioImportCommitArea {
         let day = String(try before.text("date").prefix(10))
         let amount = try before.optionalText("amount")
         let currency = try before.optionalText("currency")
-        let memo = try before.optionalText("memo")
         let fingerprint = try before.optionalText("dedup_fingerprint")
         let sourceHash = try before.optionalText("source_record_hash")
         let amountMatches = try equalNumber(amount, decision.existing.amount, 4)
@@ -447,6 +445,9 @@ extension PortfolioImportCommitArea {
         else {
             throw staleCash()
         }
+        // `writeCashAdoption` journals the full `ibkrCashSnapshotSql` images: the plan's
+        // before image and the persisted read-back, which rollback compares field by field.
+        let beforeImage = try cashImage(session, decision.transactionID.rawValue)
         _ = try session.rows(
             """
             UPDATE transactions SET
@@ -462,6 +463,7 @@ extension PortfolioImportCommitArea {
              row.dedupFingerprint.map { SQLValue.text($0) } ?? .null,
              row.dedupFingerprintVersion.map { SQLValue.integer(Int64($0)) } ?? .null,
              .integer(Int64(decision.transactionID.rawValue))])
+        let afterImage = try cashImage(session, decision.transactionID.rawValue)
         _ = try session.rows(
             """
             INSERT INTO portfolio_import_reconciliation_journal (
@@ -470,8 +472,24 @@ extension PortfolioImportCommitArea {
             """,
             [.integer(Int64(row.batchID.rawValue)), .integer(Int64(row.id.rawValue)),
              .integer(Int64(decision.transactionID.rawValue)), .text(decision.policy.rawValue),
-             .text(try cashEnvelope(amount ?? decision.existing.amount, currency: currency ?? decision.existing.currency.rawValue, memo: memo, decision: decision, row: row, after: false)),
-             .text(try cashEnvelope(decision.after.amount, currency: decision.after.currency.rawValue, memo: memo, decision: decision, row: row, after: true))])
+             .text(try cashEnvelope(beforeImage, decision: decision, row: row)),
+             .text(try cashEnvelope(afterImage, decision: decision, row: row))])
+    }
+
+    /// The `ibkrCashSnapshotSql` image of one `transactions` row, read inside the writer.
+    static func cashImage(_ session: BackendSession, _ id: Int) throws -> JSONValue {  // lint:allow raw-id business table ids of the TypeScript route and repository reads
+        guard let row = try session.row(
+            """
+            SELECT \(PortfolioImportRollbackArea.ibkrCashSnapshotSQL(alias: "t")) AS image
+              FROM transactions t
+             WHERE t.id = ?
+            """,
+            [.integer(Int64(id))]),
+            let text = try row.optionalText("image")
+        else {
+            throw staleCash()
+        }
+        return try JSONValue.parse(Data(text.utf8))
     }
 
     private static func staleCash() -> BackendHTTPError {
@@ -489,8 +507,7 @@ extension PortfolioImportCommitArea {
 
     /// The `IbkrCashProof` + snapshot envelope the journal's data columns hold.
     static func cashEnvelope(
-        _ amount: String, currency: String, memo: String?, decision: CashAdoptionDecision,
-        row: ReconciliationSourceRow, after: Bool
+        _ snapshot: JSONValue, decision: CashAdoptionDecision, row: ReconciliationSourceRow
     ) throws -> String {
         func binding(_ source: CashAdoptionDecision.Original) -> JSONValue {
             .object([
@@ -525,19 +542,6 @@ extension PortfolioImportCommitArea {
                 "sourceBindings": .array([binding(imported)]),
             ])
         }
-        let fingerprint = after ? row.dedupFingerprint : nil
-        let version = after ? row.dedupFingerprintVersion : nil
-        let snapshot: JSONValue = .object([
-            "id": .int(decision.transactionID.rawValue),
-            "date": .string(decision.existing.day),
-            "amount": .string(amount),
-            "currency": .string(currency),
-            "account_id": row.accountID.map { JSONValue.int($0.rawValue) } ?? .null,
-            "memo": memo.map { JSONValue.string($0) } ?? .null,
-            "dedup_fingerprint": fingerprint.map { JSONValue.string($0) } ?? .null,
-            "dedup_fingerprint_version": version.map { JSONValue.int($0) } ?? .null,
-            "is_active": .bool(true),
-        ])
         return String(decoding: try JSONEncoder().encode(
             JSONValue.object([
                 "ledgerKind": .string("cash"),
