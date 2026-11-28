@@ -1122,19 +1122,23 @@ enum TransactionsArea {
                     SELECT id, account_id FROM transactions WHERE id IN \
                     (SELECT value FROM json_each(?)) ORDER BY id
                     """, [.text(JSValue.array([.int(id.rawValue)]).jsonText)])
+                // `lockAccountsForLedgerMutation`: a missing row is the UPDATE's 404 below, and
+                // a legacy row with no account (the schema allows NULL) has no account to
+                // check, so neither ends the PATCH here (Astra consolidated C2).
                 var accountIds = Set(ownership.compactMap { try? $0.optionalInt64("account_id") })
                 if let targetAccount { accountIds.insert(Int64(targetAccount)) }
-                guard !accountIds.isEmpty else { return false }
-                let accounts = try session.rows(
-                    """
-                    SELECT id, is_active FROM accounts WHERE id IN \
-                    (SELECT value FROM json_each(?)) ORDER BY id
-                    """, [.text(JSValue.array(accountIds.sorted().map { .int(Int($0)) }).jsonText)])
-                if accounts.count != accountIds.count
-                    || accounts.contains(where: { (try? $0.bool("is_active")) != true })
-                {
-                    throw BackendHTTPError.validation(
-                        "Reopen the account before changing its ledger balance")
+                if !accountIds.isEmpty {
+                    let accounts = try session.rows(
+                        """
+                        SELECT id, is_active FROM accounts WHERE id IN \
+                        (SELECT value FROM json_each(?)) ORDER BY id
+                        """, [.text(JSValue.array(accountIds.sorted().map { .int(Int($0)) }).jsonText)])
+                    if accounts.count != accountIds.count
+                        || accounts.contains(where: { (try? $0.bool("is_active")) != true })
+                    {
+                        throw BackendHTTPError.validation(
+                            "Reopen the account before changing its ledger balance")
+                    }
                 }
             }
             // The canonical account identity, checked on every PATCH that carries it.

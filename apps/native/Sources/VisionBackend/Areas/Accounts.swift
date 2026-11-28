@@ -1078,6 +1078,30 @@ enum AccountsArea {
     }
 
     /// `mergeAccounts`: repoint every reference, then delete the sources — atomically.
+    /// Imported custody history (asset adjustments and asset transfers) references its accounts
+    /// with ON DELETE RESTRICT, and a transfer between two merged accounts cannot be repointed
+    /// (source and destination must differ), so the merge refuses before any write instead of
+    /// failing on the source delete (Astra consolidated C3).
+    static func assertNoMergeCustodyHistory(_ session: BackendSession, sourceJson: String) throws {
+        let row = try session.row(
+            """
+            SELECT
+              (SELECT count(*) FROM portfolio_asset_adjustments
+                WHERE account_id IN (SELECT value FROM json_each(?1))) AS adjustments,
+              (SELECT count(*) FROM portfolio_asset_transfers
+                WHERE source_account_id IN (SELECT value FROM json_each(?1))
+                   OR destination_account_id IN (SELECT value FROM json_each(?1))) AS transfers
+            """, [.text(sourceJson)])
+        let adjustments = Int(try row?.int64("adjustments") ?? 0)
+        let transfers = Int(try row?.int64("transfers") ?? 0)
+        guard adjustments == 0 && transfers == 0 else {
+            throw BackendHTTPError.validation(
+                "The account to merge has imported custody history (\(adjustments) asset adjustment(s), "
+                    + "\(transfers) asset transfer(s)) that a merge cannot move. "
+                    + "Undo the imports that created it, then merge.")
+        }
+    }
+
     static func merge(_ session: BackendSession, target: AccountID, sources: [Int]) throws -> HandlerResult {
         var seen: Set<Int> = []
         let ids = sources.filter { seen.insert($0).inserted }
@@ -1097,6 +1121,7 @@ enum AccountsArea {
                 throw BackendHTTPError.notFound("Account(s) not found: \(missing.map(String.init).joined(separator: ", "))")
             }
             try assertMergeFundingCycleSafe(session, target: target, sources: ids)
+            try assertNoMergeCustodyHistory(session, sourceJson: sourceJson)
             let union = [target.rawValue] + ids
             let stampsInterleaved = try stampRangesOverlap(stampRanges(session, ids: union))
             let collisions = try collidingAnchorCurrencies(session, ids: union)
@@ -1346,6 +1371,14 @@ enum AccountsArea {
             }
             let parts = try balanceParts(try row.optionalText("balance_parts"))
             let fallbackBase = statementPartition(parts, of: account)
+            // The statement was read in the account currency; a fallback partition in another
+            // currency would post the drift unconverted in that currency (Astra consolidated C1).
+            let statementCurrency = storedCurrencyCode(account.currency)
+            if requestedCode == nil, fallbackBase.currency.uppercased() != statementCurrency.uppercased() {
+                throw BackendHTTPError.validation(
+                    "The statement balance is in \(statementCurrency) but the ledger balance is in "
+                        + "\(fallbackBase.currency.uppercased()). Choose the currency to reconcile.")
+            }
             let reconcileCurrency = (requestedCode ?? fallbackBase.currency).uppercased()
             let exactPart = parts.first { $0.currency.uppercased() == reconcileCurrency }
             let base: Partition
