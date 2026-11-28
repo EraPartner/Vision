@@ -458,7 +458,7 @@ import VisionNativeCore
             "prices-mutations", "exposure-mutations", "portfolio-parsers-mutations",
             "portfolio-batches-mutations", "portfolio-overrides-mutations",
             "portfolio-reconciliation-mutations", "portfolio-commit-mutations",
-            "portfolio-uploads-mutations",
+            "portfolio-uploads-mutations", "portfolio-rollback-mutations",
         ]
         let recorded = Set(
             try FileManager.default.contentsOfDirectory(atPath: Self.corpusDirectory.path)

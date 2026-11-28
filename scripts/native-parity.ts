@@ -7721,6 +7721,108 @@ function mutationAreas(): Record<string, ParityArea> {
         ),
       ],
     },
+    "portfolio-rollback-mutations": {
+      router: {
+        module: "portfolioImportRoutes.ts",
+        mountPath: "/api/portfolio/import",
+      },
+      // Adoptions, restores and the abort stamp NOW(); the area records on
+      // the fixed clock the replay runs on.
+      now: "2026-11-20T12:00:00.000Z",
+      seed: [
+        `INSERT INTO accounts (id, name, display_name, institution, currency, type, liquidity_class, spendable,
+         in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, funding_account_id, is_active,
+         closed_at, created_at, updated_at, import_identity) VALUES
+        (1, 'Roll Broker', 'Roll brokerage', 'Roll', 'EUR', 'brokerage', 'liquid', 1, 1, 'none', 'me', 0, 1, NULL, 1, NULL,
+         '${SEED_TIME}', '${SEED_TIME}', '00000000-0000-4000-8000-00000000bd01')`,
+
+        `INSERT INTO recipients (id, name, normalized_name, created_at, updated_at) VALUES
+        (1, 'Cash Recipient', 'cash recipient', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO investments (id, name, symbol, asset_class, currency, current_price, interest_rate,
+         is_active, price_provider, notes, created_at, updated_at) VALUES
+        (1, 'Roll Asset', 'ROLLTEST', 'stock', 'EUR', vision_numeric('100', 18, 6), NULL,
+         1, 'manual', 'rollback adoption asset', '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO portfolio_import_batches (id, adapter_name, source_filename, source_size_bytes,
+         default_asset_class, default_type, status, rows_total, rows_imported, rows_duplicate, rows_error,
+         error_summary, started_at, completed_at, account_id, is_brokerage, custom_config) VALUES
+        (1, 'generic_csv', 'repeat.csv', 100, 'stock', 'buy', 'awaiting_review', 2, 0, 0, 0, NULL,
+         '2026-01-20T10:00:00.000000Z', NULL, 1, 1, NULL),
+        (3, 'generic_csv', 'stale.csv', 60, 'stock', 'buy', 'complete', 1, 1, 0, 0, NULL,
+         '2026-01-20T11:00:00.000000Z', '2026-01-20T11:00:05.000000Z', 1, 1, NULL),
+        (4, 'generic_csv', 'stale-cash.csv', 40, 'stock', 'buy', 'complete', 1, 1, 0, 0, NULL,
+         '2026-01-20T12:00:00.000000Z', '2026-01-20T12:00:05.000000Z', 1, 1, NULL),
+        (5, 'generic_csv', 'running.csv', 10, 'stock', 'buy', 'pending', 1, 0, 0, 0, NULL,
+         '2026-01-20T13:00:00.000000Z', NULL, 1, 1, NULL)`,
+
+        `INSERT INTO portfolio_import_staging_rows (id, batch_id, row_index, status, tx_date, type, type_raw, symbol_raw, name_raw, units, price_per_unit, amount, fees, taxes, currency, note, raw_data, match_source, resolved_investment_id, route, source_transaction_id, source_record_hash, dedup_fingerprint, dedup_fingerprint_version, dedup_occurrence, asset_transfer_details, asset_adjustment_details, committed_txn_id, created_at, updated_at) VALUES
+          (1, 1, 1, 'matched', '2026-01-10', 'buy', 'BUY', 'ROLLTEST', 'Roll Asset', vision_numeric('5', 18, 8), vision_numeric('100', 18, 6), vision_numeric('500', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'repeat buy', 'rollback row 1', 'symbol', 1, 'portfolio', 'ROLL-1', '${"1".repeat(64)}', '${"2".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:01.000000Z', '2026-01-20T10:00:01.000000Z'),
+          (2, 1, 2, 'matched', '2026-01-12', 'interest', 'INT', NULL, NULL, NULL, NULL, vision_numeric('100', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'repeat interest', 'rollback row 2', NULL, NULL, 'cash', 'CASH-1', '${"3".repeat(64)}', '${"4".repeat(64)}', 1, 1, NULL, NULL, NULL, '2026-01-20T10:00:02.000000Z', '2026-01-20T10:00:02.000000Z'),
+          (31, 3, 1, 'committed', '2026-02-01', 'buy', 'BUY', 'ROLLTEST', 'Roll Asset', vision_numeric('3', 18, 8), vision_numeric('100', 18, 6), vision_numeric('300', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'stale adoption source', 'rollback row 31', 'symbol', 1, 'portfolio', 'STALE-31', '${"5".repeat(64)}', '${"6".repeat(64)}', 1, 1, NULL, NULL, '5', '2026-01-20T11:00:01.000000Z', '2026-01-20T11:00:01.000000Z'),
+          (41, 4, 1, 'committed', '2026-02-02', 'interest', 'INT', NULL, NULL, NULL, NULL, vision_numeric('50', 18, 4), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR', 'stale cash source', 'rollback row 41', NULL, NULL, 'cash', 'STALE-41', '${"7".repeat(64)}', '${"8".repeat(64)}', 1, 1, NULL, NULL, '35', '2026-01-20T12:00:01.000000Z', '2026-01-20T12:00:01.000000Z')`,
+
+        `INSERT INTO portfolio_transactions (id, investment_id, type, date, amount, units, price_per_unit,
+         fees, taxes, currency, note, account_id, import_batch_id, dividend_amount_convention,
+         source_record_hash, dedup_fingerprint, dedup_fingerprint_version, created_at, updated_at) VALUES
+        (1, 1, 'buy', '2026-01-10', vision_numeric('500', 18, 4), vision_numeric('5', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'manual buy', NULL, NULL, 'unknown', NULL, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (5, 1, 'buy', '2026-02-01', vision_numeric('300', 18, 4), vision_numeric('3', 18, 8),
+         vision_numeric('100', 18, 6), vision_numeric('0', 18, 4), vision_numeric('0', 18, 4), 'EUR',
+         'stale adopted buy', 1, 3, 'unknown', '${"5".repeat(64)}', '${"6".repeat(64)}', 1,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+
+        `INSERT INTO transactions (id, date, amount, currency, memo, recipient_id, account_id, is_active,
+         dedup_fingerprint, dedup_fingerprint_version, created_at, updated_at) VALUES
+        (30, '2026-01-12', vision_numeric('100', 18, 4), 'EUR', 'manual interest', 1, 1, 1, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}'),
+        (35, '2026-02-02', vision_numeric('50', 18, 4), 'EUR', 'stale adopted cash', 1, 1, 1, NULL, NULL,
+         '${SEED_TIME}', '${SEED_TIME}')`,
+
+        // A legacy adoption receipt whose after-image no longer matches the
+        // portfolio transaction: rollback must refuse with a review conflict.
+        `INSERT INTO portfolio_import_reconciliation_journal (id, batch_id, staging_row_id, transaction_id,
+         "action", policy, before_data, after_data, created_at) VALUES
+        (10, 3, 31, 5, 'adopt', 'exact',
+         vision_jsonb('{"id":5,"investment_id":1,"type":"buy","date":"2026-02-01","amount":"300.0000","units":"3.00000000","price_per_unit":"100.000000","fees":"0.0000","taxes":"0.0000","currency":"EUR","fx_rate_to_eur":null,"account_id":null,"note":"manual source","dividend_amount_convention":"unknown","is_recurring":false,"recurrence_interval":null,"recurrence_end_date":null,"import_batch_id":null,"source_record_hash":null,"dedup_fingerprint":null,"dedup_fingerprint_version":null,"income_recognition_role":"standard"}'),
+         vision_jsonb('{"id":5,"investment_id":1,"type":"buy","date":"2026-02-01","amount":"300.0000","units":"3.00000000","price_per_unit":"100.000000","fees":"0.0000","taxes":"0.0000","currency":"EUR","fx_rate_to_eur":null,"account_id":1,"note":"changed after image","dividend_amount_convention":"unknown","is_recurring":false,"recurrence_interval":null,"recurrence_end_date":null,"import_batch_id":"3","source_record_hash":"${"5".repeat(64)}","dedup_fingerprint":"${"6".repeat(64)}","dedup_fingerprint_version":1,"income_recognition_role":"standard"}'),
+         '${SEED_TIME}')`,
+
+        // A legacy IBKR cash adoption receipt whose after-image no longer
+        // matches the ledger row: rollback must refuse with a cash conflict.
+        `INSERT INTO portfolio_import_reconciliation_journal (id, batch_id, staging_row_id, transaction_id,
+         "action", policy, before_data, after_data, created_at) VALUES
+        (11, 4, 41, 35, 'adopt', 'exact',
+         vision_jsonb('{"ledgerKind":"cash","version":1,"snapshot":{"id":35,"date":"2026-02-02","amount":"50.0000","currency":"EUR","memo":"stale adopted cash","comment":null,"balance":null,"account_id":1,"recipient_id":1,"recipient_bank_account_id":null,"is_active":true,"import_batch_id":null,"source_record_hash":null,"dedup_fingerprint":null,"dedup_fingerprint_version":null},"proof":{"kind":"cash_adoption","version":1,"sourceBindings":[{"id":41,"batch_id":4,"account_id":1,"custom_config":null,"staging":{}}]}}'),
+         vision_jsonb('{"ledgerKind":"cash","version":1,"snapshot":{"id":35,"date":"2026-02-02","amount":"60.0000","currency":"EUR","memo":"stale adopted cash","comment":null,"balance":null,"account_id":1,"recipient_id":1,"recipient_bank_account_id":null,"is_active":true,"import_batch_id":null,"source_record_hash":"${"7".repeat(64)}","dedup_fingerprint":"${"8".repeat(64)}","dedup_fingerprint_version":1},"proof":{"kind":"cash_adoption","version":1,"sourceBindings":[{"id":41,"batch_id":4,"account_id":1,"custom_config":null,"staging":{}}]}}'),
+         '${SEED_TIME}')`,
+      ],
+      steps: asRecorded([
+        // The plan that adopts a manual portfolio transaction and a manual
+        // cash transaction, then the commit that writes both receipts.
+        portfolioReconciliationPreview({
+          batch_ids: [1],
+          adopt_policy: "preserve_existing",
+        }),
+        portfolioReconciliationCommit({
+          batch_ids: [1],
+          adopt_policy: "preserve_existing",
+        }),
+        portfolioBatch("1"),
+        // The deep rollback: both receipts restore, both rows reset, aborted.
+        portfolioBatchesDelete("1"),
+        portfolioBatch("1"),
+        portfolioBatchesDelete("1"),
+        // Legacy receipts whose images no longer match: rollback refuses.
+        portfolioBatchesDelete("3"),
+        portfolioBatchesDelete("4"),
+        portfolioBatchesDelete("5"),
+        portfolioBatchesDelete("999"),
+        portfolioReconciliationCommit({ batch_ids: [1] }),
+      ]),
+    },
     "prices-mutations": {
       router: { module: "investments.ts", mountPath: "/api/investments" },
       now: "2026-11-26T12:00:00.000Z",
